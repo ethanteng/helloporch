@@ -1,0 +1,313 @@
+import PorchFace, { type Who } from "@/components/PorchFace";
+import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
+
+const FAMILY: { who: Who; name: string }[] = [
+  { who: "sarah", name: "Sarah" },
+  { who: "mike", name: "Mike" },
+  { who: "emma", name: "Emma" },
+];
+
+const PHONE_STEPS = ["Unlock the phone", "Find the video app", "Scroll to Sarah", "Tap the tiny camera icon"];
+
+export default function Home() {
+  return (
+    <WaitlistProvider>
+      <div className="page">
+        <nav className="nav">
+          <a href="#" className="logo" aria-label="Porch home">
+            porch<span>.</span>
+          </a>
+          <a href="#join" className="nav__cta">
+            Join the waitlist
+          </a>
+        </nav>
+
+        <header className="hero">
+          <div className="hero__badge">Video calls for parents who can&rsquo;t use a phone anymore</div>
+          <h1 className="hero__title">
+            Press a face.
+            <br />
+            <em>See a face.</em>
+          </h1>
+          <p className="hero__lede">
+            Porch is a tablet and a large-button keypad for parents with dementia or limited dexterity. Each button is
+            someone they love. <strong>One press starts a video call.</strong>
+          </p>
+          <HeroWaitlist />
+        </header>
+
+        <section className="device" aria-label="The Porch tablet and keypad">
+          <div className="device__stage">
+            <div className="device__tablet-wrap">
+              <div className="device__tablet">
+                <div className="device__screen">
+                  <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+                  <div className="device__name">Sarah</div>
+                  <div className="device__self">
+                    <PorchFace who="walt" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
+                  </div>
+                </div>
+              </div>
+              <div className="device__stand" />
+            </div>
+            <div className="keypad">
+              {FAMILY.map((f) => (
+                <div key={f.who} className="keypad__key">
+                  <div className="keypad__face">
+                    <PorchFace who={f.who} size={104} />
+                  </div>
+                  <div className="keypad__label">{f.name}</div>
+                </div>
+              ))}
+              <div className="keypad__divider" />
+              <div className="keypad__key">
+                <div className="keypad__help">HELP</div>
+                <div className="keypad__label">&nbsp;</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="compare">
+          <div className="compare__group">
+            <h2 className="section-title">Four steps on a phone.</h2>
+            <ul className="compare__steps">
+              {PHONE_STEPS.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="compare__group">
+            <h2 className="section-title">
+              <em className="bold-italic">One on Porch.</em>
+            </h2>
+            <div className="call-pill">
+              <div className="call-pill__ring" />
+              <div className="call-pill__ring call-pill__ring--late" />
+              <div className="call-pill__face">
+                <PorchFace who="sarah" size={76} talking />
+              </div>
+              Call Sarah
+            </div>
+          </div>
+        </section>
+
+        <section className="steps">
+          <div className="steps__grid">
+            <article className="step">
+              <div className="step__art" style={{ background: "oklch(0.93 0.03 75)" }}>
+                <TableScene />
+              </div>
+              <StepText n={1} title="You set it on the table.">
+                A tablet on a sturdy stand, with a large-button keypad beside it. Plug it in once and add the people he
+                calls most.
+              </StepText>
+            </article>
+            <article className="step">
+              <div className="step__art step__art--center" style={{ background: "oklch(0.88 0.075 80)" }}>
+                <div className="press-face">
+                  <PorchFace who="sarah" size={164} />
+                  <div className="press-face__tap" />
+                </div>
+              </div>
+              <StepText n={2} title="He presses a face.">
+                Each button has a photo and a name in large print. One press starts a video call.
+              </StepText>
+            </article>
+            <article className="step">
+              <div className="step__art step__art--center" style={{ background: "oklch(0.87 0.05 45)" }}>
+                <div className="phone">
+                  <div className="phone__screen">
+                    <PorchFace who="walt" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+                    <div className="phone__caption">Dad · Porch</div>
+                  </div>
+                </div>
+              </div>
+              <StepText n={3} title="You answer on your phone.">
+                The call rings in the Porch app, like any other video call.
+              </StepText>
+            </article>
+          </div>
+        </section>
+
+        <section className="features">
+          <div className="features__grid">
+            <article className="feature">
+              <div className="feature__art">
+                <div className="incoming">
+                  <div className="incoming__screen">
+                    <div className="incoming__face">
+                      <PorchFace who="mike" size={58} />
+                    </div>
+                    <div className="incoming__title">Mike is calling</div>
+                    <div className="incoming__pill">Answering automatically</div>
+                  </div>
+                </div>
+              </div>
+              <h3 className="feature__title">Call in anytime.</h3>
+              <p className="feature__body">Porch picks up for him, so he doesn&rsquo;t have to touch anything to see you.</p>
+            </article>
+            <article className="feature">
+              <div className="feature__art">
+                <div className="big-help">HELP</div>
+              </div>
+              <h3 className="feature__title">One red button for emergencies.</h3>
+              <p className="feature__body">It calls everyone on his list until someone picks up.</p>
+            </article>
+            <article className="feature">
+              <div className="feature__art">
+                <KeysCloseUp />
+              </div>
+              <h3 className="feature__title">Made for unsteady hands.</h3>
+              <p className="feature__body">Buttons are large, firm, and forgiving. A light tap and a heavy press both work.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="scene-wrap">
+          <div className="scene">
+            <div className="scene__floor" />
+            <div className="scene__rose">
+              <PorchFace who="rose" shape="none" size={560} width="100%" height="100%" talking />
+            </div>
+            <div className="scene__tablet">
+              <div className="scene__screen">
+                <PorchFace who="emma" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+              </div>
+            </div>
+            <div className="scene__quote">
+              Made for the parent who used to call every Sunday, <em>and the kids who miss it.</em>
+            </div>
+          </div>
+        </section>
+
+        <section id="join" className="join">
+          <div className="join__copy">
+            <h2 className="join__title">
+              Get Porch <em>first.</em>
+            </h2>
+            <p className="join__body">
+              We&rsquo;re building early units now. Join the waitlist and we&rsquo;ll email you when one can be yours.
+            </p>
+            <JoinWaitlist />
+          </div>
+          <div className="film" role="img" aria-label="A minute with Walt: Walt on a video call with Sarah">
+            <div className="film__floor" />
+            <div className="film__tablet">
+              <div className="film__screen">
+                <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+              </div>
+            </div>
+            <div className="film__walt">
+              <PorchFace who="walt" shape="none" width="100%" height="100%" />
+            </div>
+            <div className="film__label">
+              <div className="film__play" />A minute with Walt
+            </div>
+          </div>
+        </section>
+
+        <footer className="footer">
+          <div>© 2026 Porch</div>
+          <div>Made for families, by a family.</div>
+        </footer>
+      </div>
+    </WaitlistProvider>
+  );
+}
+
+function StepText({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="step__text">
+      <div className="step__num">{n}</div>
+      <div className="step__copy">
+        <h3 className="step__title">{title}</h3>
+        <p className="step__body">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+/* Step 1: tablet on a stand and the keypad, sitting on a table in perspective. */
+function TableScene() {
+  const key: React.CSSProperties = {
+    width: 34,
+    height: 36,
+    borderRadius: 9,
+    background: "oklch(0.965 0.014 78)",
+    border: "1.5px solid oklch(0.9 0.02 72)",
+    boxSizing: "border-box",
+    boxShadow: "0 3px 0 oklch(0.8 0.03 65)",
+    display: "grid",
+    placeItems: "center",
+  };
+  const abs = (s: React.CSSProperties): React.CSSProperties => ({ position: "absolute", ...s });
+  return (
+    <>
+      <div style={abs({ left: 0, right: 0, bottom: 0, height: 22, background: "oklch(0.86 0.03 68)" })} />
+      <div style={abs({ left: 44, top: 206, width: 14, height: 60, background: "oklch(0.55 0.07 52)" })} />
+      <div style={abs({ right: 44, top: 206, width: 14, height: 60, background: "oklch(0.55 0.07 52)" })} />
+      <div style={abs({ left: 18, right: 18, top: 146, height: 48, background: "oklch(0.74 0.07 58)", clipPath: "polygon(7% 0,93% 0,100% 100%,0 100%)" })} />
+      <div style={abs({ left: 18, right: 18, top: 194, height: 14, background: "oklch(0.6 0.07 54)", borderRadius: "0 0 4px 4px" })} />
+      <div style={abs({ left: "50%", top: 160, width: 150, height: 16, transform: "translateX(-50%)", borderRadius: "50%", background: "radial-gradient(closest-side,oklch(0.35 0.05 50 / .45),oklch(0.35 0.05 50 / 0))" })} />
+      <div style={abs({ left: "50%", top: 184, width: 200, height: 16, transform: "translateX(-50%)", borderRadius: "50%", background: "radial-gradient(closest-side,oklch(0.35 0.05 50 / .5),oklch(0.35 0.05 50 / 0))" })} />
+      <div style={abs({ left: "50%", top: 44, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" })}>
+        <div style={{ width: 168, height: 108, padding: 6, borderRadius: 14, background: "oklch(0.24 0.02 50)", boxSizing: "border-box" }}>
+          <div style={{ height: "100%", borderRadius: 8, background: "oklch(0.945 0.02 75)", display: "grid", placeItems: "center", font: "400 14px var(--font-serif), serif", color: "oklch(0.25 0.03 45)" }}>
+            Good afternoon, Walt
+          </div>
+        </div>
+        <div style={{ width: 56, height: 22, background: "oklch(0.6 0.06 60)", clipPath: "polygon(22% 0,78% 0,100% 100%,0 100%)" }} />
+      </div>
+      <div style={abs({ left: "50%", top: 146, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 7, padding: "7px 10px 10px", borderRadius: 14, background: "oklch(0.99 0.008 80)", boxShadow: "0 6px 0 oklch(0.84 0.025 68)" })}>
+        {FAMILY.map((f) => (
+          <div key={f.who} style={key}>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", overflow: "hidden" }}>
+              <PorchFace who={f.who} size={26} />
+            </div>
+          </div>
+        ))}
+        <div style={{ width: 1, height: 28, background: "oklch(0.88 0.02 70)" }} />
+        <div style={{ width: 30, height: 36, borderRadius: 9, background: "oklch(0.55 0.17 28)", boxShadow: "0 3px 0 oklch(0.44 0.14 28)" }} />
+      </div>
+    </>
+  );
+}
+
+/* "Made for unsteady hands": key 1 pressed under a fingertip, key 2 raised. */
+function KeysCloseUp() {
+  const keyBase: React.CSSProperties = {
+    position: "absolute",
+    top: 22,
+    width: 96,
+    height: 118,
+    borderRadius: 20,
+    background: "oklch(0.965 0.014 78)",
+    border: "2px solid oklch(0.9 0.02 72)",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 4,
+    paddingTop: 6,
+  };
+  const num: React.CSSProperties = { font: "400 30px/34px var(--font-serif), serif", color: "oklch(0.25 0.03 45)" };
+  return (
+    <div style={{ position: "relative", width: 250, height: 170, borderRadius: 30, background: "oklch(0.99 0.008 85)", boxShadow: "0 14px 0 oklch(0.84 0.025 68),0 26px 30px -14px oklch(0.3 0.05 50 / .45)" }}>
+      <div style={{ ...keyBase, left: 24, boxShadow: "0 4px 0 oklch(0.8 0.03 65)", transform: "translateY(5px)" }}>
+        <div style={num}>1</div>
+        <div style={{ width: 58, height: 58, borderRadius: "50%", overflow: "hidden" }}>
+          <PorchFace who="sarah" size={58} />
+        </div>
+      </div>
+      <div style={{ ...keyBase, left: 130, boxShadow: "0 9px 0 oklch(0.8 0.03 65)" }}>
+        <div style={num}>2</div>
+        <div style={{ width: 58, height: 58, borderRadius: "50%", overflow: "hidden" }}>
+          <PorchFace who="mike" size={58} />
+        </div>
+      </div>
+      <div style={{ position: "absolute", left: 38, top: 60, width: 96, height: 96, borderRadius: "50%", border: "3px solid oklch(0.52 0.13 40 / .35)", boxSizing: "border-box" }} />
+      <div style={{ position: "absolute", left: 52, top: 74, width: 68, height: 68, borderRadius: "50%", background: "oklch(0.82 0.06 55 / .6)", border: "2px solid oklch(0.97 0.02 60 / .9)", boxSizing: "border-box" }} />
+    </div>
+  );
+}
