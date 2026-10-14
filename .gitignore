@@ -5,3 +5,15 @@ out
 .env*.local
 next-env.d.ts
 *.tsbuildinfo
+
+# Native iPad builds and signing material
+.DS_Store
+ios/PorchCore/.build/
+ios/PorchCore/.swiftpm/
+ios/build/
+**/xcuserdata/
+*.p8
+*.p12
+*.mobileprovision
+*.xcarchive
+*.ipa

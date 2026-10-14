@@ -1,0 +1,41 @@
+name: Upload iPad to TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: porch-testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: macos-26
+    timeout-minutes: 30
+    environment: testflight
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+      IOS_DISTRIBUTION_P12: ${{ secrets.IOS_DISTRIBUTION_P12 }}
+      IOS_DISTRIBUTION_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_PASSWORD }}
+      IOS_APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test contact validation and keypad handling
+        run: swift test --package-path ios/PorchCore
+      - name: Archive, sign, and upload
+        run: bash ios/scripts/testflight.sh
+      - name: Clean up signing files
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/porch-signing.keychain-db" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/porch-signing"
+          if [[ -n "$ASC_KEY_ID" ]]; then
+            rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          fi

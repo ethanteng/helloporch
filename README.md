@@ -4,6 +4,8 @@ Landing page for **Porch**, a tablet plus large-button keypad that lets parents 
 
 ## Develop
 
+The native iPad FaceTime/keypad prototype lives in [`ios/`](ios/README.md). Open `ios/Porch.xcodeproj` in Xcode. Native build and TestFlight workflows are included alongside this landing page.
+
 ```sh
 npm install
 npm run dev
