@@ -1,3 +1,4 @@
+import DemoVideo from "@/components/DemoVideo";
 import PorchFace, { type Who } from "@/components/PorchFace";
 import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 
@@ -36,35 +37,9 @@ export default function Home() {
           <HeroWaitlist />
         </header>
 
-        <section className="device" aria-label="The Porch tablet and keypad">
-          <div className="device__stage">
-            <div className="device__tablet-wrap">
-              <div className="device__tablet">
-                <div className="device__screen">
-                  <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
-                  <div className="device__name">Sarah</div>
-                  <div className="device__self">
-                    <PorchFace who="walt" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
-                  </div>
-                </div>
-              </div>
-              <div className="device__stand" />
-            </div>
-            <div className="keypad">
-              {FAMILY.map((f) => (
-                <div key={f.who} className="keypad__key">
-                  <div className="keypad__face">
-                    <PorchFace who={f.who} size={104} />
-                  </div>
-                  <div className="keypad__label">{f.name}</div>
-                </div>
-              ))}
-              <div className="keypad__divider" />
-              <div className="keypad__key">
-                <div className="keypad__help">HELP</div>
-                <div className="keypad__label">&nbsp;</div>
-              </div>
-            </div>
+        <section className="demo-wrap">
+          <div className="demo">
+            <DemoVideo />
           </div>
         </section>
 
@@ -164,19 +139,34 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="scene-wrap">
-          <div className="scene">
-            <div className="scene__floor" />
-            <div className="scene__rose">
-              <PorchFace who="rose" shape="none" size={560} width="100%" height="100%" talking />
-            </div>
-            <div className="scene__tablet">
-              <div className="scene__screen">
-                <PorchFace who="emma" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+        <section className="device" aria-label="The Porch tablet and keypad">
+          <div className="device__stage">
+            <div className="device__tablet-wrap">
+              <div className="device__tablet">
+                <div className="device__screen">
+                  <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+                  <div className="device__name">Sarah</div>
+                  <div className="device__self">
+                    <PorchFace who="walt" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
+                  </div>
+                </div>
               </div>
+              <div className="device__stand" />
             </div>
-            <div className="scene__quote">
-              Made for the parent who used to call every Sunday, <em>and the kids who miss it.</em>
+            <div className="keypad">
+              {FAMILY.map((f) => (
+                <div key={f.who} className="keypad__key">
+                  <div className="keypad__face">
+                    <PorchFace who={f.who} size={104} />
+                  </div>
+                  <div className="keypad__label">{f.name}</div>
+                </div>
+              ))}
+              <div className="keypad__divider" />
+              <div className="keypad__key">
+                <div className="keypad__help">HELP</div>
+                <div className="keypad__label">&nbsp;</div>
+              </div>
             </div>
           </div>
         </section>
