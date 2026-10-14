@@ -4,7 +4,8 @@ import AppKit
 import Foundation
 
 guard CommandLine.arguments.count == 2,
-      let bitmap = NSBitmapImageRep(contentsOfFile: CommandLine.arguments[1]) else { exit(1) }
+      let data = try? Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1])),
+      let bitmap = NSBitmapImageRep(data: data) else { exit(1) }
 var cream = 0
 var clay = 0
 for row in 1...20 {
