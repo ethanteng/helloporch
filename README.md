@@ -11,9 +11,9 @@ npm run dev
 
 ## Waitlist
 
-Both forms post to `/api/waitlist`. Every signup is logged to the function logs as JSON (`waitlist_signup`, and `waitlist_who` for the follow-up "who would use Porch?" answer).
+Both forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer is saved to the subscriber's `porch_who` custom field. Each request is also logged to the function logs as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those only briefly, so MailerLite is the record.
 
-To send signups to MailerLite, set these env vars in Vercel:
+Set these env vars in Vercel:
 
 - `MAILERLITE_API_KEY`: required to enable MailerLite
 - `MAILERLITE_GROUP_ID`: optional group to add subscribers to

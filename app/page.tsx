@@ -181,19 +181,8 @@ export default function Home() {
             </p>
             <JoinWaitlist />
           </div>
-          <div className="film" role="img" aria-label="A minute with Walt: Walt on a video call with Sarah">
-            <div className="film__floor" />
-            <div className="film__tablet">
-              <div className="film__screen">
-                <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
-              </div>
-            </div>
-            <div className="film__walt">
-              <PorchFace who="walt" shape="none" width="100%" height="100%" />
-            </div>
-            <div className="film__label">
-              <div className="film__play" />A minute with Walt
-            </div>
+          <div className="film">
+            <DemoVideo />
           </div>
         </section>
 
