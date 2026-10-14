@@ -70,7 +70,7 @@ export default function Home() {
 
         <section className="compare">
           <div className="compare__group">
-            <h2 className="section-title">Four steps on a phone.</h2>
+            <h2 className="section-title section-title--sm">Four steps on a phone.</h2>
             <ul className="compare__steps">
               {PHONE_STEPS.map((s) => (
                 <li key={s}>{s}</li>
@@ -78,14 +78,14 @@ export default function Home() {
             </ul>
           </div>
           <div className="compare__group">
-            <h2 className="section-title">
+            <h2 className="section-title section-title--lg">
               <em className="bold-italic">One on Porch.</em>
             </h2>
             <div className="call-pill">
               <div className="call-pill__ring" />
               <div className="call-pill__ring call-pill__ring--late" />
               <div className="call-pill__face">
-                <PorchFace who="sarah" size={76} talking />
+                <PorchFace who="sarah" size={104} talking />
               </div>
               Call Sarah
             </div>
