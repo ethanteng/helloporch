@@ -29,6 +29,12 @@ final class CallViewController: UIViewController {
            let saved = try? JSONDecoder().decode(CallContact.self, from: data) {
             contact = try? CallContact(name: saved.name, address: saved.address)
         }
+        #if DEBUG
+        // CI screenshots use a fictional recipient, without altering storage.
+        if ProcessInfo.processInfo.arguments.contains("--preview-contact") {
+            contact = try? CallContact(name: "David", address: "david@example.com")
+        }
+        #endif
 
         let brand = UILabel()
         brand.text = "Porch."
