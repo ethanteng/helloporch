@@ -1,0 +1,42 @@
+name: iPad build
+
+on:
+  push:
+    paths: ['ios/**', '.github/workflows/ipad-build.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ipad-build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipad-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Xcode
+        run: xcodebuild -version
+      - name: Test contact validation and keypad handling
+        run: swift test --package-path ios/PorchCore
+      - name: Build iPad simulator app
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=NO build
+      - name: Build release app for an iPad
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
+          -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
+      - name: Save simulator app for local testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: Porch-simulator
+          path: ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
+          retention-days: 7
