@@ -26,9 +26,8 @@ export default function Home() {
         <header className="hero">
           <div className="hero__badge">Video calls for individuals who can&rsquo;t use a phone anymore</div>
           <h1 className="hero__title">
-            Press a face.
-            <br />
-            <em>See a face.</em>
+            <span className="hero__title-lead">Phones can get complicated.</span>
+            <em>Seeing family shouldn&rsquo;t.</em>
           </h1>
           <p className="hero__lede">
             Porch is a tablet and a large-button keypad for individuals with dementia or limited dexterity. Each button is

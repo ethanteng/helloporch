@@ -103,6 +103,10 @@ input::placeholder {
   font: 400 clamp(60px, 9vw, 112px) / 0.95 var(--serif);
   letter-spacing: -0.035em;
 }
+.hero__title-lead {
+  display: block;
+  font-size: 0.6em;
+}
 .hero__title em {
   color: var(--terracotta);
 }
