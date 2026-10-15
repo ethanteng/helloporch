@@ -1,6 +1,6 @@
 # helloporch
 
-Landing page for **Porch**, a tablet plus large-button keypad that lets parents with dementia or limited dexterity start a video call with one press. Implements design 2a from the Claude Design handoff.
+Landing page for **Porch**, a tablet plus large-button keypad that lets individuals with dementia or limited dexterity start a video call with one press. Implements design 2a from the Claude Design handoff.
 
 ## Develop
 

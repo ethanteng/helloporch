@@ -8,7 +8,7 @@ const sans = DM_Sans({ subsets: ["latin"], axes: ["opsz"], variable: "--font-san
 export const metadata: Metadata = {
   title: "Porch — Press a face. See a face.",
   description:
-    "Porch is a tablet and a large-button keypad for parents with dementia or limited dexterity. Each button is someone they love. One press starts a video call.",
+    "Porch is a tablet and a large-button keypad for individuals with dementia or limited dexterity. Each button is someone they love. One press starts a video call.",
 };
 
 export const viewport: Viewport = {

@@ -24,14 +24,14 @@ export default function Home() {
         </nav>
 
         <header className="hero">
-          <div className="hero__badge">Video calls for parents who can&rsquo;t use a phone anymore</div>
+          <div className="hero__badge">Video calls for individuals who can&rsquo;t use a phone anymore</div>
           <h1 className="hero__title">
             Press a face.
             <br />
             <em>See a face.</em>
           </h1>
           <p className="hero__lede">
-            Porch is a tablet and a large-button keypad for parents with dementia or limited dexterity. Each button is
+            Porch is a tablet and a large-button keypad for individuals with dementia or limited dexterity. Each button is
             someone they love. <strong>One press starts a video call.</strong>
           </p>
           <HeroWaitlist />
@@ -74,8 +74,8 @@ export default function Home() {
                 <TableScene />
               </div>
               <StepText n={1} title="You set it on the table.">
-                A tablet on a sturdy stand, with a large-button keypad beside it. Plug it in once and add the people he
-                calls most.
+                A tablet on a sturdy stand, with a large-button keypad beside it. Plug it in once and add the people they
+                call most.
               </StepText>
             </article>
             <article className="step">
@@ -85,7 +85,7 @@ export default function Home() {
                   <div className="press-face__tap" />
                 </div>
               </div>
-              <StepText n={2} title="He presses a face.">
+              <StepText n={2} title="They press a face.">
                 Each button has a photo and a name in large print. One press starts a video call.
               </StepText>
             </article>
@@ -120,14 +120,14 @@ export default function Home() {
                 </div>
               </div>
               <h3 className="feature__title">Call in anytime.</h3>
-              <p className="feature__body">Porch picks up for him, so he doesn&rsquo;t have to touch anything to see you.</p>
+              <p className="feature__body">Porch picks up for them, so they don&rsquo;t have to touch anything to see you.</p>
             </article>
             <article className="feature">
               <div className="feature__art">
                 <div className="big-help">HELP</div>
               </div>
               <h3 className="feature__title">One red button for emergencies.</h3>
-              <p className="feature__body">It calls everyone on his list until someone picks up.</p>
+              <p className="feature__body">It calls everyone on their list until someone picks up.</p>
             </article>
             <article className="feature">
               <div className="feature__art">
