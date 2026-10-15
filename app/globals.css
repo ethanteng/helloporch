@@ -108,6 +108,9 @@ input::placeholder {
   font-size: 0.6em;
 }
 .hero__title em {
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   color: var(--terracotta);
 }
 .hero__lede {
