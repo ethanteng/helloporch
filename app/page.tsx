@@ -1,12 +1,7 @@
 import DemoVideo from "@/components/DemoVideo";
-import PorchFace, { type Who } from "@/components/PorchFace";
+import PorchFace from "@/components/PorchFace";
+import PorchKeypad, { ScreenKey } from "@/components/PorchKeypad";
 import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
-
-const FAMILY: { who: Who; name: string }[] = [
-  { who: "sarah", name: "Sarah" },
-  { who: "mike", name: "Mike" },
-  { who: "emma", name: "Emma" },
-];
 
 const PHONE_STEPS = ["Unlock the phone", "Find the video app", "Scroll to Sarah", "Tap the tiny camera icon"];
 
@@ -36,9 +31,21 @@ export default function Home() {
           <HeroWaitlist />
         </header>
 
-        <section className="demo-wrap">
-          <div className="demo">
-            <DemoVideo />
+        <section className="device" aria-label="The Porch tablet and keypad">
+          <div className="device__stage">
+            <div className="device__tablet-wrap">
+              <div className="device__tablet">
+                <div className="device__screen">
+                  <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
+                  <div className="device__name">Sarah</div>
+                  <div className="device__self">
+                    <PorchFace who="walt" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
+                  </div>
+                </div>
+              </div>
+              <div className="device__stand" />
+            </div>
+            <PorchKeypad />
           </div>
         </section>
 
@@ -138,38 +145,6 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="device" aria-label="The Porch tablet and keypad">
-          <div className="device__stage">
-            <div className="device__tablet-wrap">
-              <div className="device__tablet">
-                <div className="device__screen">
-                  <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
-                  <div className="device__name">Sarah</div>
-                  <div className="device__self">
-                    <PorchFace who="walt" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
-                  </div>
-                </div>
-              </div>
-              <div className="device__stand" />
-            </div>
-            <div className="keypad">
-              {FAMILY.map((f) => (
-                <div key={f.who} className="keypad__key">
-                  <div className="keypad__face">
-                    <PorchFace who={f.who} size={104} />
-                  </div>
-                  <div className="keypad__label">{f.name}</div>
-                </div>
-              ))}
-              <div className="keypad__divider" />
-              <div className="keypad__key">
-                <div className="keypad__help">HELP</div>
-                <div className="keypad__label">&nbsp;</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section id="join" className="join">
           <div className="join__copy">
             <h2 className="join__title">
@@ -208,17 +183,6 @@ function StepText({ n, title, children }: { n: number; title: string; children: 
 
 /* Step 1: tablet on a stand and the keypad, sitting on a table in perspective. */
 function TableScene() {
-  const key: React.CSSProperties = {
-    width: 34,
-    height: 36,
-    borderRadius: 9,
-    background: "oklch(0.965 0.014 78)",
-    border: "1.5px solid oklch(0.9 0.02 72)",
-    boxSizing: "border-box",
-    boxShadow: "0 3px 0 oklch(0.8 0.03 65)",
-    display: "grid",
-    placeItems: "center",
-  };
   const abs = (s: React.CSSProperties): React.CSSProperties => ({ position: "absolute", ...s });
   return (
     <>
@@ -237,55 +201,37 @@ function TableScene() {
         </div>
         <div style={{ width: 56, height: 22, background: "oklch(0.6 0.06 60)", clipPath: "polygon(22% 0,78% 0,100% 100%,0 100%)" }} />
       </div>
-      <div style={abs({ left: "50%", top: 146, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 7, padding: "7px 10px 10px", borderRadius: 14, background: "oklch(0.99 0.008 80)", boxShadow: "0 6px 0 oklch(0.84 0.025 68)" })}>
-        {FAMILY.map((f) => (
-          <div key={f.who} style={key}>
-            <div style={{ width: 26, height: 26, borderRadius: "50%", overflow: "hidden" }}>
-              <PorchFace who={f.who} size={26} />
-            </div>
-          </div>
-        ))}
-        <div style={{ width: 1, height: 28, background: "oklch(0.88 0.02 70)" }} />
-        <div style={{ width: 30, height: 36, borderRadius: 9, background: "oklch(0.55 0.17 28)", boxShadow: "0 3px 0 oklch(0.44 0.14 28)" }} />
-      </div>
+      <PorchKeypad style={{ position: "absolute", left: "calc(50% - 78px)", top: 120, transform: "scale(0.27)", transformOrigin: "0 0" }} />
     </>
   );
 }
 
-/* "Made for unsteady hands": key 1 pressed under a fingertip, key 2 raised. */
+/* "Made for unsteady hands": the Sarah key pressed under a fingertip, the Mike key raised. */
 function KeysCloseUp() {
-  const keyBase: React.CSSProperties = {
-    position: "absolute",
-    top: 22,
-    width: 96,
-    height: 118,
-    borderRadius: 20,
-    background: "oklch(0.965 0.014 78)",
-    border: "2px solid oklch(0.9 0.02 72)",
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
-    paddingTop: 6,
-  };
-  const num: React.CSSProperties = { font: "400 30px/34px var(--font-serif), serif", color: "oklch(0.25 0.03 45)" };
+  const abs = (s: React.CSSProperties): React.CSSProperties => ({ position: "absolute", transformStyle: "preserve-3d", ...s });
   return (
-    <div style={{ position: "relative", width: 250, height: 170, borderRadius: 30, background: "oklch(0.99 0.008 85)", boxShadow: "0 14px 0 oklch(0.84 0.025 68),0 26px 30px -14px oklch(0.3 0.05 50 / .45)" }}>
-      <div style={{ ...keyBase, left: 24, boxShadow: "0 4px 0 oklch(0.8 0.03 65)", transform: "translateY(5px)" }}>
-        <div style={num}>1</div>
-        <div style={{ width: 58, height: 58, borderRadius: "50%", overflow: "hidden" }}>
-          <PorchFace who="sarah" size={58} />
+    <div style={{ position: "relative", width: 280, height: 200, perspective: 900 }}>
+      <div
+        style={abs({
+          left: 10,
+          top: 24,
+          width: 260,
+          height: 160,
+          borderRadius: 28,
+          background: "linear-gradient(165deg,oklch(0.995 0.003 85),oklch(0.93 0.006 80))",
+          boxShadow: "inset 0 2px 0 #fff,0 10px 0 oklch(0.84 0.008 75),0 24px 30px -14px oklch(0.3 0.05 50 / .45)",
+          transform: "rotateX(30deg) rotateY(-12deg)",
+        })}
+      >
+        <div style={abs({ left: 24, top: 30 })}>
+          <ScreenKey who="sarah" name="Sarah" pressed />
         </div>
-      </div>
-      <div style={{ ...keyBase, left: 130, boxShadow: "0 9px 0 oklch(0.8 0.03 65)" }}>
-        <div style={num}>2</div>
-        <div style={{ width: 58, height: 58, borderRadius: "50%", overflow: "hidden" }}>
-          <PorchFace who="mike" size={58} />
+        <div style={abs({ left: 136, top: 30 })}>
+          <ScreenKey who="mike" name="Mike" />
         </div>
+        <div style={abs({ left: 26, top: 32, width: 96, height: 96, borderRadius: "50%", border: "3px solid oklch(0.52 0.13 40 / .5)", boxSizing: "border-box", transform: "translateZ(34px)" })} />
+        <div style={abs({ left: 40, top: 46, width: 68, height: 68, borderRadius: "50%", background: "oklch(0.82 0.06 55 / .6)", border: "2px solid oklch(0.97 0.02 60 / .9)", boxSizing: "border-box", transform: "translateZ(36px)" })} />
       </div>
-      <div style={{ position: "absolute", left: 38, top: 60, width: 96, height: 96, borderRadius: "50%", border: "3px solid oklch(0.52 0.13 40 / .35)", boxSizing: "border-box" }} />
-      <div style={{ position: "absolute", left: 52, top: 74, width: 68, height: 68, borderRadius: "50%", background: "oklch(0.82 0.06 55 / .6)", border: "2px solid oklch(0.97 0.02 60 / .9)", boxSizing: "border-box" }} />
     </div>
   );
 }

@@ -226,7 +226,7 @@ input::placeholder {
 
 /* ---------- Device hero ---------- */
 .device {
-  margin: 0 40px 40px;
+  margin: 72px 40px 0;
   padding: 72px 0 64px;
   border-radius: 48px;
   background: var(--honey);
@@ -287,50 +287,167 @@ input::placeholder {
   clip-path: polygon(20% 0, 80% 0, 100% 100%, 0 100%);
 }
 
+/* 3D keypad: a white wedge with glossy black screen keys */
 .keypad {
+  position: relative;
+  width: 580px;
+  height: 330px;
+  flex: none;
+}
+.keypad__view {
+  position: absolute;
+  inset: 0;
+  perspective: 1500px;
+  perspective-origin: 50% 20%;
+}
+.keypad__body {
+  position: absolute;
+  left: 30px;
+  top: 80px;
+  width: 520px;
+  height: 200px;
+  transform-style: preserve-3d;
+  transform: rotateX(-14deg) rotateY(-30deg);
+  transform-origin: 50% 100%;
+}
+.keypad__shadow {
+  position: absolute;
+  left: -30px;
+  top: 30px;
+  width: 600px;
+  height: 340px;
+  transform: translateX(20px) rotateX(90deg);
+  background: radial-gradient(closest-side, oklch(0.32 0.06 55 / 0.5), oklch(0.32 0.06 55 / 0.18) 60%, oklch(0.32 0.06 55 / 0));
+}
+.keypad__side {
+  position: absolute;
+  left: 520px;
+  top: 0;
+  overflow: visible;
+  transform-origin: 0 0;
+  transform: translateZ(120px) rotateY(90deg);
+}
+.keypad__top {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 520px;
+  height: 262px;
+  transform-style: preserve-3d;
+  transform-origin: 50% 100%;
+  transform: translateZ(120px) rotateX(40.36deg);
+  border-radius: 10px 10px 8px 8px;
+  background: linear-gradient(180deg, oklch(0.93 0.005 82) 0%, oklch(0.995 0.003 85) 9%, oklch(0.975 0.004 84) 60%, oklch(0.92 0.006 80) 100%);
+  box-shadow: inset 0 -3px 0 oklch(0.88 0.006 78), inset 0 2px 0 oklch(1 0 0 / 0.9);
+}
+.keypad__logo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 30px;
+  text-align: center;
+  font: 500 22px var(--serif);
+  letter-spacing: -0.01em;
+  color: oklch(0.62 0.01 70);
+}
+.keypad__logo span {
+  color: oklch(0.62 0.1 45);
+}
+.keypad__keys {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 84px;
   display: flex;
-  align-items: center;
-  gap: 22px;
-  padding: 22px 28px 16px;
-  background: oklch(0.99 0.008 80);
-  border-radius: 44px;
-  box-shadow: 0 30px 50px -24px oklch(0.3 0.05 50 / 0.55), 0 2px 6px oklch(0.4 0.05 50 / 0.12);
+  justify-content: center;
+  gap: 16px;
+  transform-style: preserve-3d;
 }
-.keypad__key {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+.keypad__gap {
+  width: 10px;
+  flex: none;
 }
-.keypad__face {
-  box-sizing: content-box;
-  width: 104px;
-  height: 104px;
-  border-radius: 50%;
-  padding: 6px;
-  background: oklch(0.93 0.02 75);
-  box-shadow: 0 6px 0 oklch(0.82 0.03 65);
+
+.key {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  flex: none;
+  transform-style: preserve-3d;
 }
-.keypad__label {
-  font: 500 20px var(--serif);
+.key__layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
 }
-.keypad__divider {
-  width: 1px;
-  align-self: stretch;
-  margin: 8px 0 34px;
-  background: oklch(0.88 0.02 70);
+.key__shadow {
+  box-shadow: 0 14px 18px -6px oklch(0.2 0.02 50 / 0.55);
 }
-.keypad__help {
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: var(--help);
-  box-shadow: 0 6px 0 var(--help-edge);
+.key__rim {
+  background: linear-gradient(150deg, oklch(0.34 0.01 60), oklch(0.15 0.01 60) 45%, oklch(0.1 0.01 60));
+  box-shadow: inset 0 1.5px 0 oklch(1 0 0 / 0.3), inset 0 -1px 0 oklch(0 0 0 / 0.4);
+  transform: translateZ(16px);
+}
+.key__rim::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 17px;
+  background: oklch(0.04 0 0);
+}
+.key__wall,
+.key__screen {
+  position: absolute;
+  inset: 10px;
+  border-radius: 17px;
+}
+.key__wall {
+  background: oklch(0.32 0.03 50);
+}
+.key--help .key__wall {
+  background: oklch(0.4 0.14 28);
+}
+.key__screen {
+  overflow: hidden;
+}
+.key__name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 0 4px;
+  background: oklch(0.15 0.01 60 / 0.7);
+  text-align: center;
+  font: 600 13px var(--sans);
+  color: #fff;
+}
+.key__help {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.57 0.18 30);
   display: grid;
   place-items: center;
   color: #fff;
-  font: 700 13px var(--sans);
-  letter-spacing: 0.1em;
+  font: 700 18px var(--sans);
+  letter-spacing: 0.12em;
+}
+.key__gloss {
+  position: absolute;
+  inset: 0;
+  border-radius: 17px;
+  pointer-events: none;
+  background: radial-gradient(130% 110% at 28% 14%, oklch(1 0 0 / 0.42), oklch(1 0 0 / 0.08) 38%, oklch(1 0 0 / 0) 55%);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.25), inset -7px -9px 14px oklch(0 0 0 / 0.32), inset 4px 5px 8px oklch(1 0 0 / 0.3);
+}
+.key__glint {
+  position: absolute;
+  right: 7%;
+  top: 16%;
+  width: 16%;
+  height: 52%;
+  border-right: 3px solid oklch(1 0 0 / 0.6);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 /* ---------- Four steps vs one ---------- */
@@ -593,15 +710,6 @@ input::placeholder {
 }
 
 /* ---------- Demo video ---------- */
-.demo-wrap {
-  padding: 72px 40px 0;
-}
-.demo {
-  aspect-ratio: 16 / 9;
-  border-radius: 48px;
-  overflow: hidden;
-  background: oklch(0.87 0.06 60);
-}
 .demo__video {
   display: block;
   width: 100%;
@@ -722,12 +830,12 @@ input::placeholder {
     font-size: 16px;
   }
   .device {
-    margin: 0 16px 40px;
+    margin: 48px 16px 0;
     padding: 40px 0 36px;
     border-radius: 32px;
   }
   .device__tablet-wrap,
-  .keypad {
+  .device .keypad {
     zoom: 0.56;
   }
   .compare {
@@ -763,8 +871,7 @@ input::placeholder {
     height: 100%;
   }
   .steps,
-  .features,
-  .demo-wrap {
+  .features {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -780,12 +887,6 @@ input::placeholder {
   }
   .feature {
     padding: 32px 20px;
-    border-radius: 32px;
-  }
-  .demo-wrap {
-    padding-top: 48px;
-  }
-  .demo {
     border-radius: 32px;
   }
   .join {
