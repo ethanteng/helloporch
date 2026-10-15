@@ -1,6 +1,6 @@
 # helloporch
 
-Landing page for **Porch**, a tablet plus large-button keypad that lets individuals with dementia or limited dexterity start a video call with one press. Implements design 2a from the Claude Design handoff.
+Landing page for **Porch**, a tablet plus large-button keypad that lets individuals with dementia or limited dexterity start a video call with one press. Implements design 3a from the Claude Design handoff.
 
 ## Develop
 
@@ -19,3 +19,7 @@ Set these env vars in Vercel:
 
 - `MAILERLITE_API_KEY`: required to enable MailerLite
 - `MAILERLITE_GROUP_ID`: optional group to add subscribers to
+
+## Demo video
+
+The demo video defaults to the v2 file on Vercel Blob. To use a different one, set `NEXT_PUBLIC_DEMO_VIDEO_URL` in Vercel to the new `.mp4` URL and redeploy. The value is built into the page, so changing it has no effect until the next deployment.

@@ -2,7 +2,10 @@
 
 import { useEffect, useRef } from "react";
 
-const SRC = "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Porch%20Demo%20Video%20compressed.mp4";
+// Set NEXT_PUBLIC_DEMO_VIDEO_URL in Vercel to swap the video. It's baked in at build time.
+const SRC =
+  process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ||
+  "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Porch%20Demo%20Video%20v2%20compressed.mp4";
 
 // Silent demo loop: plays while on screen, pauses when scrolled away.
 // Reduced-motion users get a still frame and the native controls.
