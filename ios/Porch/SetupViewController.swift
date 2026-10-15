@@ -6,6 +6,10 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
     var onSave: ((CallContact) -> Void)?
     private let nameField = UITextField()
     private let addressField = UITextField()
+    private let shortcutField = UITextField()
+    private let methodControl = UISegmentedControl(items: ["Shortcut", "FaceTime"])
+    private let choose = UIButton(type: .system)
+    private let explanation = UILabel()
     private let initialContact: CallContact?
 
     init(contact: CallContact?) {
@@ -22,6 +26,10 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .save, target: self, action: #selector(save))
 
+        methodControl.selectedSegmentIndex = initialContact == nil || initialContact?.shortcutName != nil ? 0 : 1
+        methodControl.accessibilityLabel = "Calling method"
+        methodControl.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
+
         nameField.placeholder = "Name, such as David"
         nameField.text = initialContact?.name
         nameField.accessibilityLabel = "Contact name"
@@ -33,21 +41,29 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         addressField.autocorrectionType = .no
         addressField.spellCheckingType = .no
 
-        for field in [nameField, addressField] {
+        shortcutField.placeholder = "Exact shortcut name, such as Call David"
+        shortcutField.text = initialContact?.shortcutName
+        shortcutField.accessibilityLabel = "Shortcut name"
+        shortcutField.autocapitalizationType = .none
+        shortcutField.autocorrectionType = .no
+        shortcutField.spellCheckingType = .no
+
+        for field in [nameField, addressField, shortcutField] {
             field.borderStyle = .roundedRect
             field.font = .preferredFont(forTextStyle: .body)
             field.adjustsFontForContentSizeCategory = true
-            field.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+            let height = field.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
+            height.priority = .defaultHigh
+            height.isActive = true
         }
 
-        let choose = UIButton(type: .system)
         choose.setTitle("Choose from Contacts", for: .normal)
         choose.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         choose.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
-        choose.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+        let chooseHeight = choose.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
+        chooseHeight.priority = .defaultHigh
+        chooseHeight.isActive = true
 
-        let explanation = UILabel()
-        explanation.text = "Choose the email or phone number this person uses for FaceTime. Their name and chosen address are saved on this iPad.\n\nAfter saving, return to Porch and press 1 to test.\n\nHolding the setup button prevents accidental edits; it isn't a password lock."
         explanation.numberOfLines = 0
         explanation.font = .preferredFont(forTextStyle: .body)
         explanation.adjustsFontForContentSizeCategory = true
@@ -55,7 +71,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
 
         let scroll = UIScrollView()
         scroll.keyboardDismissMode = .onDrag
-        let stack = UIStackView(arrangedSubviews: [choose, nameField, addressField, explanation])
+        let stack = UIStackView(arrangedSubviews: [methodControl, nameField, shortcutField, choose, addressField, explanation])
         stack.axis = .vertical
         stack.spacing = 20
         scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -73,6 +89,18 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
         ])
+        updateMethod()
+    }
+
+    @objc private func updateMethod() {
+        let useShortcut = methodControl.selectedSegmentIndex == 0
+        shortcutField.isHidden = !useShortcut
+        addressField.isHidden = useShortcut
+        choose.isHidden = useShortcut
+        let instructions = useShortcut
+            ? "In Apple's Shortcuts app, create a shortcut with a FaceTime action and select the person to call. Use a fixed recipient, without Ask Each Time. Run it once there and allow any requested permissions.\n\nEnter that shortcut's exact name above. The person's name is the label shown in Porch; the shortcut controls whom you call. If you rename or delete it, update Porch too."
+            : "Choose the email or phone number this person uses for FaceTime. iPadOS may ask you to confirm the call."
+        explanation.text = instructions + "\n\nAfter saving, return to Porch and press 1 to test. Porch opens another app to call; you may need to reopen Porch afterward.\n\nHolding the setup button prevents accidental edits; it isn't a password lock."
     }
 
     @objc private func pickContact() {
@@ -99,7 +127,11 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
 
     @objc private func save() {
         do {
-            let contact = try CallContact(name: nameField.text ?? "", address: addressField.text ?? "")
+            let contact = try CallContact(
+                name: nameField.text ?? "",
+                address: addressField.text ?? "",
+                shortcutName: methodControl.selectedSegmentIndex == 0 ? (shortcutField.text ?? "") : nil
+            )
             onSave?(contact)
             dismiss(animated: true)
         } catch {

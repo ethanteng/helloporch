@@ -3,11 +3,21 @@ import Foundation
 public struct CallContact: Codable, Equatable {
     public let name: String
     public let address: String
+    public let shortcutName: String?
 
-    public init(name: String, address: String) throws {
+    public init(name: String, address: String = "", shortcutName: String? = nil) throws {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
+
+        if let shortcutName {
+            let shortcutName = shortcutName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !shortcutName.isEmpty else { throw ValidationError.missingShortcutName }
+            self.name = name
+            self.address = ""
+            self.shortcutName = shortcutName
+            return
+        }
 
         if address.contains("@") {
             // Accept a plain email address, never a URL, list, or URL parameters.
@@ -30,6 +40,15 @@ public struct CallContact: Codable, Equatable {
             self.address = normalized
         }
         self.name = name
+        self.shortcutName = nil
+    }
+
+    public var launchURL: URL {
+        guard let shortcutName else { return faceTimeURL }
+        // Keep the entire name in one query value, including &, +, # and Unicode.
+        let safe = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let encoded = shortcutName.addingPercentEncoding(withAllowedCharacters: safe)!
+        return URL(string: "shortcuts://run-shortcut?name=\(encoded)")!
     }
 
     public var faceTimeURL: URL {
@@ -41,11 +60,12 @@ public struct CallContact: Codable, Equatable {
     }
 
     public enum ValidationError: LocalizedError {
-        case missingName, invalidAddress
+        case missingName, missingShortcutName, invalidAddress
 
         public var errorDescription: String? {
             switch self {
             case .missingName: return "Enter the person's name."
+            case .missingShortcutName: return "Enter the exact name of a shortcut saved in the Shortcuts app on this iPad."
             case .invalidAddress:
                 return "Use one FaceTime email address or a phone number with 7–15 digits. Use + and the country code for international numbers. Extensions and multiple recipients aren't supported."
             }

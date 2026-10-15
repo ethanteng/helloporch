@@ -19,6 +19,9 @@ final class CallViewController: UIViewController {
     private let hintLabel = UILabel()
     private let callButton = UIButton(type: .system)
     private let setupButton = UIButton(type: .system)
+    #if DEBUG
+    private var previewSetupShown = false
+    #endif
 
     override var canBecomeFirstResponder: Bool { true }
 
@@ -27,12 +30,12 @@ final class CallViewController: UIViewController {
         view.backgroundColor = PorchStyle.cream
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let saved = try? JSONDecoder().decode(CallContact.self, from: data) {
-            contact = try? CallContact(name: saved.name, address: saved.address)
+            contact = try? CallContact(name: saved.name, address: saved.address, shortcutName: saved.shortcutName)
         }
         #if DEBUG
         // CI screenshots use a fictional recipient, without altering storage.
         if ProcessInfo.processInfo.arguments.contains("--preview-contact") {
-            contact = try? CallContact(name: "David", address: "david@example.com")
+            contact = try? CallContact(name: "David", shortcutName: "Call David")
         }
         #endif
 
@@ -121,6 +124,12 @@ final class CallViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-setup"), !previewSetupShown {
+            previewSetupShown = true
+            showSetup()
+        }
+        #endif
     }
 
     func resume() {
@@ -173,22 +182,23 @@ final class CallViewController: UIViewController {
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         guard let contact else { showSetup(); return }
         guard !UIAccessibility.isGuidedAccessEnabled else {
-            showError("Exit Guided Access", message: "Porch needs to open the FaceTime app. Guided Access keeps this iPad in one app, so a caregiver must exit it before calling.")
+            showError("Exit Guided Access", message: "Porch needs to open Shortcuts or FaceTime. Guided Access keeps this iPad in one app, so a caregiver must exit it before calling.")
             return
         }
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
         opening = true
         render()
-        hintLabel.text = "Opening FaceTime…"
-        UIApplication.shared.open(contact.faceTimeURL, options: [:]) { [weak self] opened in
+        let appName = contact.shortcutName == nil ? "FaceTime" : "Shortcuts"
+        hintLabel.text = "Opening \(appName)…"
+        UIApplication.shared.open(contact.launchURL, options: [:]) { [weak self] opened in
             guard let self else { return }
             self.opening = false
             self.render()
             if !opened {
-                self.showError("Couldn't open FaceTime", message: "Check that FaceTime is installed and enabled, then try again.")
+                self.showError("Couldn't open \(appName)", message: "Check that \(appName) is installed and enabled, then try again.")
             }
             // opened only means the URL was handed off. It does not report
-            // ringing, connection, cancellation, or the end of the call.
+            // shortcut execution, ringing, connection, or the end of the call.
         }
     }
 

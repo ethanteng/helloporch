@@ -29,6 +29,39 @@ final class PorchCoreTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(CallContact.self, from: data), original)
     }
 
+    func testShortcutNameIsOneEncodedQueryValue() throws {
+        let name = "Call José & 家人 + #1?input=clipboard%"
+        let contact = try CallContact(name: " José ", shortcutName: " \(name)\n")
+        XCTAssertEqual(contact.name, "José")
+        XCTAssertEqual(contact.shortcutName, name)
+        XCTAssertEqual(contact.address, "")
+        let url = contact.launchURL
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.scheme, "shortcuts")
+        XCTAssertEqual(components.host, "run-shortcut")
+        XCTAssertEqual(components.queryItems, [URLQueryItem(name: "name", value: name)])
+        XCTAssertNil(components.fragment)
+        XCTAssertTrue(url.absoluteString.contains("%2B"))
+        let data = try JSONEncoder().encode(contact)
+        XCTAssertEqual(try JSONDecoder().decode(CallContact.self, from: data), contact)
+    }
+
+    func testShortcutRequiresNameAndLabel() throws {
+        XCTAssertThrowsError(try CallContact(name: "David", shortcutName: " \n"))
+        XCTAssertThrowsError(try CallContact(name: " ", shortcutName: "Call David"))
+        let contact = try CallContact(name: "David", shortcutName: "Call David")
+        XCTAssertEqual(contact.launchURL.absoluteString, "shortcuts://run-shortcut?name=Call%20David")
+    }
+
+    func testExistingSavedContactKeepsDirectFaceTimeCalling() throws {
+        let data = Data(#"{"name":"David","address":"+14155550123"}"#.utf8)
+        let saved = try JSONDecoder().decode(CallContact.self, from: data)
+        let contact = try CallContact(name: saved.name, address: saved.address, shortcutName: saved.shortcutName)
+        XCTAssertNil(contact.shortcutName)
+        XCTAssertEqual(contact.launchURL, contact.faceTimeURL)
+        XCTAssertEqual(contact.launchURL.absoluteString, "facetime://+14155550123")
+    }
+
     func testHeldKeyCannotRepeatUntilReleased() {
         var trigger = CallTrigger()
         XCTAssertTrue(trigger.keyDown(0x59))

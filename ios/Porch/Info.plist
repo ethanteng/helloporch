@@ -20,6 +20,6 @@
     <string>UIInterfaceOrientationLandscapeLeft</string>
     <string>UIInterfaceOrientationLandscapeRight</string>
   </array>
-  <key>LSApplicationQueriesSchemes</key><array><string>facetime</string></array>
+  <key>LSApplicationQueriesSchemes</key><array><string>facetime</string><string>shortcuts</string></array>
   <key>ITSAppUsesNonExemptEncryption</key><false/>
 </dict></plist>
