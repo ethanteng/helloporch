@@ -1,6 +1,27 @@
 import UIKit
 import PorchCore
 
+enum BedsideText {
+    static var language: BedsideLanguage {
+        guard PorchDevice.experience == .bedside else { return .english }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-chinese") { return .traditionalChinese }
+        #endif
+        return BedsidePreferences.load().language
+    }
+    static func string(_ english: String, _ arguments: CVarArg...) -> String {
+        arguments.isEmpty ? language.text(english) : language.format(english, arguments: arguments)
+    }
+    static func error(_ description: String) -> String {
+        let translated = language.text(description)
+        return language == .traditionalChinese && translated == description ? string("Please ask your caregiver for help, then try again.") : translated
+    }
+    static func applyAccessibilityLanguage(to view: UIView) {
+        if view is UILabel || view is UIButton { view.accessibilityLanguage = language.speechLanguage }
+        view.subviews.forEach { applyAccessibilityLanguage(to: $0) }
+    }
+}
+
 /// A bright daytime palette and a quiet nighttime palette, following the
 /// caregiver's schedule. Sky keyframes meet at dawn/dusk without a color jump.
 struct BedsideScenePalette {
@@ -124,6 +145,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private var preferences = BedsidePreferences.load()
     private let appearance = UISegmentedControl(items: ["Default", "Dynamic"])
     private let hemisphere = UISegmentedControl(items: ["Northern", "Southern"])
+    private let language = UISegmentedControl(items: ["English", "繁體中文"])
     private let day = UIStepper(), night = UIStepper()
     private let dayLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let nightLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
@@ -136,7 +158,10 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         appearance.accessibilityLabel = "Bedside view"
         hemisphere.selectedSegmentIndex = preferences.hemisphere == .northern ? 0 : 1
         hemisphere.accessibilityLabel = "Season hemisphere"
-        for control in [appearance, hemisphere] {
+        language.selectedSegmentIndex = preferences.language == .traditionalChinese ? 1 : 0
+        language.accessibilityLabel = "Bedside language"
+        language.accessibilityIdentifier = "bedside.language"
+        for control in [appearance, hemisphere, language] {
             control.selectedSegmentTintColor = PorchStyle.accent; control.backgroundColor = PorchStyle.page
             control.setTitleTextAttributes([.foregroundColor: PorchStyle.ink], for: .normal)
             control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
@@ -144,6 +169,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             control.addTarget(self, action: #selector(update), for: .valueChanged)
         }
         form.addArrangedSubview(section("Clock view", detail: "Both views always show the current date and time in large, clear text. Default keeps the screen dark. Dynamic brightens with daylight, warms at sunset, and darkens at night, with a sun or moon and seasonal landscape.", views: [appearance]))
+        form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens and spoken drop-in announcements. Caregiver settings and family mode stay in English. 繁體中文 uses Mandarin announcements.", views: [language]))
         example.heightAnchor.constraint(equalToConstant: 210).isActive = true
         example.layer.cornerRadius = 20; example.clipsToBounds = true
         previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
@@ -165,6 +191,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     @objc private func update() {
         preferences.appearance = appearance.selectedSegmentIndex == 0 ? .default : .dynamic
         preferences.hemisphere = hemisphere.selectedSegmentIndex == 0 ? .northern : .southern
+        preferences.language = language.selectedSegmentIndex == 0 ? .english : .traditionalChinese
         preferences.dayStart = Int(day.value); preferences.nightStart = Int(night.value)
         func hour(_ value: Int) -> String {
             let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: value))!
@@ -174,6 +201,9 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         day.accessibilityValue = hour(preferences.dayStart); night.accessibilityValue = hour(preferences.nightStart)
         example.isHidden = preferences.appearance != .dynamic
         example.scene = BedsideScene(date: Date(), preferences: preferences)
+        let formatter = DateFormatter(); formatter.locale = preferences.language.locale
+        formatter.dateStyle = .medium; formatter.timeStyle = .short
+        previewClock.text = formatter.string(from: Date())
         previewClock.textColor = BedsideScenePalette(scene: example.scene).foreground
     }
     @objc private func save() {

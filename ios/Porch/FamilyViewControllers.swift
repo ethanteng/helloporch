@@ -1,6 +1,5 @@
 import UIKit
 import AVFoundation
-import AudioToolbox
 import PorchCore
 
 func showPorchError(_ error: Error, on controller: UIViewController) {
@@ -304,9 +303,13 @@ final class IncomingFamilyCallViewController: UIViewController {
     var onDismiss: (() -> Void)?
     private let countdown = UILabel()
     private let answer = PorchStyle.button("Answer", symbol: "phone.fill")
-    private let speech = AVSpeechSynthesizer()
+    private let keypadHint = PorchStyle.label("", size: 18, color: PorchStyle.nightSecondary)
+    private let audio: IncomingCallAudioPlaying
     private var timer: Timer?
     private var remaining = 5
+    private var announcementFinished = false
+    private var requiresManualAnswer = false
+    private var alertStarted = false
     private var answering = false
     private var keypad = CallTrigger()
     private var callKey = IncomingCallKey()
@@ -324,7 +327,7 @@ final class IncomingFamilyCallViewController: UIViewController {
                   (try? CallSlots.load())?.action(for: digit) == .callControl else { unhandled.insert(press); continue }
             let code = Int(key.keyCode.rawValue)
             guard keypad.keyDown(code), !answering else { continue }
-            handle(callKey.begin(code, dropIn: call.kind == "dropIn"))
+            handle(callKey.begin(code, dropIn: call.kind == "dropIn" && !requiresManualAnswer))
             if !answering {
                 holdTimer?.invalidate()
                 holdTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in
@@ -348,10 +351,10 @@ final class IncomingFamilyCallViewController: UIViewController {
         holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); super.pressesCancelled(presses, with: event)
     }
     override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated); holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); resignFirstResponder()
+        super.viewWillDisappear(animated); audio.stop(); timer?.invalidate(); holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); resignFirstResponder()
     }
-    init(call: FamilyCallRecord, credential: FamilyCredential) {
-        self.call = call; self.credential = credential; super.init(nibName: nil, bundle: nil)
+    init(call: FamilyCallRecord, credential: FamilyCredential, audio: IncomingCallAudioPlaying? = nil) {
+        self.call = call; self.credential = credential; self.audio = audio ?? PorchIncomingAudio(); super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
     }
     required init?(coder: NSCoder) { fatalError("Use init(call:credential:)") }
@@ -360,14 +363,14 @@ final class IncomingFamilyCallViewController: UIViewController {
         let name = PorchStyle.label(call.callerName, size: 48, color: PorchStyle.nightText, weight: .semibold)
         name.textAlignment = .center
         countdown.font = PorchStyle.font(28); countdown.textColor = PorchStyle.nightText; countdown.numberOfLines = 0; countdown.textAlignment = .center
-        answer.configuration?.title = call.mode == .video ? "Answer video call" : "Answer audio call"
+        answer.configuration?.title = BedsideText.string(call.mode == .video ? "Answer video call" : "Answer audio call")
         answer.addTarget(self, action: #selector(accept), for: .touchUpInside)
-        let decline = PorchStyle.button(call.kind == "dropIn" ? "Don't connect" : "Decline", symbol: "phone.down.fill")
+        let decline = PorchStyle.button(BedsideText.string(call.kind == "dropIn" ? "Don't connect" : "Decline"), symbol: "phone.down.fill")
         decline.configuration?.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
         decline.addTarget(self, action: #selector(reject), for: .touchUpInside)
         answer.isHidden = call.kind == "dropIn"
-        let controlDigit = ((try? CallSlots.load()) ?? CallSlots()).digit(for: .callControl)
-        let hint = PorchStyle.label(controlDigit.map { call.kind == "dropIn" ? "Press \($0) to stop this drop-in." : "Tap \($0) to answer. Hold \($0) to decline." } ?? "", size: 18, color: PorchStyle.nightSecondary)
+        updateKeypadHint()
+        let hint = keypadHint
         hint.textAlignment = .center
         let stack = UIStackView(arrangedSubviews: [name, countdown, hint]); stack.axis = .vertical; stack.spacing = 28
         let controls = UIStackView(arrangedSubviews: [answer, decline]); controls.axis = .vertical; controls.spacing = 16
@@ -385,31 +388,58 @@ final class IncomingFamilyCallViewController: UIViewController {
         let centered = stack.centerYAnchor.constraint(equalTo: scroll.frameLayoutGuide.centerYAnchor); centered.priority = .defaultHigh; centered.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(checkCall), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(reject), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        BedsideText.applyAccessibilityLanguage(to: view)
         updateCountdown()
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         keypad.resetKeys(); becomeFirstResponder()
+        guard !alertStarted else { return }; alertStarted = true
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-incoming-video") { announcementFinished = true; updateCountdown(); return }
+        #endif
         if call.kind == "dropIn" {
-            AudioServicesPlaySystemSound(1007)
-            speech.speak(AVSpeechUtterance(string: "\(call.callerName) is dropping in with \(call.mode == .video ? "video" : "audio"). Connecting in five seconds."))
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                guard let self else { return }; self.remaining -= 1; self.updateCountdown()
-                if self.remaining <= 0 { self.timer?.invalidate(); self.accept() }
+            updateCountdown()
+            audio.announce(name: call.callerName, video: call.mode == .video, language: BedsideText.language) { [weak self] success in
+                guard let self, !self.answering, self.view.window != nil, UIApplication.shared.applicationState == .active else { return }
+                if success {
+                    self.announcementFinished = true; self.remaining = 5; self.updateCountdown()
+                    self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.advanceCountdown() }
+                } else {
+                    self.requiresManualAnswer = true; self.updateKeypadHint()
+                    self.answer.isHidden = false
+                    self.countdown.text = BedsideText.string("The sound couldn't play. Tap Answer to connect.")
+                }
             }
-        } else { AudioServicesPlaySystemSound(1007) }
+        } else if !audio.ring() { countdown.text = BedsideText.string("The sound couldn't play. Tap Answer to connect.") }
     }
     deinit { holdTimer?.invalidate(); timer?.invalidate(); NotificationCenter.default.removeObserver(self) }
-    private func updateCountdown() { countdown.text = call.kind == "dropIn" ? "\(call.mode == .video ? "Video" : "Audio") drop-in\nConnecting in \(max(0, remaining))…" : "Incoming \(call.mode == .video ? "video" : "audio") call" }
+    func advanceCountdown() {
+        guard announcementFinished, !answering else { return }
+        remaining -= 1; updateCountdown()
+        if remaining <= 0 { timer?.invalidate(); accept() }
+    }
+    private func updateKeypadHint() {
+        let digit = ((try? CallSlots.load()) ?? CallSlots()).digit(for: .callControl)
+        keypadHint.text = digit.map { call.kind == "dropIn" && !requiresManualAnswer ? BedsideText.string("Press %d to stop this drop-in.", $0) : BedsideText.string("Tap %d to answer. Hold %d to decline.", $0, $0) } ?? ""
+    }
+    private func updateCountdown() {
+        if call.kind == "dropIn" {
+            countdown.text = announcementFinished ? BedsideText.string(call.mode == .video ? "Video drop-in\nConnecting in %d…" : "Audio drop-in\nConnecting in %d…", max(0, remaining)) : BedsideText.string(call.mode == .video ? "Announcing video drop-in…" : "Announcing audio drop-in…")
+        } else { countdown.text = BedsideText.string(call.mode == .video ? "Incoming video call" : "Incoming audio call") }
+    }
     @objc private func checkCall() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-incoming-video") { return }
+        #endif
         guard !answering else { return }
         if let current = FamilyCoordinator.shared.state?.call, current.id == call.id && current.state != "ended" { return }
-        timer?.invalidate(); speech.stopSpeaking(at: .immediate); dismiss(animated: true, completion: onDismiss)
+        timer?.invalidate(); audio.stop(); dismiss(animated: true, completion: onDismiss)
     }
     @objc private func accept() {
         guard !answering, UIApplication.shared.applicationState == .active, view.window != nil else { return }
         if call.kind == "dropIn" && (AVCaptureDevice.authorizationStatus(for: .audio) != .authorized || (call.mode == .video && AVCaptureDevice.authorizationStatus(for: .video) != .authorized)) { reject(); return }
-        answering = true; answer.isEnabled = false; timer?.invalidate(); speech.stopSpeaking(at: .immediate)
+        answering = true; answer.isEnabled = false; timer?.invalidate(); audio.stop()
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -422,7 +452,7 @@ final class IncomingFamilyCallViewController: UIViewController {
         }
     }
     @objc private func reject() {
-        timer?.invalidate(); speech.stopSpeaking(at: .immediate); answering = true
+        timer?.invalidate(); audio.stop(); answering = true
         Task { await FamilyCallSession(credential: credential, call: call, peerName: call.callerName).end() }
         dismiss(animated: true, completion: onDismiss)
     }

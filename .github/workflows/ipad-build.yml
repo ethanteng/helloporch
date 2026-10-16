@@ -59,6 +59,9 @@ jobs:
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people-chinese.png --preview-six --preview-people --preview-chinese --family-silent
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock-chinese.png --preview-chinese --family-silent
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-chinese.png --preview-dynamic --preview-chinese --preview-hour 10 --family-silent
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-phone-setup --preview-touch-keyboard
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-phone-setup --preview-system-keyboard --preview-hardware-keyboard
       - name: Save the iPad screenshots

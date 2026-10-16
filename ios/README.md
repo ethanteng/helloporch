@@ -1,6 +1,6 @@
 # Porch for iPhone and iPad
 
-Porch is one app with a quiet bedside clock and a family calling mode. Bedside mode supports six keypad contacts, in-app audio/video calls and regular-phone fallback. Family mode supports incoming calls and approved audio/video drop-in while Porch is open.
+Porch is one app with a quiet bedside clock and a family calling mode. Bedside mode supports ten configurable keypad slots, in-app audio/video calls and regular-phone fallback. Family mode supports incoming calls and approved audio/video drop-in while Porch is open.
 
 Start with the [family setup guide](FAMILY-SETUP.md). Family recipients join using a private invitation; no server address, shared calling code or room name is entered in the app.
 
@@ -33,7 +33,7 @@ xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
 
 Simulator Keychain access needs Xcode's simulated signing entitlements. Release/device archives use the configured distribution profile. Automated tests cover room/role authorization, enrollment and PIN isolation, name updates, contact normalization, keypad handling, caregiver focus/keyboard, first-entry PIN fields, first-tap gear opening and small-phone layouts. CI runs UIKit checks on both device families. See the [physical-device acceptance checks](FAMILY-SETUP.md#verify) before wider use.
 
-For visual Debug previews, use `--preview-phone-setup`, `--preview-caregiver`, `--preview-pin-setup`, or `--preview-family-settings`. Combine the person editor preview with `--preview-system-keyboard` to focus a native input field, `--preview-hardware-keyboard` to show the keypad guidance, or `--preview-touch-keyboard` to inspect the optional Porch keyboard. Add `--preview-keyboard-help` with the hardware-keyboard flag to inspect the help alert. The hardware flag changes guidance only; it does not emulate iPadOS hardware-keyboard suppression. Previews don't place calls or save contacts.
+For visual Debug previews, use `--preview-phone-setup`, `--preview-caregiver`, `--preview-pin-setup`, or `--preview-family-settings`. Combine the person editor preview with `--preview-system-keyboard` to focus a native input field, `--preview-hardware-keyboard` to show the keypad guidance, or `--preview-touch-keyboard` to inspect the optional Porch keyboard. Add `--preview-keyboard-help` with the hardware-keyboard flag to inspect the help alert. The hardware flag changes guidance only; it does not emulate iPadOS hardware-keyboard suppression. Use `--preview-chinese` for Traditional Chinese bedside previews and `--preview-incoming-video` for a static incoming-call fixture that never auto-answers. Previews don't place calls or save contacts.
 
 ## TestFlight
 
@@ -65,3 +65,5 @@ Alternatively, in Xcode select **Any iOS Device**, Product → Archive, and Dist
 See [server and privacy](FAMILY-SETUP.md#server-and-privacy) for shared storage and media handling. Contact slots stay local; selected fallback numbers reach the server for scoped approval and reach the telephone provider only when dialing. The Contacts picker exposes only the selected contact property, not the full address book. Keychain protects device credentials, the caregiver PIN and phone approvals. No recording, advertising, tracking or analytics is configured. Review App Store privacy disclosures for the server, LiveKit and telephone-provider data handling.
 
 Caregiver settings also offer **Bedside display → Default / Dynamic**. Both retain the large current date and time; Dynamic adds day/night and season cues using a configurable daily schedule and hemisphere. Invitations created from a person show pending acceptance and link automatically when accepted. See the [family setup guide](FAMILY-SETUP.md) for details.
+
+Under **Bedside display → Bedside language**, choose **繁體中文** for Traditional Chinese clock, contact-picker and call screens, plus Mandarin drop-in announcements. Caregiver/family screens remain English and contact names are preserved. Contact cards use large wrapping names and keypad numbers without phone icons. **Call preferences → Test ringing / Test video announcement** checks local sound, output and media volume without placing a call. Incoming ringing repeats; drop-ins finish the spoken warning before their five-second countdown, and require manual acceptance if the announcement fails.

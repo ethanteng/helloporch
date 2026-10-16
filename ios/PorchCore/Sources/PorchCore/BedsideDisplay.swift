@@ -7,7 +7,17 @@ public struct BedsidePreferences: Codable, Equatable {
     public var hemisphere: Hemisphere = .northern
     public var dayStart: Int = 6
     public var nightStart: Int = 18
+    public var language: BedsideLanguage = .english
     public init() {}
+    private enum CodingKeys: String, CodingKey { case appearance, hemisphere, dayStart, nightStart, language }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        appearance = try values.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .default
+        hemisphere = try values.decodeIfPresent(Hemisphere.self, forKey: .hemisphere) ?? .northern
+        dayStart = try values.decodeIfPresent(Int.self, forKey: .dayStart) ?? 6
+        nightStart = try values.decodeIfPresent(Int.self, forKey: .nightStart) ?? 18
+        language = (try values.decodeIfPresent(String.self, forKey: .language)).flatMap(BedsideLanguage.init(rawValue:)) ?? .english
+    }
     private static let key = "porch.bedsideDisplay.v1"
     public static func load(from defaults: UserDefaults = .standard) -> Self {
         guard let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(Self.self, from: data),

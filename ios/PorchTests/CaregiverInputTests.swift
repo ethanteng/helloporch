@@ -1,10 +1,114 @@
 import XCTest
 import UIKit
 import GameController
+import AVFoundation
 import PorchCore
 @testable import Porch
 
 final class CaregiverInputTests: XCTestCase {
+    @MainActor private func chineseBedside() -> () -> Void {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: "porch.bedsideDisplay.v1"), experience = defaults.object(forKey: "porch.experience")
+        var preferences = BedsidePreferences(); preferences.language = .traditionalChinese; preferences.appearance = .dynamic; preferences.save()
+        defaults.set("bedside", forKey: "porch.experience")
+        return { defaults.set(saved, forKey: "porch.bedsideDisplay.v1"); defaults.set(experience, forKey: "porch.experience") }
+    }
+    @MainActor private func labels(in view: UIView) -> [UILabel] { (view as? UILabel).map { [$0] } ?? view.subviews.flatMap { labels(in: $0) } }
+    @MainActor private func incoming(_ kind: String, audio: IncomingCallAudioPlaying) throws -> IncomingFamilyCallViewController {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let data = try JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": kind, "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": "家人"])
+        let call = try JSONDecoder().decode(FamilyCallRecord.self, from: data)
+        return IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .bedside), audio: audio)
+    }
+    @MainActor func testChineseBedsideClockAndLargeContactCards() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let clock = CallViewController(); clock.loadViewIfNeeded()
+        clock.view.frame = CGRect(x: 0, y: 0, width: 1032, height: 1376); clock.view.layoutIfNeeded(); clock.viewDidLayoutSubviews()
+        XCTAssertEqual(buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.call" }?.configuration?.title, "打電話")
+        XCTAssertTrue(labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.weekday" }?.text?.contains("星期") == true)
+        XCTAssertTrue(labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.date" }?.text?.contains("年") == true)
+        let time = labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.time" }!.attributedText!
+        if let first = time.string.first, !first.isNumber {
+            let number = time.string.firstIndex(where: \.isNumber)!
+            let numberIndex = time.string.distance(from: time.string.startIndex, to: number)
+            XCTAssertLessThan((time.attribute(.font, at: 0, effectiveRange: nil) as! UIFont).pointSize, (time.attribute(.font, at: numberIndex, effectiveRange: nil) as! UIFont).pointSize / 2)
+        }
+        for _ in 0..<8 { NotificationCenter.default.post(name: .porchBedsideDisplayChanged, object: nil) }
+        let repeated = labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.time" }!.attributedText!
+        let digit = repeated.string.firstIndex(where: \.isNumber)!
+        let digitIndex = (repeated.string as NSString).range(of: String(repeated.string[digit])).location
+        XCTAssertGreaterThan((repeated.attribute(.font, at: digitIndex, effectiveRange: nil) as! UIFont).pointSize, 250, "Chinese day-period prefixes must not shrink the clock on each update")
+        var slots = CallSlots()
+        for digit in CallSlots.digits { try slots.setContact(CallContact(name: digit == 1 ? "家人" : "A relative with a longer name", nativeCall: NativeCall(room: "test", mode: .video)), for: digit) }
+        let picker = PeoplePickerViewController(slots: slots); picker.loadViewIfNeeded()
+        for size in [CGSize(width: 744, height: 1133), CGSize(width: 1133, height: 744), CGSize(width: 1032, height: 1376)] {
+            picker.view.frame = CGRect(origin: .zero, size: size); picker.view.layoutIfNeeded(); picker.viewDidLayoutSubviews(); picker.view.layoutIfNeeded()
+            XCTAssertTrue(labels(in: picker.view).contains { $0.text == "您想打給誰？" })
+            let people = buttons(in: picker.view).filter { $0.accessibilityIdentifier?.hasPrefix("people.person.") == true }
+            XCTAssertEqual(people.count, 10)
+            for person in people {
+                person.layoutIfNeeded()
+                XCTAssertNil(person.configuration?.image)
+                XCTAssertGreaterThanOrEqual(person.titleLabel?.font.pointSize ?? 0, 44)
+                XCTAssertGreaterThanOrEqual(person.bounds.height, 200)
+                XCTAssertTrue(person.configuration?.subtitle?.hasPrefix("按 ") == true)
+            }
+        }
+        UserDefaults.standard.set("family", forKey: "porch.experience")
+        XCTAssertEqual(BedsideText.string("End call"), "End call", "Family mode keeps its existing language")
+    }
+    @MainActor func testCaregiverCanChooseAndSaveTraditionalChineseWithoutChangingSchedule() {
+        let restore = chineseBedside(); defer { restore() }
+        var preferences = BedsidePreferences(); preferences.dayStart = 7; preferences.nightStart = 21; preferences.save()
+        let settings = BedsideDisplaySettingsViewController(); settings.loadViewIfNeeded()
+        let language = descendants(settings.view).first { $0.accessibilityIdentifier == "bedside.language" } as! UISegmentedControl
+        XCTAssertEqual(language.titleForSegment(at: 1), "繁體中文")
+        language.selectedSegmentIndex = 1; language.sendActions(for: .valueChanged)
+        let save = settings.navigationItem.rightBarButtonItem!
+        UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
+        let saved = BedsidePreferences.load()
+        XCTAssertEqual(saved.language, .traditionalChinese); XCTAssertEqual(saved.dayStart, 7); XCTAssertEqual(saved.nightStart, 21)
+    }
+    @MainActor func testIncomingRingingRepeatsUntilTheScreenLeavesAndUsesChineseControls() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let audio = TestIncomingAudio()
+        let ringing = try incoming("call", audio: audio)
+        ringing.loadViewIfNeeded(); ringing.viewDidAppear(false); ringing.viewDidAppear(false)
+        XCTAssertEqual(audio.ringCount, 1)
+        XCTAssertTrue(buttons(in: ringing.view).contains { $0.configuration?.title == "接聽視訊" })
+        XCTAssertTrue(buttons(in: ringing.view).contains { $0.configuration?.title == "拒接" })
+        ringing.viewWillDisappear(false); XCTAssertGreaterThan(audio.stopCount, 0)
+    }
+    @MainActor func testDropInWaitsForAnnouncementBeforeCountingDownAndStopsOnLeaving() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!), audio = TestIncomingAudio()
+        let controller = try incoming("dropIn", audio: audio)
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        defer { controller.viewWillDisappear(false); window.isHidden = true; original.makeKeyAndVisible() }
+        controller.viewDidAppear(false)
+        XCTAssertEqual(audio.language, .traditionalChinese); XCTAssertEqual(audio.video, true)
+        for _ in 0..<6 { controller.advanceCountdown() }
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "正在提示視訊自動接聽…" })
+        audio.completion?(true)
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "視訊自動接聽\n5 秒後接通…" })
+        controller.advanceCountdown()
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "視訊自動接聽\n4 秒後接通…" })
+        controller.viewWillDisappear(false); XCTAssertGreaterThan(audio.stopCount, 0)
+    }
+    @MainActor func testFailedAnnouncementRequiresManualAnswerInsteadOfStartingSilentVideo() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!), audio = TestIncomingAudio()
+        let controller = try incoming("dropIn", audio: audio)
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        defer { controller.viewWillDisappear(false); window.isHidden = true; original.makeKeyAndVisible() }
+        controller.viewDidAppear(false); audio.completion?(false)
+        for _ in 0..<6 { controller.advanceCountdown() }
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "無法播放提示音，請按接聽以接通。" })
+        XCTAssertTrue(buttons(in: controller.view).contains { $0.configuration?.title == "接聽視訊" && !$0.isHidden })
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text?.contains("接聽，長按") == true })
+    }
     @MainActor func testLargeClockFitsPortraitAndLandscapeWithoutCoveringCallButton() {
         func find(_ identifier: String, in view: UIView) -> UIView? {
             if view.accessibilityIdentifier == identifier { return view }
@@ -373,4 +477,16 @@ final class CaregiverInputTests: XCTestCase {
         let a = luminance(first), b = luminance(second)
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
+}
+
+@MainActor private final class TestIncomingAudio: IncomingCallAudioPlaying {
+    var ringCount = 0, stopCount = 0
+    var language: BedsideLanguage?
+    var video: Bool?
+    var completion: ((Bool) -> Void)?
+    func ring() -> Bool { ringCount += 1; return true }
+    func announce(name: String, video: Bool, language: BedsideLanguage, completion: @escaping (Bool) -> Void) {
+        self.language = language; self.video = video; self.completion = completion
+    }
+    func stop() { stopCount += 1; completion = nil }
 }

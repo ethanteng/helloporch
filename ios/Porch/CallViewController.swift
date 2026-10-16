@@ -11,6 +11,7 @@ final class CallViewController: UIViewController {
     private let contextLabel = UILabel()
     private let weekdayLabel = UILabel()
     private let timeLabel = UILabel()
+    private var clockFont = UIFont.monospacedDigitSystemFont(ofSize: 360, weight: .regular)
     private let dateLabel = UILabel()
     private let statusLabel = UILabel()
     private let caregiver = UIButton(type: .system)
@@ -36,9 +37,9 @@ final class CallViewController: UIViewController {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-contact") || ProcessInfo.processInfo.arguments.contains("--preview-six") {
             slots = CallSlots()
-            let names = ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
+            let names = ProcessInfo.processInfo.arguments.contains("--preview-chinese") ? ["家人", "陳先生", "林小姐", "王阿姨", "李叔叔", "朋友"] : ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
             for (index, name) in names.enumerated() {
-                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "family-\(name.lowercased())", mode: .video)), for: index + 1)
+                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "preview-person-\(index + 1)", mode: .video)), for: index + 1)
             }
         }
         #endif
@@ -50,7 +51,7 @@ final class CallViewController: UIViewController {
         contextLabel.accessibilityIdentifier = "clock.context"
         contextLabel.adjustsFontSizeToFitWidth = true; contextLabel.minimumScaleFactor = 0.5
         weekdayLabel.font = PorchStyle.font(72, weight: .medium)
-        timeLabel.font = .monospacedDigitSystemFont(ofSize: 360, weight: .regular)
+        timeLabel.font = clockFont
         timeLabel.adjustsFontSizeToFitWidth = true
         timeLabel.minimumScaleFactor = 0.28
         timeLabel.numberOfLines = 1
@@ -143,6 +144,11 @@ final class CallViewController: UIViewController {
             let person = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
             present(PorchStyle.navigation(SetupViewController(slot: 1, contact: person)), animated: false)
 
+        } else if args.contains("--preview-incoming-video") {
+            let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            let data = try! JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "dropIn", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": args.contains("--preview-chinese") ? "家人" : "A family member"])
+            let call = try! JSONDecoder().decode(FamilyCallRecord.self, from: data)
+            present(IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "preview", role: .bedside)), animated: false)
         } else if args.contains("--preview-caregiver") { showUnlockedSetup() }
         else if args.contains("--preview-family-settings") { present(PorchStyle.navigation(FamilyAdminViewController()), animated: false) }
         else if args.contains("--preview-pin-setup") { present(PorchStyle.navigation(CaregiverPINViewController(profile: nil)), animated: false) }
@@ -171,7 +177,8 @@ final class CallViewController: UIViewController {
         contextLabel.font = PorchStyle.font(max(18, min(32, height * 0.07)), weight: .semibold)
         weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
         dateLabel.font = .systemFont(ofSize: min(width * 0.061, height * 0.11))
-        timeLabel.font = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
+        clockFont = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
+        timeLabel.font = clockFont
         updateClock()
     }
 
@@ -200,12 +207,10 @@ final class CallViewController: UIViewController {
         for formatter in [timeFormatter, weekdayFormatter, dateFormatter] {
             formatter.timeZone = .autoupdatingCurrent
             formatter.calendar = .autoupdatingCurrent
+            formatter.locale = BedsideText.language.locale
         }
-        timeFormatter.locale = .autoupdatingCurrent
         timeFormatter.dateStyle = .none; timeFormatter.timeStyle = .short
-        weekdayFormatter.locale = .autoupdatingCurrent
         weekdayFormatter.setLocalizedDateFormatFromTemplate("EEEE")
-        dateFormatter.locale = .autoupdatingCurrent
         dateFormatter.setLocalizedDateFormatFromTemplate("MMMMdyyyy")
         updateClock()
         clockTimer?.fireDate = nextMinute
@@ -239,7 +244,7 @@ final class CallViewController: UIViewController {
                 statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
                 appliedDisplayStyle = style
             }
-            contextLabel.text = "\(scene.period.rawValue) · \(scene.season.rawValue)"
+            contextLabel.text = "\(BedsideText.string(scene.period.rawValue)) · \(BedsideText.string(scene.season.rawValue))"
             // Switch the complete contrast treatment at a schedule boundary;
             // a crossfade between light and dark text would briefly lose contrast.
             if sceneView.window != nil && !UIAccessibility.isReduceMotionEnabled && sceneView.scene.isDay == scene.isDay && sceneView.scene != scene {
@@ -256,10 +261,11 @@ final class CallViewController: UIViewController {
             statusLabel.textColor = PorchStyle.nightSecondary; statusLabel.backgroundColor = .clear
         }
         let time = timeFormatter.string(from: now).replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
-        let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: clockColor])
-        for symbol in [timeFormatter.amSymbol, timeFormatter.pmSymbol] {
-            guard let symbol, !symbol.isEmpty, let range = time.range(of: symbol, options: .caseInsensitive) else { continue }
-            text.addAttributes([.font: UIFont.systemFont(ofSize: timeLabel.font.pointSize * 0.25, weight: .medium)], range: NSRange(range, in: time))
+        let text = NSMutableAttributedString(string: time, attributes: [.font: clockFont, .foregroundColor: clockColor])
+        // Flexible Chinese periods include 中午/凌晨, beyond the AM/PM symbols.
+        let periods = try? NSRegularExpression(pattern: "[\\p{L}\\p{M}]+")
+        for match in periods?.matches(in: time, range: NSRange(time.startIndex..., in: time)) ?? [] {
+            text.addAttributes([.font: UIFont.systemFont(ofSize: clockFont.pointSize * 0.25, weight: .medium)], range: match.range)
         }
         timeLabel.attributedText = text
         weekdayLabel.text = weekdayFormatter.string(from: now)
@@ -273,7 +279,11 @@ final class CallViewController: UIViewController {
         if ProcessInfo.processInfo.arguments.contains("--preview-dynamic") { dynamic = true }
         #endif
         sceneView.isHidden = !dynamic; contextLabel.isHidden = !dynamic
-        updateClock()
+        callButton.configuration?.title = BedsideText.string("Call someone")
+        caregiver.accessibilityLabel = BedsideText.string("Caregiver mode")
+        caregiver.accessibilityHint = BedsideText.string("Tap or hold to manage contacts and settings.")
+        BedsideText.applyAccessibilityLanguage(to: view)
+        resetClock()
     }
     @objc private func reloadSlots() {
         do { slots = try CallSlots.load() } catch { statusLabel.text = error.localizedDescription }
@@ -313,11 +323,11 @@ final class CallViewController: UIViewController {
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         guard slots.action(for: slot) == .person else {
-            statusLabel.text = slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call."
+            statusLabel.text = BedsideText.string(slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call.")
             return
         }
         guard let contact = slots.contact(for: slot) else {
-            statusLabel.text = "No one is assigned to \(slot).\nPlease choose another number."
+            statusLabel.text = BedsideText.string("No one is assigned to %d.\nPlease choose another number.", slot)
             return
         }
         guard let native = contact.nativeCall else {
@@ -344,8 +354,8 @@ final class CallViewController: UIViewController {
                 // confirmed offline result permits an unpaired phone handoff.
                 if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
                     do { self.present(try NativeCallViewController.phoneFallback(contact), animated: true) }
-                    catch { self.showError("Couldn't call \(contact.name)", message: error.localizedDescription) }
-                } else { self.showError("Couldn't call \(contact.name)", message: error.localizedDescription) }
+                    catch { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
+                } else { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
             }
         }
     }
@@ -377,8 +387,8 @@ final class CallViewController: UIViewController {
     }
 
     private func showError(_ title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        let alert = UIAlertController(title: BedsideText.string(title), message: BedsideText.error(message), preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: BedsideText.string("OK"), style: .default))
         present(alert, animated: true)
     }
 }
@@ -389,6 +399,7 @@ final class PeoplePickerViewController: UIViewController {
     private let grid = UIStackView()
     private var trigger = CallTrigger()
     private var columns = 0
+    private var gridWidth: CGFloat = 0
     private var choosing = false
     init(slots: CallSlots) {
         self.slots = slots
@@ -402,11 +413,15 @@ final class PeoplePickerViewController: UIViewController {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .dark
         view.backgroundColor = PorchStyle.night
-        let heading = PorchStyle.label("Who would you like to call?", size: 36, color: PorchStyle.nightText, weight: .semibold)
-        let hint = PorchStyle.label("Tap a name or press their number on the keypad.", size: 20, color: PorchStyle.nightSecondary)
+        let heading = PorchStyle.label(BedsideText.string("Who would you like to call?"), size: 36, color: PorchStyle.nightText, weight: .semibold)
+        let hint = PorchStyle.label(BedsideText.string("Tap a name or press their number on the keypad."), size: 20, color: PorchStyle.nightSecondary)
         heading.textAlignment = .center; hint.textAlignment = .center
-        let back = PorchStyle.button("Back to clock", symbol: "clock", filled: false)
+        let back = PorchStyle.button(BedsideText.string("Back to clock"), symbol: "clock", filled: false)
         back.configuration?.baseForegroundColor = PorchStyle.nightText
+        back.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes; attributes.font = PorchStyle.font(28, weight: .medium); return attributes
+        }
+        back.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
         back.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
         grid.axis = .vertical; grid.spacing = 16
         let scroll = UIScrollView()
@@ -427,34 +442,46 @@ final class PeoplePickerViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -32),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -64)
         ])
+        BedsideText.applyAccessibilityLanguage(to: view)
     }
     override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); becomeFirstResponder() }
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let count = traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 ? 1 : view.bounds.width > view.bounds.height ? 3 : 2
-        guard columns != count else { return }
-        columns = count
+        guard columns != count || abs(gridWidth - view.bounds.width) > 1 else { return }
+        columns = count; gridWidth = view.bounds.width
+        let cardWidth = (view.bounds.width - 64 - CGFloat(count - 1) * 16) / CGFloat(count)
+        let nameSize = max(44, min(76, cardWidth * 0.15))
+        let numberSize = max(28, min(38, cardWidth * 0.075))
         grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
         let people = CallSlots.digits.compactMap { index in slots.contact(for: index).map { (index, $0) } }
         if people.isEmpty {
-            grid.addArrangedSubview(PorchStyle.label("Your caregiver can add people using the settings icon on the clock screen.", size: 24, color: PorchStyle.nightText))
+            grid.addArrangedSubview(PorchStyle.label(BedsideText.string("Your caregiver can add people using the settings icon on the clock screen."), size: 24, color: PorchStyle.nightText))
         }
         for start in stride(from: 0, to: people.count, by: columns) {
             let row = UIStackView(); row.spacing = 16; row.distribution = .fillEqually
             for index in start..<min(start + columns, people.count) {
                 let (number, person) = people[index]
                 let button = PorchStyle.button(person.name)
-                button.configuration?.subtitle = "Press \(number)"
-                button.configuration?.image = UIImage(systemName: "phone.fill")
-                button.configuration?.imagePlacement = .top
-                button.configuration?.imagePadding = 16
+                button.configuration?.subtitle = BedsideText.string("Press %d", number)
+                button.configuration?.image = nil
+                button.configuration?.titleAlignment = .center
+                button.configuration?.titleLineBreakMode = .byWordWrapping
+                button.configuration?.subtitleLineBreakMode = .byWordWrapping
+                button.configuration?.titlePadding = 12
+                button.configuration?.contentInsets = .init(top: 28, leading: 20, bottom: 28, trailing: 20)
                 button.configuration?.baseBackgroundColor = PorchStyle.nightSurface
                 button.configuration?.baseForegroundColor = PorchStyle.nightText
                 button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = attributes; attributes.font = PorchStyle.font(30, weight: .semibold); return attributes
+                    var attributes = attributes; attributes.font = PorchStyle.font(nameSize, weight: .semibold); return attributes
                 }
-                button.accessibilityLabel = "Call \(person.name), key \(number)"
-                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+                button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                    var attributes = attributes; attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = PorchStyle.nightText; return attributes
+                }
+                button.accessibilityIdentifier = "people.person.\(number)"
+                button.accessibilityLanguage = BedsideText.language.speechLanguage
+                button.accessibilityLabel = BedsideText.string("Call %@, key %d", person.name, number)
+                button.heightAnchor.constraint(greaterThanOrEqualToConstant: max(200, nameSize * 3.5)).isActive = true
                 button.addAction(UIAction { [weak self] _ in self?.choose(number) }, for: .touchUpInside)
                 row.addArrangedSubview(button)
             }
