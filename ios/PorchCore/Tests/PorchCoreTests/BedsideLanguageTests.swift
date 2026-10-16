@@ -7,10 +7,56 @@ final class BedsideLanguageTests: XCTestCase {
         let saved = try JSONDecoder().decode(BedsidePreferences.self, from: data)
         XCTAssertEqual(saved.appearance, .dynamic); XCTAssertEqual(saved.hemisphere, .southern)
         XCTAssertEqual(saved.dayStart, 7); XCTAssertEqual(saved.nightStart, 21); XCTAssertEqual(saved.language, .english)
-        var chinese = saved; chinese.language = .traditionalChinese
-        XCTAssertEqual(try JSONDecoder().decode(BedsidePreferences.self, from: JSONEncoder().encode(chinese)), chinese)
+        for language in BedsideLanguage.allCases {
+            var localized = saved; localized.language = language
+            XCTAssertEqual(try JSONDecoder().decode(BedsidePreferences.self, from: JSONEncoder().encode(localized)), localized)
+        }
         let future = Data(#"{"appearance":"dynamic","dayStart":7,"nightStart":21,"language":"future"}"#.utf8)
         XCTAssertEqual(try JSONDecoder().decode(BedsidePreferences.self, from: future).language, .english)
+    }
+    func testEveryLanguageCoversAllBedsideStringsAndPreservesFormatArguments() throws {
+        let keys = Set(BedsideLanguage.traditionalChinese.translations.keys)
+        let placeholders = try NSRegularExpression(pattern: "%[@d]")
+        func arguments(in text: String) -> [String] {
+            placeholders.matches(in: text, range: NSRange(text.startIndex..., in: text)).map { (text as NSString).substring(with: $0.range) }
+        }
+        for language in BedsideLanguage.allCases where language != .english {
+            XCTAssertEqual(Set(language.translations.keys), keys, language.rawValue)
+            for key in keys {
+                let text = language.text(key)
+                XCTAssertFalse(text.isEmpty, "\(language): \(key)")
+                XCTAssertNotEqual(text, key, "\(language): \(key)")
+                XCTAssertEqual(arguments(in: text), arguments(in: key), "\(language): \(key)")
+            }
+            XCTAssertTrue(language.format("Call %@, key %d", arguments: ["María 陳", 8]).contains("María 陳"))
+            XCTAssertTrue(language.format("Call %@, key %d", arguments: ["María 陳", 8]).contains("8"))
+        }
+    }
+    func testNewLanguagesUseDistinctTranslationsAndAnnouncementVoices() {
+        XCTAssertEqual(BedsideLanguage.simplifiedChinese.text("End call"), "挂断")
+        XCTAssertEqual(BedsideLanguage.cantonese.text("End call"), "收線")
+        XCTAssertEqual(BedsideLanguage.spanish.text("End call"), "Colgar")
+        XCTAssertEqual(BedsideLanguage.simplifiedChinese.speechLanguage, "zh-CN")
+        XCTAssertEqual(BedsideLanguage.cantonese.speechLanguage, "zh-HK")
+        XCTAssertEqual(BedsideLanguage.spanish.speechLanguage, "es-ES")
+        XCTAssertEqual(BedsideLanguage.cantonese.format("%@ is dropping in with video. Connecting in five seconds.", arguments: ["陳先生"]), "陳先生想同您視像通話，五秒後接通。")
+        XCTAssertEqual(BedsideLanguage.simplifiedChinese.format("Video drop-in\nConnecting in %d…", arguments: [5]), "视频自动接听\n5 秒后接通…")
+        XCTAssertEqual(BedsideLanguage.spanish.format("Tap %d to answer. Hold %d to decline.", arguments: [0, 0]), "Pulse 0 para contestar. Mantenga pulsado 0 para rechazar.")
+        XCTAssertEqual(BedsideLanguage.english.text("End call"), "End call")
+    }
+    func testNewLanguageDatesKeepTheLocalDateAndWeekday() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 23, minute: 35))!
+        for language in [BedsideLanguage.simplifiedChinese, .cantonese, .spanish] {
+            let formatter = DateFormatter(); formatter.locale = language.locale
+            formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
+            formatter.setLocalizedDateFormatFromTemplate("EEEE")
+            XCTAssertEqual(formatter.string(from: date), language == .spanish ? "viernes" : "星期五")
+            formatter.setLocalizedDateFormatFromTemplate("yyyyMMMMd")
+            let text = formatter.string(from: date)
+            XCTAssertTrue(text.contains("2026")); XCTAssertTrue(text.contains("16"))
+            XCTAssertTrue(text.contains(language == .spanish ? "octubre" : "10月"))
+        }
     }
     func testTraditionalChineseCoversOrientationAndCallActions() {
         let language = BedsideLanguage.traditionalChinese

@@ -6,10 +6,10 @@ import PorchCore
 @testable import Porch
 
 final class CaregiverInputTests: XCTestCase {
-    @MainActor private func chineseBedside() -> () -> Void {
+    @MainActor private func localizedBedside(_ language: BedsideLanguage = .traditionalChinese) -> () -> Void {
         let defaults = UserDefaults.standard
         let saved = defaults.object(forKey: "porch.bedsideDisplay.v1"), experience = defaults.object(forKey: "porch.experience")
-        var preferences = BedsidePreferences(); preferences.language = .traditionalChinese; preferences.appearance = .dynamic; preferences.save()
+        var preferences = BedsidePreferences(); preferences.language = language; preferences.appearance = .dynamic; preferences.save()
         defaults.set("bedside", forKey: "porch.experience")
         return { defaults.set(saved, forKey: "porch.bedsideDisplay.v1"); defaults.set(experience, forKey: "porch.experience") }
     }
@@ -21,7 +21,7 @@ final class CaregiverInputTests: XCTestCase {
         return IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .bedside), snapshot: snapshot, audio: audio)
     }
     @MainActor func testRenamedContactIsShownAndAnnouncedForIncomingVoiceVideoAndDropIn() throws {
-        let restoreLanguage = chineseBedside(); defer { restoreLanguage() }
+        let restoreLanguage = localizedBedside(); defer { restoreLanguage() }
         let defaults = UserDefaults.standard, keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
@@ -50,7 +50,7 @@ final class CaregiverInputTests: XCTestCase {
         }
     }
     @MainActor func testChineseBedsideClockAndLargeContactCards() throws {
-        let restore = chineseBedside(); defer { restore() }
+        let restore = localizedBedside(); defer { restore() }
         let clock = CallViewController(); clock.loadViewIfNeeded()
         clock.view.frame = CGRect(x: 0, y: 0, width: 1032, height: 1376); clock.view.layoutIfNeeded(); clock.viewDidLayoutSubviews()
         XCTAssertEqual(buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.call" }?.configuration?.title, "打電話")
@@ -86,20 +86,69 @@ final class CaregiverInputTests: XCTestCase {
         UserDefaults.standard.set("family", forKey: "porch.experience")
         XCTAssertEqual(BedsideText.string("End call"), "End call", "Family mode keeps its existing language")
     }
-    @MainActor func testCaregiverCanChooseAndSaveTraditionalChineseWithoutChangingSchedule() {
-        let restore = chineseBedside(); defer { restore() }
-        var preferences = BedsidePreferences(); preferences.dayStart = 7; preferences.nightStart = 21; preferences.save()
-        let settings = BedsideDisplaySettingsViewController(); settings.loadViewIfNeeded()
-        let language = descendants(settings.view).first { $0.accessibilityIdentifier == "bedside.language" } as! UISegmentedControl
-        XCTAssertEqual(language.titleForSegment(at: 1), "繁體中文")
-        language.selectedSegmentIndex = 1; language.sendActions(for: .valueChanged)
-        let save = settings.navigationItem.rightBarButtonItem!
-        UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
-        let saved = BedsidePreferences.load()
-        XCTAssertEqual(saved.language, .traditionalChinese); XCTAssertEqual(saved.dayStart, 7); XCTAssertEqual(saved.nightStart, 21)
+    @MainActor func testCaregiverCanChooseAndSaveEveryLanguageWithoutChangingSchedule() {
+        let restore = localizedBedside(); defer { restore() }
+        var preferences = BedsidePreferences(); preferences.dayStart = 7; preferences.nightStart = 21
+        preferences.hemisphere = .southern; preferences.appearance = .dynamic; preferences.save()
+        for choice in BedsideLanguage.allCases {
+            let settings = BedsideDisplaySettingsViewController(); settings.loadViewIfNeeded()
+            let options = buttons(in: settings.view).filter { $0.accessibilityIdentifier?.hasPrefix("bedside.language.") == true }
+            XCTAssertEqual(options.count, 5)
+            let language = options.first { $0.accessibilityIdentifier == "bedside.language.\(choice.rawValue)" }!
+            XCTAssertEqual(language.configuration?.title, choice.displayName)
+            language.sendActions(for: .touchUpInside)
+            XCTAssertTrue(language.accessibilityTraits.contains(.selected))
+            XCTAssertEqual(options.filter { $0.accessibilityTraits.contains(.selected) }.count, 1)
+            XCTAssertEqual(BedsidePreferences.load(), preferences, "Selection is only persisted on Save")
+            for size in [CGSize(width: 320, height: 568), CGSize(width: 744, height: 1133)] {
+                settings.view.frame = CGRect(origin: .zero, size: size); settings.view.layoutIfNeeded()
+                for option in options {
+                    XCTAssertGreaterThanOrEqual(option.bounds.height, 44)
+                    XCTAssertLessThanOrEqual(option.bounds.width, size.width)
+                    XCTAssertGreaterThan(option.bounds.width, 0)
+                }
+            }
+            let save = settings.navigationItem.rightBarButtonItem!
+            UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
+            preferences.language = choice
+            XCTAssertEqual(BedsidePreferences.load(), preferences)
+            let reopened = BedsideDisplaySettingsViewController(); reopened.loadViewIfNeeded()
+            XCTAssertTrue(buttons(in: reopened.view).first { $0.accessibilityIdentifier == language.accessibilityIdentifier }!.accessibilityTraits.contains(.selected))
+        }
+    }
+    @MainActor func testNewLanguagesReachClockContactsIncomingCallsAndAnnouncements() throws {
+        for language in [BedsideLanguage.simplifiedChinese, .cantonese, .spanish] {
+            let restore = localizedBedside(language); defer { restore() }
+            let clock = CallViewController(); clock.loadViewIfNeeded()
+            XCTAssertEqual(buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.call" }?.configuration?.title, language.text("Call someone"))
+            XCTAssertEqual(BedsideText.error("An unexpected server error"), language.text("Please ask your caregiver for help, then try again."))
+            var slots = CallSlots()
+            try slots.setContact(CallContact(name: "María 陳", nativeCall: NativeCall(room: "test", mode: .video)), for: 1)
+            let picker = PeoplePickerViewController(slots: slots); picker.loadViewIfNeeded()
+            for size in [CGSize(width: 744, height: 1133), CGSize(width: 1133, height: 744)] {
+                picker.view.frame = CGRect(origin: .zero, size: size); picker.view.layoutIfNeeded(); picker.viewDidLayoutSubviews(); picker.view.layoutIfNeeded()
+                XCTAssertTrue(labels(in: picker.view).contains { $0.text == language.text("Who would you like to call?") })
+                let person = buttons(in: picker.view).first { $0.accessibilityIdentifier == "people.person.1" }!
+                XCTAssertEqual(person.configuration?.title, "María 陳")
+                XCTAssertEqual(person.configuration?.subtitle, language.format("Press %d", arguments: [1]))
+                XCTAssertEqual(person.accessibilityLanguage, language.speechLanguage)
+            }
+            for mode in [NativeCall.Mode.voice, .video] {
+                let audio = TestIncomingAudio()
+                let controller = try incoming("dropIn", mode: mode, callerName: "María 陳", audio: audio)
+                controller.loadViewIfNeeded(); controller.viewDidAppear(false)
+                XCTAssertEqual(audio.language, language); XCTAssertEqual(audio.name, "María 陳")
+                XCTAssertEqual(audio.video, mode == .video)
+                XCTAssertTrue(labels(in: controller.view).contains { $0.text == language.text(mode == .video ? "Announcing video drop-in…" : "Announcing audio drop-in…") })
+                XCTAssertTrue(buttons(in: controller.view).contains { $0.configuration?.title == language.text("Don't connect") })
+                controller.viewWillDisappear(false)
+            }
+            UserDefaults.standard.set("family", forKey: "porch.experience")
+            XCTAssertEqual(BedsideText.string("End call"), "End call")
+        }
     }
     @MainActor func testIncomingRingingRepeatsUntilTheScreenLeavesAndUsesChineseControls() throws {
-        let restore = chineseBedside(); defer { restore() }
+        let restore = localizedBedside(); defer { restore() }
         let audio = TestIncomingAudio()
         let ringing = try incoming("call", audio: audio)
         ringing.loadViewIfNeeded(); ringing.viewDidAppear(false); ringing.viewDidAppear(false)
@@ -109,7 +158,7 @@ final class CaregiverInputTests: XCTestCase {
         ringing.viewWillDisappear(false); XCTAssertGreaterThan(audio.stopCount, 0)
     }
     @MainActor func testDropInWaitsForAnnouncementBeforeCountingDownAndStopsOnLeaving() throws {
-        let restore = chineseBedside(); defer { restore() }
+        let restore = localizedBedside(); defer { restore() }
         let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
         let window = UIWindow(windowScene: original.windowScene!), audio = TestIncomingAudio()
         let controller = try incoming("dropIn", audio: audio)
@@ -126,7 +175,7 @@ final class CaregiverInputTests: XCTestCase {
         controller.viewWillDisappear(false); XCTAssertGreaterThan(audio.stopCount, 0)
     }
     @MainActor func testFailedAnnouncementRequiresManualAnswerInsteadOfStartingSilentVideo() throws {
-        let restore = chineseBedside(); defer { restore() }
+        let restore = localizedBedside(); defer { restore() }
         let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
         let window = UIWindow(windowScene: original.windowScene!), audio = TestIncomingAudio()
         let controller = try incoming("dropIn", audio: audio)

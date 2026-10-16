@@ -52,7 +52,7 @@ final class CallPreferencesViewController: CaregiverFormViewController {
         stopSoundTests()
         let language = BedsidePreferences.load().language
         soundStatus.text = "Playing the video announcement in the bedside language."
-        testAnnouncement.announce(name: language == .traditionalChinese ? "家人" : "A family member", video: true, language: language) { [weak self] success in
+        testAnnouncement.announce(name: language.text("A family member"), video: true, language: language) { [weak self] success in
             self?.soundStatus.text = success ? "Video announcement completed. No call was placed." : "Couldn't play the announcement. Check the iPad's audio output and installed voices."
         }
         if soundStatus.text == "Playing the video announcement in the bedside language." { soundStatus.text?.append("\n\(outputDescription())") }
