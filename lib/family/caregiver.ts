@@ -14,28 +14,39 @@ async function save(store: FamilyStore, key: string, update: (raw: string | null
   }
   throw new CaregiverAuthError("Caregiver verification is busy. Try again.", 409);
 }
-export async function checkCaregiverCode(request: Request, store?: FamilyStore, now = Math.floor(Date.now() / 1000)) {
+export const caregiverPINKey = (householdID?: string) => `security:caregiver-pin${householdID ? `:${householdID}` : ""}`;
+function pinRecord(pin: unknown) {
+  if (typeof pin !== "string" || !/^\d{6}$/.test(pin)) throw new CaregiverAuthError("Choose a six-digit caregiver PIN.", 400);
+  const salt = randomBytes(16).toString("hex");
+  return JSON.stringify({ salt, digest: digest(`${salt}.${pin}`).toString("hex") });
+}
+export async function initializeCaregiverPIN(pin: unknown, store: FamilyStore, householdID: string) {
+  return store.create(caregiverPINKey(householdID), pinRecord(pin));
+}
+export async function checkCaregiverCode(request: Request, store?: FamilyStore, now = Math.floor(Date.now() / 1000), householdID?: string) {
   const code = request.headers.get("X-Porch-Setup-Code") ?? "";
   // Existing long secrets remain valid for migration and recovery, never for family invitations.
   if (legacy(code)) return;
   if (!/^\d{6}$/.test(code)) throw new CaregiverAuthError("Enter your six-digit caregiver PIN.", 403);
   store ??= familyStore();
-  // Global attempt reservation is atomic across instances and IPs. Five guesses per 15 minutes.
-  await save(store, "security:pin-attempts", raw => {
+  // Five guesses per household per 15 minutes, reserved atomically across instances/IPs.
+  const attempts = `security:pin-attempts${householdID ? `:${householdID}` : ""}`;
+  await save(store, attempts, raw => {
     const current = raw ? JSON.parse(raw) : { attempts: 0, resetAt: now + 900 };
     if (current.resetAt <= now) { current.attempts = 0; current.resetAt = now + 900; }
     if (current.attempts >= 5) throw new CaregiverAuthError("Too many PIN attempts. Wait 15 minutes before trying again.", 429);
     current.attempts += 1;
     return JSON.stringify(current);
   });
-  const stored = await store.get("security:caregiver-pin");
+  // Older builds keep their shared PIN until this household chooses its own.
+  const own = householdID ? await store.get(caregiverPINKey(householdID)) : null;
+  const stored = own ?? await store.get(caregiverPINKey());
   const pin = stored ? JSON.parse(stored) : null;
   if (!pin || !equal(pin.digest, digest(`${pin.salt}.${code}`).toString("hex"))) throw new CaregiverAuthError("The caregiver PIN is incorrect.", 403);
-  await save(store, "security:pin-attempts", () => JSON.stringify({ attempts: 0, resetAt: now + 900 }));
+  await save(store, attempts, () => JSON.stringify({ attempts: 0, resetAt: now + 900 }));
 }
-export async function configureCaregiverPIN(request: Request, pin: unknown, store: FamilyStore, now: number) {
-  if (typeof pin !== "string" || !/^\d{6}$/.test(pin)) throw new CaregiverAuthError("Choose a six-digit caregiver PIN.", 400);
-  await checkCaregiverCode(request, store, now);
-  const salt = randomBytes(16).toString("hex");
-  await save(store, "security:caregiver-pin", () => JSON.stringify({ salt, digest: digest(`${salt}.${pin}`).toString("hex") }));
+export async function configureCaregiverPIN(request: Request, pin: unknown, store: FamilyStore, now: number, householdID?: string) {
+  const record = pinRecord(pin);
+  await checkCaregiverCode(request, store, now, householdID);
+  await save(store, caregiverPINKey(householdID), () => record);
 }

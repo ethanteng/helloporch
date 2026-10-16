@@ -134,31 +134,39 @@ final class FamilyPairingViewController: CaregiverFormViewController {
 
 final class FamilyAdminViewController: CaregiverFormViewController {
     private let householdName = UITextField()
-    private let pin = UITextField()
-    private let confirmation = UITextField()
     private let details = UIStackView()
     private var busy = false
+    private var displayed: FamilySnapshot?
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Family & drop-in"
         details.axis = .vertical; details.spacing = 20
-        form.addArrangedSubview(details); hideKeyboardControl()
+        form.addArrangedSubview(details)
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         refresh()
+    }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    @objc private func familyChanged() {
+        guard !busy, !householdName.isFirstResponder, displayed == nil || householdName.text == displayed?.householdName else { return }
+        let state = FamilyCoordinator.shared.state
+        if displayed?.householdName != state?.householdName || displayed?.people != state?.people || displayed?.dropInEnabled != state?.dropInEnabled { refresh() }
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); if PorchDevice.credential(for: .bedside) != nil { refresh() } }
     private func refresh() {
         details.arrangedSubviews.forEach { details.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard PorchDevice.credential(for: .bedside) != nil else {
-            householdName.text = "Mom"
-            pin.isSecureTextEntry = true; pin.keyboardType = .numberPad
-            confirmation.isSecureTextEntry = true; confirmation.keyboardType = .numberPad
-            let create = PorchStyle.button("Set up bedside device", symbol: "house.fill")
-            create.addTarget(self, action: #selector(createHousehold), for: .touchUpInside)
-            details.addArrangedSubview(section("A Porch for your family", detail: "Pair this iPad, then invite the people who may call it. Drop-in starts paused.", views: [field(householdName, title: "Bedside name", placeholder: "For example, Mom"), field(pin, title: "Caregiver PIN", placeholder: "Six digits"), field(confirmation, title: "Confirm PIN", placeholder: "Repeat the six digits"), create]))
-            details.addArrangedSubview(PorchStyle.label("Choose a six-digit PIN for caregiver settings. Existing installations can migrate their saved setup code automatically. A new installation uses the PIN already configured for your Porch."))
-            return
+            details.addArrangedSubview(PorchStyle.label("Return to the clock and open caregiver mode to finish setting up this bedside device.")); return
         }
         let state = FamilyCoordinator.shared.state
-        details.addArrangedSubview(section(state?.householdName ?? "Your family", detail: "Approved callers can connect automatically only while this bedside iPad is open and ready. Each drop-in is announced before the microphone or camera turns on.", views: []))
+        displayed = state
+        householdName.text = state?.householdName ?? "Your loved one"
+        householdName.autocapitalizationType = .words
+        let saveName = PorchStyle.button("Save name", symbol: "checkmark")
+        saveName.addAction(UIAction { [weak self] _ in
+            guard let self else { return }; self.view.endEditing(true)
+            Task { await self.perform("setHouseholdName", ["name": self.householdName.text ?? ""]) }
+        }, for: .touchUpInside)
+        details.addArrangedSubview(section("Who is this Porch for?", detail: "Family members will see this name when calling or dropping in.", views: [field(householdName, title: "Display name", placeholder: "Your loved one"), saveName]))
+        householdName.autocapitalizationType = .words
         let master = UISwitch(); master.isOn = state?.dropInEnabled == true; master.onTintColor = PorchStyle.accent
         let masterRow = UIStackView(arrangedSubviews: [PorchStyle.label("Allow approved drop-ins", size: 18, color: PorchStyle.ink), master]); masterRow.alignment = .center; masterRow.spacing = 16
         master.addAction(UIAction { [weak self, weak master] _ in
@@ -205,7 +213,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let changePIN = PorchStyle.button("Change caregiver PIN", symbol: "lock.rotation", filled: false)
         changePIN.addAction(UIAction { [weak self] _ in self?.navigationController?.pushViewController(ChangeCaregiverPINViewController(), animated: true) }, for: .touchUpInside)
         details.addArrangedSubview(changePIN)
-        details.addArrangedSubview(PorchStyle.label("To put a family member on a keypad number, edit that person and choose Link a family member. Ordinary incoming calls require Answer; only approved drop-ins answer automatically."))
+        details.addArrangedSubview(PorchStyle.label("To put a family member on a keypad number, edit that person and choose Link their Porch app. Ordinary incoming calls require Answer; only approved drop-ins answer automatically."))
     }
     private func requestMedia(video: Bool) async -> Bool {
         let microphone = await AVCaptureDevice.requestAccess(for: .audio)
@@ -216,38 +224,13 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         }
         return true
     }
-    @objc private func createHousehold() {
-        guard !busy else { return }
-        let code = pin.text ?? ""
-        guard code.range(of: "^[0-9]{6}$", options: .regularExpression) != nil, code == confirmation.text else {
-            showPorchError(FamilyServiceError(message: "Enter the same six-digit PIN in both fields.", status: 400), on: self); return
-        }
-        busy = true; view.endEditing(true)
-        Task { [weak self] in
-            guard let self else { return }; defer { self.busy = false }
-            do {
-                let origin = URL(string: NativeCallSettings.savedURL) ?? PorchDevice.defaultOrigin
-                let service = FamilyService(origin: origin)
-                let old = NativeCallSettings.caregiverCode
-                if old.count >= 16 { _ = try await service.send("setCaregiverPIN", ["pin": code], pin: old) }
-                let pending = try PorchDevice.pending(role: .bedside, origin: origin)
-                var registration = PorchDevice.registration(pending); registration["name"] = self.householdName.text ?? ""
-                let response = try await service.send("createHousehold", registration, pin: code)
-                guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
-                try NativeCallSettings.writeSecret(Data(code.utf8), account: "porch.contact-setup-code")
-                try PorchDevice.save(FamilyCredential(origin: origin, credential: token, role: .bedside))
-                FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)
-                self.refresh()
-            } catch { showPorchError(error, on: self) }
-        }
-    }
     private func perform(_ action: String, _ values: [String: Any] = [:]) async {
         guard !busy, let credential = PorchDevice.credential(for: .bedside) else { return }
         busy = true; defer { busy = false }
         do {
             let response = try await FamilyService(credential).send(action, values, pin: NativeCallSettings.caregiverCode)
             FamilyCoordinator.shared.update(response); refresh()
-        } catch { refresh(); showPorchError(error, on: self) }
+        } catch { if action != "setHouseholdName" { refresh() }; showPorchError(error, on: self) }
     }
     private func showInvite() {
         let invite = FamilyInviteViewController(); invite.onCreated = { [weak self] in self?.refresh() }
@@ -256,6 +239,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
 }
 
 final class FamilyInviteViewController: CaregiverFormViewController {
+    var prefilledName: String?
     var onCreated: (() -> Void)?
     private let personName = UITextField()
     private let audio = UISwitch()
@@ -263,6 +247,7 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     private let create = PorchStyle.button("Create invitation", symbol: "person.badge.plus")
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Invite someone"
+        personName.text = prefilledName
         func row(_ title: String, _ toggle: UISwitch) -> UIView {
             toggle.onTintColor = PorchStyle.accent
             let row = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink), toggle]); row.alignment = .center; row.spacing = 16; return row

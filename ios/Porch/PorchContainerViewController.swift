@@ -61,8 +61,15 @@ final class PorchContainerViewController: UIViewController {
         else { show() }
     }
     func openInvitation(_ url: URL) {
-        guard (try? FamilyInvitation(url: url)) != nil else { return }
         guard presentedViewController == nil, content?.presentedViewController == nil else { return }
+        if (try? BedsideInvitation(url: url)) != nil {
+            guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This bedside device is already set up. Use the activation link on the new iPad.", status: 409), on: self); return }
+            do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
+            PorchDevice.experience = .bedside
+            DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup() }
+            return
+        }
+        guard (try? FamilyInvitation(url: url)) != nil else { return }
         PorchDevice.experience = .family
         guard let nav = content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
         nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
@@ -71,28 +78,99 @@ final class PorchContainerViewController: UIViewController {
 
 final class CaregiverPINViewController: CaregiverFormViewController {
     var onUnlock: (() -> Void)?
-    private let pin = UITextField()
-    private let unlock = PorchStyle.button("Open caregiver mode", symbol: "lock.open")
+    private let profile: FamilyCredential?
+    init(profile: FamilyCredential? = PorchDevice.credential(for: .bedside)) {
+        self.profile = profile; super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(profile:)") }
+    private let pin = UITextField(), confirmation = UITextField(), activation = UITextField(), bedsideName = UITextField()
+    private let content = UIStackView()
+    private let submit = PorchStyle.button("Continue", symbol: "lock.fill")
+    private var creating = false
+    private var task: Task<Void, Never>?
+
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Caregiver mode"
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
-        pin.isSecureTextEntry = true; pin.keyboardType = .numberPad
-        form.addArrangedSubview(section("Your caregiver PIN", detail: "Enter the six-digit PIN to manage this bedside device.", views: [field(pin, title: "Six-digit PIN", placeholder: "••••••"), unlock]))
-        unlock.addTarget(self, action: #selector(check), for: .touchUpInside)
+        content.axis = .vertical; content.spacing = 20; form.addArrangedSubview(content)
+        for field in [pin, confirmation] { field.isSecureTextEntry = true; field.keyboardType = .numberPad }
+        pin.accessibilityIdentifier = "caregiver.pin"
+        confirmation.accessibilityIdentifier = "caregiver.confirm"
+        bedsideName.text = "Your loved one"; bedsideName.autocapitalizationType = .words
+        activation.keyboardType = .URL; activation.text = PorchDevice.bedsideActivation?.absoluteString
+        submit.addTarget(self, action: #selector(save), for: .touchUpInside)
+        loadStatus()
     }
-    @objc private func cancel() { dismiss(animated: true) }
-    @objc private func check() {
-        guard let credential = PorchDevice.credential(for: .bedside) else { return }
-        let value = pin.text ?? ""
-        guard value.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else { showPorchError(FamilyServiceError(message: "Enter six digits.", status: 400), on: self); return }
-        unlock.isEnabled = false
-        Task { [weak self] in
-            guard let self else { return }; defer { self.unlock.isEnabled = true }
+    private func loadStatus() {
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        guard let profile else { creating = true; showForm(); return }
+        content.addArrangedSubview(PorchStyle.label("Checking caregiver setup…"))
+        task = Task { [weak self] in
+            guard let self else { return }
+            defer { self.task = nil }
             do {
-                _ = try await FamilyService(credential).send("verifyPIN", pin: value)
+                let result = try await FamilyService(profile).send("caregiverStatus")
+                self.creating = result.pinConfigured != true; self.showForm()
+            } catch {
+                self.content.arrangedSubviews.forEach { self.content.removeArrangedSubview($0); $0.removeFromSuperview() }
+                self.content.addArrangedSubview(PorchStyle.label("Connect to the internet to open caregiver mode."))
+                let retry = PorchStyle.button("Try again", symbol: "arrow.clockwise")
+                retry.addAction(UIAction { [weak self] _ in self?.loadStatus() }, for: .touchUpInside)
+                self.content.addArrangedSubview(retry)
+            }
+        }
+    }
+    private func showForm() {
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        var fields: [UIView] = []
+        if creating && profile == nil {
+            fields.append(field(bedsideName, title: "Who is this Porch for?", placeholder: "Your loved one"))
+            if NativeCallSettings.caregiverCode.count < 16 && PorchDevice.bedsideActivation == nil {
+                fields.append(field(activation, title: "Bedside activation link", placeholder: "Paste your private activation link", helper: "Open the private link for this new iPad. It connects the device without a server address or a preset PIN."))
+            }
+        }
+        fields.append(field(pin, title: creating ? "Choose a six-digit PIN" : "Six-digit PIN", placeholder: "Enter six digits"))
+        if creating { fields.append(field(confirmation, title: "Confirm your PIN", placeholder: "Repeat the six digits")) }
+        submit.configuration?.title = creating ? "Save PIN and continue" : "Open caregiver mode"
+        fields.append(submit)
+        bedsideName.autocapitalizationType = .words
+        content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", detail: creating ? "Choose a PIN you will remember. You'll use it to manage contacts and settings on this bedside device." : "Enter your PIN to manage this bedside device.", views: fields))
+    }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if navigationController?.isBeingDismissed == true { task?.cancel() }
+    }
+    @objc private func cancel() { task?.cancel(); try? PorchDevice.saveActivation(nil); dismiss(animated: true) }
+    @objc private func save() {
+        guard task == nil else { return }
+        let value = pin.text ?? ""
+        guard value.range(of: "^[0-9]{6}$", options: .regularExpression) != nil, !creating || value == confirmation.text else {
+            showPorchError(FamilyServiceError(message: creating ? "Enter the same six digits in both PIN fields." : "Enter six digits.", status: 400), on: self); return
+        }
+        submit.isEnabled = false; view.endEditing(true)
+        task = Task { [weak self] in
+            guard let self else { return }
+            defer { self.task = nil; self.submit.isEnabled = true }
+            do {
+                if let profile = self.profile {
+                    _ = try await FamilyService(profile).send(self.creating ? "initializeCaregiverPIN" : "verifyPIN", self.creating ? ["pin": value] : [:], pin: self.creating ? nil : value)
+                } else {
+                    let linkText = self.activation.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let invitation = try linkText.isEmpty ? nil : BedsideInvitation(url: URL(string: linkText) ?? URL(fileURLWithPath: "/"))
+                    let origin = invitation?.origin ?? URL(string: NativeCallSettings.savedURL) ?? PorchDevice.defaultOrigin
+                    let pending = try PorchDevice.pending(role: .bedside, origin: origin, invitation: invitation?.code ?? "")
+                    var registration = PorchDevice.registration(pending)
+                    registration["name"] = self.bedsideName.text ?? "Your loved one"; registration["pin"] = value
+                    if let invitation { registration["activation"] = invitation.code }
+                    let response = try await FamilyService(origin: origin).send("enrollBedside", registration, pin: NativeCallSettings.caregiverCode.isEmpty ? nil : NativeCallSettings.caregiverCode)
+                    guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
+                    try PorchDevice.save(FamilyCredential(origin: origin, credential: token, role: .bedside))
+                    FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)
+                    try PorchDevice.saveActivation(nil)
+                }
                 try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code")
-                self.view.endEditing(true); self.dismiss(animated: true, completion: self.onUnlock)
-            } catch { self.pin.text = ""; showPorchError(error, on: self) }
+                self.dismiss(animated: true, completion: self.onUnlock)
+            } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
         }
     }
 }

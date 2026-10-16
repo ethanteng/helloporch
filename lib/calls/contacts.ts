@@ -39,7 +39,7 @@ export async function authorizeContact(request: Request, now = Math.floor(Date.n
   if (!code || !process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID) {
     return callJSON({ error: "A caregiver needs to configure a separate contact setup code and outbound phone trunk on this server." }, 503);
   }
-  try { await checkCaregiverCode(request, undefined, now); }
+  try { await checkCaregiverCode(request, undefined, now, config.householdID); }
   catch (error) { return callJSON({ error: error instanceof CaregiverAuthError ? error.message : "Caregiver verification is unavailable." }, error instanceof CaregiverAuthError ? error.status : 503); }
   const input = await callInput(request);
   if (input instanceof Response) return input;

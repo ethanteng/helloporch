@@ -52,7 +52,8 @@ jobs:
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
           mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-setup
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-phone-setup --preview-touch-keyboard
       - name: Save the iPad screenshots

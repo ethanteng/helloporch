@@ -5,13 +5,13 @@ One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. 
 ## Pair your family
 
 1. Install the same updated TestFlight build on Mom's iPad and family members' iPhones.
-2. On the iPad, hold the **gear** for 1.5 seconds. Open **Family & drop-in**, enter a bedside name such as Mom, and choose and confirm a six-digit caregiver PIN. If this iPad already has the old long setup code saved, Porch migrates it automatically. A fresh installation must use the PIN already configured for the server.
+2. On the iPad, tap the **gear** (a half-second hold works too). On first caregiver entry, choose and confirm your own six-digit PIN. An already-paired iPad needs no preset code. An older installation can enroll using its saved credentials. A brand-new bedside device uses a private activation link as described below. The initial display name is **Your loved one**; edit it in **Family & drop-in → Display name**.
 3. Choose **Invite a family member**, enter their name, and select audio and/or video drop-in if appropriate. Both permissions start off. Porch asks for the corresponding iPad media permissions during setup.
 4. Share the private invitation using the system share sheet. The recipient opens it on their iPhone or pastes it into **Invitation → Join your family**. Invitations expire after 15 minutes and work for one device. Invite each additional device separately.
 5. On the iPad, turn on **Allow approved drop-ins**. Return to the clock. The family member can now make audio/video calls or use the drop-in types you approved.
 6. To let Mom call that person with a keypad number, edit the slot, select **Porch → Link a family member**, and choose voice or video. Optionally add a fallback phone number. Contacts imports and typed numbers are normalized to E.164 (for example, `(415) 867-6937` in the US becomes `+14158676937`). National numbers use the device's region; include `+country code` for overseas contacts. Extensions aren't supported.
 
-Paired calls use the bundled server address and private device credentials. Family members never enter a server address, shared calling code, or caregiver PIN. Old manual rooms and browser calling remain under **Advanced calling connection**.
+Paired calls use the bundled server address and private device credentials. Family members never enter a server address, shared calling code, or caregiver PIN. Contacts have one combined details section with their name, Contacts import, audio/video preference and paired app. The app no longer offers calling-method, room, advanced-connection or daily-use settings. The browser prototype remains available for legacy manual-room testing.
 
 ## How calls behave
 
@@ -23,11 +23,21 @@ Paired calls use the bundled server address and private device credentials. Fami
 
 ## Caregiver PIN
 
-Once paired, holding the gear opens a six-digit PIN prompt. Change the PIN under **Family & drop-in → Change caregiver PIN**. Five incorrect guesses cause a 15-minute server lockout. Internet access is required to unlock settings.
+The first caregiver entry prompts you to choose and confirm a PIN. Later entries ask for that PIN. Tap the gear or hold it for half a second. Change the PIN under **Family & drop-in → Change caregiver PIN**. Five incorrect guesses cause a 15-minute lockout for that household. Internet access is required to unlock settings.
 
-The server stores only a salted PIN digest, using the server secret as a pepper. The original long `PORCH_CONTACT_SETUP_CODE` remains server-side for recovery and signing phone approvals. **Do not replace that environment variable with six digits.** Existing device phone approvals survive a PIN change. Other bedside devices using that server must enter the updated PIN when next needed.
+The server stores only a salted PIN digest, using the server secret as a pepper. The original long `PORCH_CONTACT_SETUP_CODE` remains server-side for recovery and signing phone approvals. **Do not replace that environment variable with six digits.** Existing device phone approvals survive a PIN change. Other households have independent PINs and attempt limits.
 
-For a server with no existing bedside installation, an operator can initialize the PIN with the `/api/family` `setCaregiverPIN` action authenticated by the long recovery secret, then enter the chosen PIN on the new bedside device. Do not send recovery secrets or PINs in chat, logs or Git. This beta uses one caregiver PIN per server, not independent account passwords.
+## A completely new bedside iPad
+
+A server operator creates a private, one-use activation link. This authorizes enrollment without shipping a shared secret inside the app or accepting anonymous registrations to the calling service.
+
+```sh
+node --env-file=.env.local scripts/create-bedside-invite.mjs
+```
+
+The command reads the server's long recovery secret privately and writes `.env.bedside-activation.local` with mode 0600. It never prints the activation URL or PIN. Open the link on the new iPad, or paste it into the first caregiver setup screen. Choose the bedside name, choose and confirm a PIN, and continue. Links work for one device, expire after 24 hours and support a retry on the same device after a lost response. Each additional household gets its own PIN. There is no generated/default caregiver PIN file in the new setup flow. Keep activation links private; family recipients use separate family invitations.
+
+Existing paired devices choose a PIN once without a new activation link. After that, changing it requires the current PIN. Legacy shared PINs are accepted only as a compatibility fallback for households that haven't chosen their own PIN yet; a household-specific PIN supersedes that fallback. Keep the long server recovery/signing secret for operator recovery and existing phone approvals.
 
 ## Server and privacy
 

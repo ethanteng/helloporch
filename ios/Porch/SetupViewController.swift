@@ -19,8 +19,8 @@ final class SlotsViewController: UITableViewController {
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Back to clock", style: .done, target: self, action: #selector(done))
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); tableView.reloadData() }
-    override func numberOfSections(in tableView: UITableView) -> Int { 4 }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 3 : 1 }
+    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 2 : 1 }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.backgroundColor = PorchStyle.surface
@@ -43,35 +43,27 @@ final class SlotsViewController: UITableViewController {
                 if let call = contact.nativeCall {
                     return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on")
                 }
-                return contact.shortcutName == nil ? "FaceTime" : "Shortcut"
+                return "Finish Porch setup"
             } ?? "Assign keypad number \(number)"
             cell.accessibilityLabel = "Key \(number), \(person?.name ?? "add a person")"
         } else if indexPath.section == 1, indexPath.row == 0 {
             content.text = "Family & drop-in"
             content.secondaryText = "Pair devices, invite people, and approve access"
             content.image = UIImage(systemName: "person.2.fill")
-        } else if indexPath.section == 1, indexPath.row == 2 {
-            content.text = "Advanced calling connection"
-            content.secondaryText = NativeCallSettings.savedURL.isEmpty ? "Connect this iPad to Porch" : "Server and caregiver access codes"
-            content.image = UIImage(systemName: "network")
         } else if indexPath.section == 1 {
             content.text = "Call preferences"
             content.secondaryText = "Phone fallback after \(CallPreferences.fallbackSeconds()) seconds · Dialing sound"
             content.image = UIImage(systemName: "phone.badge.waveform")
-        } else if indexPath.section == 3 {
+        } else {
             content.text = "Bedside mode"
             content.secondaryText = "Change this device to family mode"
             content.image = UIImage(systemName: "ipad.and.iphone")
-        } else {
-            content.text = "Keep Porch ready"
-            content.secondaryText = "Keypad, Guided Access, and daily use"
-            content.image = UIImage(systemName: "moon.stars")
         }
         cell.contentConfiguration = content
         return cell
     }
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        ["Your people", "Calling", "Using this device", "Device mode"][section]
+        ["Your people", "Calling", "Device mode"][section]
     }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         section == 0 ? "Each person keeps their keypad number. Saving a contact never places a call." : nil
@@ -85,11 +77,10 @@ final class SlotsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 1 {
-            let controller: UIViewController = indexPath.row == 0 ? FamilyAdminViewController() : indexPath.row == 1 ? CallPreferencesViewController() : NativeCallSettingsViewController()
+            let controller: UIViewController = indexPath.row == 0 ? FamilyAdminViewController() : CallPreferencesViewController()
             navigationController?.pushViewController(controller, animated: true); return
         }
-        if indexPath.section == 3 { offerExperienceChange(on: self); return }
-        if indexPath.section == 2 { navigationController?.pushViewController(PorchDailyUseViewController(), animated: true); return }
+        if indexPath.section == 2 { offerExperienceChange(on: self); return }
         let number = indexPath.row + 1
         let editor = SetupViewController(slot: number, contact: slots.contact(for: number))
         editor.onSave = { [weak self] contact in
@@ -105,37 +96,16 @@ final class SlotsViewController: UITableViewController {
     @objc private func done() { view.endEditing(true); dismiss(animated: true) }
 }
 
-final class PorchDailyUseViewController: CaregiverFormViewController {
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        title = "Keep Porch ready"
-        form.addArrangedSubview(section("A quiet bedside clock", detail: "Return to the clock when you're finished. Porch keeps the display awake while it is open. Use the iPad's brightness control to make the screen comfortable for the room.", views: []))
-        form.addArrangedSubview(section("Keep the app open", detail: "For a dedicated calling iPad, enable Guided Access in iPad Settings → Accessibility. Open Porch, start a Guided Access session, and choose a suitable Display Auto-Lock setting. Leave Touch and Software Keyboards enabled for caregiver setup.", views: []))
-        form.addArrangedSubview(section("Using the keypad", detail: "Press 1–6 to call the person assigned to that number. Porch needs to be the active app and the iPad must be unlocked. A normal keypad cannot wake Porch from the background or lock screen. Native Porch calls and phone fallback stay inside Porch.", views: []))
-        form.addArrangedSubview(section("Joining a Porch call", detail: "The other person still joins the same room in the same mode. Incoming Porch notifications aren't available in this beta. If enabled, phone fallback rings their regular phone after the wait set in Call preferences.", views: []))
-        hideKeyboardControl()
-    }
-}
-
 final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate {
     var onSave: ((CallContact?) throws -> Void)?
     private let nameField = UITextField()
-    private let addressField = UITextField()
-    private let shortcutField = UITextField()
-    private let methodControl = UISegmentedControl(items: ["Porch", "FaceTime", "Shortcut"])
-    private let roomField = UITextField()
     private let modeControl = UISegmentedControl(items: ["Voice", "Video"])
     private let phoneFallbackSwitch = UISwitch()
     private let phoneField = UITextField()
     private var selectedFamilyID: String?
-    private var roomGroup = UIView()
     private let familyLink = PorchStyle.button("Link a family member", symbol: "person.2", filled: false)
     private let chooseContactButton = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
-    private var nativeGroup = UIView()
-    private var fallbackGroup = UIView()
     private var phoneGroup = UIView()
-    private var faceTimeGroup = UIView()
-    private var shortcutGroup = UIView()
     private let initialContact: CallContact?
     private let slot: Int
     private var saveTask: Task<Void, Never>?
@@ -154,50 +124,32 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         nameField.text = initialContact?.name
         selectedFamilyID = initialContact?.familyMemberID
         nameField.autocapitalizationType = .words
-        roomField.text = initialContact?.nativeCall?.room ?? "porch-\(UUID().uuidString.prefix(8).lowercased())"
-        shortcutField.text = initialContact?.shortcutName
-        addressField.text = initialContact?.address
-        phoneField.text = initialContact?.phoneNumber
+        phoneField.text = initialContact?.phoneNumber ?? (initialContact?.nativeCall == nil ? initialContact.flatMap { try? PhoneNumberNormalization.e164($0.address) } : nil)
         phoneField.keyboardType = .phonePad
         phoneField.textContentType = .telephoneNumber
-        addressField.keyboardType = .emailAddress
-        methodControl.selectedSegmentIndex = initialContact?.nativeCall != nil || initialContact == nil ? 0 : initialContact?.shortcutName == nil ? 1 : 2
         modeControl.selectedSegmentIndex = initialContact?.nativeCall?.mode == .video ? 1 : 0
-        for control in [methodControl, modeControl] {
+        for control in [modeControl] {
             control.selectedSegmentTintColor = PorchStyle.accent
             control.backgroundColor = PorchStyle.page
             control.setTitleTextAttributes([.foregroundColor: PorchStyle.ink, .font: UIFont.systemFont(ofSize: 16, weight: .medium)], for: .normal)
             control.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 16, weight: .semibold)], for: .selected)
             control.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
         }
-        methodControl.accessibilityLabel = "Calling method"
         modeControl.accessibilityLabel = "Porch call mode"
-        methodControl.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
         let personName = field(nameField, title: "Name", placeholder: "For example, David")
-        nameField.autocapitalizationType = .words
-        let method = UIStackView(arrangedSubviews: [PorchStyle.label("Call using", size: 16, color: PorchStyle.ink, weight: .semibold), methodControl])
-        method.axis = .vertical; method.spacing = 8
         chooseContactButton.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
-        form.addArrangedSubview(section("Their details", views: [personName, chooseContactButton, method]))
-        let room = field(roomField, title: "Porch room", placeholder: "A shared room name", helper: "Already filled in. Use this same room on the other device to join a Porch call.")
-        roomField.keyboardType = .asciiCapable
-        roomGroup = room
         configureFamilyLinks()
-        nativeGroup = section("Porch call", detail: "Link a paired family member to ring their Porch app, or use a manual room for browser testing.", views: [modeControl, familyLink, room])
-        form.addArrangedSubview(nativeGroup)
-        roomGroup.isHidden = selectedFamilyID != nil
-        phoneFallbackSwitch.isOn = initialContact?.phoneNumber != nil
+        form.addArrangedSubview(section("Their details", views: [personName, chooseContactButton, modeControl, familyLink]))
+        nameField.autocapitalizationType = .words
+        phoneFallbackSwitch.isOn = !(phoneField.text ?? "").isEmpty
         phoneFallbackSwitch.onTintColor = PorchStyle.accent
         phoneFallbackSwitch.accessibilityLabel = "Call their phone if Porch isn't answered"
         phoneFallbackSwitch.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
         let phoneToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Call their phone", size: 18, color: PorchStyle.ink, weight: .medium), phoneFallbackSwitch])
         phoneToggle.alignment = .center; phoneToggle.spacing = 16
-        phoneGroup = field(phoneField, title: "Phone number", placeholder: "+14158676937", helper: "Saved with + and the country code. Numbers without a country code use the device's region (\(PhoneNumberNormalization.deviceRegion)). Saving approves this number automatically.")
-        fallbackGroup = section("If Porch isn't answered", detail: "Try Porch for \(CallPreferences.fallbackSeconds()) seconds, then ring their regular phone. Change this in Call preferences. Phone calls are voice only and carrier charges apply.", views: [phoneToggle, phoneGroup])
+        phoneGroup = field(phoneField, title: "Phone number", placeholder: "+14158676937", helper: "Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). Internet is needed to save a phone number.")
+        let fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their phone. If their app is unavailable, try their phone right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply.", views: [phoneToggle, phoneGroup])
         form.addArrangedSubview(fallbackGroup)
-        faceTimeGroup = section("FaceTime", views: [field(addressField, title: "FaceTime address", placeholder: "Email address or phone number", helper: "Use the address this person uses for FaceTime. This opens Apple's FaceTime app.")])
-        shortcutGroup = section("Shortcut", views: [field(shortcutField, title: "Shortcut name", placeholder: "For example, Call David", helper: "Create and test a shortcut in Apple's Shortcuts app first. Enter its exact name here.")])
-        form.addArrangedSubview(faceTimeGroup); form.addArrangedSubview(shortcutGroup)
         if initialContact != nil {
             let remove = PorchStyle.button("Remove person", symbol: "person.crop.circle.badge.minus", filled: false)
             remove.configuration?.baseForegroundColor = .systemRed
@@ -205,7 +157,9 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
             form.addArrangedSubview(remove)
         }
         updateMethod()
+        NotificationCenter.default.addObserver(self, selector: #selector(configureFamilyLinks), name: .porchFamilyChanged, object: nil)
     }
+    deinit { NotificationCenter.default.removeObserver(self) }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         #if DEBUG
@@ -214,69 +168,59 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     }
     @objc private func updateMethod() {
         view.endEditing(true)
-        nativeGroup.isHidden = methodControl.selectedSegmentIndex != 0
-        fallbackGroup.isHidden = nativeGroup.isHidden
         phoneGroup.isHidden = !phoneFallbackSwitch.isOn
-        faceTimeGroup.isHidden = methodControl.selectedSegmentIndex != 1
-        shortcutGroup.isHidden = methodControl.selectedSegmentIndex != 2
-        chooseContactButton.isHidden = methodControl.selectedSegmentIndex == 2
     }
     @objc private func pickContact() {
         view.endEditing(true)
         let picker = CNContactPickerViewController()
         picker.overrideUserInterfaceStyle = .light
         picker.delegate = self
-        let porch = methodControl.selectedSegmentIndex == 0
-        picker.displayedPropertyKeys = porch ? [CNContactPhoneNumbersKey] : [CNContactPhoneNumbersKey, CNContactEmailAddressesKey]
-        picker.predicateForEnablingContact = NSPredicate(format: porch ? "phoneNumbers.@count > 0" : "phoneNumbers.@count > 0 OR emailAddresses.@count > 0")
+        picker.displayedPropertyKeys = [CNContactPhoneNumbersKey]
+        picker.predicateForEnablingContact = NSPredicate(format: "phoneNumbers.@count > 0")
         picker.predicateForSelectionOfContact = NSPredicate(value: false)
-        picker.predicateForSelectionOfProperty = NSPredicate(format: porch ? "key == 'phoneNumbers'" : "key == 'phoneNumbers' OR key == 'emailAddresses'")
+        picker.predicateForSelectionOfProperty = NSPredicate(format: "key == 'phoneNumbers'")
         present(picker, animated: true)
     }
     func contactPicker(_ picker: CNContactPickerViewController, didSelect property: CNContactProperty) {
         nameField.text = CNContactFormatter.string(from: property.contact, style: .fullName)
-        if property.key == CNContactPhoneNumbersKey, let phone = property.value as? CNPhoneNumber {
-            if methodControl.selectedSegmentIndex == 0 {
-                do {
-                    phoneField.text = try PhoneNumberNormalization.e164(phone.stringValue)
-                    phoneFallbackSwitch.isOn = true
-                    updateMethod()
-                } catch { picker.dismiss(animated: true) { [weak self] in self?.showContactError(error) } }
-            } else { addressField.text = phone.stringValue }
-        } else if property.key == CNContactEmailAddressesKey, let email = property.value as? String { addressField.text = email }
+        guard let phone = property.value as? CNPhoneNumber else { return }
+        do {
+            phoneField.text = try PhoneNumberNormalization.e164(phone.stringValue)
+            phoneFallbackSwitch.isOn = true; updateMethod()
+        } catch { picker.dismiss(animated: true) { [weak self] in self?.showContactError(error) } }
     }
 
-    private func configureFamilyLinks() {
+    @objc private func configureFamilyLinks() {
         let people = FamilyCoordinator.shared.state?.people ?? []
-        familyLink.isHidden = people.isEmpty && selectedFamilyID == nil
-        familyLink.configuration?.title = selectedFamilyID.flatMap { id in people.first(where: { $0.id == id })?.name }.map { "Linked to \($0)" } ?? (selectedFamilyID == nil ? "Link a family member" : "Linked family member")
+        familyLink.isHidden = false
+        familyLink.configuration?.title = selectedFamilyID.flatMap { id in people.first(where: { $0.id == id })?.name }.map { "Linked to \($0)" } ?? (selectedFamilyID == nil ? "Link their Porch app" : "Linked Porch app")
         let actions = people.map { person in
             UIAction(title: person.name, state: selectedFamilyID == person.id ? .on : .off) { [weak self] _ in
                 self?.selectedFamilyID = person.id
-                self?.nameField.text = person.name
-                self?.roomGroup.isHidden = true
+                if self?.nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false { self?.nameField.text = person.name }
                 self?.configureFamilyLinks()
             }
         }
-        let manual = UIAction(title: "Manual room (advanced)", state: selectedFamilyID == nil ? .on : .off) { [weak self] _ in
-            self?.selectedFamilyID = nil; self?.roomGroup.isHidden = false; self?.configureFamilyLinks()
+        let manual = UIAction(title: "No Porch app yet", state: selectedFamilyID == nil ? .on : .off) { [weak self] _ in
+            self?.selectedFamilyID = nil; self?.configureFamilyLinks()
         }
-        familyLink.menu = UIMenu(children: actions + [manual]); familyLink.showsMenuAsPrimaryAction = true
+        let invite = UIAction(title: "Invite their Porch app", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
+            let controller = FamilyInviteViewController(); controller.prefilledName = self?.nameField.text
+            self?.navigationController?.pushViewController(controller, animated: true)
+        }
+        familyLink.menu = UIMenu(children: actions + [invite, manual]); familyLink.showsMenuAsPrimaryAction = true
     }
 
     @objc private func save() {
         guard saveTask == nil else { return }
         do {
-            let contact: CallContact
-            if methodControl.selectedSegmentIndex == 0 {
-                let call = try NativeCall(room: roomField.text ?? "", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
-                contact = try CallContact(name: nameField.text ?? "", nativeCall: call,
-                    phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID)
-                phoneField.text = contact.phoneNumber
-            } else {
-                contact = try CallContact(name: nameField.text ?? "", address: addressField.text ?? "",
-                    shortcutName: methodControl.selectedSegmentIndex == 2 ? (shortcutField.text ?? "") : nil)
+            guard selectedFamilyID != nil || phoneFallbackSwitch.isOn else {
+                throw FamilyServiceError(message: "Link their Porch app or add a phone number so Porch can reach this person.", status: 400)
             }
+            let call = try NativeCall(room: initialContact?.nativeCall?.room ?? "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
+            let contact = try CallContact(name: nameField.text ?? "", nativeCall: call,
+                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID)
+            phoneField.text = contact.phoneNumber
             view.isUserInteractionEnabled = false
             navigationItem.rightBarButtonItem?.isEnabled = false
             navigationItem.rightBarButtonItem?.title = "Saving…"

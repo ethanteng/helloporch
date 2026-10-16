@@ -47,9 +47,10 @@ public struct FamilyCredential: Codable {
 public struct FamilyInvitation {
     public let origin: URL
     public let code: String
-    public init(url: URL) throws {
+    public init(url: URL) throws { try self.init(url: url, host: "pair") }
+    fileprivate init(url: URL, host: String) throws {
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              parts.scheme == "porch", parts.host == "pair", parts.path.isEmpty,
+              parts.scheme == "porch", parts.host == host, parts.path.isEmpty,
               parts.user == nil, parts.password == nil, parts.port == nil, parts.fragment == nil,
               let items = parts.queryItems, items.count == 2,
               items.filter({ $0.name == "server" }).count == 1,
@@ -69,5 +70,14 @@ public struct FamilyInvitation {
     public enum InvitationError: LocalizedError {
         case invalid
         public var errorDescription: String? { "Paste the complete Porch invitation link from your caregiver." }
+    }
+}
+
+public struct BedsideInvitation {
+    public let origin: URL
+    public let code: String
+    public init(url: URL) throws {
+        let invitation = try FamilyInvitation(url: url, host: "activate")
+        origin = invitation.origin; code = invitation.code
     }
 }

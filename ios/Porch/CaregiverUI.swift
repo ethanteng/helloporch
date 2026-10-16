@@ -207,10 +207,10 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     func hideKeyboardControl() { keyboardButton.isHidden = true }
 
     func field(_ field: UITextField, title: String, placeholder: String, helper: String? = nil) -> UIView {
-        fields.append(field)
+        if !fields.contains(where: { $0 === field }) { fields.append(field) }
         field.delegate = self
         field.accessibilityLabel = title
-        field.accessibilityIdentifier = title
+        field.accessibilityIdentifier = field.accessibilityIdentifier ?? title
         field.textColor = PorchStyle.ink
         field.tintColor = PorchStyle.accent
         field.backgroundColor = PorchStyle.surface

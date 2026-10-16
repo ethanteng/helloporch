@@ -17,12 +17,12 @@ The universal app now includes family pairing, ordinary incoming calls and appro
 
 ## Native voice and video calling prototype
 
-The instructions in this section describe the legacy manual-room flow. The iPad and browser join a private LiveKit room manually. There is no incoming app-call notification, background calling, account system, or recording in this version. An optional phone fallback rings a regular phone if Porch isn't answered. Each new room is configured for at most two participants. Use a distinct room name for each contact, and use the same voice/video mode on both devices.
+The instructions in this section describe browser calling and older native builds. Current apps use the family setup guide above; manual-room and connection fields have been removed. The iPad and browser join a private LiveKit room manually. There is no incoming app-call notification, background calling, account system, or recording in this version. An optional phone fallback rings a regular phone if Porch isn't answered. Each new room is configured for at most two participants. Use a distinct room name for each contact, and use the same voice/video mode on both devices.
 
 1. Create a LiveKit Cloud project and get its WebSocket URL, API key, and API secret from its dashboard.
 2. Copy `.env.example` to `.env.local`. Fill in `LIVEKIT_URL` (`wss://…`), `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. Generate a separate `PORCH_CALL_ACCESS_CODE` with `openssl rand -hex 24` and save it in that file too. Never put API credentials in `NEXT_PUBLIC_` variables or in the iPad app.
 3. Run `npm install` and `npm run dev`. Open [the browser call page](http://localhost:3000/call). For testing with a physical iPad or another computer, host this server over HTTPS and set the same four environment variables there. Plain HTTP localhost works only on the same computer (including the iPad simulator).
-4. In iPad setup → **Calling connection**, enter this server's HTTPS origin and the prototype access code. Use `http://localhost:3000` for simulator testing. The access code is saved in the iPad Keychain.
+4. In an older iPad build’s setup → **Calling connection**, enter this server's HTTPS origin and the prototype access code. Use `http://localhost:3000` for simulator testing. The access code is saved in the iPad Keychain.
 5. Configure a person with **Porch**, a room such as `family-david`, and **Voice** or **Video**. Tap Done and press their number.
 6. On the browser page, enter your name, the same room, access code, and mode, then **Join call**. You can also configure the same room/mode on a second iPad. Both people should join within 90 seconds, or 20 seconds if phone fallback is enabled; either person can join first.
 

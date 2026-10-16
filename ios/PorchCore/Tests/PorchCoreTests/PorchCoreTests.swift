@@ -312,3 +312,14 @@ final class FamilyModelTests: XCTestCase {
         XCTAssertThrowsError(try CallContact(name: "Ethan", nativeCall: NativeCall(room: "paired", mode: .voice), familyMemberID: "a display name"))
     }
 }
+
+final class BedsideInvitationTests: XCTestCase {
+    func testActivationLinksCannotBeConfusedWithFamilyInvitations() throws {
+        let code = String(repeating: "a", count: 64)
+        let url = URL(string: "porch://activate?server=https%3A%2F%2Fexample.com&code=\(code)")!
+        XCTAssertEqual(try BedsideInvitation(url: url).origin.absoluteString, "https://example.com")
+        XCTAssertThrowsError(try FamilyInvitation(url: url))
+        XCTAssertThrowsError(try BedsideInvitation(url: FamilyInvitation.url(origin: URL(string: "https://example.com")!, code: code)))
+        XCTAssertThrowsError(try BedsideInvitation(url: URL(string: "porch://activate?server=http%3A%2F%2Fexample.com&code=\(code)")!))
+    }
+}

@@ -166,3 +166,86 @@ test('answer and phone fallback race atomically: an answered Porch call never st
  if(answer.status===200) { assert.equal((await f.send('fallback',{callID},bedside.credential)).status,409); assert.equal(f.ended.length,0); }
  else { assert.equal((await f.send('joinCall',{callID},family.credential)).status,410); assert.equal(f.ended.length,1); }
 });
+
+test('paired bedside devices choose their own PIN once without a preset PIN', async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ assert.equal((await f.json('caregiverStatus',{},bedside.credential)).pinConfigured,false);
+ assert.equal((await f.send('initializeCaregiverPIN',{pin:'012345'})).status,401);
+ assert.equal((await f.send('initializeCaregiverPIN',{pin:'012345'},family.credential)).status,403);
+ await f.json('initializeCaregiverPIN',{pin:'012345'},bedside.credential);
+ assert.equal((await f.json('caregiverStatus',{},bedside.credential)).pinConfigured,true);
+ await f.json('verifyPIN',{},bedside.credential,'012345');
+ assert.equal((await f.send('initializeCaregiverPIN',{pin:'654321'},bedside.credential)).status,409);
+ assert.equal((await f.send('setCaregiverPIN',{pin:'654321'},bedside.credential,'999999')).status,403);
+ await f.json('setCaregiverPIN',{pin:'654321'},bedside.credential,'012345');
+ await f.json('verifyPIN',{},bedside.credential,'654321');
+ assert.equal((await f.send('verifyPIN',{},bedside.credential,'012345')).status,403);
+});
+
+test('caregiver PINs and lockouts are isolated by household and supersede the old shared PIN',async()=>{
+ const f=fixture();
+ await f.json('setCaregiverPIN',{pin:'111111'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ const a=await f.json('createHousehold',{name:'First'},undefined,'111111');
+ const b=await f.json('createHousehold',{name:'Second'},undefined,'111111');
+ await f.json('initializeCaregiverPIN',{pin:'222222'},a.credential);
+ await f.json('initializeCaregiverPIN',{pin:'333333'},b.credential);
+ for(let n=0;n<5;n++)assert.equal((await f.send('verifyPIN',{},a.credential,'111111')).status,403);
+ assert.equal((await f.send('verifyPIN',{},a.credential,'222222')).status,429);
+ await f.json('verifyPIN',{},b.credential,'333333');
+ assert.equal((await f.send('verifyPIN',{},b.credential,'222222')).status,403);
+});
+
+test('new bedside enrollment uses a one-use activation and a caregiver-chosen PIN',async()=>{
+ const f=fixture();
+ assert.equal((await f.send('createBedsideInvite',{},undefined,'123456')).status,403);
+ const invite=await f.json('createBedsideInvite',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ const registration={deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex'),pin:'098765',activation:invite.code};
+ const owner=await f.json('enrollBedside',registration);
+ assert.equal(owner.state.householdName,'Your loved one');
+ assert.equal(owner.state.me.name,'Your loved one');
+ await f.json('verifyPIN',{},owner.credential,'098765');
+ const retry=await f.json('enrollBedside',registration);
+ assert.equal(retry.credential,owner.credential);
+ assert.equal((await f.send('enrollBedside',{...registration,pin:'999999'})).status,403);
+ assert.equal((await f.send('enrollBedside',{...registration,deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex')})).status,410);
+});
+
+test('expired or missing activation cannot enroll; malformed details do not consume a valid link',async()=>{
+ const f=fixture(),register=()=>({deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex'),pin:'012345'});
+ assert.equal((await f.send('enrollBedside',register())).status,403);
+ const first=await f.json('createBedsideInvite',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await f.send('enrollBedside',{...register(),activation:first.code,pin:'123'})).status,400);
+ await f.json('enrollBedside',{...register(),activation:first.code});
+ const expired=await f.json('createBedsideInvite',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ f.advance(86401);
+ assert.equal((await f.send('enrollBedside',{...register(),activation:expired.code})).status,410);
+});
+
+test('a saved legacy credential can migrate directly to a chosen household PIN',async()=>{
+ const f=fixture();
+ const owner=await f.json('enrollBedside',{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex'),pin:'123456',name:'Pat'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ await f.json('verifyPIN',{},owner.credential,'123456');
+ assert.equal(owner.state.me.name,'Pat');
+});
+
+test('caregiver display-name edits propagate to family callers and reject unauthorized edits',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ await f.json('initializeCaregiverPIN',{pin:'123456'},bedside.credential);
+ assert.equal((await f.send('setHouseholdName',{name:'Pat'},family.credential,'123456')).status,403);
+ assert.equal((await f.send('setHouseholdName',{name:'Pat'},bedside.credential)).status,403);
+ assert.equal((await f.send('setHouseholdName',{name:' '},bedside.credential,'123456')).status,400);
+ const saved=await f.json('setHouseholdName',{name:' Pat '},bedside.credential,'123456');
+ assert.equal(saved.state.householdName,'Pat');
+ assert.equal((await f.json('poll',{available:true},family.credential)).state.people[0].name,'Pat');
+});
+
+test('contacts without a paired app get a confirmed offline result before phone fallback',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ const result=await f.send('startCall',{unlinked:true,kind:'call',mode:'voice'},bedside.credential);
+ assert.equal(result.status,409);assert.equal((await result.json()).errorCode,'offline');
+ assert.equal((await f.send('startCall',{unlinked:true,kind:'call',mode:'voice'},family.credential)).status,403);
+ assert.equal((await f.json('poll',{available:true},bedside.credential)).state.call,null);
+ await f.json('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+ const busy=await f.send('startCall',{unlinked:true,kind:'call',mode:'voice'},bedside.credential);
+ assert.equal(busy.status,409);assert.equal((await busy.json()).errorCode,undefined);
+});

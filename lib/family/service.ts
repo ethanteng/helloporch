@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { AccessToken, RoomConfiguration, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
-import { checkCaregiverCode, configureCaregiverPIN, CaregiverAuthError } from "./caregiver.ts";
+import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
 type Role = "bedside" | "family";
 type Mode = "voice" | "video";
@@ -98,29 +98,64 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     const store = dependencies.store ?? familyStore();
     const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
     const action = input.action;
+    if (action === "createBedsideInvite") {
+      requireValue((request.headers.get("X-Porch-Setup-Code") ?? "").length >= 16, "A server operator must authorize a new bedside device.", 403);
+      await checkCaregiverCode(request, store, now);
+      const code = randomBytes(32).toString("hex"), expiresAt = now + 86400;
+      await store.create(`activation:${hash(code)}`, JSON.stringify({ expiresAt }), 86400);
+      return callJSON({ code, expiresAt });
+    }
     if (action === "setCaregiverPIN") {
-      if ((request.headers.get("X-Porch-Setup-Code") ?? "").length < 16) {
+      let householdID: string | undefined;
+      if (request.headers.has("authorization") || (request.headers.get("X-Porch-Setup-Code") ?? "").length < 16) {
         const auth = await authenticate(request, store);
         const raw = await store.get(`house:${auth.householdID}`);
         requireValue(raw && memberFor(JSON.parse(raw), auth).role === "bedside", "Only a bedside caregiver can change the PIN.", 403);
+        householdID = auth.householdID;
       }
-      await configureCaregiverPIN(request, input.pin, store, now);
+      await configureCaregiverPIN(request, input.pin, store, now, householdID);
       return callJSON({ saved: true });
     }
-    if (action === "createHousehold") {
+    if (action === "createHousehold" || action === "enrollBedside") {
       config();
-      await checkCaregiverCode(request, store, now);
+      const enrolling = action === "enrollBedside";
+      if (enrolling) requireValue(typeof input.pin === "string" && /^\d{6}$/.test(input.pin), "Choose a six-digit caregiver PIN.");
       const { deviceID, secret } = registration(input);
       const id = deviceID;
+      const bedsideName = name(input.name ?? "Your loved one");
+      if (enrolling && input.activation !== undefined) {
+        requireValue(typeof input.activation === "string" && codePattern.test(input.activation), "Open a valid bedside activation link.");
+        const key = `activation:${hash(input.activation)}`;
+        let claimed = false;
+        for (let n = 0; n < 12; n++) {
+          const raw = await store.get(key);
+          requireValue(raw, "This activation link expired. Request a new one.", 410);
+          const activation = JSON.parse(raw);
+          requireValue(activation.expiresAt > now, "This activation link expired. Request a new one.", 410);
+          if (activation.claimedBy) {
+            requireValue(activation.claimedBy === deviceID && activation.claimHash === hash(secret), "This activation link was already used.", 410);
+            claimed = true; break;
+          }
+          if (await store.compareAndSet(key, raw, JSON.stringify({ ...activation, claimedBy: deviceID, claimHash: hash(secret) }))) { claimed = true; break; }
+        }
+        requireValue(claimed, "Activation is busy. Try again.", 409);
+      } else await checkCaregiverCode(request, store, now);
       await reserveDevice(store, deviceID, secret, id, "bedside");
-      const me: Member = { id: deviceID, name: name(input.name), role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
+      const me: Member = { id: deviceID, name: bedsideName, role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
       const house: Household = { id, name: me.name, dropInEnabled: false, members: [me], invites: [] };
       if (!await store.create(`house:${id}`, JSON.stringify(house))) {
         const existing: Household = JSON.parse((await store.get(`house:${id}`))!);
         const owner = memberFor(existing, { householdID: id, deviceID, hash: hash(secret) });
+        if (enrolling) {
+          if (!await initializeCaregiverPIN(input.pin, store, id)) {
+            const headers = new Headers(request.headers); headers.set("X-Porch-Setup-Code", String(input.pin));
+            await checkCaregiverCode(new Request(request.url, { headers }), store, now, id);
+          }
+        }
         await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
         return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(existing, owner, now) });
       }
+      if (enrolling) await initializeCaregiverPIN(input.pin, store, id);
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
       return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(house, me, now) });
     }
@@ -148,10 +183,17 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       return callJSON({ credential: `${deviceID}.${secret}`, role: "family", state: snapshot(house, house.members.find(m => m.id === deviceID)!, now) });
     }
     const auth = await authenticate(request, store);
-    if (["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN"].includes(String(action))) {
+    if (action === "caregiverStatus" || action === "initializeCaregiverPIN") {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw && memberFor(JSON.parse(raw), auth).role === "bedside", "Only the bedside caregiver can set a PIN.", 403);
+      if (action === "caregiverStatus") return callJSON({ pinConfigured: !!await store.get(caregiverPINKey(auth.householdID)) });
+      requireValue(await initializeCaregiverPIN(input.pin, store, auth.householdID), "A PIN is already set. Enter your current PIN to change it.", 409);
+      return callJSON({ saved: true });
+    }
+    if (["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN", "setHouseholdName"].includes(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
       requireValue(raw && memberFor(JSON.parse(raw), auth).role === "bedside", "Only a bedside caregiver can change access.", 403);
-      await checkCaregiverCode(request, store, now);
+      await checkCaregiverCode(request, store, now, auth.householdID);
     }
     let cleanupID: string | undefined;
     let issuedCode: string | undefined;
@@ -160,6 +202,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const me = memberFor(house, auth);
       expire(house, now);
       if (action === "verifyPIN") { requireValue(me.role === "bedside", "Only a bedside caregiver can unlock settings.", 403); return undefined; }
+      if (action === "setHouseholdName") { house.name = name(input.name); me.name = house.name; return undefined; }
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now; me.available = input.available;
@@ -194,6 +237,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "startCall") {
         requireValue(input.mode === "voice" || input.mode === "video", "Choose audio or video.");
         requireValue(input.kind === "call" || input.kind === "dropIn", "Choose a call type.");
+        if (me.role === "bedside" && input.unlinked === true && input.kind === "call") {
+          requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
+          throw new FamilyError("This person hasn't paired a Porch app yet.", 409, "offline");
+        }
         const target = house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
@@ -260,13 +307,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
 // Family devices cannot authorize destinations or use the SIP trunk.
 export async function authorizeBedsideCalling(request: Request): Promise<CallServer | Response> {
   try {
+    const origin = request.headers.get("origin");
+    requireValue(!origin || origin === new URL(request.url).origin, "Use your Porch app to place calls.", 403);
     const store = familyStore();
     const auth = await authenticate(request, store);
     const raw = await store.get(`house:${auth.householdID}`);
     requireValue(raw, "This household was not found.", 401);
     const member = memberFor(JSON.parse(raw), auth);
     requireValue(member.role === "bedside", "Only a bedside device can use phone fallback.", 403);
-    return config();
+    return { ...config(), householdID: auth.householdID };
   } catch (error) {
     return callJSON({ error: error instanceof FamilyError ? error.message : "Couldn't verify this device." }, error instanceof FamilyError ? error.status : 503);
   }

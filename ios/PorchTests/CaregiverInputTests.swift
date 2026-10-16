@@ -136,6 +136,49 @@ final class CaregiverInputTests: XCTestCase {
         }
     }
 
+
+    @MainActor func testContactEditorOnlyOffersPorchDetailsAndPhoneFallback() {
+        let editor = SetupViewController(slot: 1, contact: nil)
+        editor.loadViewIfNeeded()
+        func labels(_ view: UIView) -> [String] {
+            (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels)
+        }
+        let text = labels(editor.view)
+        XCTAssertTrue(text.contains("Their details"))
+        XCTAssertTrue(text.contains("Phone number"))
+        for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
+        let settings = SlotsViewController(slots: CallSlots())
+        settings.loadViewIfNeeded()
+        let headings = (0..<settings.numberOfSections(in: settings.tableView)).compactMap { settings.tableView(settings.tableView, titleForHeaderInSection: $0) }
+        XCTAssertEqual(headings, ["Your people", "Calling", "Device mode"])
+    }
+
+    @MainActor func testFirstCaregiverEntryAsksForChosenPINAndConfirmation() {
+        let setup = CaregiverPINViewController(profile: nil)
+        setup.loadViewIfNeeded()
+        func find(_ id: String, _ view: UIView) -> UITextField? {
+            if view.accessibilityIdentifier == id { return view as? UITextField }
+            return view.subviews.compactMap { find(id, $0) }.first
+        }
+        let pin = find("caregiver.pin", setup.view)
+        let confirm = find("caregiver.confirm", setup.view)
+        XCTAssertNotNil(pin); XCTAssertNotNil(confirm)
+        XCTAssertEqual(pin?.text ?? "", "", "A generated PIN must never prefill the chooser")
+        XCTAssertEqual(pin?.keyboardType, .numberPad)
+        XCTAssertTrue(confirm?.isSecureTextEntry == true)
+    }
+
+    @MainActor func testFirstTapOnGearOpensCaregiverGate() async {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let clock = CallViewController(); window.rootViewController = clock; window.makeKeyAndVisible()
+        defer { window.isHidden = true; original.makeKeyAndVisible() }
+        let gear = buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.caregiver" }!
+        gear.sendActions(for: .touchUpInside)
+        XCTAssertTrue((clock.presentedViewController as? UINavigationController)?.topViewController is CaregiverPINViewController)
+        await withCheckedContinuation { continuation in clock.dismiss(animated: false) { continuation.resume() } }
+    }
+
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {
         func luminance(_ color: UIColor) -> CGFloat {
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

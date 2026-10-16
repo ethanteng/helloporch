@@ -18,6 +18,12 @@ enum PorchDevice {
     static func credential(for role: PorchExperience) -> FamilyCredential? {
         NativeCallSettings.readSecret("porch.family.\(role.rawValue)").flatMap { try? JSONDecoder().decode(FamilyCredential.self, from: $0) }
     }
+    static var bedsideActivation: URL? {
+        NativeCallSettings.readSecret("porch.bedside.activation").flatMap { String(data: $0, encoding: .utf8) }.flatMap { $0.isEmpty ? nil : URL(string: $0) }
+    }
+    static func saveActivation(_ url: URL?) throws {
+        try NativeCallSettings.writeSecret(Data((url?.absoluteString ?? "").utf8), account: "porch.bedside.activation")
+    }
     private struct Pending: Codable { let profile: FamilyCredential; let scope: String }
     static func pending(role: PorchExperience, origin: URL, invitation: String = "") throws -> FamilyCredential {
         let account = "porch.family.pending.\(role.rawValue)"
@@ -53,6 +59,7 @@ enum PorchDevice {
 }
 
 struct FamilyResponse: Decodable {
+    let pinConfigured: Bool?
     let state: FamilySnapshot?
     let credential: String?
     let role: PorchExperience?
@@ -144,9 +151,11 @@ struct FamilyCallSession {
     func startCall(to person: FamilyPerson, mode: NativeCall.Mode, dropIn: Bool) async throws -> FamilyCallSession {
         try await startCall(targetID: person.id, name: person.name, mode: mode, dropIn: dropIn)
     }
-    func startCall(targetID: String, name: String, mode: NativeCall.Mode, dropIn: Bool, waitSeconds: Int = 45) async throws -> FamilyCallSession {
+    func startCall(targetID: String?, name: String, mode: NativeCall.Mode, dropIn: Bool, waitSeconds: Int = 45) async throws -> FamilyCallSession {
         guard let credential else { throw FamilyServiceError(message: "Pair this device first.", status: 401) }
-        let result = try await FamilyService(credential).send("startCall", ["targetID": targetID, "mode": mode.rawValue, "kind": dropIn ? "dropIn" : "call", "waitSeconds": waitSeconds])
+        var values: [String: Any] = ["mode": mode.rawValue, "kind": dropIn ? "dropIn" : "call", "waitSeconds": waitSeconds]
+        if let targetID { values["targetID"] = targetID } else { values["unlinked"] = true }
+        let result = try await FamilyService(credential).send("startCall", values)
         update(result)
         guard let call = result.state?.call else { throw FamilyServiceError(message: "Couldn't start the call.", status: 503) }
         return FamilyCallSession(credential: credential, call: call, peerName: name)

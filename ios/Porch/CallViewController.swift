@@ -76,13 +76,14 @@ final class CallViewController: UIViewController {
         caregiver.setImage(UIImage(systemName: "gearshape", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)), for: .normal)
         caregiver.tintColor = PorchStyle.nightSecondary
         caregiver.accessibilityLabel = "Caregiver mode"
-        caregiver.accessibilityHint = "Touch and hold to manage contacts and settings."
+        caregiver.accessibilityHint = "Tap or hold to manage contacts and settings."
         caregiver.accessibilityIdentifier = "clock.caregiver"
         caregiver.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Open caregiver mode", target: self, selector: #selector(accessibleSetup))]
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(heldSetup(_:)))
-        hold.minimumPressDuration = 1.5
+        hold.minimumPressDuration = 0.5
+        hold.allowableMovement = 30
         caregiver.addGestureRecognizer(hold)
-        caregiver.addTarget(self, action: #selector(explainCaregiver), for: .touchUpInside)
+        caregiver.addTarget(self, action: #selector(tappedSetup), for: .touchUpInside)
         statusLabel.font = PorchStyle.font(17)
         statusLabel.textColor = PorchStyle.nightSecondary
         statusLabel.textAlignment = .center
@@ -97,8 +98,8 @@ final class CallViewController: UIViewController {
             clock.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
             caregiver.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
             caregiver.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
-            caregiver.widthAnchor.constraint(equalToConstant: 56),
-            caregiver.heightAnchor.constraint(equalToConstant: 56),
+            caregiver.widthAnchor.constraint(equalToConstant: 64),
+            caregiver.heightAnchor.constraint(equalToConstant: 64),
             callButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             callButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -36),
             callButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 210),
@@ -127,9 +128,11 @@ final class CallViewController: UIViewController {
         if args.contains("--preview-phone-setup") {
             let person = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
             present(PorchStyle.navigation(SetupViewController(slot: 1, contact: person)), animated: false)
-        } else if args.contains("--preview-server") {
-            present(PorchStyle.navigation(NativeCallSettingsViewController()), animated: false)
-        } else if args.contains("--preview-setup") { showSetup() }
+
+        } else if args.contains("--preview-caregiver") { showUnlockedSetup() }
+        else if args.contains("--preview-family-settings") { present(PorchStyle.navigation(FamilyAdminViewController()), animated: false) }
+        else if args.contains("--preview-pin-setup") { present(PorchStyle.navigation(CaregiverPINViewController(profile: nil)), animated: false) }
+        else if args.contains("--preview-setup") { showSetup() }
         else if args.contains("--preview-people") { showPeople() }
         #endif
     }
@@ -245,40 +248,13 @@ final class CallViewController: UIViewController {
             statusLabel.text = "No one is assigned to \(slot).\nPlease choose another number."
             return
         }
-        if let native = contact.nativeCall {
-            if let memberID = contact.familyMemberID { startFamilyCall(contact, memberID: memberID, mode: native.mode); return }
-            do {
-                let server = try NativeCallSettings.load()
-                guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
-                opening = true
-                refreshCallButton()
-                present(NativeCallViewController(contact: contact, call: native, server: server), animated: true)
-            } catch {
-                showError("Set up native calling", message: error.localizedDescription)
-            }
-            return
+        guard let native = contact.nativeCall else {
+            showError("Finish Porch setup", message: "Open caregiver mode and link this person's Porch app or add their phone number."); return
         }
-        guard !UIAccessibility.isGuidedAccessEnabled else {
-            showError("Exit Guided Access", message: "Porch needs to open Shortcuts or FaceTime. Guided Access keeps this iPad in one app, so a caregiver must exit it before calling.")
-            return
-        }
-        guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
-        opening = true
-        refreshCallButton()
-        let appName = contact.shortcutName == nil ? "FaceTime" : "Shortcuts"
-        statusLabel.text = "Opening \(appName)…"
-        UIApplication.shared.open(contact.launchURL, options: [:]) { [weak self] opened in
-            guard let self else { return }
-            self.opening = false
-            self.refreshCallButton()
-            if !opened {
-                self.showError("Couldn't open \(appName)", message: "Check that \(appName) is installed and enabled, then try again.")
-            }
-            // URL handoff doesn't report shortcut execution or call status.
-        }
+        startFamilyCall(contact, memberID: contact.familyMemberID, mode: native.mode)
     }
 
-    private func startFamilyCall(_ contact: CallContact, memberID: String, mode: NativeCall.Mode) {
+    private func startFamilyCall(_ contact: CallContact, memberID: String?, mode: NativeCall.Mode) {
         guard PorchDevice.credential(for: .bedside) != nil, !opening else {
             showError("Porch isn't ready", message: "Check Family & drop-in in caregiver mode, then try again."); return
         }
@@ -303,21 +279,17 @@ final class CallViewController: UIViewController {
     }
 
     @objc private func heldSetup(_ gesture: UILongPressGestureRecognizer) {
-        if gesture.state == .began { showSetup() }
+        if gesture.state == .began { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showSetup() }
     }
-    @objc private func explainCaregiver() {
-        statusLabel.text = "Hold the settings icon to open caregiver mode."
-    }
+    @objc private func tappedSetup() { showSetup() }
     @objc private func accessibleSetup() -> Bool { showSetup(); return true }
 
-    private func showSetup() {
+    func showSetup() {
         guard presentedViewController == nil else { return }
-        if PorchDevice.credential(for: .bedside) != nil {
-            let gate = CaregiverPINViewController()
-            gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
-            present(PorchStyle.navigation(gate), animated: true); return
-        }
-        showUnlockedSetup()
+        trigger.resetKeys(); resignFirstResponder()
+        let gate = CaregiverPINViewController()
+        gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
+        present(PorchStyle.navigation(gate), animated: true)
     }
 
     private func showUnlockedSetup() {
