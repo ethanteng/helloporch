@@ -98,6 +98,8 @@ final class SlotsViewController: UITableViewController {
             var updated = self.slots
             try updated.setContact(contact, for: number)
             try updated.setAction(action, for: number)
+            // Invites may be accepted while the caregiver is editing another slot.
+            if let state = FamilyCoordinator.shared.state { try updated.reconcile(with: state) }
             try self.onSave?(updated)
             self.slots = updated
             self.tableView.reloadData()
