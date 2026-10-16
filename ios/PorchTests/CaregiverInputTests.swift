@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import GameController
 import PorchCore
 @testable import Porch
 
@@ -88,6 +89,80 @@ final class CaregiverInputTests: XCTestCase {
         clock.resume()
         XCTAssertTrue(clock.isFirstResponder, "Returning to the clock restores keypad calling")
     }
+
+    @MainActor func testConnectingAKeypadDoesNotReplaceTheNativeKeyboard() {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let name = UITextField(), pin = UITextField(); pin.keyboardType = .numberPad
+        form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
+        form.form.addArrangedSubview(form.field(pin, title: "PIN", placeholder: "Six digits"))
+        XCTAssertTrue(name.becomeFirstResponder())
+        XCTAssertNil(name.inputView)
+        XCTAssertFalse(name.inputAssistantItem.allowsHidingShortcuts)
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertNil(name.inputView, "Connecting a keypad must not suppress the system keyboard")
+        XCTAssertNil(pin.inputView, "Other fields must keep the native keyboard too")
+        XCTAssertTrue(name.isFirstResponder)
+        name.insertText("Pat")
+        XCTAssertEqual(name.text, "Pat")
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertNil(name.inputView)
+    }
+
+    @MainActor func testPorchKeyboardIsOptInAndSwitchingBackRestoresEveryField() {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let name = UITextField(), phone = UITextField(); phone.keyboardType = .phonePad
+        form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
+        form.form.addArrangedSubview(form.field(phone, title: "Phone", placeholder: "Phone"))
+        XCTAssertTrue(name.becomeFirstResponder()); name.insertText("Pat")
+        buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.porchKeyboard" }!.sendActions(for: .touchUpInside)
+        XCTAssertNotNil(name.inputView); XCTAssertNotNil(phone.inputView)
+        let keyboard = form.view.subviews.flatMap { descendants($0) }.first { $0.accessibilityIdentifier == "caregiver.touchKeyboard" }!
+        XCTAssertFalse(keyboard.isHidden)
+        buttons(in: keyboard).first { $0.title(for: .normal) == "m" }!.sendActions(for: .touchUpInside)
+        XCTAssertEqual(name.text, "Patm")
+        buttons(in: keyboard).first { $0.accessibilityIdentifier == "caregiver.touchKeyboard.useNative" }!.sendActions(for: .touchUpInside)
+        XCTAssertNil(name.inputView); XCTAssertNil(phone.inputView)
+        XCTAssertTrue(keyboard.isHidden); XCTAssertTrue(name.isFirstResponder)
+        XCTAssertEqual(name.text, "Patm", "Changing keyboards must preserve the text and selection")
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertNil(name.inputView)
+        _ = form.textFieldShouldReturn(name)
+        XCTAssertTrue(phone.isFirstResponder); XCTAssertNil(phone.inputView)
+        phone.insertText("+1415"); XCTAssertEqual(phone.text, "+1415")
+        form.setKeyboardControlVisible(false); form.view.endEditing(true)
+        XCTAssertTrue(descendants(form.view).first { $0.accessibilityIdentifier == "caregiver.keyboardOptions" }!.isHidden)
+    }
+
+    @MainActor func testRequestingNativeKeyboardFocusesAnEditableFieldAndPreservesAssistant() {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let hidden = UITextField(), disabled = UITextField(), detached = UITextField(), editable = UITextField()
+        let hiddenGroup = form.field(hidden, title: "Hidden", placeholder: "Hidden"); hiddenGroup.isHidden = true
+        form.form.addArrangedSubview(hiddenGroup)
+        disabled.isEnabled = false; form.form.addArrangedSubview(form.field(disabled, title: "Disabled", placeholder: "Disabled"))
+        _ = form.field(detached, title: "Detached", placeholder: "Detached")
+        let item = UIBarButtonItem(title: "Test shortcut", style: .plain, target: nil, action: nil)
+        let group = UIBarButtonItemGroup(barButtonItems: [item], representativeItem: nil)
+        editable.inputAssistantItem.leadingBarButtonGroups = [group]
+        form.form.addArrangedSubview(form.field(editable, title: "Name", placeholder: "Name"))
+        XCTAssertEqual(editable.inputAssistantItem.leadingBarButtonGroups.count, 1)
+        buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.nativeKeyboard" }!.sendActions(for: .touchUpInside)
+        XCTAssertTrue(editable.isFirstResponder); XCTAssertNil(editable.inputView)
+        XCTAssertFalse(hidden.isFirstResponder); XCTAssertFalse(disabled.isFirstResponder); XCTAssertFalse(detached.isFirstResponder)
+    }
+
+    @MainActor private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
 
     @MainActor func testCaregiverFieldsRemainLegibleWhenDeviceUsesDarkMode() {
         let form = CaregiverFormViewController()

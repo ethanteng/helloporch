@@ -60,6 +60,7 @@ jobs:
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-phone-setup --preview-touch-keyboard
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-phone-setup --preview-system-keyboard --preview-hardware-keyboard
       - name: Save the iPad screenshots
         uses: actions/upload-artifact@v4
         with:

@@ -8,7 +8,7 @@ Start with the [family setup guide](FAMILY-SETUP.md). Family recipients join usi
 
 Tap the gear, or hold it for half a second. The first caregiver entry asks you to choose and confirm your own six-digit PIN. An already-paired iPad needs no preset PIN; an older installation can use its saved connection during migration. A completely new bedside device uses a private, one-use activation link from the server operator before enrollment. The PIN is specific to that bedside household and verified by the server; five wrong guesses lock that household for 15 minutes.
 
-In **Family & drop-in**, edit the bedside display name (default **Your loved one**), invite family devices and approve audio/video drop-in separately. The PIN can be changed there. The on-screen keyboard remains available with a hardware keypad connected.
+In **Family & drop-in**, edit the bedside display name (default **Your loved one**), invite family devices and approve audio/video drop-in separately. The PIN can be changed there. The native keyboard is the default even with a hardware keypad connected; **Porch keyboard** is an optional touch fallback. If iPadOS hides its keyboard, use its bottom Shortcuts bar → **Show Keyboard**. See [typing in caregiver settings](FAMILY-SETUP.md#typing-in-caregiver-settings).
 
 Choose a keypad slot to edit a person's name, import a phone number from Contacts, choose voice/video and link their paired Porch app. Optionally enable phone fallback. Everything calls through Porch; no calling-method or manual-room configuration is shown. Old FaceTime/Shortcut contact records remain readable so names/key assignments survive, but must be edited into a Porch contact before calling.
 
@@ -33,7 +33,7 @@ xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
 
 Simulator Keychain access needs Xcode's simulated signing entitlements. Release/device archives use the configured distribution profile. Automated tests cover room/role authorization, enrollment and PIN isolation, name updates, contact normalization, keypad handling, caregiver focus/keyboard, first-entry PIN fields, first-tap gear opening and small-phone layouts. CI runs UIKit checks on both device families. See the [physical-device acceptance checks](FAMILY-SETUP.md#verify) before wider use.
 
-For visual Debug previews, use `--preview-phone-setup`, `--preview-caregiver`, `--preview-pin-setup`, or `--preview-family-settings`. They don't place calls or save contacts.
+For visual Debug previews, use `--preview-phone-setup`, `--preview-caregiver`, `--preview-pin-setup`, or `--preview-family-settings`. Combine the person editor preview with `--preview-system-keyboard` to focus a native input field, `--preview-hardware-keyboard` to show the keypad guidance, or `--preview-touch-keyboard` to inspect the optional Porch keyboard. They don't place calls or save contacts.
 
 ## TestFlight
 

@@ -193,7 +193,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") { nameField.becomeFirstResponder() }
+        if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") || ProcessInfo.processInfo.arguments.contains("--preview-system-keyboard") { nameField.becomeFirstResponder() }
         #endif
     }
     @objc private func updateMethod() {

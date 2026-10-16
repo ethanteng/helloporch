@@ -96,7 +96,8 @@ final class CaregiverTouchKeyboard: UIView {
         let heading = UIStackView(arrangedSubviews: [PorchStyle.label(field.accessibilityLabel ?? "Touch keyboard", size: 15), UIView()])
         heading.alignment = .center
         let system = UIButton(type: .system)
-        system.setTitle("Use iPad keyboard", for: .normal)
+        system.setTitle(UIDevice.current.userInterfaceIdiom == .phone ? "Use iPhone keyboard" : "Use iPad keyboard", for: .normal)
+        system.accessibilityIdentifier = "caregiver.touchKeyboard.useNative"
         system.tintColor = PorchStyle.accent
         system.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         system.addAction(UIAction { [weak self] _ in self?.onSystemKeyboard?() }, for: .touchUpInside)
@@ -156,10 +157,17 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     let form = UIStackView()
     let scroll = UIScrollView()
     private let keyboard = CaregiverTouchKeyboard()
-    private let keyboardButton = PorchStyle.button("On-screen keyboard", symbol: "keyboard", filled: false)
+    private let keyboardButton = PorchStyle.button("Porch keyboard", symbol: "square.grid.3x3", filled: false)
+    private let nativeKeyboardButton = PorchStyle.button(UIDevice.current.userInterfaceIdiom == .phone ? "iPhone keyboard" : "iPad keyboard", symbol: "keyboard", filled: false)
+    private let keyboardFooter = UIStackView()
+    private let hardwareHint = PorchStyle.label("If your keypad hides the iPad keyboard, tap the keyboard button in the iPad's bottom bar, then Show Keyboard. Porch keyboard is also available.", size: 14)
+    private var keyboardControlsEnabled = true
+    private var hardwareKeyboardConnected = GCKeyboard.coalesced != nil
     private var fields: [UITextField] = []
     private weak var activeField: UITextField?
-    private var useTouchKeyboard = GCKeyboard.coalesced != nil
+    // Native input is always the default, even with a USB/Bluetooth keypad.
+    // An empty input view is allowed only after choosing Porch keyboard.
+    private var useTouchKeyboard = false
     private let emptyInput = UIView(frame: .zero)
 
     override func viewDidLoad() {
@@ -169,6 +177,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         view.tintColor = PorchStyle.accent
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") { useTouchKeyboard = true }
+        if ProcessInfo.processInfo.arguments.contains("--preview-hardware-keyboard") { hardwareKeyboardConnected = true }
         #endif
         form.axis = .vertical
         form.spacing = 24
@@ -178,7 +187,23 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         keyboard.onNext = { [weak self] in self?.nextField() }
         keyboard.onSystemKeyboard = { [weak self] in self?.showSystemKeyboard() }
         keyboardButton.addTarget(self, action: #selector(showTouchKeyboard), for: .touchUpInside)
-        let body = UIStackView(arrangedSubviews: [scroll, keyboardButton, keyboard])
+        nativeKeyboardButton.addTarget(self, action: #selector(showSystemKeyboard), for: .touchUpInside)
+        keyboardButton.accessibilityIdentifier = "caregiver.porchKeyboard"
+        nativeKeyboardButton.accessibilityIdentifier = "caregiver.nativeKeyboard"
+        for button in [nativeKeyboardButton, keyboardButton] {
+            button.configuration?.contentInsets = .init(top: 12, leading: 10, bottom: 12, trailing: 10)
+            button.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 16)
+            button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                var attributes = attributes; attributes.font = PorchStyle.font(15, weight: .medium); return attributes
+            }
+        }
+        let options = UIStackView(arrangedSubviews: [nativeKeyboardButton, keyboardButton])
+        options.distribution = .fillEqually
+        keyboardFooter.axis = .vertical; keyboardFooter.spacing = 4
+        keyboardFooter.accessibilityIdentifier = "caregiver.keyboardOptions"
+        hardwareHint.textAlignment = .center; hardwareHint.isHidden = true
+        keyboardFooter.addArrangedSubview(options); keyboardFooter.addArrangedSubview(hardwareHint)
+        let body = UIStackView(arrangedSubviews: [scroll, keyboardFooter, keyboard])
         body.axis = .vertical
         body.spacing = 0
         [body, form].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -200,12 +225,13 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         let width = form.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
         width.priority = .defaultHigh; width.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardConnected), name: .GCKeyboardDidConnect, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDisconnected), name: .GCKeyboardDidDisconnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(scrollToField), name: UIResponder.keyboardDidShowNotification, object: nil)
     }
     deinit { NotificationCenter.default.removeObserver(self) }
 
-    func hideKeyboardControl() { keyboardButton.isHidden = true }
-    func setKeyboardControlVisible(_ visible: Bool) { keyboardButton.isHidden = !visible }
+    func hideKeyboardControl() { setKeyboardControlVisible(false) }
+    func setKeyboardControlVisible(_ visible: Bool) { keyboardControlsEnabled = visible; updateKeyboardUI() }
 
     func field(_ field: UITextField, title: String, placeholder: String, helper: String? = nil) -> UIView {
         if !fields.contains(where: { $0 === field }) { fields.append(field) }
@@ -230,8 +256,8 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         field.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
         field.returnKeyType = .next
         field.inputView = useTouchKeyboard ? emptyInput : nil
-        field.inputAssistantItem.leadingBarButtonGroups = []
-        field.inputAssistantItem.trailingBarButtonGroups = []
+        // Preserve the native assistant bar rather than stripping its controls.
+        field.inputAssistantItem.allowsHidingShortcuts = false
         field.autocorrectionType = .no
         field.spellCheckingType = .no
         field.autocapitalizationType = .none
@@ -265,9 +291,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         activeField = textField
         textField.layer.borderColor = PorchStyle.accent.cgColor
         textField.layer.borderWidth = 2
-        keyboard.field = textField
-        keyboard.isHidden = !useTouchKeyboard
-        keyboardButton.isHidden = useTouchKeyboard
+        updateKeyboardUI()
         view.layoutIfNeeded()
         scrollToField()
     }
@@ -277,43 +301,56 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         textField.layer.borderWidth = 1
         if activeField === textField {
             activeField = nil
-            keyboard.isHidden = true
-            keyboardButton.isHidden = false
+            updateKeyboardUI()
         }
     }
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool { nextField(); return false }
 
+    private func updateKeyboardUI() {
+        let customVisible = keyboardControlsEnabled && useTouchKeyboard && activeField != nil
+        keyboard.isHidden = !customVisible
+        keyboard.field = customVisible ? activeField : nil
+        keyboardFooter.isHidden = !keyboardControlsEnabled || customVisible
+        hardwareHint.isHidden = !hardwareKeyboardConnected || useTouchKeyboard || activeField == nil || UIDevice.current.userInterfaceIdiom != .pad
+    }
+
     @objc private func showTouchKeyboard() {
+        guard keyboardControlsEnabled, let target = activeField ?? fields.first(where: isVisible) else { return }
         useTouchKeyboard = true
         fields.forEach { $0.inputView = emptyInput }
-        if let activeField {
-            activeField.reloadInputViews()
-            textFieldDidBeginEditing(activeField)
-        } else { fields.first(where: isVisible)?.becomeFirstResponder() }
+        if target.isFirstResponder { target.reloadInputViews(); updateKeyboardUI() }
+        else { target.becomeFirstResponder() }
+        view.layoutIfNeeded(); scrollToField()
     }
 
     @objc private func keyboardConnected() {
-        if activeField != nil { showTouchKeyboard() }
-        else { useTouchKeyboard = true; fields.forEach { $0.inputView = emptyInput } }
+        // A keypad must never change the caregiver's chosen input method.
+        hardwareKeyboardConnected = true; updateKeyboardUI()
     }
+    @objc private func keyboardDisconnected() { hardwareKeyboardConnected = false; updateKeyboardUI() }
 
-    private func showSystemKeyboard() {
+    @objc private func showSystemKeyboard() {
+        guard keyboardControlsEnabled else { return }
         useTouchKeyboard = false
         fields.forEach { $0.inputView = nil }
-        keyboard.isHidden = true
-        keyboardButton.isHidden = false
-        activeField?.reloadInputViews()
-        scrollToField()
+        updateKeyboardUI()
+        if let target = activeField ?? fields.first(where: isVisible) {
+            if target.isFirstResponder { target.reloadInputViews() }
+            else { target.becomeFirstResponder() }
+        }
+        view.layoutIfNeeded(); scrollToField()
     }
 
     private func isVisible(_ field: UITextField) -> Bool {
-        var view: UIView? = field
-        while let current = view {
-            if current.isHidden { return false }
-            view = current.superview
+        guard field.isEnabled, field.isUserInteractionEnabled else { return false }
+        var candidate: UIView? = field
+        while let current = candidate {
+            if current.isHidden || current.alpha == 0 { return false }
+            if current === view { return true }
+            candidate = current.superview
         }
-        return true
+        return false
     }
 
     private func nextField() {
