@@ -166,7 +166,7 @@ extension Notification.Name {
         var lastSuccess = Date()
         while !Task.isCancelled && uuid == id && !ending {
             do {
-                let response = try await FamilyService(profile).send("poll", ["available": false])
+                let response = try await FamilyService(profile).send("poll", ["available": false, "receivedCallID": id.uuidString.lowercased()])
                 guard uuid == id, !Task.isCancelled else { return }
                 guard let state = response.state, let current = state.call, current.id == id.uuidString.lowercased(),
                       current.to == state.me.id, current.kind == "call", current.state != "ended" else {

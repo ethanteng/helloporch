@@ -11,7 +11,7 @@ type Mode = "voice" | "video";
 type Permissions = { audio: boolean; video: boolean };
 type Member = { voip?: VoIPRegistration; invitationID?: string; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
 type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; expiresAt: number; claimedBy?: string };
-type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string };
+type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string };
 type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call };
 type Auth = { householdID: string; deviceID: string; hash: string };
 export type FamilyDependencies = { sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult>; store?: FamilyStore; now?: () => number; endRoom?: (room: string, config: CallServer) => Promise<void> };
@@ -218,6 +218,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now; me.available = input.available;
+        const call = house.call;
+        // Receipt is scoped to the authenticated recipient and exact pending
+        // ordinary call; it never grants foreground readiness or drop-in consent.
+        if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === call.id) call.receivedAt ??= now;
         if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
@@ -309,8 +313,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             const recipient = current.members.find(m => m.id === target.id);
             if (delivery.invalidToken && recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
             const active = current.call;
-            // An answer always wins over a delivery failure, just as with SIP fallback.
-            if (recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending") {
+            // A call-specific recipient receipt or answer outweighs a missing
+            // APNs acknowledgment, even while the recipient is backgrounded.
+            if (recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
               active.state = "ended"; active.reason = "Incoming call delivery unavailable.";
               return true;
             }

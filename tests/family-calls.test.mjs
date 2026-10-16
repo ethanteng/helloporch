@@ -380,3 +380,62 @@ test('a decline during a failed push is preserved instead of being reclassified 
  deliver({delivered:false});
  const result=await pending;assert.equal(result.status,200);assert.equal((await result.json()).state.call.reason,'Call ended.');
 });
+
+test('background receipt preserves ringing when the APNs acknowledgment is lost',async()=>{
+ for (const failure of ['response','error']) {
+  for (const outcome of ['answer','fallback']) {
+   let deliver,sent; const arrived=new Promise(resolve=>sent=resolve);
+   const f=fixture({sendPush:async()=>{sent();await new Promise(resolve=>deliver=resolve);if(failure==='error')throw new Error('APNs acknowledgment lost');return {delivered:false};}});
+   const {bedside,family}=await f.setup();
+   await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+   await f.json('poll',{available:false},family.credential);
+   const pending=f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call',waitSeconds:20},bedside.credential);
+   await arrived;
+   const current=(await f.json('poll',{available:false},family.credential)).state.call;
+   const receipt=await f.json('poll',{available:false,receivedCallID:current.id},family.credential);
+   deliver();
+   const response=await pending;
+   assert.equal(response.status,200,'authenticated receipt must preserve the pending call');
+   const call=(await response.json()).state.call;
+   assert.equal(call.state,'pending');assert.equal(call.expiresAt,current.expiresAt);
+   assert.equal(receipt.state.me.online,false,'receipt must not advertise foreground availability');
+   assert.equal(call.announcedAt,undefined,'ordinary receipt is separate from drop-in consent');
+   assert.equal(f.ended.length,0);
+   assert.equal((await f.send('joinCall',{callID:call.id},family.credential)).status,403);
+   if(outcome==='answer') {
+    await f.json('acceptCall',{callID:call.id,available:true},family.credential);
+    assert.equal((await f.send('fallback',{callID:call.id},bedside.credential)).status,409);
+   } else {
+    await f.json('fallback',{callID:call.id},bedside.credential);
+    assert.equal((await f.send('acceptCall',{callID:call.id,available:true},family.credential)).status,410);
+   }
+  }
+ }
+});
+
+test('caller, stale-call and unscoped background polls cannot acknowledge delivery',async()=>{
+ for (const source of ['caller','stale','unscoped']) {
+  let deliver,sent; const arrived=new Promise(resolve=>sent=resolve);
+  const f=fixture({sendPush:async()=>{sent();return new Promise(resolve=>deliver=resolve);}}),{bedside,family}=await f.setup();
+  await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+  await f.json('poll',{available:false},family.credential);
+  const pending=f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+  await arrived;
+  const current=(await f.json('poll',{available:false},family.credential)).state.call;
+  const values={available:false,...(source==='unscoped'?{}:{receivedCallID:source==='stale'?randomUUID():current.id})};
+  await f.json('poll',values,source==='caller'?bedside.credential:family.credential);
+  deliver({delivered:false});
+  const response=await pending; assert.equal(response.status,409);assert.equal((await response.json()).errorCode,'offline');
+ }
+});
+
+test('a delivery receipt cannot skip the bedside drop-in announcement',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ await f.json('setDropIn',{enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const created=await f.json('startCall',{targetID:bedside.state.me.id,mode:'voice',kind:'dropIn'},family.credential),callID=created.state.call.id;
+ await f.json('poll',{available:false,receivedCallID:callID},bedside.credential);
+ f.advance(5);
+ assert.equal((await f.send('acceptCall',{callID,available:true},bedside.credential)).status,409);
+ await f.json('poll',{available:true},bedside.credential);f.advance(5);
+ await f.json('acceptCall',{callID,available:true},bedside.credential);
+});
