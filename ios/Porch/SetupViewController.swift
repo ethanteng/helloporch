@@ -24,7 +24,7 @@ final class SlotsViewController: UITableViewController {
         tableView.reloadData()
     }
     override func numberOfSections(in tableView: UITableView) -> Int { 3 }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 3 : 1 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 4 : 1 }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.backgroundColor = PorchStyle.surface
@@ -60,10 +60,15 @@ final class SlotsViewController: UITableViewController {
             content.text = "Call preferences"
             content.secondaryText = "Phone fallback after \(CallPreferences.fallbackSeconds()) seconds · Dialing sound"
             content.image = UIImage(systemName: "phone.badge.waveform")
-        } else if indexPath.section == 1 {
+        } else if indexPath.section == 1, indexPath.row == 2 {
             content.text = "Bedside display"
             content.secondaryText = BedsidePreferences.load().appearance == .dynamic ? "Dynamic · Day, night & seasons" : "Default · Dark date & time"
             content.image = UIImage(systemName: "sun.and.horizon")
+        } else if indexPath.section == 1 {
+            content.text = "Advanced"
+            content.secondaryText = CallPreferences.disconnectAfterSilence() ? "End calls after \(CallPreferences.silenceSeconds()) seconds of silence" : "Automatic hang-up is off"
+            content.image = UIImage(systemName: "gearshape.2")
+            cell.accessibilityIdentifier = "caregiver.advanced"
         } else {
             content.text = "Bedside mode"
             content.secondaryText = "Change this device to family mode"
@@ -87,7 +92,7 @@ final class SlotsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 1 {
-            let controller: UIViewController = indexPath.row == 0 ? FamilyAdminViewController() : indexPath.row == 1 ? CallPreferencesViewController() : BedsideDisplaySettingsViewController()
+            let controller: UIViewController = indexPath.row == 0 ? FamilyAdminViewController() : indexPath.row == 1 ? CallPreferencesViewController() : indexPath.row == 2 ? BedsideDisplaySettingsViewController() : AdvancedSettingsViewController()
             navigationController?.pushViewController(controller, animated: true); return
         }
         if indexPath.section == 2 { offerExperienceChange(on: self); return }

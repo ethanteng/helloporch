@@ -5,8 +5,77 @@ import AVFoundation
 import Security
 import PorchCore
 @testable import Porch
+@testable import LiveKit
 
 final class CaregiverInputTests: XCTestCase {
+    @MainActor func testCaregiverAdvancedMenuOpensSilenceSettings() throws {
+        let slots = SlotsViewController(slots: CallSlots())
+        let navigation = UINavigationController(rootViewController: slots)
+        navigation.loadViewIfNeeded(); slots.loadViewIfNeeded()
+        XCTAssertEqual(slots.tableView(slots.tableView, numberOfRowsInSection: 1), 4)
+        let path = IndexPath(row: 3, section: 1)
+        let cell = slots.tableView(slots.tableView, cellForRowAt: path)
+        XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Advanced")
+        slots.tableView(slots.tableView, didSelectRowAt: path)
+        XCTAssertTrue(navigation.topViewController is AdvancedSettingsViewController)
+    }
+
+    @MainActor func testAdvancedSilenceSettingValidatesSavesAndCanBeTurnedOff() async throws {
+        let suite = "porch.advanced-test.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let screen = AdvancedSettingsViewController(defaults: defaults)
+        screen.loadViewIfNeeded()
+        func find<T: UIView>(_ view: UIView, _ type: T.Type) -> T? {
+            if let found = view as? T { return found }
+            return view.subviews.lazy.compactMap { find($0, type) }.first
+        }
+        let toggle = try XCTUnwrap(find(screen.view, UISwitch.self))
+        let field = try XCTUnwrap(find(screen.view, UITextField.self))
+        XCTAssertFalse(toggle.isOn); XCTAssertEqual(field.text, "120")
+        toggle.isOn = true; toggle.sendActions(for: .valueChanged)
+        for invalid in ["", "hello", "14", "1801", "3.5", "-30"] {
+            field.text = invalid; field.sendActions(for: .editingChanged)
+            XCTAssertFalse(screen.navigationItem.rightBarButtonItem!.isEnabled, invalid)
+        }
+        field.text = "45"; field.sendActions(for: .editingChanged)
+        let navigation = UINavigationController(rootViewController: screen)
+        navigation.loadViewIfNeeded()
+        let original = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow })
+        let window = UIWindow(windowScene: try XCTUnwrap(original.windowScene))
+        window.rootViewController = navigation; window.makeKeyAndVisible()
+        defer { window.isHidden = true; original.makeKeyAndVisible() }
+        for size in [CGSize(width: 393, height: 852), CGSize(width: 1024, height: 768)] {
+            window.frame = CGRect(origin: .zero, size: size)
+            window.setNeedsLayout(); window.layoutIfNeeded()
+            navigation.view.setNeedsLayout(); navigation.view.layoutIfNeeded(); screen.view.layoutIfNeeded()
+            XCTAssertGreaterThan(try XCTUnwrap(find(screen.view, UIScrollView.self)).bounds.height, 100)
+            XCTAssertGreaterThan(field.bounds.width, 100)
+            XCTAssertFalse(field.superview!.isHidden)
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let image = UIGraphicsImageRenderer(bounds: navigation.view.bounds).image { context in
+                navigation.view.layer.render(in: context.cgContext)
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "Advanced settings \(Int(size.width))x\(Int(size.height))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        let save = try XCTUnwrap(screen.navigationItem.rightBarButtonItem)
+        XCTAssertTrue(save.isEnabled)
+        UIApplication.shared.sendAction(try XCTUnwrap(save.action), to: save.target, from: save, for: nil)
+        XCTAssertTrue(CallPreferences.disconnectAfterSilence(in: defaults))
+        XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 45)
+        let reloaded = AdvancedSettingsViewController(defaults: defaults); reloaded.loadViewIfNeeded()
+        let reloadedToggle = try XCTUnwrap(find(reloaded.view, UISwitch.self))
+        XCTAssertTrue(reloadedToggle.isOn)
+        reloadedToggle.isOn = false; reloadedToggle.sendActions(for: .valueChanged)
+        let off = try XCTUnwrap(reloaded.navigationItem.rightBarButtonItem)
+        UIApplication.shared.sendAction(try XCTUnwrap(off.action), to: off.target, from: off, for: nil)
+        XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
+        XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 45)
+    }
+
     @MainActor func testCallCredentialsCanMigrateToLockScreenAccessWithoutChangingOtherSecrets() throws {
         let account = "porch.test.incoming.\(UUID().uuidString)"
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -590,4 +659,79 @@ final class CaregiverInputTests: XCTestCase {
         self.name = name; self.language = language; self.video = video; self.completion = completion
     }
     func stop() { stopCount += 1; completion = nil }
+}
+
+
+/// Exercise the pinned SDK's real teardown: identity/attributes disappear as
+/// soon as the delegate returns, before a queued main-actor callback can run.
+final class PhoneFallbackHangupTests: XCTestCase {
+    @MainActor private func fixture() throws -> NativeCallViewController {
+        let call = try NativeCall(room: "hangup-test", mode: .voice)
+        let contact = try CallContact(name: "Family", nativeCall: call, phoneNumber: "+14155550123")
+        let server = try NativeCallServer(url: "https://example.com", accessCode: "test-credential-no-network")
+        // Do not load the view: no network, permissions, audio or telephone call.
+        return try NativeCallViewController.phoneFallback(contact, server: server)
+    }
+
+    private func participant(in room: Room, identity: String = "phone") -> HangupTestParticipant {
+        let participant = HangupTestParticipant(room: room, identity: Participant.Identity(from: identity))
+        participant._state.mutate { $0.attributes = ["sip.callStatus": "active"] }
+        return participant
+    }
+
+    @MainActor private func deliverAndReset(_ participant: Participant, event: @escaping @Sendable () -> Void) throws {
+        let reset = DispatchSemaphore(value: 0)
+        Task.detached {
+            event()
+            await participant.cleanUp(notify: false)
+            reset.signal()
+        }
+        // Hold the main actor until real SDK cleanup resets participant state.
+        XCTAssertEqual(reset.wait(timeout: .now() + 5), .success)
+        XCTAssertNil(participant.identity)
+        XCTAssertTrue(participant.attributes.isEmpty)
+    }
+
+    @MainActor private func drainCallbacks() async {
+        for _ in 0..<20 { await Task.yield() }
+    }
+
+    @MainActor func testRemoteHangupEndsFallbackAfterLiveKitClearsParticipant() async throws {
+        let screen = try fixture(), room = screen.room, phone = participant(in: room)
+        try deliverAndReset(phone) { screen.handleParticipantDisconnect(phone, in: room) }
+        await drainCallbacks()
+        XCTAssertTrue(screen.isEnding, "The disconnected phone must end the call even after its identity is cleared")
+    }
+
+    @MainActor func testExplicitSIPHangupEndsFallbackBeforeParticipantRemoval() async throws {
+        let screen = try fixture(), room = screen.room, phone = participant(in: room)
+        try deliverAndReset(phone) { screen.room(room, participant: phone, didUpdateAttributes: ["sip.callStatus": "hangup"]) }
+        await drainCallbacks()
+        XCTAssertTrue(screen.isEnding)
+    }
+
+    @MainActor func testRingingActiveAndAutomationDoNotEndFallback() async throws {
+        for status in ["dialing", "ringing", "active", "automation"] {
+            let screen = try fixture(), room = screen.room, phone = participant(in: room)
+            screen.room(room, participant: phone, didUpdateAttributes: ["sip.callStatus": status])
+            await drainCallbacks()
+            XCTAssertFalse(screen.isEnding, status)
+        }
+    }
+
+    @MainActor func testStaleRoomsAndOtherParticipantsCannotEndFallback() async throws {
+        let screen = try fixture(), room = screen.room, previousRoom = Room()
+        let oldPhone = participant(in: previousRoom)
+        try deliverAndReset(oldPhone) { screen.handleParticipantDisconnect(oldPhone, in: previousRoom) }
+        let other = participant(in: room, identity: "someone-else")
+        try deliverAndReset(other) { screen.handleParticipantDisconnect(other, in: room) }
+        await drainCallbacks()
+        XCTAssertFalse(screen.isEnding)
+    }
+}
+
+/// The base SDK cleanup is the same state-reset path used by RemoteParticipant;
+/// avoid constructing a transport/protobuf fixture or publishing any tracks.
+private final class HangupTestParticipant: Participant, @unchecked Sendable {
+    override func unpublishAll(notify: Bool = true) async {}
 }

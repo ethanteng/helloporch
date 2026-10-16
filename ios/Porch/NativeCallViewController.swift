@@ -8,7 +8,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let contact: CallContact
     private let call: NativeCall
     private let server: NativeCallServer
-    private var room = Room()
+    private(set) var room = Room()
     private let statusLabel = UILabel()
     private let keypadHint = PorchStyle.label("", size: 16, color: PorchStyle.nightSecondary)
     private let remoteVideo = VideoView()
@@ -21,11 +21,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var waitTask: Task<Void, Never>?
     private var controlTask: Task<Void, Never>?
     private var fallbackTask: Task<Void, Never>?
+    private var inactivityTask: Task<Void, Never>?
+    private var inactivity = CallInactivityTimer(timeout: CallPreferences.disconnectAfterSilence() ? TimeInterval(CallPreferences.silenceSeconds()) : nil)
     private var phoneControlToken: String?
     private var isPhoneCall = false
     private var isSwitchingToPhone = false
     private var cleanupBackgroundTask: UIBackgroundTaskIdentifier = .invalid
-    private var isEnding = false
+    private(set) var isEnding = false
     private var hasFailed = false
     private var hasConnectedPeer = false
     private var mediaReady = false
@@ -86,10 +88,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         return controller
     }
 
-    static func phoneFallback(_ contact: CallContact) throws -> NativeCallViewController {
+    static func phoneFallback(_ contact: CallContact, server: NativeCallServer? = nil) throws -> NativeCallViewController {
         guard let call = contact.nativeCall else { throw CallError(message: "Choose a Porch contact.") }
-        let controller = NativeCallViewController(contact: contact, call: call, server: try NativeCallSettings.loadForPhone())
+        let configuration = try server ?? NativeCallSettings.loadForPhone()
+        let controller = NativeCallViewController(contact: contact, call: call, server: configuration)
         controller.beginWithPhoneFallback = true
+        controller.isPhoneCall = true
         return controller
     }
 
@@ -187,6 +191,15 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(endCall), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         BedsideText.applyAccessibilityLanguage(to: view)
+        if inactivity.timeout != nil {
+            inactivityTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(nanoseconds: 1_000_000_000) } catch { return }
+                    guard let self, !self.isEnding, !self.hasFailed else { return }
+                    self.checkInactivity()
+                }
+            }
+        }
         connectionTask = Task { if beginWithPhoneFallback { await switchToPhone() } else { await connect() } }
     }
 
@@ -310,10 +323,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
     private func refresh(source: Room? = nil) {
         guard !isEnding, !hasFailed, source == nil || source === room else { return }
+        defer { checkInactivity() }
         updateKeypadHint()
         let peers = Array(room.remoteParticipants.values)
         if isPhoneCall {
             let status = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
+            if status == "hangup" { finishPhoneCall(); return }
             if status == "active" || status == "automation" {
                 hasConnectedPeer = true
                 waitTask?.cancel()
@@ -392,6 +407,32 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         }
     }
 
+    private func checkInactivity(speaking: Bool = false) {
+        let peers = Array(room.remoteParticipants.values)
+        let phoneStatus = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
+        let connected = mediaReady && !isEnding && !hasFailed && !isSwitchingToPhone
+            && room.connectionState == .connected && !peers.isEmpty
+            && (!isPhoneCall || phoneStatus == "active" || phoneStatus == "automation")
+        let speech = speaking || room.localParticipant.isSpeaking || peers.contains { $0.isSpeaking }
+        if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected, speaking: speech) {
+            finish(message: "Call ended. Returning to the clock…")
+        }
+    }
+
+    nonisolated func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        // Snapshot before the SDK changes these participants again. Even a brief
+        // utterance between timer ticks should restart the silence interval.
+        let speaking = !participants.isEmpty
+        Task { @MainActor [weak self] in
+            guard let self, room === self.room else { return }
+            self.checkInactivity(speaking: speaking)
+        }
+    }
+
+    private func finishPhoneCall() {
+        finish(message: hasConnectedPeer ? "Call ended. Returning to the clock…" : "The phone call ended before it was answered.")
+    }
+
     @objc private func endCall() { finish() }
 
     private func finish(message: String? = nil) {
@@ -402,6 +443,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         connectionTask?.cancel()
         fallbackTask?.cancel()
         waitTask?.cancel()
+        inactivityTask?.cancel()
         controlTask?.cancel()
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
@@ -453,10 +495,16 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
+        handleParticipantDisconnect(participant, in: room)
+    }
+
+    nonisolated func handleParticipantDisconnect(_ participant: Participant, in room: Room) {
+        // LiveKit resets participant state after this callback returns.
+        let identity = participant.identity?.stringValue
         Task { @MainActor [weak self] in
             guard let self, room === self.room else { return }
-            if self.isPhoneCall, participant.identity?.stringValue == "phone" {
-                self.finish(message: self.hasConnectedPeer ? "Call ended. Returning to the clock…" : "The phone call ended before it was answered.")
+            if self.isPhoneCall, identity == "phone" {
+                self.finishPhoneCall()
                 return
             }
             guard !self.isSwitchingToPhone, !self.isPhoneCall else { return }
@@ -485,6 +533,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     nonisolated func room(_ room: Room, didUpdateConnectionState state: ConnectionState, from old: ConnectionState) {
         Task { @MainActor [weak self] in
             guard let self, room === self.room, !self.isEnding, !self.hasFailed else { return }
+            if state != .connected { self.inactivity.reset() }
             if state == .reconnecting { self.statusLabel.text = BedsideText.string("Reconnecting…") }
             if state == .connected { self.refresh() }
         }
@@ -500,6 +549,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     nonisolated func room(_ room: Room, didStartReconnectWithMode mode: ReconnectMode) {
         Task { @MainActor [weak self] in
             guard let self, room === self.room, !self.isEnding, !self.hasFailed else { return }
+            self.inactivity.reset()
             self.statusLabel.text = BedsideText.string("Reconnecting…")
         }
     }
@@ -509,7 +559,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     nonisolated func room(_ room: Room, participant: Participant, didUpdateAttributes attributes: [String: String]) {
-        Task { @MainActor [weak self] in self?.refresh(source: room) }
+        let identity = participant.identity?.stringValue
+        let status = attributes["sip.callStatus"]
+        Task { @MainActor [weak self] in
+            guard let self, room === self.room else { return }
+            if self.isPhoneCall, identity == "phone", status == "hangup" { self.finishPhoneCall() }
+            else { self.refresh(source: room) }
+        }
     }
 
     private func phoneRequest(_ action: String, body: [String: Any]) async throws -> Data {

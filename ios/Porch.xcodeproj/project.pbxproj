@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A00000000000000000000026 = {isa = PBXBuildFile; fileRef = B00000000000000000000026; };
         A00000000000000000000025 = {isa = PBXBuildFile; fileRef = B00000000000000000000025; };
         A00000000000000000000024 = {isa = PBXBuildFile; fileRef = B00000000000000000000024; };
         A00000000000000000000023 = {isa = PBXBuildFile; fileRef = B00000000000000000000023; };
@@ -28,6 +29,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        B00000000000000000000026 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsViewController.swift; sourceTree = "<group>"; };
         B00000000000000000000025 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemIncomingCalls.swift; sourceTree = "<group>"; };
         B00000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudio.swift; sourceTree = "<group>"; };
         B00000000000000000000023 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedsideDisplayView.swift; sourceTree = "<group>"; };
@@ -90,6 +92,7 @@
                 B00000000000000000000021,
                 B00000000000000000000020,
                 B00000000000000000000014 /* CallPreferencesViewController.swift */,
+                B00000000000000000000026 /* AdvancedSettingsViewController.swift */,
 				B00000000000000000000006 /* Info.plist */,
 			);
 			path = Porch;
@@ -210,6 +213,7 @@
                 A00000000000000000000021,
                 A00000000000000000000020,
                 A00000000000000000000012 /* CallPreferencesViewController.swift in Sources */,
+                A00000000000000000000026 /* AdvancedSettingsViewController.swift in Sources */,
 				A00000000000000000000003 /* SetupViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
