@@ -171,4 +171,93 @@ final class PorchCoreTests: XCTestCase {
         XCTAssertFalse(trigger.allowLaunch(at: 11))
         XCTAssertTrue(trigger.allowLaunch(at: 12))
     }
+
+    func testNativeCallsPersistAlongsideExistingMethods() throws {
+        try withDefaults { defaults in
+            var slots = CallSlots()
+            let voice = try CallContact(name: "David", nativeCall: NativeCall(room: " Family-David ", mode: .voice))
+            let video = try CallContact(name: "Maria", nativeCall: NativeCall(room: "family-maria", mode: .video))
+            try slots.setContact(voice, for: 2)
+            try slots.setContact(video, for: 6)
+            try slots.setContact(CallContact(name: "Anna", shortcutName: "Call Anna"), for: 1)
+            try slots.setContact(CallContact(name: "James", address: "james@example.com"), for: 3)
+            try slots.save(to: defaults)
+            let loaded = try CallSlots.load(from: defaults)
+            XCTAssertEqual(loaded, slots)
+            XCTAssertEqual(loaded.contact(for: 2)?.nativeCall?.room, "family-david")
+            XCTAssertEqual(loaded.contact(for: 2)?.nativeCall?.mode, .voice)
+            XCTAssertEqual(loaded.contact(for: 6)?.nativeCall?.mode, .video)
+            XCTAssertNil(loaded.contact(for: 1)?.nativeCall)
+            XCTAssertNil(loaded.contact(for: 3)?.nativeCall)
+        }
+    }
+
+    func testNativeRoomNamesRejectURLsAndInvalidNames() {
+        for room in ["", " ", "family/other", "a?x=1", "a#b", "a b", "家人", "-room", String(repeating: "a", count: 65)] {
+            XCTAssertThrowsError(try NativeCall(room: room, mode: .voice), room)
+        }
+    }
+
+    func testMalformedNativeSavedDataIsRevalidated() throws {
+        try withDefaults { defaults in
+            for json in [
+                #"[{"name":"David","address":"","nativeCall":{"room":"../room","mode":"voice"}},null,null,null,null,null]"#,
+                #"[{"name":"David","address":"david@example.com","nativeCall":{"room":"room","mode":"video"}},null,null,null,null,null]"#,
+                #"[{"name":"David","address":"","nativeCall":{"room":"room","mode":"invalid"}},null,null,null,null,null]"#,
+            ] {
+                defaults.set(Data(json.utf8), forKey: "porch.slots.v1")
+                XCTAssertThrowsError(try CallSlots.load(from: defaults))
+            }
+        }
+    }
+
+    func testNativeServerAllowsHTTPSAndLocalhostOnly() throws {
+        let code = "prototype-code-for-test"
+        let server = try NativeCallServer(url: " https://porch.example.com/ ", accessCode: code)
+        XCTAssertEqual(server.tokenURL.absoluteString, "https://porch.example.com/api/calls/token")
+        XCTAssertNoThrow(try NativeCallServer(url: "http://localhost:3000", accessCode: code))
+        for url in ["http://porch.example.com", "https://a:b@porch.example.com", "https://porch.example.com/path", "https://porch.example.com?code=secret", "https://porch.example.com#room", "wss://porch.example.com", "porch.example.com"] {
+            XCTAssertThrowsError(try NativeCallServer(url: url, accessCode: code), url)
+        }
+        for invalid in ["short", "code with spaces in it", "abcdefghijklmnop\r\nAuthorization: bad", String(repeating: "a", count: 257)] {
+            XCTAssertThrowsError(try NativeCallServer(url: "https://porch.example.com", accessCode: invalid))
+        }
+    }
+
+    func testPhoneFallbackRetainsPorchModeAndStableSlotAcrossRelaunch() throws {
+        try withDefaults { defaults in
+            var slots = CallSlots()
+            let contact = try CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video),
+                phoneNumber: " +1 (415) 555-0123 ")
+            try slots.setContact(contact, for: 4)
+            try slots.save(to: defaults)
+            let loaded = try CallSlots.load(from: defaults)
+            XCTAssertEqual(loaded.contact(for: 4)?.nativeCall?.mode, .video)
+            XCTAssertEqual(loaded.contact(for: 4)?.nativeCall?.room, "family-david")
+            XCTAssertEqual(loaded.contact(for: 4)?.phoneNumber, "+14155550123")
+            XCTAssertNil(loaded.contact(for: 1))
+            try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video)), for: 4)
+            try slots.save(to: defaults)
+            XCTAssertNil(try CallSlots.load(from: defaults).contact(for: 4)?.phoneNumber)
+        }
+    }
+
+    func testPhoneFallbackRequiresAnInternationalNumberWithoutExtensions() throws {
+        XCTAssertEqual(try CallContact.normalizedPhoneNumber("+44 20 7946 0123"), "+442079460123")
+        for phone in ["4155550123", "", " ", "+01415550123", "+1911", "+14155550123 ext 2", "+14155550123#2", "++14155550123", "tel:+14155550123", "+１２３４５６７８９０", "+1234567890123456"] {
+            XCTAssertThrowsError(try CallContact.normalizedPhoneNumber(phone), phone)
+        }
+    }
+
+    func testCorruptPhoneFallbackCannotChangeLegacyContactsOrBypassValidation() throws {
+        try withDefaults { defaults in
+            for json in [
+                #"[{"name":"David","address":"david@example.com","phoneNumber":"+14155550123"},null,null,null,null,null]"#,
+                #"[{"name":"David","address":"","phoneNumber":"4155550123","nativeCall":{"room":"family-david","mode":"voice"}},null,null,null,null,null]"#,
+            ] {
+                defaults.set(Data(json.utf8), forKey: "porch.slots.v1")
+                XCTAssertThrowsError(try CallSlots.load(from: defaults))
+            }
+        }
+    }
 }

@@ -21,17 +21,31 @@ final class SlotsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        CallSlots.count
+        section == 0 ? CallSlots.count : 1
     }
 
+    override func numberOfSections(in tableView: UITableView) -> Int { 2 }
+
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if indexPath.section == 1 {
+            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+            var content = cell.defaultContentConfiguration()
+            content.text = "Native calling server"
+            content.secondaryText = NativeCallSettings.savedURL.isEmpty ? "Set up LiveKit prototype calling" : NativeCallSettings.savedURL
+            cell.contentConfiguration = content
+            cell.accessoryType = .disclosureIndicator
+            return cell
+        }
         let number = indexPath.row + 1
         let contact = slots.contact(for: number)
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         var content = cell.defaultContentConfiguration()
         content.text = "\(number)   \(contact?.name ?? "Add a person")"
         content.secondaryText = contact.map { person in
-            person.shortcutName.map { "Shortcut: \($0)" } ?? "FaceTime: \(person.address)"
+            if let native = person.nativeCall {
+                return "Porch \(native.mode.rawValue): \(native.room)" + (person.phoneNumber == nil ? "" : " → phone if unanswered")
+            }
+            return person.shortcutName.map { "Shortcut: \($0)" } ?? "FaceTime: \(person.address)"
         } ?? "Not set up"
         cell.contentConfiguration = content
         cell.accessoryType = .disclosureIndicator
@@ -41,15 +55,21 @@ final class SlotsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        "Choose a keypad number to set up or change."
+        section == 0 ? "Choose a keypad number to set up or change." : "Prototype settings"
     }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Each number can use FaceTime or its own shortcut. Unassigned numbers do not call anyone. Removing a person leaves their number empty; other people keep their numbers."
+        section == 0
+            ? "Each number can use Porch voice or video, FaceTime, or its own shortcut. Removing a person leaves their number empty; other people keep their numbers."
+            : "Porch calls stay inside the app. Add a fallback number to try their phone if nobody joins Porch within 20 seconds. App notifications are not included yet."
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        if indexPath.section == 1 {
+            navigationController?.pushViewController(NativeCallSettingsViewController(), animated: true)
+            return
+        }
         let number = indexPath.row + 1
         let editor = SetupViewController(slot: number, contact: slots.contact(for: number))
         editor.onSave = { [weak self] contact in
@@ -71,7 +91,13 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
     private let nameField = UITextField()
     private let addressField = UITextField()
     private let shortcutField = UITextField()
-    private let methodControl = UISegmentedControl(items: ["Shortcut", "FaceTime"])
+    private let methodControl = UISegmentedControl(items: ["Porch", "Shortcut", "FaceTime"])
+    private let roomField = UITextField()
+    private let modeControl = UISegmentedControl(items: ["Voice", "Video"])
+    private let phoneFallbackLabel = UILabel()
+    private let phoneFallbackSwitch = UISwitch()
+    private let phoneField = UITextField()
+    private let phoneFallbackRow = UIStackView()
     private let choose = UIButton(type: .system)
     private let explanation = UILabel()
     private let initialContact: CallContact?
@@ -92,13 +118,37 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .save, target: self, action: #selector(save))
 
-        methodControl.selectedSegmentIndex = initialContact == nil || initialContact?.shortcutName != nil ? 0 : 1
+        methodControl.selectedSegmentIndex = initialContact == nil || initialContact?.nativeCall != nil ? 0 : (initialContact?.shortcutName != nil ? 1 : 2)
         methodControl.accessibilityLabel = "Calling method"
         methodControl.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
 
         nameField.placeholder = "Name, such as David"
         nameField.text = initialContact?.name
         nameField.accessibilityLabel = "Contact name"
+        roomField.placeholder = "Shared room name, such as family-david"
+        roomField.text = initialContact?.nativeCall?.room
+        roomField.accessibilityLabel = "Shared call room name"
+        roomField.autocapitalizationType = .none
+        roomField.autocorrectionType = .no
+        roomField.spellCheckingType = .no
+        modeControl.selectedSegmentIndex = initialContact?.nativeCall?.mode == .voice ? 0 : 1
+        modeControl.accessibilityLabel = "Porch call mode"
+        phoneFallbackLabel.text = "Call their phone if Porch isn't answered"
+        phoneFallbackLabel.font = .preferredFont(forTextStyle: .body)
+        phoneFallbackLabel.adjustsFontForContentSizeCategory = true
+        phoneFallbackLabel.numberOfLines = 0
+        phoneFallbackSwitch.isOn = initialContact?.phoneNumber != nil
+        phoneFallbackSwitch.accessibilityLabel = "Call their phone if Porch isn't answered"
+        phoneFallbackSwitch.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
+        phoneFallbackRow.addArrangedSubview(phoneFallbackLabel)
+        phoneFallbackRow.addArrangedSubview(phoneFallbackSwitch)
+        phoneFallbackRow.spacing = 16
+        phoneFallbackRow.alignment = .center
+        phoneField.placeholder = "Phone number with country code, such as +1 415 555 0123"
+        phoneField.text = initialContact?.phoneNumber
+        phoneField.accessibilityLabel = "Fallback phone number, including country code"
+        phoneField.keyboardType = .phonePad
+        phoneField.textContentType = .telephoneNumber
         addressField.placeholder = "FaceTime email or phone number"
         addressField.text = initialContact?.address
         addressField.accessibilityLabel = "FaceTime email or phone number"
@@ -114,7 +164,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         shortcutField.autocorrectionType = .no
         shortcutField.spellCheckingType = .no
 
-        for field in [nameField, addressField, shortcutField] {
+        for field in [nameField, addressField, shortcutField, roomField, phoneField] {
             field.borderStyle = .roundedRect
             field.font = .preferredFont(forTextStyle: .body)
             field.adjustsFontForContentSizeCategory = true
@@ -144,7 +194,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         remove.titleLabel?.adjustsFontForContentSizeCategory = true
         remove.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         remove.addTarget(self, action: #selector(removePerson), for: .touchUpInside)
-        let fields: [UIView] = [methodControl, nameField, shortcutField, choose, addressField, explanation]
+        let fields: [UIView] = [methodControl, nameField, roomField, modeControl, phoneFallbackRow, phoneField, shortcutField, choose, addressField, explanation]
         let stack = UIStackView(arrangedSubviews: fields + (initialContact == nil ? [] : [remove]))
         stack.axis = .vertical
         stack.spacing = 20
@@ -167,10 +217,19 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
     }
 
     @objc private func updateMethod() {
-        let useShortcut = methodControl.selectedSegmentIndex == 0
+        let useNative = methodControl.selectedSegmentIndex == 0
+        let useShortcut = methodControl.selectedSegmentIndex == 1
+        roomField.isHidden = !useNative
+        modeControl.isHidden = !useNative
+        phoneFallbackRow.isHidden = !useNative
+        phoneField.isHidden = !useNative || !phoneFallbackSwitch.isOn
         shortcutField.isHidden = !useShortcut
-        addressField.isHidden = useShortcut
-        choose.isHidden = useShortcut
+        addressField.isHidden = useNative || useShortcut
+        choose.isHidden = useNative || useShortcut
+        if useNative {
+            explanation.text = "Porch always tries the shared room first. The other person joins the same room and mode from another iPad or the server's /call page; app notifications aren't included yet.\n\nIf phone fallback is enabled and nobody joins within 20 seconds, Porch turns off video and rings their regular phone. They don't need the Porch app. Their number must also be approved on your calling server. Carrier charges apply.\n\nChoose Voice or Video for the Porch attempt; phone fallback is always voice only. Configure Native calling server before testing. Saving never places a call. Holding setup prevents accidental edits; it isn't a password lock."
+            return
+        }
         let instructions = useShortcut
             ? "In Apple's Shortcuts app, create a shortcut with a FaceTime action and select the person to call. Use a fixed recipient, without Ask Each Time. Run it once there and allow any requested permissions.\n\nEnter that shortcut's exact name above. The person's name is the label shown in Porch; the shortcut controls whom you call. If you rename or delete it, update Porch too."
             : "Choose the email or phone number this person uses for FaceTime. iPadOS may ask you to confirm the call."
@@ -201,11 +260,15 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
 
     @objc private func save() {
         do {
-            let contact = try CallContact(
-                name: nameField.text ?? "",
-                address: addressField.text ?? "",
-                shortcutName: methodControl.selectedSegmentIndex == 0 ? (shortcutField.text ?? "") : nil
-            )
+            let contact: CallContact
+            if methodControl.selectedSegmentIndex == 0 {
+                let call = try NativeCall(room: roomField.text ?? "", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
+                contact = try CallContact(name: nameField.text ?? "", nativeCall: call,
+                    phoneNumber: phoneFallbackSwitch.isOn ? (phoneField.text ?? "") : nil)
+            } else {
+                contact = try CallContact(name: nameField.text ?? "", address: addressField.text ?? "",
+                    shortcutName: methodControl.selectedSegmentIndex == 1 ? (shortcutField.text ?? "") : nil)
+            }
             try onSave?(contact)
             navigationController?.popViewController(animated: true)
         } catch {

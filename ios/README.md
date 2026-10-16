@@ -1,6 +1,34 @@
 # Porch for iPad
 
-Native iPad prototype: configure up to **six people**, each using a named Apple Shortcut or a direct FaceTime contact. Press their number (**1–6**) on a connected keypad to start the call. The large numbered buttons on screen do the same thing. The Next.js landing page remains at the repository root.
+Native iPad prototype: configure up to **six people**, each using an in-app **Porch voice/video call**, a named Apple Shortcut, or a direct FaceTime contact. Press their number (**1–6**) on a connected keypad to start the call. The large numbered buttons on screen do the same thing. The Next.js website and LiveKit token endpoint live at the repository root.
+
+## LiveKit voice and video calls
+
+Follow the root [calling setup](../README.md#native-voice-and-video-calling-prototype) to configure the server. The LiveKit Swift SDK is pinned to 2.17.0 through Swift Package Manager; Xcode downloads it and its WebRTC dependency on first build.
+
+In **Your people → Native calling server**, save your Porch server address (an HTTPS origin, without a path) and its prototype access code. The address is kept in UserDefaults, and the access code in this device's Keychain. LiveKit API credentials are never entered in the app. `http://localhost:3000` is supported for simulator testing with a locally running Next.js server; a real iPad needs an HTTPS server it can reach.
+
+Choose a keypad slot, select **Porch**, enter the person's name and a shared room name such as `family-david`, then choose **Voice** or **Video**. Saving never starts a call. After Done, pressing that number opens the native call screen. The other person joins the same room/mode from another iPad or the server's `/call` browser page. They join manually; this prototype does not notify or ring another device. Each new room is configured for two participants. Use unique room names per contact and coordinate testing to avoid mixing calls.
+
+- Voice requests microphone access only. The server grants microphone publication only, and voice/video rooms are separate.
+- Video requests microphone and camera access, shows the remote video and a local preview, and provides camera on/off. Camera denial explains how to grant permission or change the contact to Voice.
+- Both modes provide mute/unmute and a large End call button. End disconnects and releases media before returning to your people. If nobody joins within 90 seconds and no phone fallback is configured, Porch returns automatically. When the remote person leaves, Porch also ends the call.
+- Network interruptions show a reconnecting state; a final disconnect returns to your people. An initial failure leaves an explanation and a Back to your people button.
+- The app ends its call on entering the background or locking the iPad. CallKit, PushKit, incoming calls, and background audio are not implemented.
+- Native calls do not leave Porch, so the FaceTime-specific Guided Access block does not apply. Verify permissions, controls, and recovery in Guided Access on the actual iPad before use.
+- The shared code is for trusted prototype testers. It grants access to all prototype rooms. Family/device authentication and per-person authorization are still required for a public product. There is no recording or application-level end-to-end encryption configuration.
+
+## Porch first, then their phone
+
+For a Porch contact, enable **Call their phone if Porch isn't answered** and enter their international phone number. This is a fallback, never a direct telephone shortcut: Porch tries the shared room first for 20 seconds, then switches to a voice-only telephone call if nobody joins. An initial connection failure before anyone joins also starts fallback. An answered Porch call never falls through to phone after hangup. FaceTime/Shortcut contacts keep their existing behavior.
+
+The server needs an outbound SIP trunk and a matching approved destination. Follow the root [phone fallback setup](../README.md#porch-first-then-phone-fallback). Phone numbers are normalized (for example, `+1 (415) 555-0123` → `+14155550123`) and stored locally with the contact. They are sent to the server and telephone provider only when preparing the fallback. Saving or editing a contact never dials it.
+
+Fallback disconnects the Porch room to release its camera and joins an isolated room with microphone-only credentials. Camera controls stay hidden and an existing mute setting is preserved. Late Porch joiners cannot enter the phone call. A dial tone plays while the telephone is being dialed; **Phone call connected** requires LiveKit's SIP `active`/`automation` status, not merely the presence of a SIP participant.
+
+End Call and backgrounding disconnect the iPad and request deletion of the phone room to hang up the other end. If cleanup cannot be confirmed, the app offers **Retry ending phone call**. Calls are bounded to 45 seconds ringing and 15 minutes total on the server; network loss or force termination can prevent immediate cleanup. App notifications, answering-machine detection, and incoming regular phone calls aren't implemented.
+
+For a visual-only setup preview, launch a Debug build with `--preview-phone-setup`. This shows a fictional contact and never saves it or places a call.
 
 ## Run on an iPad
 
@@ -66,6 +94,8 @@ Device checks: configure all six people with mixed calling methods, press each k
 
 ## Privacy
 
-For each configured slot, the display name and either a shortcut name or selected FaceTime address are saved locally in UserDefaults. In Shortcut mode, only the shortcut name is passed to Shortcuts; the recipient is configured there. In direct mode, the Contacts picker gives access only to the selection, without full address-book permission, and the selected address is passed to FaceTime. FaceTime handles camera/microphone access and calling. Porch has no backend, third-party SDK, tracking, or analytics. Its privacy manifest declares local preferences and elapsed-time measurement for cooldown.
+For each configured slot, the display name and either native room/mode, shortcut name, or selected FaceTime address are saved locally in UserDefaults. The native server address is also local; the prototype access code is stored in Keychain. For native calls, Porch sends the room, mode, and a generic “Porch iPad” participant name to its token endpoint, then LiveKit handles audio/video transport and connection metadata. No call recording is configured. Review LiveKit's data handling and update App Store privacy disclosures before distributing this version. The privacy manifest declares local preferences and elapsed-time measurement for cooldown; LiveKit includes its own manifest.
+
+In Shortcut mode, only the shortcut name is passed to Shortcuts; the recipient is configured there. In direct FaceTime mode, the Contacts picker gives access only to the selection, without full address-book permission, and the selected address is passed to FaceTime. FaceTime handles media and permissions for those calls. Porch has no advertising, tracking, or analytics integration.
 
 References: [run a shortcut by URL](https://support.apple.com/guide/shortcuts/run-a-shortcut-from-a-url-apd624386f42/ios), [keyboard input](https://developer.apple.com/documentation/uikit/handling-key-presses-made-on-a-physical-keyboard), [FaceTime URLs](https://developer.apple.com/library/archive/featuredarticles/iPhoneURLScheme_Reference/FacetimeLinks/FacetimeLinks.html), [Contacts picker](https://developer.apple.com/documentation/contactsui/cncontactpickerviewcontroller), [TestFlight](https://developer.apple.com/testflight/).

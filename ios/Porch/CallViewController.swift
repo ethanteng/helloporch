@@ -131,12 +131,24 @@ final class CallViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        opening = false
+        trigger.resetKeys()
+        render()
         becomeFirstResponder()
         if let message = loadError {
             loadError = nil
             showError("Couldn't load your people", message: message)
         }
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-phone-setup"), !previewSetupShown, presentedViewController == nil {
+            previewSetupShown = true
+            // Fictional contact for visual QA; no settings are saved or calls placed.
+            let contact = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
+            let editor = SetupViewController(slot: 1, contact: contact)
+            let navigation = UINavigationController(rootViewController: editor)
+            navigation.modalPresentationStyle = .fullScreen
+            present(navigation, animated: false)
+        }
         if ProcessInfo.processInfo.arguments.contains("--preview-setup"), !previewSetupShown, presentedViewController == nil {
             previewSetupShown = true
             showSetup()
@@ -260,6 +272,18 @@ final class CallViewController: UIViewController {
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         guard let contact = slots.contact(for: slot) else {
             hintLabel.text = "No one is assigned to \(slot).\nChoose another number."
+            return
+        }
+        if let native = contact.nativeCall {
+            do {
+                let server = try NativeCallSettings.load()
+                guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
+                opening = true
+                render()
+                present(NativeCallViewController(contact: contact, call: native, server: server), animated: true)
+            } catch {
+                showError("Set up native calling", message: error.localizedDescription)
+            }
             return
         }
         guard !UIAccessibility.isGuidedAccessEnabled else {

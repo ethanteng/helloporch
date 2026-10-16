@@ -17,3 +17,5 @@ ios/build/
 *.mobileprovision
 *.xcarchive
 *.ipa
+.env*
+!.env.example

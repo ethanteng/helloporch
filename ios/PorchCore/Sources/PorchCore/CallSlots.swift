@@ -20,7 +20,12 @@ public struct CallSlots: Equatable {
         guard (1...Self.count).contains(slot) else { throw ValidationError.invalidSlot }
         // Revalidate decoded contacts as well as contacts created by the form.
         contacts[slot - 1] = try contact.map {
-            try CallContact(name: $0.name, address: $0.address, shortcutName: $0.shortcutName)
+            if let native = $0.nativeCall {
+                guard $0.shortcutName == nil, $0.address.isEmpty else { throw ValidationError.invalidSavedSlots }
+                return try CallContact(name: $0.name, nativeCall: native, phoneNumber: $0.phoneNumber)
+            }
+            guard $0.phoneNumber == nil else { throw ValidationError.invalidSavedSlots }
+            return try CallContact(name: $0.name, address: $0.address, shortcutName: $0.shortcutName)
         }
     }
 
