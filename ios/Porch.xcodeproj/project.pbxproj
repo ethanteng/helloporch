@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A00000000000000000000012 = {isa = PBXBuildFile; fileRef = B00000000000000000000014; };
+        A00000000000000000000011 /* CaregiverInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012; };
+		A00000000000000000000010 /* CaregiverUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* CaregiverUI.swift */; };
 		A00000000000000000000001 /* PorchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* PorchApp.swift */; };
 		A00000000000000000000002 /* CallViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* CallViewController.swift */; };
 		A00000000000000000000003 /* SetupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* SetupViewController.swift */; };
@@ -19,6 +22,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        B00000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPreferencesViewController.swift; sourceTree = "<group>"; };
+        B00000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverInputTests.swift; sourceTree = "<group>"; };
+        B00000000000000000000013 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PorchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000011 /* CaregiverUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverUI.swift; sourceTree = "<group>"; };
 		B00000000000000000000001 /* PorchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PorchApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* CallViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallViewController.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* SetupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupViewController.swift; sourceTree = "<group>"; };
@@ -40,6 +47,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        D00000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -48,6 +56,7 @@
 			children = (
 				C00000000000000000000002 /* Porch */,
 				C00000000000000000000003 /* Products */,
+                C00000000000000000000004 /* PorchTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -61,6 +70,8 @@
 				B00000000000000000000005 /* PrivacyInfo.xcprivacy */,
 				B00000000000000000000009 /* NativeCallSettings.swift */,
 				B00000000000000000000010 /* NativeCallViewController.swift */,
+				B00000000000000000000011 /* CaregiverUI.swift */,
+                B00000000000000000000014 /* CallPreferencesViewController.swift */,
 				B00000000000000000000006 /* Info.plist */,
 			);
 			path = Porch;
@@ -70,10 +81,12 @@
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000007 /* Porch.app */,
+                B00000000000000000000013 /* PorchTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+        C00000000000000000000004 = {isa = PBXGroup; children = (B00000000000000000000012); path = PorchTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -98,7 +111,21 @@
 			productReference = B00000000000000000000007 /* Porch.app */;
 			productType = "com.apple.product-type.application";
 		};
+        F00000000000000000000005 /* PorchTests */ = {
+            isa = PBXNativeTarget; buildConfigurationList = F00000000000000000000006;
+            buildPhases = (D00000000000000000000004, D00000000000000000000005);
+            buildRules = (); dependencies = (F00000000000000000000008);
+            name = PorchTests; productName = PorchTests;
+            productReference = B00000000000000000000013;
+            productType = "com.apple.product-type.bundle.unit-test";
+        };
 /* End PBXNativeTarget section */
+/* Begin PBXContainerItemProxy section */
+        F00000000000000000000007 = {isa = PBXContainerItemProxy; containerPortal = F00000000000000000000002; proxyType = 1; remoteGlobalIDString = F00000000000000000000001; remoteInfo = Porch; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+        F00000000000000000000008 = {isa = PBXTargetDependency; target = F00000000000000000000001; targetProxy = F00000000000000000000007; };
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		F00000000000000000000002 /* Project object */ = {
@@ -130,6 +157,7 @@
 			projectRoot = "";
 			targets = (
 				F00000000000000000000001 /* Porch */,
+                F00000000000000000000005 /* PorchTests */,
 			);
 		};
 /* End PBXProject section */
@@ -155,10 +183,13 @@
 				A00000000000000000000002 /* CallViewController.swift in Sources */,
 				A00000000000000000000007 /* NativeCallSettings.swift in Sources */,
 				A00000000000000000000008 /* NativeCallViewController.swift in Sources */,
+				A00000000000000000000010 /* CaregiverUI.swift in Sources */,
+                A00000000000000000000012 /* CallPreferencesViewController.swift in Sources */,
 				A00000000000000000000003 /* SetupViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        D00000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000011); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -170,6 +201,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+                ENABLE_TESTABILITY = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -234,6 +266,8 @@
 			};
 			name = Release;
 		};
+        100000000000000000000005 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Porch.app/Porch"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.ethanteng.helloporch.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 2; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 7U9T57JPF7;}; };
+        100000000000000000000006 = {isa = XCBuildConfiguration; name = Release; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Porch.app/Porch"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.ethanteng.helloporch.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 2; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 7U9T57JPF7;}; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -255,6 +289,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+        F00000000000000000000006 = {isa = XCConfigurationList; buildConfigurations = (100000000000000000000005, 100000000000000000000006); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */

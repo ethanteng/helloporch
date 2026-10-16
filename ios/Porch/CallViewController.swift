@@ -1,277 +1,227 @@
 import UIKit
 import PorchCore
 
-enum PorchStyle {
-    static let cream = UIColor(red: 0.97, green: 0.94, blue: 0.87, alpha: 1)
-    static let ink = UIColor(red: 0.22, green: 0.16, blue: 0.12, alpha: 1)
-    static let terracotta = UIColor(red: 0.60, green: 0.26, blue: 0.16, alpha: 1)
-    static func font(_ size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
-        UIFontMetrics(forTextStyle: .title1).scaledFont(for: .systemFont(ofSize: size, weight: weight))
-    }
-}
-
 final class CallViewController: UIViewController {
     private var slots = CallSlots()
     private var trigger = CallTrigger()
     private var opening = false
     private var loadError: String?
-    private let titleLabel = UILabel()
-    private let hintLabel = UILabel()
-    private let grid = UIStackView()
-    private let setupButton = UIButton(type: .system)
-    private var renderedColumns = 0
+    private let weekdayLabel = UILabel()
+    private let timeLabel = UILabel()
+    private let dateLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let callButton = PorchStyle.button("Call someone", symbol: "phone.fill")
+    private var clockTimer: Timer?
+    private var timeFormatter = DateFormatter()
+    private var weekdayFormatter = DateFormatter()
+    private var dateFormatter = DateFormatter()
     #if DEBUG
-    private var previewSetupShown = false
+    private var previewShown = false
     #endif
 
-    override var canBecomeFirstResponder: Bool { true }
+    override var canBecomeFirstResponder: Bool { presentedViewController == nil }
+    override var prefersStatusBarHidden: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = PorchStyle.cream
-        do {
-            slots = try CallSlots.load()
-        } catch {
-            loadError = error.localizedDescription
-        }
+        overrideUserInterfaceStyle = .dark
+        view.backgroundColor = PorchStyle.night
+        do { slots = try CallSlots.load() } catch { loadError = error.localizedDescription }
         #if DEBUG
-        // Previews are fictional and never saved to the device's preferences.
-        if ProcessInfo.processInfo.arguments.contains("--preview-contact") {
+        if ProcessInfo.processInfo.arguments.contains("--preview-contact") || ProcessInfo.processInfo.arguments.contains("--preview-six") {
             slots = CallSlots()
-            try? slots.setContact(CallContact(name: "David", shortcutName: "Call David"), for: 1)
-        }
-        if ProcessInfo.processInfo.arguments.contains("--preview-six") {
-            slots = CallSlots()
-            for (index, name) in ["David", "Maria", "James", "Sarah", "Michael", "Anna"].enumerated() {
-                let contact = try? CallContact(name: name, shortcutName: "Call \(name)")
-                try? slots.setContact(contact, for: index + 1)
+            let names = ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
+            for (index, name) in names.enumerated() {
+                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "family-\(name.lowercased())", mode: .video)), for: index + 1)
             }
         }
         #endif
-
-        let brand = UILabel()
-        brand.text = "Porch."
-        brand.font = PorchStyle.font(32, weight: .medium)
-        brand.textColor = PorchStyle.ink
-        brand.textAlignment = .center
-        brand.adjustsFontForContentSizeCategory = true
-
-        titleLabel.font = PorchStyle.font(36, weight: .semibold)
-        hintLabel.font = PorchStyle.font(24)
-        for label in [titleLabel, hintLabel] {
-            label.textColor = PorchStyle.ink
+        weekdayLabel.font = PorchStyle.font(34, weight: .medium)
+        timeLabel.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: .monospacedDigitSystemFont(ofSize: 172, weight: .regular), maximumPointSize: 240)
+        timeLabel.adjustsFontSizeToFitWidth = true
+        timeLabel.minimumScaleFactor = 0.28
+        timeLabel.numberOfLines = 1
+        timeLabel.accessibilityIdentifier = "clock.time"
+        dateLabel.font = PorchStyle.font(29)
+        for label in [weekdayLabel, timeLabel, dateLabel] {
+            label.textColor = label === timeLabel ? PorchStyle.nightText : PorchStyle.nightSecondary
             label.textAlignment = .center
-            label.numberOfLines = 0
             label.adjustsFontForContentSizeCategory = true
         }
+        timeLabel.accessibilityTraits.insert(.updatesFrequently)
+        let clock = UIStackView(arrangedSubviews: [weekdayLabel, timeLabel, dateLabel])
+        clock.axis = .vertical
+        clock.spacing = 16
+        clock.isAccessibilityElement = false
+        clock.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(clock)
 
-        grid.axis = .vertical
-        grid.spacing = 20
-
-        setupButton.setTitle("Hold here to set up", for: .normal)
-        setupButton.setTitleColor(PorchStyle.ink, for: .normal)
-        setupButton.titleLabel?.font = PorchStyle.font(18)
-        setupButton.titleLabel?.adjustsFontForContentSizeCategory = true
-        setupButton.accessibilityLabel = "Contact setup"
-        setupButton.accessibilityHint = "Press and hold for two seconds to configure people for keys 1 to 6."
-        setupButton.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Open contact setup", target: self, selector: #selector(accessibleSetup))]
+        var callConfig = callButton.configuration!
+        callConfig.baseBackgroundColor = PorchStyle.nightSurface
+        callConfig.baseForegroundColor = PorchStyle.nightText
+        callConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes; attributes.font = PorchStyle.font(19, weight: .medium); return attributes
+        }
+        callButton.configuration = callConfig
+        callButton.accessibilityIdentifier = "clock.call"
+        callButton.addTarget(self, action: #selector(showPeople), for: .touchUpInside)
+        let caregiver = UIButton(type: .system)
+        caregiver.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        caregiver.tintColor = PorchStyle.nightSecondary
+        caregiver.accessibilityLabel = "Caregiver mode"
+        caregiver.accessibilityHint = "Touch and hold to manage contacts and settings."
+        caregiver.accessibilityIdentifier = "clock.caregiver"
+        caregiver.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Open caregiver mode", target: self, selector: #selector(accessibleSetup))]
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(heldSetup(_:)))
-        hold.minimumPressDuration = 2
-        setupButton.addGestureRecognizer(hold)
-
-        // The grid scrolls when large accessibility text needs additional space.
-        let scroll = UIScrollView()
-        let content = UIView()
-        let stack = UIStackView(arrangedSubviews: [brand, titleLabel, hintLabel, grid, setupButton])
-        stack.axis = .vertical
-        stack.spacing = 24
-        [scroll, content, stack].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
-        view.addSubview(scroll)
-        scroll.addSubview(content)
-        content.addSubview(stack)
+        hold.minimumPressDuration = 1.5
+        caregiver.addGestureRecognizer(hold)
+        caregiver.addTarget(self, action: #selector(explainCaregiver), for: .touchUpInside)
+        statusLabel.font = PorchStyle.font(17)
+        statusLabel.textColor = PorchStyle.nightSecondary
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        statusLabel.adjustsFontForContentSizeCategory = true
+        [callButton, caregiver, statusLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: guide.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
-            content.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            content.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
-            content.heightAnchor.constraint(greaterThanOrEqualTo: scroll.frameLayoutGuide.heightAnchor),
-            stack.centerXAnchor.constraint(equalTo: content.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: content.centerYAnchor),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(greaterThanOrEqualTo: content.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -24),
-            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 1000),
-            setupButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            clock.centerYAnchor.constraint(equalTo: guide.centerYAnchor, constant: -32),
+            clock.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            clock.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 32),
+            clock.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
+            clock.widthAnchor.constraint(lessThanOrEqualToConstant: 960),
+            caregiver.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
+            caregiver.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
+            caregiver.widthAnchor.constraint(equalToConstant: 56),
+            caregiver.heightAnchor.constraint(equalToConstant: 56),
+            callButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            callButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -36),
+            callButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 210),
+            statusLabel.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
+            statusLabel.bottomAnchor.constraint(equalTo: callButton.topAnchor, constant: -16)
         ])
-        let preferredWidth = stack.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -48)
-        preferredWidth.priority = .defaultHigh
-        preferredWidth.isActive = true
-        render()
+        let width = clock.widthAnchor.constraint(equalTo: guide.widthAnchor, constant: -64)
+        width.priority = .defaultHigh; width.isActive = true
+        NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: UIApplication.significantTimeChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: NSLocale.currentLocaleDidChangeNotification, object: nil)
+        resetClock()
     }
 
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        if renderedColumns != columnCount { render() }
-    }
-
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        guard isViewLoaded else { return }
-        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
-            render()
-        }
-    }
+    deinit { clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        opening = false
-        trigger.resetKeys()
-        render()
-        becomeFirstResponder()
-        if let message = loadError {
-            loadError = nil
-            showError("Couldn't load your people", message: message)
-        }
+        resume()
+        if let error = loadError { loadError = nil; showError("Couldn't load your people", message: error) }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--preview-phone-setup"), !previewSetupShown, presentedViewController == nil {
-            previewSetupShown = true
-            // Fictional contact for visual QA; no settings are saved or calls placed.
-            let contact = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
-            let editor = SetupViewController(slot: 1, contact: contact)
-            let navigation = UINavigationController(rootViewController: editor)
-            navigation.modalPresentationStyle = .fullScreen
-            present(navigation, animated: false)
-        }
-        if ProcessInfo.processInfo.arguments.contains("--preview-setup"), !previewSetupShown, presentedViewController == nil {
-            previewSetupShown = true
-            showSetup()
-        }
+        let args = ProcessInfo.processInfo.arguments
+        guard !previewShown, presentedViewController == nil else { return }
+        previewShown = true
+        if args.contains("--preview-phone-setup") {
+            let person = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
+            present(PorchStyle.navigation(SetupViewController(slot: 1, contact: person)), animated: false)
+        } else if args.contains("--preview-server") {
+            present(PorchStyle.navigation(NativeCallSettingsViewController()), animated: false)
+        } else if args.contains("--preview-setup") { showSetup() }
+        else if args.contains("--preview-people") { showPeople() }
         #endif
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        clockTimer?.invalidate(); clockTimer = nil
+        resignFirstResponder()
     }
 
     func resume() {
         trigger.resetKeys()
+        // Permission dialogs, app switching and keyboard changes must never take focus
+        // from a caregiver's text field or from an active call.
+        guard isViewLoaded, presentedViewController == nil else { return }
         opening = false
-        if isViewLoaded { render(); becomeFirstResponder() }
+        statusLabel.text = nil
+        refreshCallButton()
+        resetClock()
+        if clockTimer == nil {
+            let timer = Timer(fire: nextMinute, interval: 60, repeats: true) { [weak self] _ in self?.updateClock() }
+            timer.tolerance = 0.1
+            RunLoop.main.add(timer, forMode: .common)
+            clockTimer = timer
+        }
+        becomeFirstResponder()
     }
 
-    func pause() { trigger.resetKeys() }
+    func pause() { trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil }
 
-    private var columnCount: Int {
-        let count = slots.contacts.compactMap { $0 }.count
-        if count <= 1 || traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 {
-            return 1
+    @objc private func resetClock() {
+        for formatter in [timeFormatter, weekdayFormatter, dateFormatter] {
+            formatter.timeZone = .autoupdatingCurrent
+            formatter.calendar = .autoupdatingCurrent
         }
-        return view.bounds.width > view.bounds.height ? 3 : 2
+        timeFormatter.locale = .autoupdatingCurrent
+        timeFormatter.dateStyle = .none; timeFormatter.timeStyle = .short
+        weekdayFormatter.locale = .autoupdatingCurrent
+        weekdayFormatter.setLocalizedDateFormatFromTemplate("EEEE")
+        dateFormatter.locale = .autoupdatingCurrent
+        dateFormatter.setLocalizedDateFormatFromTemplate("MMMMdyyyy")
+        updateClock()
+        clockTimer?.fireDate = nextMinute
     }
 
-    private func render() {
-        let people = (1...CallSlots.count).compactMap { number in
-            slots.contact(for: number).map { (number, $0) }
-        }
-        titleLabel.text = people.isEmpty ? "Let's set up your calls"
-            : people.count == 1 ? "Call \(people[0].1.name)" : "Who would you like to call?"
-        hintLabel.text = people.isEmpty ? "Hold the setup button below to choose people."
-            : people.count == 1 ? "Press \(people[0].0) on the keypad\nor tap the button below."
-            : "Press their number on the keypad\nor tap their name."
-
-        renderedColumns = columnCount
-        for row in grid.arrangedSubviews {
-            grid.removeArrangedSubview(row)
-            row.removeFromSuperview()
-        }
-
-        if people.isEmpty {
-            let button = makeButton(title: "Choose people", number: 0)
-            grid.addArrangedSubview(button)
-        } else {
-            for start in stride(from: 0, to: people.count, by: renderedColumns) {
-                let row = UIStackView()
-                row.axis = .horizontal
-                row.spacing = 20
-                row.distribution = .fillEqually
-                for index in start..<min(start + renderedColumns, people.count) {
-                    let (number, contact) = people[index]
-                    let button = makeButton(title: "\(number)   \(contact.name)", number: number)
-                    button.accessibilityLabel = "Key \(number), call \(contact.name)"
-                    row.addArrangedSubview(button)
-                }
-                // Keep the last row aligned with the columns above.
-                for _ in row.arrangedSubviews.count..<min(renderedColumns, people.count) {
-                    row.addArrangedSubview(UIView())
-                }
-                grid.addArrangedSubview(row)
-            }
-        }
+    private var nextMinute: Date {
+        Date(timeIntervalSinceNow: 60 - Date().timeIntervalSince1970.truncatingRemainder(dividingBy: 60) + 0.05)
     }
 
-    private func makeButton(title: String, number: Int) -> UIButton {
-        let button = UIButton(type: .system)
-        var configuration = UIButton.Configuration.filled()
-        configuration.title = title
-        configuration.baseBackgroundColor = PorchStyle.terracotta
-        configuration.baseForegroundColor = .white
-        configuration.cornerStyle = .large
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 28, leading: 20, bottom: 28, trailing: 20)
-        configuration.titleAlignment = .center
-        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = PorchStyle.font(36, weight: .semibold)
-            return attributes
+    private func updateClock() {
+        let now = Date()
+        let time = timeFormatter.string(from: now).replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
+        let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: PorchStyle.nightText])
+        for symbol in [timeFormatter.amSymbol, timeFormatter.pmSymbol] {
+            guard let symbol, !symbol.isEmpty, let range = time.range(of: symbol, options: .caseInsensitive) else { continue }
+            text.addAttributes([.font: PorchStyle.font(42, weight: .medium)], range: NSRange(range, in: time))
         }
-        button.configuration = configuration
-        button.titleLabel?.numberOfLines = 0
-        button.titleLabel?.textAlignment = .center
-        button.tag = number
-        button.isEnabled = !opening
-        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
-        button.addTarget(self, action: #selector(tappedCall(_:)), for: .touchUpInside)
-        return button
+        timeLabel.attributedText = text
+        weekdayLabel.text = weekdayFormatter.string(from: now)
+        dateLabel.text = dateFormatter.string(from: now)
     }
+
+    private func refreshCallButton() { callButton.isEnabled = !opening }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key,
+            guard presentedViewController == nil, let key = press.key,
                   let slot = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
-                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
-                  presentedViewController == nil else {
-                unhandled.insert(press)
-                continue
+                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else {
+                unhandled.insert(press); continue
             }
             if trigger.keyDown(Int(key.keyCode.rawValue)) { call(slot: slot) }
         }
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
     }
-
     override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        for press in presses {
-            if let key = press.key { trigger.keyUp(Int(key.keyCode.rawValue)) }
-        }
+        for press in presses { if let key = press.key { trigger.keyUp(Int(key.keyCode.rawValue)) } }
         super.pressesEnded(presses, with: event)
     }
-
     override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        trigger.resetKeys()
-        super.pressesCancelled(presses, with: event)
+        trigger.resetKeys(); super.pressesCancelled(presses, with: event)
     }
 
-    @objc private func tappedCall(_ sender: UIButton) {
-        if sender.tag == 0 { showSetup() } else { call(slot: sender.tag) }
+    @objc private func showPeople() {
+        guard presentedViewController == nil else { return }
+        let picker = PeoplePickerViewController(slots: slots)
+        picker.onCall = { [weak self, weak picker] number in
+            picker?.dismiss(animated: true) { self?.call(slot: number) }
+        }
+        present(picker, animated: true)
     }
 
     private func call(slot: Int) {
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         guard let contact = slots.contact(for: slot) else {
-            hintLabel.text = "No one is assigned to \(slot).\nChoose another number."
+            statusLabel.text = "No one is assigned to \(slot).\nPlease choose another number."
             return
         }
         if let native = contact.nativeCall {
@@ -279,7 +229,7 @@ final class CallViewController: UIViewController {
                 let server = try NativeCallSettings.load()
                 guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
                 opening = true
-                render()
+                refreshCallButton()
                 present(NativeCallViewController(contact: contact, call: native, server: server), animated: true)
             } catch {
                 showError("Set up native calling", message: error.localizedDescription)
@@ -292,13 +242,13 @@ final class CallViewController: UIViewController {
         }
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
         opening = true
-        render()
+        refreshCallButton()
         let appName = contact.shortcutName == nil ? "FaceTime" : "Shortcuts"
-        hintLabel.text = "Opening \(appName)…"
+        statusLabel.text = "Opening \(appName)…"
         UIApplication.shared.open(contact.launchURL, options: [:]) { [weak self] opened in
             guard let self else { return }
             self.opening = false
-            self.render()
+            self.refreshCallButton()
             if !opened {
                 self.showError("Couldn't open \(appName)", message: "Check that \(appName) is installed and enabled, then try again.")
             }
@@ -309,27 +259,127 @@ final class CallViewController: UIViewController {
     @objc private func heldSetup(_ gesture: UILongPressGestureRecognizer) {
         if gesture.state == .began { showSetup() }
     }
-
+    @objc private func explainCaregiver() {
+        statusLabel.text = "Hold the settings icon to open caregiver mode."
+    }
     @objc private func accessibleSetup() -> Bool { showSetup(); return true }
 
     private func showSetup() {
         guard presentedViewController == nil else { return }
         trigger.resetKeys()
+        resignFirstResponder()
         let setup = SlotsViewController(slots: slots)
         setup.onSave = { [weak self] updated in
-            guard let self else { return }
             try updated.save()
-            self.slots = updated
-            self.render()
+            self?.slots = updated
         }
-        let navigation = UINavigationController(rootViewController: setup)
-        navigation.modalPresentationStyle = .formSheet
-        present(navigation, animated: true)
+        present(PorchStyle.navigation(setup), animated: true)
     }
 
     private func showError(_ title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+}
+
+final class PeoplePickerViewController: UIViewController {
+    var onCall: ((Int) -> Void)?
+    private let slots: CallSlots
+    private let grid = UIStackView()
+    private var trigger = CallTrigger()
+    private var columns = 0
+    private var choosing = false
+    init(slots: CallSlots) {
+        self.slots = slots
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .fullScreen
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(slots:)") }
+    override var canBecomeFirstResponder: Bool { true }
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        overrideUserInterfaceStyle = .dark
+        view.backgroundColor = PorchStyle.night
+        let heading = PorchStyle.label("Who would you like to call?", size: 36, color: PorchStyle.nightText, weight: .semibold)
+        let hint = PorchStyle.label("Tap a name or press their number on the keypad.", size: 20, color: PorchStyle.nightSecondary)
+        heading.textAlignment = .center; hint.textAlignment = .center
+        let back = PorchStyle.button("Back to clock", symbol: "clock", filled: false)
+        back.configuration?.baseForegroundColor = PorchStyle.nightText
+        back.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
+        grid.axis = .vertical; grid.spacing = 16
+        let scroll = UIScrollView()
+        let stack = UIStackView(arrangedSubviews: [heading, hint, grid])
+        stack.axis = .vertical; stack.spacing = 24
+        [stack, scroll, back].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        view.addSubview(scroll); view.addSubview(back); scroll.addSubview(stack)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: back.topAnchor, constant: -16),
+            back.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            back.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 48),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 32),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -32),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -64)
+        ])
+    }
+    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); becomeFirstResponder() }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let count = traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 ? 1 : view.bounds.width > view.bounds.height ? 3 : 2
+        guard columns != count else { return }
+        columns = count
+        grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
+        let people = (1...CallSlots.count).compactMap { index in slots.contact(for: index).map { (index, $0) } }
+        if people.isEmpty {
+            grid.addArrangedSubview(PorchStyle.label("Your caregiver can add people using the settings icon on the clock screen.", size: 24, color: PorchStyle.nightText))
+        }
+        for start in stride(from: 0, to: people.count, by: columns) {
+            let row = UIStackView(); row.spacing = 16; row.distribution = .fillEqually
+            for index in start..<min(start + columns, people.count) {
+                let (number, person) = people[index]
+                let button = PorchStyle.button(person.name)
+                button.configuration?.subtitle = "Press \(number)"
+                button.configuration?.image = UIImage(systemName: "phone.fill")
+                button.configuration?.imagePlacement = .top
+                button.configuration?.imagePadding = 16
+                button.configuration?.baseBackgroundColor = PorchStyle.nightSurface
+                button.configuration?.baseForegroundColor = PorchStyle.nightText
+                button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                    var attributes = attributes; attributes.font = PorchStyle.font(30, weight: .semibold); return attributes
+                }
+                button.accessibilityLabel = "Call \(person.name), key \(number)"
+                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+                button.addAction(UIAction { [weak self] _ in self?.choose(number) }, for: .touchUpInside)
+                row.addArrangedSubview(button)
+            }
+            for _ in row.arrangedSubviews.count..<columns { row.addArrangedSubview(UIView()) }
+            grid.addArrangedSubview(row)
+        }
+    }
+    private func choose(_ number: Int) {
+        guard !choosing, slots.contact(for: number) != nil else { return }
+        choosing = true; view.isUserInteractionEnabled = false; onCall?(number)
+    }
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        for press in presses {
+            guard let key = press.key, let number = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
+                key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            if trigger.keyDown(Int(key.keyCode.rawValue)) { choose(number) }
+        }
+        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
+    }
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses { if let key = press.key { trigger.keyUp(Int(key.keyCode.rawValue)) } }
+        super.pressesEnded(presses, with: event)
+    }
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        trigger.resetKeys(); super.pressesCancelled(presses, with: event)
     }
 }

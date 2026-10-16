@@ -5,71 +5,82 @@ import PorchCore
 final class SlotsViewController: UITableViewController {
     var onSave: ((CallSlots) throws -> Void)?
     private var slots: CallSlots
-
-    init(slots: CallSlots) {
-        self.slots = slots
-        super.init(style: .insetGrouped)
-    }
-
+    init(slots: CallSlots) { self.slots = slots; super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("Use init(slots:)") }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Your people"
-        tableView.backgroundColor = PorchStyle.cream
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(done))
+        overrideUserInterfaceStyle = .light
+        title = "Caregiver mode"
+        tableView.backgroundColor = PorchStyle.page
+        tableView.tintColor = PorchStyle.accent
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 94
+        tableView.cellLayoutMarginsFollowReadableWidth = true
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Back to clock", style: .done, target: self, action: #selector(done))
     }
-
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        section == 0 ? CallSlots.count : 1
-    }
-
-    override func numberOfSections(in tableView: UITableView) -> Int { 2 }
-
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); tableView.reloadData() }
+    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 2 : 1 }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        if indexPath.section == 1 {
-            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-            var content = cell.defaultContentConfiguration()
-            content.text = "Native calling server"
-            content.secondaryText = NativeCallSettings.savedURL.isEmpty ? "Set up LiveKit prototype calling" : NativeCallSettings.savedURL
-            cell.contentConfiguration = content
-            cell.accessoryType = .disclosureIndicator
-            return cell
-        }
-        let number = indexPath.row + 1
-        let contact = slots.contact(for: number)
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        var content = cell.defaultContentConfiguration()
-        content.text = "\(number)   \(contact?.name ?? "Add a person")"
-        content.secondaryText = contact.map { person in
-            if let native = person.nativeCall {
-                return "Porch \(native.mode.rawValue): \(native.room)" + (person.phoneNumber == nil ? "" : " → phone if unanswered")
-            }
-            return person.shortcutName.map { "Shortcut: \($0)" } ?? "FaceTime: \(person.address)"
-        } ?? "Not set up"
-        cell.contentConfiguration = content
+        cell.backgroundColor = PorchStyle.surface
         cell.accessoryType = .disclosureIndicator
-        cell.accessibilityLabel = "Key \(number), \(contact?.name ?? "not set up")"
-        cell.accessibilityHint = "Edit this person's calling settings."
+        var content = cell.defaultContentConfiguration()
+        content.textProperties.color = PorchStyle.ink
+        content.textProperties.font = PorchStyle.font(21, weight: .semibold)
+        content.secondaryTextProperties.color = PorchStyle.secondary
+        content.secondaryTextProperties.font = PorchStyle.font(16)
+        content.secondaryTextProperties.numberOfLines = 0
+        content.directionalLayoutMargins = .init(top: 18, leading: 18, bottom: 18, trailing: 18)
+        content.imageProperties.tintColor = PorchStyle.accent
+        content.imageToTextPadding = 18
+        if indexPath.section == 0 {
+            let number = indexPath.row + 1
+            let person = slots.contact(for: number)
+            content.text = person?.name ?? "Add a person"
+            content.image = UIImage(systemName: "\(number).circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 32))
+            content.secondaryText = person.map { contact in
+                if let call = contact.nativeCall {
+                    return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on")
+                }
+                return contact.shortcutName == nil ? "FaceTime" : "Shortcut"
+            } ?? "Assign keypad number \(number)"
+            cell.accessibilityLabel = "Key \(number), \(person?.name ?? "add a person")"
+        } else if indexPath.section == 1, indexPath.row == 0 {
+            content.text = "Calling connection"
+            content.secondaryText = NativeCallSettings.savedURL.isEmpty ? "Connect this iPad to Porch" : "Server and caregiver access codes"
+            content.image = UIImage(systemName: "network")
+        } else if indexPath.section == 1 {
+            content.text = "Call preferences"
+            content.secondaryText = "Phone fallback after \(CallPreferences.fallbackSeconds()) seconds · Dialing sound"
+            content.image = UIImage(systemName: "phone.badge.waveform")
+        } else {
+            content.text = "Keep Porch ready"
+            content.secondaryText = "Keypad, Guided Access, and daily use"
+            content.image = UIImage(systemName: "moon.stars")
+        }
+        cell.contentConfiguration = content
         return cell
     }
-
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 0 ? "Choose a keypad number to set up or change." : "Prototype settings"
+        ["Your people", "Connection", "Using this iPad"][section]
     }
-
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0
-            ? "Each number can use Porch voice or video, FaceTime, or its own shortcut. Removing a person leaves their number empty; other people keep their numbers."
-            : "Porch calls stay inside the app. Add a fallback number to try their phone if nobody joins Porch within 20 seconds. App notifications are not included yet."
+        section == 0 ? "Each person keeps their keypad number. Saving a contact never places a call." : nil
     }
-
+    override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
+        (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = PorchStyle.secondary
+    }
+    override func tableView(_ tableView: UITableView, willDisplayFooterView view: UIView, forSection section: Int) {
+        (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = PorchStyle.secondary
+    }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 1 {
-            navigationController?.pushViewController(NativeCallSettingsViewController(), animated: true)
-            return
+            let controller: UIViewController = indexPath.row == 0 ? NativeCallSettingsViewController() : CallPreferencesViewController()
+            navigationController?.pushViewController(controller, animated: true); return
         }
+        if indexPath.section == 2 { navigationController?.pushViewController(PorchDailyUseViewController(), animated: true); return }
         let number = indexPath.row + 1
         let editor = SetupViewController(slot: number, contact: slots.contact(for: number))
         editor.onSave = { [weak self] contact in
@@ -82,164 +93,121 @@ final class SlotsViewController: UITableViewController {
         }
         navigationController?.pushViewController(editor, animated: true)
     }
-
-    @objc private func done() { dismiss(animated: true) }
+    @objc private func done() { view.endEditing(true); dismiss(animated: true) }
 }
 
-final class SetupViewController: UIViewController, CNContactPickerDelegate {
+final class PorchDailyUseViewController: CaregiverFormViewController {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Keep Porch ready"
+        form.addArrangedSubview(section("A quiet bedside clock", detail: "Return to the clock when you're finished. Porch keeps the display awake while it is open. Use the iPad's brightness control to make the screen comfortable for the room.", views: []))
+        form.addArrangedSubview(section("Keep the app open", detail: "For a dedicated calling iPad, enable Guided Access in iPad Settings → Accessibility. Open Porch, start a Guided Access session, and choose a suitable Display Auto-Lock setting. Leave Touch and Software Keyboards enabled for caregiver setup.", views: []))
+        form.addArrangedSubview(section("Using the keypad", detail: "Press 1–6 to call the person assigned to that number. Porch needs to be the active app and the iPad must be unlocked. A normal keypad cannot wake Porch from the background or lock screen. Native Porch calls and phone fallback stay inside Porch.", views: []))
+        form.addArrangedSubview(section("Joining a Porch call", detail: "The other person still joins the same room in the same mode. Incoming Porch notifications aren't available in this beta. If enabled, phone fallback rings their regular phone after the wait set in Call preferences.", views: []))
+        hideKeyboardControl()
+    }
+}
+
+final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate {
     var onSave: ((CallContact?) throws -> Void)?
     private let nameField = UITextField()
     private let addressField = UITextField()
     private let shortcutField = UITextField()
-    private let methodControl = UISegmentedControl(items: ["Porch", "Shortcut", "FaceTime"])
+    private let methodControl = UISegmentedControl(items: ["Porch", "FaceTime", "Shortcut"])
     private let roomField = UITextField()
     private let modeControl = UISegmentedControl(items: ["Voice", "Video"])
-    private let phoneFallbackLabel = UILabel()
     private let phoneFallbackSwitch = UISwitch()
     private let phoneField = UITextField()
-    private let phoneFallbackRow = UIStackView()
-    private let choose = UIButton(type: .system)
-    private let explanation = UILabel()
+    private var nativeGroup = UIView()
+    private var fallbackGroup = UIView()
+    private var phoneGroup = UIView()
+    private var faceTimeGroup = UIView()
+    private var shortcutGroup = UIView()
     private let initialContact: CallContact?
     private let slot: Int
     private var saveTask: Task<Void, Never>?
-
     init(slot: Int, contact: CallContact?) {
-        self.slot = slot
-        initialContact = contact
+        self.slot = slot; initialContact = contact
         super.init(nibName: nil, bundle: nil)
     }
-
     required init?(coder: NSCoder) { fatalError("Use init(slot:contact:)") }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Person for key \(slot)"
-        view.backgroundColor = PorchStyle.cream
+        title = initialContact == nil ? "Add a person" : "Edit person"
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .save, target: self, action: #selector(save))
-
-        methodControl.selectedSegmentIndex = initialContact == nil || initialContact?.nativeCall != nil ? 0 : (initialContact?.shortcutName != nil ? 1 : 2)
-        methodControl.accessibilityLabel = "Calling method"
-        methodControl.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
-
-        nameField.placeholder = "Name, such as David"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
+        let badge = PorchStyle.label("KEYPAD NUMBER \(slot)", size: 14, color: PorchStyle.accent, weight: .semibold)
+        form.addArrangedSubview(badge)
         nameField.text = initialContact?.name
-        nameField.accessibilityLabel = "Contact name"
-        roomField.placeholder = "Shared room name, such as family-david"
-        roomField.text = initialContact?.nativeCall?.room
-        roomField.accessibilityLabel = "Shared call room name"
-        roomField.autocapitalizationType = .none
-        roomField.autocorrectionType = .no
-        roomField.spellCheckingType = .no
-        modeControl.selectedSegmentIndex = initialContact?.nativeCall?.mode == .voice ? 0 : 1
-        modeControl.accessibilityLabel = "Porch call mode"
-        phoneFallbackLabel.text = "Call their phone if Porch isn't answered"
-        phoneFallbackLabel.font = .preferredFont(forTextStyle: .body)
-        phoneFallbackLabel.adjustsFontForContentSizeCategory = true
-        phoneFallbackLabel.numberOfLines = 0
-        phoneFallbackSwitch.isOn = initialContact?.phoneNumber != nil
-        phoneFallbackSwitch.accessibilityLabel = "Call their phone if Porch isn't answered"
-        phoneFallbackSwitch.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
-        phoneFallbackRow.addArrangedSubview(phoneFallbackLabel)
-        phoneFallbackRow.addArrangedSubview(phoneFallbackSwitch)
-        phoneFallbackRow.spacing = 16
-        phoneFallbackRow.alignment = .center
-        phoneField.placeholder = "Phone number with country code, such as +1 415 555 0123"
+        nameField.autocapitalizationType = .words
+        roomField.text = initialContact?.nativeCall?.room ?? "porch-\(UUID().uuidString.prefix(8).lowercased())"
+        shortcutField.text = initialContact?.shortcutName
+        addressField.text = initialContact?.address
         phoneField.text = initialContact?.phoneNumber
-        phoneField.accessibilityLabel = "Fallback phone number, including country code"
         phoneField.keyboardType = .phonePad
         phoneField.textContentType = .telephoneNumber
-        addressField.placeholder = "FaceTime email or phone number"
-        addressField.text = initialContact?.address
-        addressField.accessibilityLabel = "FaceTime email or phone number"
-        addressField.keyboardType = .asciiCapable
-        addressField.autocapitalizationType = .none
-        addressField.autocorrectionType = .no
-        addressField.spellCheckingType = .no
-
-        shortcutField.placeholder = "Exact shortcut name, such as Call David"
-        shortcutField.text = initialContact?.shortcutName
-        shortcutField.accessibilityLabel = "Shortcut name"
-        shortcutField.autocapitalizationType = .none
-        shortcutField.autocorrectionType = .no
-        shortcutField.spellCheckingType = .no
-
-        for field in [nameField, addressField, shortcutField, roomField, phoneField] {
-            field.borderStyle = .roundedRect
-            field.font = .preferredFont(forTextStyle: .body)
-            field.adjustsFontForContentSizeCategory = true
-            let height = field.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
-            height.priority = .defaultHigh
-            height.isActive = true
+        addressField.keyboardType = .emailAddress
+        methodControl.selectedSegmentIndex = initialContact?.nativeCall != nil || initialContact == nil ? 0 : initialContact?.shortcutName == nil ? 1 : 2
+        modeControl.selectedSegmentIndex = initialContact?.nativeCall?.mode == .video ? 1 : 0
+        for control in [methodControl, modeControl] {
+            control.selectedSegmentTintColor = PorchStyle.accent
+            control.backgroundColor = PorchStyle.page
+            control.setTitleTextAttributes([.foregroundColor: PorchStyle.ink, .font: UIFont.systemFont(ofSize: 16, weight: .medium)], for: .normal)
+            control.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 16, weight: .semibold)], for: .selected)
+            control.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
         }
-
-        choose.setTitle("Choose from Contacts", for: .normal)
-        choose.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        methodControl.accessibilityLabel = "Calling method"
+        modeControl.accessibilityLabel = "Porch call mode"
+        methodControl.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
+        let personName = field(nameField, title: "Name", placeholder: "For example, David")
+        nameField.autocapitalizationType = .words
+        let method = UIStackView(arrangedSubviews: [PorchStyle.label("Call using", size: 16, color: PorchStyle.ink, weight: .semibold), methodControl])
+        method.axis = .vertical; method.spacing = 8
+        let choose = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
         choose.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
-        let chooseHeight = choose.heightAnchor.constraint(greaterThanOrEqualToConstant: 48)
-        chooseHeight.priority = .defaultHigh
-        chooseHeight.isActive = true
-
-        explanation.numberOfLines = 0
-        explanation.font = .preferredFont(forTextStyle: .body)
-        explanation.adjustsFontForContentSizeCategory = true
-        explanation.textColor = PorchStyle.ink
-
-        let scroll = UIScrollView()
-        scroll.keyboardDismissMode = .onDrag
-        let remove = UIButton(type: .system)
-        remove.setTitle("Remove person from key \(slot)", for: .normal)
-        remove.setTitleColor(.systemRed, for: .normal)
-        remove.titleLabel?.font = .preferredFont(forTextStyle: .body)
-        remove.titleLabel?.adjustsFontForContentSizeCategory = true
-        remove.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-        remove.addTarget(self, action: #selector(removePerson), for: .touchUpInside)
-        let fields: [UIView] = [methodControl, nameField, roomField, modeControl, phoneFallbackRow, phoneField, shortcutField, choose, addressField, explanation]
-        let stack = UIStackView(arrangedSubviews: fields + (initialContact == nil ? [] : [remove]))
-        stack.axis = .vertical
-        stack.spacing = 20
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(scroll)
-        scroll.addSubview(stack)
-        NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
-            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
-        ])
+        form.addArrangedSubview(section("Their details", views: [personName, choose, method]))
+        let room = field(roomField, title: "Porch room", placeholder: "A shared room name", helper: "Already filled in. Use this same room on the other device to join a Porch call.")
+        roomField.keyboardType = .asciiCapable
+        nativeGroup = section("Porch call", detail: "Choose how the call starts. The other person joins manually in this beta.", views: [modeControl, room])
+        form.addArrangedSubview(nativeGroup)
+        phoneFallbackSwitch.isOn = initialContact?.phoneNumber != nil
+        phoneFallbackSwitch.onTintColor = PorchStyle.accent
+        phoneFallbackSwitch.accessibilityLabel = "Call their phone if Porch isn't answered"
+        phoneFallbackSwitch.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
+        let phoneToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Call their phone", size: 18, color: PorchStyle.ink, weight: .medium), phoneFallbackSwitch])
+        phoneToggle.alignment = .center; phoneToggle.spacing = 16
+        phoneGroup = field(phoneField, title: "Phone number", placeholder: "+1 415 555 0123", helper: "Include + and the country code. Saving approves this number automatically.")
+        fallbackGroup = section("If Porch isn't answered", detail: "Try Porch for \(CallPreferences.fallbackSeconds()) seconds, then ring their regular phone. Change this in Call preferences. Phone calls are voice only and carrier charges apply.", views: [phoneToggle, phoneGroup])
+        form.addArrangedSubview(fallbackGroup)
+        faceTimeGroup = section("FaceTime", views: [field(addressField, title: "FaceTime address", placeholder: "Email address or phone number", helper: "Use the address this person uses for FaceTime. This opens Apple's FaceTime app.")])
+        shortcutGroup = section("Shortcut", views: [field(shortcutField, title: "Shortcut name", placeholder: "For example, Call David", helper: "Create and test a shortcut in Apple's Shortcuts app first. Enter its exact name here.")])
+        form.addArrangedSubview(faceTimeGroup); form.addArrangedSubview(shortcutGroup)
+        if initialContact != nil {
+            let remove = PorchStyle.button("Remove person", symbol: "person.crop.circle.badge.minus", filled: false)
+            remove.configuration?.baseForegroundColor = .systemRed
+            remove.addTarget(self, action: #selector(removePerson), for: .touchUpInside)
+            form.addArrangedSubview(remove)
+        }
         updateMethod()
     }
-
-    @objc private func updateMethod() {
-        let useNative = methodControl.selectedSegmentIndex == 0
-        let useShortcut = methodControl.selectedSegmentIndex == 1
-        roomField.isHidden = !useNative
-        modeControl.isHidden = !useNative
-        phoneFallbackRow.isHidden = !useNative
-        phoneField.isHidden = !useNative || !phoneFallbackSwitch.isOn
-        shortcutField.isHidden = !useShortcut
-        addressField.isHidden = useNative || useShortcut
-        choose.isHidden = useNative || useShortcut
-        if useNative {
-            explanation.text = "Porch always tries the shared room first. The other person joins the same room and mode from another iPad or the server's /call page; app notifications aren't included yet.\n\nIf phone fallback is enabled and nobody joins within 20 seconds, Porch turns off video and rings their regular phone. They don't need the Porch app. Saving approves their number automatically using the caregiver setup code in Native calling server. An internet connection is needed when saving a phone contact. Carrier charges apply.\n\nChoose Voice or Video for the Porch attempt; phone fallback is always voice only. Saving never places a call. Holding setup prevents accidental edits; it isn't a password lock."
-            return
-        }
-        let instructions = useShortcut
-            ? "In Apple's Shortcuts app, create a shortcut with a FaceTime action and select the person to call. Use a fixed recipient, without Ask Each Time. Run it once there and allow any requested permissions.\n\nEnter that shortcut's exact name above. The person's name is the label shown in Porch; the shortcut controls whom you call. If you rename or delete it, update Porch too."
-            : "Choose the email or phone number this person uses for FaceTime. iPadOS may ask you to confirm the call."
-        explanation.text = instructions + "\n\nAfter saving, tap Done to return to Porch and press \(slot) to test. Porch opens another app to call; you may need to reopen Porch afterward.\n\nHolding the setup button prevents accidental edits; it isn't a password lock."
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") { nameField.becomeFirstResponder() }
+        #endif
     }
-
+    @objc private func updateMethod() {
+        view.endEditing(true)
+        nativeGroup.isHidden = methodControl.selectedSegmentIndex != 0
+        fallbackGroup.isHidden = nativeGroup.isHidden
+        phoneGroup.isHidden = !phoneFallbackSwitch.isOn
+        faceTimeGroup.isHidden = methodControl.selectedSegmentIndex != 1
+        shortcutGroup.isHidden = methodControl.selectedSegmentIndex != 2
+    }
     @objc private func pickContact() {
         view.endEditing(true)
         let picker = CNContactPickerViewController()
+        picker.overrideUserInterfaceStyle = .light
         picker.delegate = self
         picker.displayedPropertyKeys = [CNContactPhoneNumbersKey, CNContactEmailAddressesKey]
         picker.predicateForEnablingContact = NSPredicate(format: "phoneNumbers.@count > 0 OR emailAddresses.@count > 0")
@@ -247,16 +215,13 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         picker.predicateForSelectionOfProperty = NSPredicate(format: "key == 'phoneNumbers' OR key == 'emailAddresses'")
         present(picker, animated: true)
     }
-
     func contactPicker(_ picker: CNContactPickerViewController, didSelect property: CNContactProperty) {
-        let contact = property.contact
-        nameField.text = CNContactFormatter.string(from: contact, style: .fullName)
+        nameField.text = CNContactFormatter.string(from: property.contact, style: .fullName)
         if property.key == CNContactPhoneNumbersKey, let phone = property.value as? CNPhoneNumber {
-            addressField.text = phone.stringValue
-        } else if property.key == CNContactEmailAddressesKey, let email = property.value as? String {
-            addressField.text = email
-        }
-        // Selection only fills the form; it never places a call.
+            if methodControl.selectedSegmentIndex == 0 {
+                phoneField.text = phone.stringValue; phoneFallbackSwitch.isOn = true; updateMethod()
+            } else { addressField.text = phone.stringValue }
+        } else if property.key == CNContactEmailAddressesKey, let email = property.value as? String { addressField.text = email }
     }
 
     @objc private func save() {
@@ -269,7 +234,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
                     phoneNumber: phoneFallbackSwitch.isOn ? (phoneField.text ?? "") : nil)
             } else {
                 contact = try CallContact(name: nameField.text ?? "", address: addressField.text ?? "",
-                    shortcutName: methodControl.selectedSegmentIndex == 1 ? (shortcutField.text ?? "") : nil)
+                    shortcutName: methodControl.selectedSegmentIndex == 2 ? (shortcutField.text ?? "") : nil)
             }
             view.isUserInteractionEnabled = false
             navigationItem.rightBarButtonItem?.isEnabled = false

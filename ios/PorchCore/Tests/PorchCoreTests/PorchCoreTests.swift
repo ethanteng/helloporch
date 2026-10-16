@@ -260,4 +260,18 @@ final class PorchCoreTests: XCTestCase {
             }
         }
     }
+    func testFallbackWaitDefaultsPersistsAndBoundsInvalidValues() throws {
+        try withDefaults { defaults in
+            XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 20)
+            CallPreferences.saveFallbackSeconds(45, in: defaults)
+            XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 45)
+            CallPreferences.saveFallbackSeconds(1, in: defaults)
+            XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 5)
+            CallPreferences.saveFallbackSeconds(500, in: defaults)
+            XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 120)
+            defaults.set(-10, forKey: "porch.phoneFallbackSeconds")
+            XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 20)
+        }
+    }
+
 }

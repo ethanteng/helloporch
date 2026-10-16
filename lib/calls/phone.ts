@@ -12,7 +12,7 @@ const dialMarker = "porch.phoneDialStarted";
 // a dial request automatically; a new user attempt must prepare a new session.
 const dialing = new Set<string>();
 
-type Ticket = { id: string; phoneNumber: string; name: string; startBy: number; exp: number; contactAuthorization?: string };
+type Ticket = { id: string; phoneNumber: string; name: string; startBy: number; exp: number; contactAuthorization?: string; localRingback?: boolean };
 type PhoneServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "updateParticipant" | "deleteRoom">;
   sip: Pick<SipClient, "createSipParticipant">;
@@ -75,9 +75,10 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
   const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
 
   if (action === "prepare") {
-    const { phoneNumber, name, contactAuthorization } = input;
+    const { phoneNumber, name, contactAuthorization, localRingback } = input;
     if (typeof phoneNumber !== "string" || !numberPattern.test(phoneNumber) ||
-        typeof name !== "string" || !name.trim() || name.trim().length > 80) {
+        typeof name !== "string" || !name.trim() || name.trim().length > 80 ||
+        (localRingback !== undefined && typeof localRingback !== "boolean")) {
       return callJSON({ error: "Enter a phone number with + and the country code, and the person's name." }, 400);
     }
     const numbers = approvedNumbers();
@@ -92,6 +93,7 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
       return callJSON({ error: "A caregiver needs to save and approve this phone contact in Porch." }, 403);
     }
     const ticket: Ticket = { id: randomUUID(), phoneNumber, name: name.trim(), startBy: now + 120, exp: now + 1200,
+      ...(localRingback === true ? { localRingback: true } : {}),
       ...(typeof contactAuthorization === "string" ? { contactAuthorization } : {}) };
     const room = `porch-phone-${ticket.id}`;
     const token = new AccessToken(config.apiKey, config.apiSecret, { identity: `porch-${ticket.id}`, name: "Porch iPad", ttl: "2m" });
@@ -127,7 +129,8 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
     await client.rooms.updateParticipant(room, identity, { attributes: { [dialMarker]: "true" } });
     await client.sip.createSipParticipant(trunk, ticket.phoneNumber, room, {
       participantIdentity: phoneIdentity, participantName: ticket.name,
-      hidePhoneNumber: true, playDialtone: true, waitUntilAnswered: false,
+      // Updated iPads play local ringback immediately; older builds retain SIP ringback.
+      hidePhoneNumber: true, playDialtone: ticket.localRingback !== true, waitUntilAnswered: false,
       ringingTimeout: 45, maxCallDuration: 900, timeout: 10,
     });
     // End/cancel can race with dialing. Remove a late SIP leg if the iPad left.

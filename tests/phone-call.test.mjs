@@ -198,3 +198,14 @@ test("a failed hangup is reported for retry, not incorrectly confirmed", async (
   f.state.deletionError = new Error("offline");
   assert.equal((await f.send("end", { controlToken: session.controlToken })).status, 502);
 });
+
+test("local ringback clients avoid a duplicate SIP tone while older clients keep it", async () => {
+  const f = fixture();
+  const response = await f.send("prepare", { phoneNumber: "+14155550123", name: "David", localRingback: true });
+  assert.equal(response.status, 200);
+  const session = await response.json();
+  assert.equal((await f.send("start", { controlToken: session.controlToken })).status, 200);
+  assert.equal(f.calls.dial[0][3].playDialtone, false);
+  assert.equal(f.calls.dial[0][3].waitUntilAnswered, false);
+  assert.equal((await f.send("prepare", { phoneNumber: "+14155550123", name: "David", localRingback: "yes" })).status, 400);
+});

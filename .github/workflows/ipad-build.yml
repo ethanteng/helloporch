@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Check Xcode
@@ -34,18 +34,27 @@ jobs:
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch
           -configuration Release -destination 'generic/platform=iOS'
           -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
+      - name: Test caregiver keyboard and focus on an iPad simulator
+        shell: bash
+        run: |
+          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPad" in d["name"]))')"
+          echo "PORCH_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device_id"
+          xcrun simctl bootstatus "$device_id" -b
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
+            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
+            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test
       - name: Launch on an iPad simulator and capture the screens
         timeout-minutes: 10
         shell: bash
         run: |
-          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPad" in d["name"]))')"
-          xcrun simctl boot "$device_id"
-          xcrun simctl bootstatus "$device_id" -b
+          device_id="$PORCH_SIMULATOR_ID"
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
           mkdir -p ios/build/screenshots
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/setup.png
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/call.png --preview-contact
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/six-people.png --preview-six
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-setup
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-phone-setup --preview-touch-keyboard
       - name: Save the iPad screenshots
         uses: actions/upload-artifact@v4
         with:

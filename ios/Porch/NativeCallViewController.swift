@@ -28,6 +28,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var hasFailed = false
     private var hasConnectedPeer = false
     private var mediaReady = false
+    private let ringback = PorchRingback()
+    private let fallbackSeconds = CallPreferences.fallbackSeconds()
 
     init(contact: CallContact, call: NativeCall, server: NativeCallServer) {
         self.contact = contact
@@ -42,18 +44,19 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = PorchStyle.cream
+        overrideUserInterfaceStyle = .dark
+        view.backgroundColor = PorchStyle.night
         room.add(delegate: self)
         let title = UILabel()
         title.text = contact.name
         title.font = PorchStyle.font(36, weight: .semibold)
-        title.textColor = PorchStyle.ink
+        title.textColor = PorchStyle.nightText
         title.textAlignment = .center
         title.numberOfLines = 0
         title.adjustsFontForContentSizeCategory = true
         statusLabel.text = "Connecting…"
         statusLabel.font = PorchStyle.font(22)
-        statusLabel.textColor = PorchStyle.ink
+        statusLabel.textColor = PorchStyle.nightText
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.adjustsFontForContentSizeCategory = true
@@ -94,7 +97,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         configure(microphoneButton, title: "Mute", action: #selector(toggleMicrophone))
         configure(cameraButton, title: "Camera off", action: #selector(toggleCamera))
         configure(endButton, title: "End call", action: #selector(endCall))
-        endButton.configuration?.baseBackgroundColor = .systemRed
+        endButton.configuration?.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
         cameraButton.isHidden = call.mode == .voice
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
@@ -135,7 +138,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private func configure(_ button: UIButton, title: String, action: Selector) {
         var configuration = UIButton.Configuration.filled()
         configuration.title = title
-        configuration.baseBackgroundColor = PorchStyle.terracotta
+        configuration.baseBackgroundColor = PorchStyle.nightSurface
         configuration.baseForegroundColor = .white
         configuration.cornerStyle = .large
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 18, leading: 24, bottom: 18, trailing: 24)
@@ -200,13 +203,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             cameraButton.isEnabled = true
             refresh()
             waitTask = Task { [weak self] in
-                let seconds: UInt64 = self?.contact.phoneNumber == nil ? 90 : 20
+                let seconds: UInt64 = self?.contact.phoneNumber == nil ? 90 : UInt64(self?.fallbackSeconds ?? CallPreferences.defaultFallbackSeconds)
                 do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }
                 guard let self, !self.hasConnectedPeer else { return }
                 if self.contact.phoneNumber != nil {
                     self.fallbackTask = Task { await self.switchToPhone() }
                 } else {
-                    self.finish(message: "No one joined. Returning to your people…")
+                    self.finish(message: "No one joined. Returning to the clock…")
                 }
             }
         } catch {
@@ -216,6 +219,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return
             }
             hasFailed = true
+            ringback.stop()
             await room.disconnect()
             remoteVideo.track = nil
             localVideo.track = nil
@@ -225,7 +229,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             placeholder.text = error.localizedDescription
             microphoneButton.isEnabled = false
             cameraButton.isEnabled = false
-            endButton.configuration?.title = "Back to your people"
+            endButton.configuration?.title = "Back to clock"
         }
     }
 
@@ -237,13 +241,16 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             if status == "active" || status == "automation" {
                 hasConnectedPeer = true
                 waitTask?.cancel()
+                ringback.stop()
                 statusLabel.text = "Phone call connected"
             } else {
+                if mediaReady { ringback.start() }
                 statusLabel.text = "Calling \(contact.name)'s phone…"
             }
             return
         }
-        if !peers.isEmpty { hasConnectedPeer = true; waitTask?.cancel() }
+        if !peers.isEmpty { hasConnectedPeer = true; waitTask?.cancel(); ringback.stop() }
+        else if mediaReady && !hasConnectedPeer && !isSwitchingToPhone { ringback.start() }
         statusLabel.text = peers.isEmpty
             ? "Waiting for \(contact.name)…\nJoin room \(call.room) in \(call.mode.rawValue) mode."
             : (mediaReady ? "\(call.mode == .voice ? "Voice" : "Video") call connected" : "Connecting audio…")
@@ -289,6 +296,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
+        ringback.stop()
         connectionTask?.cancel()
         fallbackTask?.cancel()
         waitTask?.cancel()
@@ -344,12 +352,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         Task { @MainActor [weak self] in
             guard let self, room === self.room else { return }
             if self.isPhoneCall, participant.identity?.stringValue == "phone" {
-                self.finish(message: self.hasConnectedPeer ? "Call ended. Returning to your people…" : "The phone call ended before it was answered.")
+                self.finish(message: self.hasConnectedPeer ? "Call ended. Returning to the clock…" : "The phone call ended before it was answered.")
                 return
             }
             guard !self.isSwitchingToPhone, !self.isPhoneCall else { return }
             if self.hasConnectedPeer, self.room.remoteParticipants.isEmpty {
-                self.finish(message: "Call ended. Returning to your people…")
+                self.finish(message: "Call ended. Returning to the clock…")
             } else { self.refresh() }
         }
     }
@@ -381,7 +389,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor [weak self] in
             guard let self, room === self.room, !self.isEnding, !self.isSwitchingToPhone, self.mediaReady else { return }
-            self.finish(message: "The call disconnected. Returning to your people…")
+            self.finish(message: "The call disconnected. Returning to the clock…")
         }
     }
 
@@ -400,7 +408,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         Task { @MainActor [weak self] in self?.refresh(source: room) }
     }
 
-    private func phoneRequest(_ action: String, body: [String: String]) async throws -> Data {
+    private func phoneRequest(_ action: String, body: [String: Any]) async throws -> Data {
         var request = URLRequest(url: server.baseURL.appendingPathComponent("api/calls/phone/\(action)"))
         request.httpMethod = "POST"
         request.timeoutInterval = 25
@@ -429,6 +437,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         guard room.remoteParticipants.isEmpty else { refresh(); return }
         let microphoneEnabled = !mediaReady || room.localParticipant.isMicrophoneEnabled()
         isSwitchingToPhone = true
+        ringback.stop()
         mediaReady = false
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
@@ -448,7 +457,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         isPhoneCall = true
         do {
             try Task.checkCancellation()
-            var details = ["phoneNumber": phoneNumber, "name": contact.name]
+            var details: [String: Any] = ["phoneNumber": phoneNumber, "name": contact.name, "localRingback": true]
             if !NativeCallSettings.caregiverCode.isEmpty {
                 details["contactAuthorization"] = try await NativeCallSettings.authorizePhone(phoneNumber, server: server)
             }
@@ -465,6 +474,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             try await room.localParticipant.setMicrophone(enabled: microphoneEnabled)
             try Task.checkCancellation()
             microphoneButton.configuration?.title = microphoneEnabled ? "Mute" : "Unmute"
+            ringback.start()
             try await phoneAction("start", ticket: ticket)
             try Task.checkCancellation()
             isSwitchingToPhone = false
@@ -474,16 +484,17 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             waitTask = Task { [weak self] in
                 do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { return }
                 guard let self, !self.hasConnectedPeer else { return }
-                self.finish(message: "Their phone didn't answer. Returning to your people…")
+                self.finish(message: "Their phone didn't answer. Returning to the clock…")
             }
         } catch {
             if Task.isCancelled || isEnding { return }
             hasFailed = true
+            ringback.stop()
             await room.disconnect()
             isSwitchingToPhone = false
             statusLabel.text = "Couldn't connect their phone."
             placeholder.text = error.localizedDescription
-            endButton.configuration?.title = "Back to your people"
+            endButton.configuration?.title = "Back to clock"
             // End call also cleans up any telephone leg created before failure.
         }
     }

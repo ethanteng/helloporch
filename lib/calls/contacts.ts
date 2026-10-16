@@ -39,7 +39,7 @@ export async function authorizeContact(request: Request, now = Math.floor(Date.n
   }
   const digest = (value: string) => createHash("sha256").update(value).digest();
   if (!timingSafeEqual(digest(request.headers.get("x-porch-setup-code") ?? ""), digest(code))) {
-    return callJSON({ error: "Check the caregiver setup code in Native calling server." }, 403);
+    return callJSON({ error: "Check the caregiver setup code in Calling connection." }, 403);
   }
   const input = await callInput(request);
   if (input instanceof Response) return input;

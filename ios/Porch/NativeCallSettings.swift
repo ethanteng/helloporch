@@ -100,80 +100,62 @@ enum NativeCallSettings {
         case missingConfiguration, keychainFailure, invalidCaregiverCode, missingCaregiverCode
         var errorDescription: String? {
             switch self {
-            case .missingConfiguration: return "A caregiver needs to open setup → Native calling server and save the server address and prototype access code."
+            case .missingConfiguration: return "A caregiver needs to open caregiver mode → Calling connection and save the server address and prototype access code."
             case .keychainFailure: return "Couldn't securely save the access code. Unlock the iPad and try again."
             case .invalidCaregiverCode: return "Use a separate caregiver setup code: 16–256 characters with no spaces, different from the calling access code."
-            case .missingCaregiverCode: return "A caregiver needs to enter the caregiver setup code in Native calling server before adding phone contacts."
+            case .missingCaregiverCode: return "A caregiver needs to enter the caregiver setup code in Calling connection before adding phone contacts."
             }
         }
     }
 }
 
-final class NativeCallSettingsViewController: UIViewController {
+final class NativeCallSettingsViewController: CaregiverFormViewController {
     private let serverField = UITextField()
     private let codeField = UITextField()
     private let caregiverField = UITextField()
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Native calling server"
-        view.backgroundColor = PorchStyle.cream
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .save, target: self, action: #selector(save))
-        serverField.placeholder = "https://your-porch-server.com"
+        title = "Calling connection"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
         serverField.text = NativeCallSettings.savedURL
         serverField.keyboardType = .URL
-        serverField.accessibilityLabel = "Porch server address"
-        codeField.placeholder = "Prototype access code"
         codeField.text = try? NativeCallSettings.load().accessCode
-        codeField.isSecureTextEntry = true
-        codeField.accessibilityLabel = "Prototype access code"
-        caregiverField.placeholder = "Caregiver setup code (for phone contacts)"
         caregiverField.text = NativeCallSettings.caregiverCode
-        caregiverField.isSecureTextEntry = true
-        caregiverField.accessibilityLabel = "Caregiver setup code for phone contacts"
-        for field in [serverField, codeField, caregiverField] {
-            field.borderStyle = .roundedRect
-            field.autocapitalizationType = .none
-            field.autocorrectionType = .no
-            field.spellCheckingType = .no
-            field.font = .preferredFont(forTextStyle: .body)
-            field.adjustsFontForContentSizeCategory = true
-            field.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+        for field in [codeField, caregiverField] { field.isSecureTextEntry = true; field.keyboardType = .asciiCapable }
+        form.addArrangedSubview(section("Connect to Porch", detail: "Set this up once. Your contacts and calls will use this connection.", views: [
+            field(serverField, title: "Server address", placeholder: "https://your-porch-server.com", helper: "Use the Porch website address, without /call or another path.")
+        ]))
+        form.addArrangedSubview(section("Access codes", views: [
+            field(codeField, title: "Calling access code", placeholder: "Paste your calling code", helper: "This is the code other people use to join a Porch call."),
+            field(caregiverField, title: "Caregiver setup code", placeholder: "Paste your caregiver code", helper: "Keep this private. It lets you add phone contacts without changing the server.")
+        ]))
+        for (field, name) in [(codeField, "calling code"), (caregiverField, "caregiver code")] {
+            let reveal = UIButton(type: .system)
+            reveal.setTitle("Show", for: .normal)
+            reveal.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+            reveal.tintColor = PorchStyle.accent
+            reveal.frame = CGRect(x: 0, y: 0, width: 72, height: 54)
+            reveal.accessibilityLabel = "Show \(name)"
+            reveal.addAction(UIAction { [weak field, weak reveal] _ in
+                guard let field else { return }
+                field.isSecureTextEntry.toggle()
+                reveal?.setTitle(field.isSecureTextEntry ? "Show" : "Hide", for: .normal)
+                reveal?.accessibilityLabel = "\(field.isSecureTextEntry ? "Show" : "Hide") \(name)"
+            }, for: .touchUpInside)
+            field.rightView = reveal
         }
-        let instructions = UILabel()
-        instructions.text = "Enter your Porch server's address and calling access code.\n\nTo add phone contacts, enter the separate caregiver setup code once. Saving a phone contact approves its number automatically. Both codes and phone approvals are saved securely on this iPad. Share only the calling code with other call participants.\n\nPorch tries the shared room first, then rings their regular phone after 20 seconds without an answer if fallback is enabled. Telephone calls are voice only and incur carrier charges.\n\nThe other person joins /call on this server or another iPad in the same room and mode. App notifications aren't included yet."
-        instructions.numberOfLines = 0
-        instructions.font = .preferredFont(forTextStyle: .body)
-        instructions.adjustsFontForContentSizeCategory = true
-        instructions.textColor = PorchStyle.ink
-        let scroll = UIScrollView()
-        scroll.keyboardDismissMode = .onDrag
-        let stack = UIStackView(arrangedSubviews: [serverField, codeField, caregiverField, instructions])
-        stack.axis = .vertical
-        stack.spacing = 20
-        [scroll, stack].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
-        view.addSubview(scroll)
-        scroll.addSubview(stack)
-        NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
-            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
-            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48),
-        ])
+        form.addArrangedSubview(PorchStyle.label("Codes are stored securely on this iPad. You don't need to enter LiveKit or Twilio credentials here.", size: 16))
     }
 
     @objc private func save() {
         do {
+            view.endEditing(true)
             let server = try NativeCallServer(url: serverField.text ?? "", accessCode: codeField.text ?? "")
             try NativeCallSettings.save(server, caregiverCode: caregiverField.text ?? "")
             navigationController?.popViewController(animated: true)
         } catch {
-            let alert = UIAlertController(title: "Check the server settings", message: error.localizedDescription, preferredStyle: .alert)
+            let alert = UIAlertController(title: "Check the connection", message: error.localizedDescription, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
         }
