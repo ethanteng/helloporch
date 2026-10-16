@@ -11,6 +11,7 @@ final class PorchContainerViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(changeExperience), name: .porchExperienceChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         FamilyCoordinator.shared.canReceive = { [weak self] in self?.readyForIncoming == true }
+        NotificationCenter.default.addObserver(self, selector: #selector(systemCallChanged), name: .porchSystemCallChanged, object: nil)
         installExperience()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -29,6 +30,8 @@ final class PorchContainerViewController: UIViewController {
         UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside && UIApplication.shared.applicationState == .active
     }
     @objc private func changeExperience() {
+        SystemIncomingCalls.shared.registerDevice()
+        if SystemIncomingCalls.shared.hasCall { SystemIncomingCalls.shared.requestEnd() }
         FamilyCoordinator.shared.pause()
         let finish = { [weak self] in
             self?.installExperience(); self?.incomingID = nil
@@ -38,12 +41,16 @@ final class PorchContainerViewController: UIViewController {
         else if content?.presentedViewController != nil { content?.dismiss(animated: false, completion: finish) }
         else { finish() }
     }
-    func resume() { (content as? CallViewController)?.resume(); FamilyCoordinator.shared.start() }
+    func resume() { (content as? CallViewController)?.resume(); FamilyCoordinator.shared.start(); systemCallChanged() }
     func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
     @objc private func familyChanged() {
         let coordinator = FamilyCoordinator.shared
         guard let credential = coordinator.credential, let state = coordinator.state else { return }
         guard let call = state.call, call.state == "pending", call.to == state.me.id else { if state.call?.state == "ended" || state.call == nil { incomingID = nil }; return }
+        if credential.role == .family && call.kind == "call" {
+            SystemIncomingCalls.shared.receive(call, credential: credential)
+            return
+        }
         guard incomingID != call.id, readyForIncoming else { return }
         incomingID = call.id
         let show = { [weak self] in
@@ -58,6 +65,20 @@ final class PorchContainerViewController: UIViewController {
             self.present(incoming, animated: true)
         }
         if let picker = content?.presentedViewController as? PeoplePickerViewController { picker.dismiss(animated: false, completion: show) }
+        else { show() }
+    }
+    @objc private func systemCallChanged() {
+        let calls = SystemIncomingCalls.shared
+        guard calls.answered, UIApplication.shared.applicationState == .active,
+              !(presentedViewController is SystemCallViewController) else { return }
+        let show = { [weak self] in
+            guard let self, calls.answered, calls.hasCall else { return }
+            let screen = SystemCallViewController()
+            screen.modalPresentationStyle = .fullScreen
+            self.present(screen, animated: false)
+        }
+        if presentedViewController != nil { dismiss(animated: false, completion: show) }
+        else if content?.presentedViewController != nil { content?.dismiss(animated: false, completion: show) }
         else { show() }
     }
     func openInvitation(_ url: URL) {

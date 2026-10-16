@@ -4,15 +4,17 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
+import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
+
 type Role = "bedside" | "family";
 type Mode = "voice" | "video";
 type Permissions = { audio: boolean; video: boolean };
-type Member = { invitationID?: string; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
+type Member = { voip?: VoIPRegistration; invitationID?: string; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
 type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; expiresAt: number; claimedBy?: string };
-type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string };
+type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string };
 type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call };
 type Auth = { householdID: string; deviceID: string; hash: string };
-export type FamilyDependencies = { store?: FamilyStore; now?: () => number; endRoom?: (room: string, config: CallServer) => Promise<void> };
+export type FamilyDependencies = { sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult>; store?: FamilyStore; now?: () => number; endRoom?: (room: string, config: CallServer) => Promise<void> };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const codePattern = /^[a-f0-9]{64}$/;
@@ -73,8 +75,8 @@ async function mutate<T>(store: FamilyStore, id: string, change: (house: Househo
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
 }
-function snapshot(house: Household, me: Member, now: number) {
-  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
+function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
+  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (m.role === "family" && !!m.voip && pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, me: publicMember(me),
     invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
@@ -99,6 +101,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     const store = dependencies.store ?? familyStore();
     const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
     const action = input.action;
+    const pushEnabled = !!dependencies.sendPush || voipConfigured();
     if (action === "createBedsideInvite") {
       requireValue((request.headers.get("X-Porch-Setup-Code") ?? "").length >= 16, "A server operator must authorize a new bedside device.", 403);
       await checkCaregiverCode(request, store, now);
@@ -154,11 +157,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           }
         }
         await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
-        return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(existing, owner, now) });
+        return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(existing, owner, now, pushEnabled) });
       }
       if (enrolling) await initializeCaregiverPIN(input.pin, store, id);
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
-      return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(house, me, now) });
+      return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(house, me, now, pushEnabled) });
     }
     if (action === "claimInvite") {
       requireValue(typeof input.code === "string" && codePattern.test(input.code), "Paste a valid invitation.");
@@ -181,7 +184,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         house.members.push(me); invite.claimedBy = deviceID;
       });
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID }));
-      return callJSON({ credential: `${deviceID}.${secret}`, role: "family", state: snapshot(house, house.members.find(m => m.id === deviceID)!, now) });
+      return callJSON({ credential: `${deviceID}.${secret}`, role: "family", state: snapshot(house, house.members.find(m => m.id === deviceID)!, now, pushEnabled) });
     }
     const auth = await authenticate(request, store);
     if (action === "caregiverStatus" || action === "initializeCaregiverPIN") {
@@ -204,9 +207,21 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       expire(house, now);
       if (action === "verifyPIN") { requireValue(me.role === "bedside", "Only a bedside caregiver can unlock settings.", 403); return undefined; }
       if (action === "setHouseholdName") { house.name = name(input.name); me.name = house.name; return undefined; }
+      if (action === "registerVoIP") {
+        requireValue(me.role === "family", "Only family devices register for incoming call pushes.", 403);
+        if (input.token === null) { delete me.voip; return undefined; }
+        requireValue(typeof input.token === "string" && /^[a-f0-9]{32,512}$/.test(input.token) && input.token.length % 2 === 0, "Invalid VoIP token.");
+        requireValue(input.environment === "sandbox" || input.environment === "production", "Invalid push environment.");
+        me.voip = { token: input.token, environment: input.environment };
+        return undefined;
+      }
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now; me.available = input.available;
+        const call = house.call;
+        // Receipt is scoped to the authenticated recipient and exact pending
+        // ordinary call; it never grants foreground readiness or drop-in consent.
+        if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === call.id) call.receivedAt ??= now;
         if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
@@ -226,7 +241,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         } else {
           const target = house.members.find(m => m.id === input.memberID && m.role === "family" && !m.revoked);
           requireValue(target, "This family member was not found.", 404);
-          if (action === "revoke") target.revoked = true;
+          if (action === "revoke") { target.revoked = true; delete target.voip; }
           else target.permissions = permissions(input.permissions);
         }
         const call = house.call;
@@ -245,7 +260,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const target = house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
-        if (!online(target, now)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        if (!online(target, now) && !(input.kind === "call" && target.role === "family" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
         const wait = me.role === "bedside" && input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
@@ -275,17 +290,49 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             if (call.kind === "dropIn") requireValue(call.announcedAt && now >= call.announcedAt + 5, "Wait for the drop-in announcement to finish.", 409);
             call.state = "accepted"; call.acceptedAt = now; call.expiresAt = now + 1800;
             me.available = false; me.seenAt = now;
-          } else requireValue(call.from === me.id || call.state === "accepted", "Answer this call before joining.", 403);
+          } else { requireValue(call.from === me.id || call.state === "accepted", "Answer this call before joining.", 403); me.seenAt = now; }
         }
         return undefined;
       }
       throw new FamilyError("Unknown family action.");
     });
     const me = memberFor(house, auth);
+    if (action === "startCall" && house.call?.kind === "call") {
+      const call = house.call;
+      const target = house.members.find(m => m.id === call.to)!;
+      if (target.role === "family" && target.voip && pushEnabled) {
+        // Outside the CAS mutation: concurrent callers/retries cannot send pushes
+        // for a call that never won the household reservation.
+        const registration = target.voip;
+        let delivery: PushResult;
+        try { delivery = await (dependencies.sendPush ?? sendVoIPPush)(registration, {
+          callID: call.id, recipientID: target.id, callerName: me.name, mode: call.mode, expiresAt: call.expiresAt,
+        }); } catch { delivery = { delivered: false }; }
+        if (!delivery.delivered) {
+          const updated = await mutate(store, house.id, current => {
+            const recipient = current.members.find(m => m.id === target.id);
+            if (delivery.invalidToken && recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
+            const active = current.call;
+            // A call-specific recipient receipt or answer outweighs a missing
+            // APNs acknowledgment, even while the recipient is backgrounded.
+            if (recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
+              active.state = "ended"; active.reason = "Incoming call delivery unavailable.";
+              return true;
+            }
+            return false;
+          });
+          Object.assign(house, updated.house);
+          if (updated.result) {
+            try { await endRoom(call.id, dependencies); } catch { /* no recipient joined */ }
+            throw new FamilyError("Couldn't reach their Porch app. Try their phone.", 409, "offline");
+          }
+        }
+      }
+    }
     if (issuedCode && result) await store.create(`invite:${hash(issuedCode)}`, JSON.stringify({ householdID: house.id, inviteID: result.inviteID }), 900);
     if (cleanupID) {
       try { await endRoom(cleanupID, dependencies); }
-      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now) }, 502); }
+      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }
     }
     if (action === "joinCall") {
       const call = house.call!;
@@ -297,7 +344,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         canPublishSources: call.mode === "voice" ? [TrackSource.MICROPHONE] : [TrackSource.MICROPHONE, TrackSource.CAMERA] });
       return callJSON({ token: await token.toJwt(), serverUrl: configuration.serverUrl, room: roomName });
     }
-    return callJSON({ state: snapshot(house, me, now), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
+    return callJSON({ state: snapshot(house, me, now, pushEnabled), ...(action === "registerVoIP" ? { pushReady: !!me.voip && pushEnabled } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
   } catch (error) {
     if (error instanceof FamilyError || error instanceof CaregiverAuthError) return callJSON({ error: error.message, ...(error instanceof FamilyError && error.code ? { errorCode: error.code } : {}) }, error.status);
     return callJSON({ error: "Family calling is unavailable. Check the connection and shared storage setup." }, 503);

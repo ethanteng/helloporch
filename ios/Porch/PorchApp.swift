@@ -2,6 +2,11 @@ import UIKit
 
 @main
 final class PorchApp: UIResponder, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        SystemIncomingCalls.shared.start()
+        return true
+    }
+
     func application(_ application: UIApplication,
                      configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
@@ -35,6 +40,8 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
         UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
     }
+
+    func sceneDidEnterBackground(_ scene: UIScene) { SystemIncomingCalls.shared.enterBackground() }
 
     func sceneWillResignActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.pause()

@@ -1,6 +1,6 @@
 # Porch for iPhone and iPad
 
-Porch is one app with a quiet bedside clock and a family calling mode. Bedside mode supports ten configurable keypad slots, in-app audio/video calls and regular-phone fallback. Family mode supports incoming calls and approved audio/video drop-in while Porch is open.
+Porch is one app with a quiet bedside clock and a family calling mode. Bedside mode supports ten configurable keypad slots, in-app audio/video calls and regular-phone fallback. Family mode supports CallKit incoming calls while locked/backgrounded, with APNs VoIP delivery configured as described in [incoming-call setup](INCOMING-CALLS.md), and can initiate approved audio/video drop-in.
 
 Start with the [family setup guide](FAMILY-SETUP.md). Family recipients join using a private invitation; no server address, shared calling code or room name is entered in the app.
 
@@ -14,13 +14,13 @@ Choose a keypad slot to edit a person's name, import a phone number from Contact
 
 The saved slot name is also used for that person's incoming calls, spoken drop-in announcements and active call screen on the bedside device. Existing renames take effect without inviting or pairing again. Porch matches the linked device/invitation identity; callers without a matching slot use their caregiver-assigned invitation name.
 
-Porch attempts the paired app first. A person without a linked app gets a confirmed unavailable result before phone fallback. An online family app can ring for the wait set in **Call preferences** (20 seconds by default). Answering Porch atomically cancels phone fallback. Phone numbers use E.164; saving approves the destination without placing a telephone call. Failed approval preserves the original contact.
+Porch attempts the paired app first. A person without a linked app gets a confirmed unavailable result before phone fallback. A family app that is open or registered for VoIP delivery can ring for the wait set in **Call preferences** (20 seconds by default). Answering Porch atomically cancels phone fallback. Phone numbers use E.164; saving approves the destination without placing a telephone call. Failed approval preserves the original contact.
 
 ## Dedicated bedside use
 
 Keep Porch open and the iPad unlocked. The display stays awake in bedside mode. Any digit 0–9 can be configured to call a person. Initially 1–8 are person slots, 9 toggles video, and 0 answers/declines/hangs up. The small **Call someone** button also starts a call. Tap the call-control key to answer or hang up, hold one second to decline, and tap it during a drop-in countdown to stop the connection. Unassigned person keys show a brief hint. An audio call keeps the camera off. Drop-in announces its caller, waits five seconds and offers **Don't connect** before answering. Caregiver screens do not auto-answer.
 
-Both apps must remain open in this beta. Leaving Porch or locking a device ends its call. CallKit/PushKit background ringing is not implemented. Ordinary USB/Bluetooth keyboard input cannot wake Porch behind another app or the lock screen. Use iPad brightness and Guided Access as appropriate, keeping Touch and Software Keyboards enabled for setup.
+Keep the bedside iPad open and unlocked. Ordinary incoming family calls use CallKit, and answered incoming audio can continue while the iPhone is locked or backgrounded. Video starts only after tapping **Turn camera on** in Porch and turns off on backgrounding. Outgoing calls and bedside/drop-in sessions still require Porch to stay open. Configure APNs and updated provisioning before relying on background ringing; see [setup and acceptance checks](INCOMING-CALLS.md). Ordinary USB/Bluetooth keyboard input cannot wake Porch behind another app or the lock screen. Use iPad brightness and Guided Access as appropriate, keeping Touch and Software Keyboards enabled for setup.
 
 ## Build and verify
 
@@ -56,7 +56,7 @@ Configure these encrypted GitHub secrets in the `testflight` environment or repo
 
 Set variables `APPLE_TEAM_ID=7U9T57JPF7` and `IOS_BUNDLE_ID=com.ethanteng.helloporch`.
 
-Create the certificate/profile in Apple Developer and the upload key in App Store Connect → Users and Access → Integrations. Team API keys apply across every app on the team; use the lowest required role. Keep credentials out of Git; signing files are ignored.
+Enable **Push Notifications** for the app ID in Apple Developer and regenerate the distribution profile with `aps-environment=production`; the upload script checks this. Create the certificate/profile in Apple Developer and the upload key in App Store Connect → Users and Access → Integrations. Team API keys apply across every app on the team; use the lowest required role. Keep credentials out of Git; signing files are ignored.
 
 Run the workflow on the desired branch. Build numbers use the workflow run number and attempt. After upload, wait for Apple processing and assign the build to an internal group. External testing requires beta test information and Apple's beta review.
 

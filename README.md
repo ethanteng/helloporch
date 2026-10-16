@@ -13,7 +13,7 @@ npm run dev
 
 ## Bedside and family calling
 
-The universal app now includes family pairing, ordinary incoming calls and approved audio/video drop-in while Mom’s iPad is open. Start with the [family setup guide](ios/FAMILY-SETUP.md) for invitations, the six-digit caregiver PIN, managed storage, permissions and beta limits. iPhone recipients must keep Porch in the foreground in this beta. Existing manual rooms remain available for browser testing.
+The universal app now includes family pairing, ordinary incoming calls and approved audio/video drop-in while Mom’s iPad is open. Start with the [family setup guide](ios/FAMILY-SETUP.md) for invitations, the six-digit caregiver PIN, managed storage, permissions and beta limits. Ordinary calls to family iPhones support APNs VoIP delivery and CallKit ringing while locked or backgrounded once the server and Apple signing are configured; see [incoming-call setup](ios/INCOMING-CALLS.md). The existing regular-phone fallback remains in place. Existing manual rooms remain available for browser testing.
 
 ## Native voice and video calling prototype
 

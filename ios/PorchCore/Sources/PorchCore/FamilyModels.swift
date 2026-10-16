@@ -10,6 +10,7 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let name: String
     public let role: PorchExperience
     public let permissions: DropInPermissions
+    public let canReceiveCalls: Bool?
     public let online: Bool
     public let invitationID: String?
 }

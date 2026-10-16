@@ -40,6 +40,8 @@ if team not in profile['TeamIdentifier']:
     raise SystemExit('Provisioning profile does not match APPLE_TEAM_ID')
 if profile['Entitlements'].get('application-identifier') != f'{team}.{bundle}':
     raise SystemExit('Provisioning profile does not match IOS_BUNDLE_ID')
+if profile['Entitlements'].get('aps-environment') != 'production':
+    raise SystemExit('Enable Push Notifications for the app ID and regenerate IOS_APPSTORE_PROFILE with production aps-environment')
 if profile['ExpirationDate'] <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None):
     raise SystemExit('Provisioning profile has expired')
 if profile.get('ProvisionedDevices') or profile.get('ProvisionsAllDevices') or profile['Entitlements'].get('get-task-allow'):
