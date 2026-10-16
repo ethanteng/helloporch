@@ -43,11 +43,16 @@ enum PorchDevice {
     #if DEBUG
     static func installPreviewFixture() {
         guard ProcessInfo.processInfo.arguments.contains("--family-fixture") else { return }
-        struct Fixture: Decodable { let profile: FamilyCredential; let pin: String? }
+        struct Fixture: Decodable { let profile: FamilyCredential; let pin: String?; let contacts: [String: CallContact]? }
         guard let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
               let data = try? Data(contentsOf: folder.appendingPathComponent("PorchDebugFamily.json")),
               let fixture = try? JSONDecoder().decode(Fixture.self, from: data) else { return }
         try? save(fixture.profile)
+        if let contacts = fixture.contacts {
+            var slots = CallSlots()
+            for (digit, contact) in contacts { if let digit = Int(digit) { try? slots.setContact(contact, for: digit) } }
+            try? slots.save()
+        }
         if let pin = fixture.pin { try? NativeCallSettings.writeSecret(Data(pin.utf8), account: "porch.contact-setup-code") }
         UserDefaults.standard.set(fixture.profile.role.rawValue, forKey: "porch.experience")
         try? FileManager.default.removeItem(at: folder.appendingPathComponent("PorchDebugFamily.json"))
@@ -64,6 +69,7 @@ struct FamilyResponse: Decodable {
     let credential: String?
     let role: PorchExperience?
     let code: String?
+    let invitationID: String?
     let expiresAt: TimeInterval?
     let token: String?
     let serverUrl: String?
@@ -147,7 +153,17 @@ struct FamilyCallSession {
     func update(_ response: FamilyResponse) {
         if let state = response.state { self.state = state; error = nil; changed() }
     }
-    private func changed() { NotificationCenter.default.post(name: .porchFamilyChanged, object: self) }
+    private func changed() {
+        if let state, state.me.role == .bedside {
+            do {
+                var slots = try CallSlots.load()
+                let previous = slots
+                try slots.reconcile(with: state)
+                if slots != previous { try slots.save() }
+            } catch { self.error = error.localizedDescription }
+        }
+        NotificationCenter.default.post(name: .porchFamilyChanged, object: self)
+    }
     func startCall(to person: FamilyPerson, mode: NativeCall.Mode, dropIn: Bool) async throws -> FamilyCallSession {
         try await startCall(targetID: person.id, name: person.name, mode: mode, dropIn: dropIn)
     }

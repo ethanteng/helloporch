@@ -16,7 +16,7 @@ Porch attempts the paired app first. A person without a linked app gets a confir
 
 ## Dedicated bedside use
 
-Keep Porch open and the iPad unlocked. The display stays awake in bedside mode. A configured keypad key 1–6 or the small **Call someone** button starts a call. Empty keys do nothing. An audio call keeps the camera off. Drop-in announces its caller, waits five seconds and offers **Don't connect** before answering. Caregiver screens do not auto-answer.
+Keep Porch open and the iPad unlocked. The display stays awake in bedside mode. Any digit 0–9 can be configured to call a person. Initially 1–8 are person slots, 9 toggles video, and 0 answers/declines/hangs up. The small **Call someone** button also starts a call. Tap the call-control key to answer or hang up, hold one second to decline, and tap it during a drop-in countdown to stop the connection. Unassigned person keys show a brief hint. An audio call keeps the camera off. Drop-in announces its caller, waits five seconds and offers **Don't connect** before answering. Caregiver screens do not auto-answer.
 
 Both apps must remain open in this beta. Leaving Porch or locking a device ends its call. CallKit/PushKit background ringing is not implemented. Ordinary USB/Bluetooth keyboard input cannot wake Porch behind another app or the lock screen. Use iPad brightness and Guided Access as appropriate, keeping Touch and Software Keyboards enabled for setup.
 
@@ -63,3 +63,5 @@ Alternatively, in Xcode select **Any iOS Device**, Product → Archive, and Dist
 ## Privacy
 
 See [server and privacy](FAMILY-SETUP.md#server-and-privacy) for shared storage and media handling. Contact slots stay local; selected fallback numbers reach the server for scoped approval and reach the telephone provider only when dialing. The Contacts picker exposes only the selected contact property, not the full address book. Keychain protects device credentials, the caregiver PIN and phone approvals. No recording, advertising, tracking or analytics is configured. Review App Store privacy disclosures for the server, LiveKit and telephone-provider data handling.
+
+Caregiver settings also offer **Bedside display → Default / Dynamic**. Both retain the large current date and time; Dynamic adds day/night and season cues using a configurable daily schedule and hemisphere. Invitations created from a person show pending acceptance and link automatically when accepted. See the [family setup guide](FAMILY-SETUP.md) for details.

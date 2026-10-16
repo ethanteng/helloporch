@@ -10,6 +10,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let server: NativeCallServer
     private var room = Room()
     private let statusLabel = UILabel()
+    private let keypadHint = PorchStyle.label("", size: 16, color: PorchStyle.nightSecondary)
     private let remoteVideo = VideoView()
     private let localVideo = VideoView()
     private let placeholder = UILabel()
@@ -33,6 +34,33 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var familySession: FamilyCallSession?
     private var familyAccepted = false
     private var beginWithPhoneFallback = false
+    private var keypad = CallTrigger()
+    override var canBecomeFirstResponder: Bool { true }
+    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder() }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); keypad.resetKeys(); resignFirstResponder() }
+    func performKeypadDigit(_ digit: Int) {
+        guard UIApplication.shared.applicationState == .active, presentedViewController == nil,
+              let action = (try? CallSlots.load())?.action(for: digit) else { return }
+        switch action {
+        case .callControl: endCall()
+        case .toggleVideo:
+            if call.mode == .video && !isPhoneCall && cameraButton.isEnabled { toggleCamera() }
+        case .person: break
+        }
+    }
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        for press in presses {
+            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)), key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            if keypad.keyDown(Int(key.keyCode.rawValue)) { performKeypadDigit(digit) }
+        }
+        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
+    }
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses { if let key = press.key { keypad.keyUp(Int(key.keyCode.rawValue)) } }
+        super.pressesEnded(presses, with: event)
+    }
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) { keypad.resetKeys(); super.pressesCancelled(presses, with: event) }
 
     init(contact: CallContact, call: NativeCall, server: NativeCallServer) {
         self.contact = contact
@@ -122,7 +150,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
 
-        let controls = UIStackView(arrangedSubviews: [microphoneButton, cameraButton, endButton])
+        keypadHint.textAlignment = .center
+        updateKeypadHint()
+        let controls = UIStackView(arrangedSubviews: [keypadHint, microphoneButton, cameraButton, endButton])
         controls.axis = .vertical
         controls.spacing = 12
         let scroll = UIScrollView()
@@ -267,8 +297,14 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         }
     }
 
+    private func updateKeypadHint() {
+        let slots = (try? CallSlots.load()) ?? CallSlots()
+        keypadHint.text = [slots.digit(for: .callControl).map { "Key \($0): hang up" }, call.mode == .video && !isPhoneCall && !beginWithPhoneFallback ? slots.digit(for: .toggleVideo).map { "Key \($0): video off / on" } : nil].compactMap { $0 }.joined(separator: " · ")
+        keypadHint.isHidden = keypadHint.text?.isEmpty != false
+    }
     private func refresh(source: Room? = nil) {
         guard !isEnding, !hasFailed, source == nil || source === room else { return }
+        updateKeypadHint()
         let peers = Array(room.remoteParticipants.values)
         if isPhoneCall {
             let status = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
@@ -320,10 +356,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     @objc private func toggleCamera() { changeMedia(camera: true) }
 
     private func changeMedia(camera: Bool) {
-        guard mediaReady, !isEnding, !isSwitchingToPhone, !camera || (call.mode == .video && !isPhoneCall) else { return }
+        guard controlTask == nil, mediaReady, !isEnding, !isSwitchingToPhone, !camera || (call.mode == .video && !isPhoneCall) else { return }
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
         controlTask = Task {
+            defer { controlTask = nil }
             do {
                 if camera {
                     try await room.localParticipant.setCamera(enabled: !room.localParticipant.isCameraEnabled())
@@ -544,6 +581,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         placeholder.isHidden = false
         placeholder.text = "Phone call\nCamera is off"
         isPhoneCall = true
+        updateKeypadHint()
         do {
             try Task.checkCancellation()
             var details: [String: Any] = ["phoneNumber": phoneNumber, "name": contact.name, "localRingback": true]

@@ -145,12 +145,13 @@ final class CaregiverInputTests: XCTestCase {
         }
         let text = labels(editor.view)
         XCTAssertTrue(text.contains("Their details"))
+        XCTAssertTrue(text.contains("Default calling mode"))
         XCTAssertTrue(text.contains("Phone number"))
         for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
         let settings = SlotsViewController(slots: CallSlots())
         settings.loadViewIfNeeded()
         let headings = (0..<settings.numberOfSections(in: settings.tableView)).compactMap { settings.tableView(settings.tableView, titleForHeaderInSection: $0) }
-        XCTAssertEqual(headings, ["Your people", "Calling", "Device mode"])
+        XCTAssertEqual(headings, ["Keypad · people & controls", "Settings", "Device mode"])
     }
 
     @MainActor func testFirstCaregiverEntryAsksForChosenPINAndConfirmation() {
@@ -177,6 +178,59 @@ final class CaregiverInputTests: XCTestCase {
         gear.sendActions(for: .touchUpInside)
         XCTAssertTrue((clock.presentedViewController as? UINavigationController)?.topViewController is CaregiverPINViewController)
         await withCheckedContinuation { continuation in clock.dismiss(animated: false) { continuation.resume() } }
+    }
+
+    @MainActor func testAllTenKeypadRowsIncludeDefaultControlsAndCanBeRemapped() throws {
+        let settings = SlotsViewController(slots: CallSlots()); settings.loadViewIfNeeded()
+        XCTAssertEqual(settings.tableView(settings.tableView, numberOfRowsInSection: 0), 10)
+        let nine = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 8, section: 0))
+        let zero = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 9, section: 0))
+        XCTAssertEqual(nine.accessibilityLabel, "Key 9, Turn video off / on")
+        XCTAssertEqual(zero.accessibilityLabel, "Key 0, Answer / decline / hang up")
+        let editor = SetupViewController(slot: 4, contact: nil, action: .callControl)
+        editor.loadViewIfNeeded()
+        var saved: KeypadAction?
+        editor.onSaveSlot = { action, contact in saved = action; XCTAssertNil(contact) }
+        let save = editor.navigationItem.rightBarButtonItem!
+        _ = editor.perform(save.action)
+        XCTAssertEqual(saved, .callControl, "A control can be saved on any digit without a person's name or phone number")
+    }
+
+    @MainActor func testDynamicClockRetainsCurrentDateTimeAndReadableLayout() {
+        let old = UserDefaults.standard.data(forKey: "porch.bedsideDisplay.v1")
+        defer { UserDefaults.standard.set(old, forKey: "porch.bedsideDisplay.v1") }
+        var preferences = BedsidePreferences(); preferences.appearance = .dynamic; preferences.save()
+        func find(_ id: String, _ view: UIView) -> UIView? {
+            if view.accessibilityIdentifier == id { return view }
+            return view.subviews.compactMap { find(id, $0) }.first
+        }
+        for size in [CGSize(width: 744, height: 1133), CGSize(width: 1133, height: 744), CGSize(width: 320, height: 568), CGSize(width: 568, height: 320)] {
+            let clock = CallViewController(); clock.loadViewIfNeeded(); clock.view.frame = CGRect(origin: .zero, size: size)
+            clock.view.layoutIfNeeded(); clock.viewDidLayoutSubviews(); clock.view.layoutIfNeeded()
+            let time = find("clock.time", clock.view) as! UILabel
+            let date = find("clock.date", clock.view) as! UILabel
+            let context = find("clock.context", clock.view) as! UILabel
+            let call = find("clock.call", clock.view)!
+            XCTAssertFalse(time.isHidden); XCTAssertFalse(date.isHidden); XCTAssertFalse(context.isHidden)
+            XCTAssertFalse(time.attributedText?.string.isEmpty ?? true)
+            XCTAssertEqual(date.text, { let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("MMMMdyyyy"); return f.string(from: Date()) }())
+            XCTAssertGreaterThanOrEqual(context.convert(context.bounds, to: clock.view).minY, 0)
+            XCTAssertLessThan(date.convert(date.bounds, to: clock.view).maxY, call.frame.minY)
+        }
+    }
+
+    @MainActor func testFamilyInvitationCopyAndGearAreClear() {
+        func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
+        let home = FamilyHomeViewController(); home.loadViewIfNeeded()
+        XCTAssertFalse(labels(home.view).contains("Close, even from here."))
+        XCTAssertNotNil(home.navigationItem.rightBarButtonItem?.image)
+        let pairing = FamilyPairingViewController(); pairing.loadViewIfNeeded()
+        XCTAssertTrue(labels(pairing.view).contains("Your Porch invite"))
+        let editor = SetupViewController(slot: 1, contact: nil); editor.loadViewIfNeeded()
+        func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
+        let mode = segments(editor.view).first { $0.accessibilityLabel == "Default calling mode" }
+        XCTAssertEqual(mode?.titleForSegment(at: 0), "Voice-only")
+        XCTAssertFalse(buttons(in: editor.view).contains { $0.configuration?.title == "Link their Porch app" })
     }
 
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {

@@ -68,12 +68,12 @@ final class PorchCoreTests: XCTestCase {
         XCTAssertFalse(trigger.keyDown(0x59))
         trigger.keyUp(0x59)
         XCTAssertTrue(trigger.keyDown(0x59))
-        XCTAssertFalse(trigger.keyDown(0x5F)) // keypad 7 must not call
+        XCTAssertFalse(trigger.keyDown(0x58)) // keypad Enter must not call
     }
 
-    func testKeypadAndKeyboardRouteToAllSixSlots() {
+    func testKeypadAndKeyboardRouteToAllTenDigits() {
         var trigger = CallTrigger()
-        for slot in 1...6 {
+        for slot in 1...9 {
             for code in [0x59 + slot - 1, 0x1E + slot - 1] {
                 XCTAssertEqual(CallTrigger.slot(for: code), slot)
                 XCTAssertTrue(trigger.keyDown(code))
@@ -81,7 +81,9 @@ final class PorchCoreTests: XCTestCase {
                 trigger.keyUp(code)
             }
         }
-        for code in [0x58, 0x5F, 0x60, 0x61, 0x62, 0x24, 0x25, 0x26, 0x27, 0x04] {
+        XCTAssertEqual(CallTrigger.slot(for: 0x62), 0)
+        XCTAssertEqual(CallTrigger.slot(for: 0x27), 0)
+        for code in [0x58, 0x63, 0x28, 0x04] {
             XCTAssertNil(CallTrigger.slot(for: code))
             XCTAssertFalse(trigger.keyDown(code))
         }
@@ -106,7 +108,7 @@ final class PorchCoreTests: XCTestCase {
             try slots.setContact(nil, for: 2)
             try slots.save(to: defaults)
             let loaded = try CallSlots.load(from: defaults)
-            XCTAssertEqual(loaded.contacts.count, 6)
+            XCTAssertEqual(loaded.contacts.count, 10)
             XCTAssertNil(loaded.contact(for: 2))
             XCTAssertEqual(loaded.contact(for: 3)?.shortcutName, "Call person 3")
             XCTAssertEqual(loaded.contact(for: 6), sixth)
@@ -136,10 +138,10 @@ final class PorchCoreTests: XCTestCase {
         var slots = CallSlots()
         let contact = try CallContact(name: "David", shortcutName: "Call David")
         try slots.setContact(contact, for: 6)
-        for number in [-1, 0, 1, 2, 3, 4, 5, 7] {
+        for number in [-1, 0, 1, 2, 3, 4, 5, 7, 8, 9, 10] {
             XCTAssertNil(slots.contact(for: number))
         }
-        for number in [-1, 0, 7] {
+        for number in [-1, 10] {
             XCTAssertThrowsError(try slots.setContact(contact, for: number))
         }
         XCTAssertEqual(slots.contact(for: 6), contact)
@@ -321,5 +323,98 @@ final class BedsideInvitationTests: XCTestCase {
         XCTAssertThrowsError(try FamilyInvitation(url: url))
         XCTAssertThrowsError(try BedsideInvitation(url: FamilyInvitation.url(origin: URL(string: "https://example.com")!, code: code)))
         XCTAssertThrowsError(try BedsideInvitation(url: URL(string: "porch://activate?server=http%3A%2F%2Fexample.com&code=\(code)")!))
+    }
+}
+
+final class BedsideAndKeypadTests: XCTestCase {
+    private func defaults() -> UserDefaults { UserDefaults(suiteName: "BedsideTests.\(UUID().uuidString)")! }
+    func testSixContactsMigrateToTenDigitsWithoutMovingAnyone() throws {
+        let prefs = defaults()
+        let contacts = try (1...6).map { try CallContact(name: "Person \($0)", nativeCall: NativeCall(room: "person-\($0)", mode: .voice)) }
+        prefs.set(try JSONEncoder().encode(contacts), forKey: "porch.slots.v1")
+        let slots = try CallSlots.load(from: prefs)
+        for digit in 1...6 { XCTAssertEqual(slots.contact(for: digit), contacts[digit - 1]) }
+        XCTAssertNil(slots.contact(for: 7)); XCTAssertNil(slots.contact(for: 8))
+        XCTAssertEqual(slots.action(for: 9), .toggleVideo); XCTAssertEqual(slots.action(for: 0), .callControl)
+        XCTAssertEqual(try CallSlots.load(from: prefs), slots)
+        XCTAssertNil(prefs.data(forKey: "porch.slots.v1"))
+    }
+    func testAnyDigitCanBeAPersonOrControlAndChangesSurviveRelaunch() throws {
+        let prefs = defaults(); var slots = CallSlots()
+        let person = try CallContact(name: "Pat", nativeCall: NativeCall(room: "pat", mode: .video))
+        for digit in CallSlots.digits { try slots.setContact(person, for: digit) }
+        XCTAssertEqual(slots.contacts.compactMap { $0 }.count, 10)
+        try slots.setAction(.callControl, for: 4); try slots.setAction(.toggleVideo, for: 7)
+        try slots.save(to: prefs)
+        let loaded = try CallSlots.load(from: prefs)
+        XCTAssertEqual(loaded.digit(for: .callControl), 4); XCTAssertNil(loaded.contact(for: 4))
+        XCTAssertEqual(loaded.action(for: 7), .toggleVideo); XCTAssertEqual(loaded.contact(for: 0), person)
+    }
+    func testCallControlDistinguishesTapHoldDropInAndCancellation() {
+        var input = IncomingCallKey()
+        XCTAssertNil(input.begin(0x62, dropIn: false)); XCTAssertNil(input.begin(0x62, dropIn: false))
+        XCTAssertEqual(input.release(0x62), .answer); XCTAssertNil(input.release(0x62))
+        XCTAssertNil(input.begin(0x62, dropIn: false)); XCTAssertEqual(input.held(0x62), .decline)
+        XCTAssertNil(input.release(0x62), "A declined call must never also answer on key release")
+        XCTAssertEqual(input.begin(0x62, dropIn: true), .decline); XCTAssertNil(input.release(0x62))
+        XCTAssertNil(input.begin(0x62, dropIn: false)); input.cancel(); XCTAssertNil(input.release(0x62))
+    }
+    func testAcceptingInvitationLinksOnlyMatchingContactAndKeepsFallback() throws {
+        let invite = UUID().uuidString, otherInvite = UUID().uuidString, person = UUID().uuidString
+        let contact = try CallContact(name: "Same name", nativeCall: NativeCall(room: "person", mode: .video), phoneNumber: "+14158676937", invitationID: invite)
+        var slots = CallSlots(); try slots.setContact(contact, for: 8)
+        try slots.setContact(CallContact(name: "Same name", nativeCall: NativeCall(room: "other", mode: .voice), invitationID: otherInvite), for: 2)
+        func snapshot(people: [[String: Any]]) throws -> FamilySnapshot {
+            let object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": false, "me": ["id": "bed", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true], "people": people, "busy": false, "serverTime": 1]
+            return try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+        let state = try snapshot(people: [["id": person, "invitationID": invite, "name": "Same name", "role": "family", "permissions": ["audio": false, "video": false], "online": true]])
+        try slots.reconcile(with: state)
+        XCTAssertEqual(slots.contact(for: 8)?.familyMemberID, person)
+        XCTAssertEqual(slots.contact(for: 8)?.phoneNumber, contact.phoneNumber)
+        XCTAssertEqual(slots.contact(for: 8)?.nativeCall, contact.nativeCall)
+        XCTAssertNil(slots.contact(for: 2)?.familyMemberID)
+        let prefs = defaults(); try slots.save(to: prefs)
+        XCTAssertEqual(try CallSlots.load(from: prefs), slots)
+        try slots.reconcile(with: snapshot(people: []))
+        XCTAssertNil(slots.contact(for: 8)?.familyMemberID, "Revoked devices must not remain linked")
+    }
+    private var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(secondsFromGMT: 0)!; return c }
+    private func date(month: Int = 10, hour: Int, minute: Int = 0) -> Date { calendar.date(from: DateComponents(year: 2026, month: month, day: 16, hour: hour, minute: minute))! }
+    func testSunAndMoonFollowScheduleAcrossMidnight() {
+        let prefs = BedsidePreferences()
+        let dawn = BedsideScene(date: date(hour: 6), preferences: prefs, calendar: calendar)
+        let midday = BedsideScene(date: date(hour: 12), preferences: prefs, calendar: calendar)
+        let dusk = BedsideScene(date: date(hour: 18), preferences: prefs, calendar: calendar)
+        let midnight = BedsideScene(date: date(hour: 0), preferences: prefs, calendar: calendar)
+        XCTAssertTrue(dawn.isDay); XCTAssertEqual(dawn.progress, 0)
+        XCTAssertEqual(midday.progress, 0.5); XCTAssertEqual(midday.period, .afternoon)
+        XCTAssertFalse(dusk.isDay); XCTAssertEqual(dusk.progress, 0); XCTAssertEqual(dusk.period, .evening)
+        XCTAssertEqual(midnight.progress, 0.5); XCTAssertEqual(midnight.period, .night)
+        for hour in 0...23 {
+            let scene = BedsideScene(date: date(hour: hour, minute: 59), preferences: prefs, calendar: calendar)
+            XCTAssertGreaterThanOrEqual(scene.progress, 0); XCTAssertLessThan(scene.progress, 1)
+        }
+    }
+    func testSeasonsFollowHemisphereAndLocalCalendar() {
+        var prefs = BedsidePreferences()
+        let seasons: [(Int, BedsideScene.Season, BedsideScene.Season)] = [(1, .winter, .summer), (4, .spring, .fall), (7, .summer, .winter), (10, .fall, .spring)]
+        for (month, north, south) in seasons {
+            prefs.hemisphere = .northern
+            XCTAssertEqual(BedsideScene(date: date(month: month, hour: 12), preferences: prefs, calendar: calendar).season, north)
+            prefs.hemisphere = .southern
+            XCTAssertEqual(BedsideScene(date: date(month: month, hour: 12), preferences: prefs, calendar: calendar).season, south)
+        }
+        var local = calendar; local.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!
+        prefs.hemisphere = .northern
+        XCTAssertFalse(BedsideScene(date: date(hour: 8), preferences: prefs, calendar: local).isDay)
+    }
+    func testDisplayPreferencesDefaultDarkAndPersistSchedule() {
+        let defaults = defaults(); var prefs = BedsidePreferences.load(from: defaults)
+        XCTAssertEqual(prefs.appearance, .default)
+        prefs.appearance = .dynamic; prefs.hemisphere = .southern; prefs.dayStart = 7; prefs.nightStart = 20; prefs.save(to: defaults)
+        XCTAssertEqual(BedsidePreferences.load(from: defaults), prefs)
+        XCTAssertFalse(BedsideScene(date: date(hour: 19), preferences: .init(), calendar: calendar).isDay)
+        XCTAssertTrue(BedsideScene(date: date(hour: 19), preferences: prefs, calendar: calendar).isDay)
     }
 }

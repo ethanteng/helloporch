@@ -7,7 +7,7 @@ import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, care
 type Role = "bedside" | "family";
 type Mode = "voice" | "video";
 type Permissions = { audio: boolean; video: boolean };
-type Member = { id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
+type Member = { invitationID?: string; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
 type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; expiresAt: number; claimedBy?: string };
 type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string };
 type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call };
@@ -74,9 +74,10 @@ async function mutate<T>(store: FamilyStore, id: string, change: (house: Househo
   throw new FamilyError("Porch is busy. Please try again.", 409);
 }
 function snapshot(house: Household, me: Member, now: number) {
-  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now) });
+  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, me: publicMember(me),
+    invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     call: call && (call.from === me.id || call.to === me.id) ? { ...call, callerName: house.members.find(m => m.id === call.from)?.name ?? "Family" } : null,
     busy: !!call && call.state !== "ended", serverTime: now };
@@ -176,7 +177,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         requireValue(!house.members.some(m => m.id === deviceID), "This device identity is already in use.", 409);
         requireValue(house.members.filter(m => !m.revoked).length < 20, "This household has reached its device limit.");
-        const me: Member = { id: deviceID, name: invite.name, role: "family", secretHash: hash(secret), permissions: invite.permissions, revoked: false, seenAt: now, available: false };
+        const me: Member = { invitationID: invite.id, id: deviceID, name: invite.name, role: "family", secretHash: hash(secret), permissions: invite.permissions, revoked: false, seenAt: now, available: false };
         house.members.push(me); invite.claimedBy = deviceID;
       });
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID }));
@@ -296,7 +297,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         canPublishSources: call.mode === "voice" ? [TrackSource.MICROPHONE] : [TrackSource.MICROPHONE, TrackSource.CAMERA] });
       return callJSON({ token: await token.toJwt(), serverUrl: configuration.serverUrl, room: roomName });
     }
-    return callJSON({ state: snapshot(house, me, now), ...(issuedCode && result ? { code: issuedCode, expiresAt: result.expiresAt } : {}) });
+    return callJSON({ state: snapshot(house, me, now), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
   } catch (error) {
     if (error instanceof FamilyError || error instanceof CaregiverAuthError) return callJSON({ error: error.message, ...(error instanceof FamilyError && error.code ? { errorCode: error.code } : {}) }, error.status);
     return callJSON({ error: "Family calling is unavailable. Check the connection and shared storage setup." }, 503);

@@ -249,3 +249,24 @@ test('contacts without a paired app get a confirmed offline result before phone 
  const busy=await f.send('startCall',{unlinked:true,kind:'call',mode:'voice'},bedside.credential);
  assert.equal(busy.status,409);assert.equal((await busy.json()).errorCode,undefined);
 });
+
+test('contact invitations expose pending status and a durable accepted identity only to bedside',async()=>{
+ const f=fixture(); const bedside=await f.json('createHousehold',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ const invite=await f.json('createInvite',{name:'Same name',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.match(invite.invitationID,/^[a-f0-9-]{36}$/);
+ assert.deepEqual(invite.state.invitations,[{id:invite.invitationID,expiresAt:invite.expiresAt}]);
+ assert.ok(!JSON.stringify(invite.state).includes(invite.code));
+ const family=await f.json('claimInvite',{code:invite.code});
+ assert.deepEqual(family.state.invitations,[]); assert.equal(family.state.me.invitationID,undefined);
+ const next=await f.json('createInvite',{name:'Same name',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const poll=await f.json('poll',{available:true},bedside.credential);
+ assert.equal(poll.state.people[0].invitationID,invite.invitationID);
+ assert.notEqual(poll.state.invitations[0].id,invite.invitationID);
+ await f.json('cancelInvites',{},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const after=await f.json('poll',{available:true},bedside.credential);
+ assert.deepEqual(after.state.invitations,[]);
+ assert.equal(after.state.people[0].invitationID,invite.invitationID,'creating/cancelling other invites must not lose an accepted association');
+ assert.equal((await f.send('claimInvite',{code:next.code})).status,410);
+ await f.json('revoke',{memberID:family.state.me.id},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.deepEqual((await f.json('poll',{available:true},bedside.credential)).state.people,[]);
+});

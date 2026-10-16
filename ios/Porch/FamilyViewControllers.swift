@@ -34,9 +34,9 @@ final class FamilyHomeViewController: CaregiverFormViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Porch"
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Invitation", style: .plain, target: self, action: #selector(newInvitation))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Device mode", style: .plain, target: self, action: #selector(changeMode))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(changeMode))
         people.axis = .vertical; people.spacing = 20
-        form.addArrangedSubview(PorchStyle.label("Close, even from here.", size: 32, color: PorchStyle.ink, weight: .semibold))
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "Device settings"
         form.addArrangedSubview(status); form.addArrangedSubview(people)
         hideKeyboardControl()
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchFamilyChanged, object: nil)
@@ -58,7 +58,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         displayed = next
         people.arrangedSubviews.forEach { people.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard next.paired else {
-            status.text = "Join your family's Porch using a private invitation from the caregiver."
+            status.text = "Ask the caregiver to invite you to the family Porch."
             let join = PorchStyle.button("Join a family", symbol: "person.badge.plus")
             join.addAction(UIAction { [weak self] _ in self?.showPairing() }, for: .touchUpInside)
             people.addArrangedSubview(join); return
@@ -105,7 +105,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Join your family"
         link.text = invitation?.absoluteString; link.keyboardType = .URL
-        form.addArrangedSubview(section("A personal invitation", detail: "Ask the caregiver to share an invitation from the bedside iPad. It can be used once and expires after 15 minutes.", views: [field(link, title: "Porch invitation", placeholder: "Paste the complete invitation link"), join]))
+        form.addArrangedSubview(section("Your Porch invite", detail: "Ask the caregiver to invite you to the family Porch. It can be used once and expires after 15 minutes.", views: [field(link, title: "Porch invitation", placeholder: "Paste the complete invitation link"), join]))
         form.addArrangedSubview(PorchStyle.label("Your invitation sets your name and access. Audio and video drop-in are approved separately by the caregiver. No calling code is needed."))
         join.addTarget(self, action: #selector(pair), for: .touchUpInside)
     }
@@ -233,18 +233,29 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         } catch { if action != "setHouseholdName" { refresh() }; showPorchError(error, on: self) }
     }
     private func showInvite() {
-        let invite = FamilyInviteViewController(); invite.onCreated = { [weak self] in self?.refresh() }
+        let invite = FamilyInviteViewController(); invite.onCreated = { [weak self] _, _ in self?.refresh() }
         navigationController?.pushViewController(invite, animated: true)
     }
 }
 
 final class FamilyInviteViewController: CaregiverFormViewController {
     var prefilledName: String?
-    var onCreated: (() -> Void)?
+    var returnsToPerson = false
+    var onCreated: ((String, String) -> Void)?
     private let personName = UITextField()
     private let audio = UISwitch()
     private let video = UISwitch()
     private let create = PorchStyle.button("Create invitation", symbol: "person.badge.plus")
+    private var invitationLink: URL?
+    private var invitationExpiry: TimeInterval = 0
+    private let inviteHint = PorchStyle.label("", size: 17)
+    @objc private func finishedInvite() { navigationController?.popViewController(animated: true) }
+    private func shareInvite(_ link: URL) {
+        let share = UIActivityViewController(activityItems: ["Join our Porch. This private invitation works once and expires in 15 minutes.", link], applicationActivities: nil)
+        share.popoverPresentationController?.sourceView = create
+        share.popoverPresentationController?.sourceRect = create.bounds
+        present(share, animated: true)
+    }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Invite someone"
         personName.text = prefilledName
@@ -254,9 +265,11 @@ final class FamilyInviteViewController: CaregiverFormViewController {
         }
         form.addArrangedSubview(section("Who is this invitation for?", views: [field(personName, title: "Their name", placeholder: "For example, Ethan")]))
         form.addArrangedSubview(section("Approve drop-in", detail: "Both are off by default. Ordinary calls will still be available. You can change these permissions or remove access later.", views: [row("Audio drop-in", audio), row("Video drop-in", video)]))
+        form.addArrangedSubview(inviteHint)
         form.addArrangedSubview(create); create.addTarget(self, action: #selector(createInvite), for: .touchUpInside)
     }
     @objc private func createInvite() {
+        if let invitationLink, invitationExpiry > Date().timeIntervalSince1970 { shareInvite(invitationLink); return }
         guard let credential = PorchDevice.credential(for: .bedside) else { return }
         create.isEnabled = false; view.endEditing(true)
         Task { [weak self] in
@@ -270,13 +283,15 @@ final class FamilyInviteViewController: CaregiverFormViewController {
                     }
                 }
                 let response = try await FamilyService(credential).send("createInvite", ["name": self.personName.text ?? "", "permissions": ["audio": self.audio.isOn, "video": self.video.isOn]], pin: NativeCallSettings.caregiverCode)
-                guard let code = response.code else { throw FamilyInvitation.InvitationError.invalid }
-                FamilyCoordinator.shared.update(response); self.onCreated?()
+                guard let code = response.code, let invitationID = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
+                FamilyCoordinator.shared.update(response); self.onCreated?(invitationID, self.personName.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
                 let link = FamilyInvitation.url(origin: credential.origin, code: code)
-                let share = UIActivityViewController(activityItems: ["Join our Porch. This private invitation works once and expires in 15 minutes.", link], applicationActivities: nil)
-                share.popoverPresentationController?.sourceView = self.create
-                share.popoverPresentationController?.sourceRect = self.create.bounds
-                self.present(share, animated: true)
+                self.invitationLink = link; self.invitationExpiry = response.expiresAt ?? 0
+                self.personName.isEnabled = false; self.audio.isEnabled = false; self.video.isEnabled = false
+                self.create.configuration?.title = "Share invitation again"
+                self.inviteHint.text = !self.returnsToPerson ? "Invitation ready. Share it, then tap Done." : "Invitation ready. Share it, tap Done, then save the person. Their app connects automatically when they accept."
+                self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(self.finishedInvite))
+                self.shareInvite(link)
             } catch { showPorchError(error, on: self) }
         }
     }
@@ -293,6 +308,48 @@ final class IncomingFamilyCallViewController: UIViewController {
     private var timer: Timer?
     private var remaining = 5
     private var answering = false
+    private var keypad = CallTrigger()
+    private var callKey = IncomingCallKey()
+    private var holdTimer: Timer?
+    override var canBecomeFirstResponder: Bool { true }
+    private func handle(_ decision: IncomingCallKey.Decision?) {
+        guard !answering else { return }
+        if decision == .answer { accept() } else if decision == .decline { reject() }
+    }
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        for press in presses {
+            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
+                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
+                  (try? CallSlots.load())?.action(for: digit) == .callControl else { unhandled.insert(press); continue }
+            let code = Int(key.keyCode.rawValue)
+            guard keypad.keyDown(code), !answering else { continue }
+            handle(callKey.begin(code, dropIn: call.kind == "dropIn"))
+            if !answering {
+                holdTimer?.invalidate()
+                holdTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in
+                    guard let self else { return }; self.handle(self.callKey.held(code))
+                }
+            }
+        }
+        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
+    }
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses {
+            if let key = press.key {
+                let code = Int(key.keyCode.rawValue)
+                keypad.keyUp(code)
+                if let decision = callKey.release(code) { holdTimer?.invalidate(); handle(decision) }
+            }
+        }
+        super.pressesEnded(presses, with: event)
+    }
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); super.pressesCancelled(presses, with: event)
+    }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated); holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); resignFirstResponder()
+    }
     init(call: FamilyCallRecord, credential: FamilyCredential) {
         self.call = call; self.credential = credential; super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
@@ -309,7 +366,10 @@ final class IncomingFamilyCallViewController: UIViewController {
         decline.configuration?.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
         decline.addTarget(self, action: #selector(reject), for: .touchUpInside)
         answer.isHidden = call.kind == "dropIn"
-        let stack = UIStackView(arrangedSubviews: [name, countdown]); stack.axis = .vertical; stack.spacing = 28
+        let controlDigit = ((try? CallSlots.load()) ?? CallSlots()).digit(for: .callControl)
+        let hint = PorchStyle.label(controlDigit.map { call.kind == "dropIn" ? "Press \($0) to stop this drop-in." : "Tap \($0) to answer. Hold \($0) to decline." } ?? "", size: 18, color: PorchStyle.nightSecondary)
+        hint.textAlignment = .center
+        let stack = UIStackView(arrangedSubviews: [name, countdown, hint]); stack.axis = .vertical; stack.spacing = 28
         let controls = UIStackView(arrangedSubviews: [answer, decline]); controls.axis = .vertical; controls.spacing = 16
         let scroll = UIScrollView()
         [stack, controls, scroll].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -329,6 +389,7 @@ final class IncomingFamilyCallViewController: UIViewController {
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        keypad.resetKeys(); becomeFirstResponder()
         if call.kind == "dropIn" {
             AudioServicesPlaySystemSound(1007)
             speech.speak(AVSpeechUtterance(string: "\(call.callerName) is dropping in with \(call.mode == .video ? "video" : "audio"). Connecting in five seconds."))
@@ -338,7 +399,7 @@ final class IncomingFamilyCallViewController: UIViewController {
             }
         } else { AudioServicesPlaySystemSound(1007) }
     }
-    deinit { timer?.invalidate(); NotificationCenter.default.removeObserver(self) }
+    deinit { holdTimer?.invalidate(); timer?.invalidate(); NotificationCenter.default.removeObserver(self) }
     private func updateCountdown() { countdown.text = call.kind == "dropIn" ? "\(call.mode == .video ? "Video" : "Audio") drop-in\nConnecting in \(max(0, remaining))…" : "Incoming \(call.mode == .video ? "video" : "audio") call" }
     @objc private func checkCall() {
         guard !answering else { return }

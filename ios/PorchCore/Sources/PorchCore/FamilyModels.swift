@@ -11,6 +11,7 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let role: PorchExperience
     public let permissions: DropInPermissions
     public let online: Bool
+    public let invitationID: String?
 }
 public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let id: String
@@ -26,12 +27,17 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let callerName: String
     public let reason: String?
 }
+public struct PendingFamilyInvitation: Codable, Equatable {
+    public let id: String
+    public let expiresAt: TimeInterval
+}
 public struct FamilySnapshot: Codable, Equatable {
     public let householdID: String
     public let householdName: String
     public let dropInEnabled: Bool
     public let me: FamilyPerson
     public let people: [FamilyPerson]
+    public let invitations: [PendingFamilyInvitation]?
     public let call: FamilyCallRecord?
     public let busy: Bool
     public let serverTime: TimeInterval

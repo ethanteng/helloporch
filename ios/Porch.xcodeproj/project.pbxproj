@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A00000000000000000000023 = {isa = PBXBuildFile; fileRef = B00000000000000000000023; };
         A00000000000000000000022 = {isa = PBXBuildFile; fileRef = B00000000000000000000022; };
         A00000000000000000000021 = {isa = PBXBuildFile; fileRef = B00000000000000000000021; };
         A00000000000000000000020 = {isa = PBXBuildFile; fileRef = B00000000000000000000020; };
@@ -25,6 +26,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        B00000000000000000000023 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedsideDisplayView.swift; sourceTree = "<group>"; };
         B00000000000000000000022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PorchContainerViewController.swift; sourceTree = "<group>"; };
         B00000000000000000000021 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyViewControllers.swift; sourceTree = "<group>"; };
         B00000000000000000000020 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyService.swift; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 				B00000000000000000000010 /* NativeCallViewController.swift */,
 				B00000000000000000000011 /* CaregiverUI.swift */,
                 B00000000000000000000022,
+                B00000000000000000000023,
                 B00000000000000000000021,
                 B00000000000000000000020,
                 B00000000000000000000014 /* CallPreferencesViewController.swift */,
@@ -194,6 +197,7 @@
 				A00000000000000000000008 /* NativeCallViewController.swift in Sources */,
 				A00000000000000000000010 /* CaregiverUI.swift in Sources */,
                 A00000000000000000000022,
+                A00000000000000000000023,
                 A00000000000000000000021,
                 A00000000000000000000020,
                 A00000000000000000000012 /* CallPreferencesViewController.swift in Sources */,

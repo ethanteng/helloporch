@@ -7,9 +7,11 @@ public struct CallContact: Codable, Equatable {
     public let nativeCall: NativeCall?
     public let phoneNumber: String?
     public let familyMemberID: String?
+    public let invitationID: String?
 
     public init(name: String, address: String = "", shortcutName: String? = nil) throws {
         self.familyMemberID = nil
+        self.invitationID = nil
         self.nativeCall = nil
         self.phoneNumber = nil
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,11 +51,13 @@ public struct CallContact: Codable, Equatable {
         self.shortcutName = nil
     }
 
-    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil) throws {
+    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil) throws {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
         guard name.count <= 80 else { throw ValidationError.nameTooLong }
         if let familyMemberID, UUID(uuidString: familyMemberID) == nil { throw ValidationError.invalidFamilyMember }
+        if let invitationID, UUID(uuidString: invitationID) == nil { throw ValidationError.invalidFamilyMember }
+        self.invitationID = invitationID
         self.familyMemberID = familyMemberID
         self.name = name
         self.address = ""

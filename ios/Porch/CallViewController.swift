@@ -6,6 +6,9 @@ final class CallViewController: UIViewController {
     private var trigger = CallTrigger()
     private var opening = false
     private var loadError: String?
+    private let sceneView = BedsideSceneView()
+    private let clock = UIStackView()
+    private let contextLabel = UILabel()
     private let weekdayLabel = UILabel()
     private let timeLabel = UILabel()
     private let dateLabel = UILabel()
@@ -37,6 +40,13 @@ final class CallViewController: UIViewController {
             }
         }
         #endif
+        sceneView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(sceneView)
+        NSLayoutConstraint.activate([sceneView.leadingAnchor.constraint(equalTo: view.leadingAnchor), sceneView.trailingAnchor.constraint(equalTo: view.trailingAnchor), sceneView.topAnchor.constraint(equalTo: view.topAnchor), sceneView.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
+        contextLabel.textColor = PorchStyle.nightText; contextLabel.textAlignment = .center
+        contextLabel.font = PorchStyle.font(32, weight: .semibold)
+        contextLabel.accessibilityIdentifier = "clock.context"
+        contextLabel.adjustsFontSizeToFitWidth = true; contextLabel.minimumScaleFactor = 0.5
         weekdayLabel.font = PorchStyle.font(72, weight: .medium)
         timeLabel.font = .monospacedDigitSystemFont(ofSize: 360, weight: .regular)
         timeLabel.adjustsFontSizeToFitWidth = true
@@ -56,7 +66,7 @@ final class CallViewController: UIViewController {
             label.adjustsFontForContentSizeCategory = true
         }
         timeLabel.accessibilityTraits.insert(.updatesFrequently)
-        let clock = UIStackView(arrangedSubviews: [weekdayLabel, timeLabel, dateLabel])
+        [contextLabel, weekdayLabel, timeLabel, dateLabel].forEach { clock.addArrangedSubview($0) }
         clock.axis = .vertical
         clock.spacing = 24
         clock.isAccessibilityElement = false
@@ -112,7 +122,9 @@ final class CallViewController: UIViewController {
         width.priority = .defaultHigh; width.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: UIApplication.significantTimeChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: NSLocale.currentLocaleDidChangeNotification, object: nil)
-        resetClock()
+        NotificationCenter.default.addObserver(self, selector: #selector(updateDisplay), name: .porchBedsideDisplayChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(reloadSlots), name: .porchFamilyChanged, object: nil)
+        updateDisplay(); resetClock()
     }
 
     deinit { clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
@@ -134,6 +146,7 @@ final class CallViewController: UIViewController {
         else if args.contains("--preview-pin-setup") { present(PorchStyle.navigation(CaregiverPINViewController(profile: nil)), animated: false) }
         else if args.contains("--preview-setup") { showSetup() }
         else if args.contains("--preview-people") { showPeople() }
+        else if args.contains("--preview-display-settings") { present(PorchStyle.navigation(BedsideDisplaySettingsViewController()), animated: false) }
         #endif
     }
 
@@ -151,7 +164,9 @@ final class CallViewController: UIViewController {
         // Fit the clock to the iPad, rather than capping it at phone-sized text.
         // Reserve the bottom area for calling and allow long localized dates to fit.
         let width = max(200, size.width - 64)
-        let height = max(240, size.height - 200)
+        let height = max(120, size.height - 200)
+        clock.spacing = min(24, size.height * 0.025)
+        contextLabel.font = PorchStyle.font(max(18, min(32, height * 0.07)), weight: .semibold)
         weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
         dateLabel.font = .systemFont(ofSize: min(width * 0.061, height * 0.11))
         timeLabel.font = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
@@ -164,6 +179,7 @@ final class CallViewController: UIViewController {
         // from a caregiver's text field or from an active call.
         guard isViewLoaded, presentedViewController == nil else { return }
         opening = false
+        updateDisplay()
         statusLabel.text = nil
         refreshCallButton()
         resetClock()
@@ -198,7 +214,20 @@ final class CallViewController: UIViewController {
     }
 
     private func updateClock() {
-        let now = Date()
+        var now = Date()
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "--preview-hour"), args.count > i + 1, let hour = Int(args[i + 1]) {
+            now = Calendar.current.date(bySettingHour: hour, minute: 30, second: 0, of: now) ?? now
+        }
+        #endif
+        if !sceneView.isHidden {
+            let scene = BedsideScene(date: now, preferences: BedsidePreferences.load())
+            contextLabel.text = "\(scene.period.rawValue) · \(scene.season.rawValue)"
+            if sceneView.window != nil && !UIAccessibility.isReduceMotionEnabled && sceneView.scene != scene {
+                UIView.transition(with: sceneView, duration: 1.5, options: [.transitionCrossDissolve, .allowUserInteraction]) { self.sceneView.scene = scene }
+            } else { sceneView.scene = scene }
+        }
         let time = timeFormatter.string(from: now).replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
         let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: PorchStyle.nightText])
         for symbol in [timeFormatter.amSymbol, timeFormatter.pmSymbol] {
@@ -210,6 +239,19 @@ final class CallViewController: UIViewController {
         dateLabel.text = dateFormatter.string(from: now)
     }
 
+    @objc private func updateDisplay() {
+        guard isViewLoaded else { return }
+        var dynamic = BedsidePreferences.load().appearance == .dynamic
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-dynamic") { dynamic = true }
+        #endif
+        sceneView.isHidden = !dynamic; contextLabel.isHidden = !dynamic
+        for label in [weekdayLabel, dateLabel] { label.textColor = dynamic ? PorchStyle.nightText : PorchStyle.nightSecondary }
+        updateClock()
+    }
+    @objc private func reloadSlots() {
+        do { slots = try CallSlots.load() } catch { statusLabel.text = error.localizedDescription }
+    }
     private func refreshCallButton() { callButton.isEnabled = !opening }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
@@ -244,12 +286,16 @@ final class CallViewController: UIViewController {
     private func call(slot: Int) {
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
+        guard slots.action(for: slot) == .person else {
+            statusLabel.text = slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call."
+            return
+        }
         guard let contact = slots.contact(for: slot) else {
             statusLabel.text = "No one is assigned to \(slot).\nPlease choose another number."
             return
         }
         guard let native = contact.nativeCall else {
-            showError("Finish Porch setup", message: "Open caregiver mode and link this person's Porch app or add their phone number."); return
+            showError("Finish Porch setup", message: "Open caregiver mode and invite this person to Porch or add their phone number."); return
         }
         startFamilyCall(contact, memberID: contact.familyMemberID, mode: native.mode)
     }
@@ -363,7 +409,7 @@ final class PeoplePickerViewController: UIViewController {
         guard columns != count else { return }
         columns = count
         grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
-        let people = (1...CallSlots.count).compactMap { index in slots.contact(for: index).map { (index, $0) } }
+        let people = CallSlots.digits.compactMap { index in slots.contact(for: index).map { (index, $0) } }
         if people.isEmpty {
             grid.addArrangedSubview(PorchStyle.label("Your caregiver can add people using the settings icon on the clock screen.", size: 24, color: PorchStyle.nightText))
         }

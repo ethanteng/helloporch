@@ -205,6 +205,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     deinit { NotificationCenter.default.removeObserver(self) }
 
     func hideKeyboardControl() { keyboardButton.isHidden = true }
+    func setKeyboardControlVisible(_ visible: Bool) { keyboardButton.isHidden = !visible }
 
     func field(_ field: UITextField, title: String, placeholder: String, helper: String? = nil) -> UIView {
         if !fields.contains(where: { $0 === field }) { fields.append(field) }
