@@ -20,7 +20,7 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(navigation.topViewController is AdvancedSettingsViewController)
     }
 
-    @MainActor func testAdvancedSilenceSettingValidatesSavesAndCanBeTurnedOff() async throws {
+    @MainActor func testAdvancedSilenceSettingValidatesSavesAndCanBeTurnedOff() throws {
         let suite = "porch.advanced-test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -52,14 +52,6 @@ final class CaregiverInputTests: XCTestCase {
             XCTAssertGreaterThan(try XCTUnwrap(find(screen.view, UIScrollView.self)).bounds.height, 100)
             XCTAssertGreaterThan(field.bounds.width, 100)
             XCTAssertFalse(field.superview!.isHidden)
-            try await Task.sleep(nanoseconds: 100_000_000)
-            let image = UIGraphicsImageRenderer(bounds: navigation.view.bounds).image { context in
-                navigation.view.layer.render(in: context.cgContext)
-            }
-            let attachment = XCTAttachment(image: image)
-            attachment.name = "Advanced settings \(Int(size.width))x\(Int(size.height))"
-            attachment.lifetime = .keepAlways
-            add(attachment)
         }
         let save = try XCTUnwrap(screen.navigationItem.rightBarButtonItem)
         XCTAssertTrue(save.isEnabled)
