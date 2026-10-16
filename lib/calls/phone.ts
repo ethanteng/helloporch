@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { AccessToken, RoomConfiguration, RoomServiceClient, SipClient, TrackSource } from "livekit-server-sdk";
 import { authorizeCalls, callInput, callJSON, type CallServer } from "./server.ts";
+import { verifyContactApproval } from "./contacts.ts";
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -11,7 +12,7 @@ const dialMarker = "porch.phoneDialStarted";
 // a dial request automatically; a new user attempt must prepare a new session.
 const dialing = new Set<string>();
 
-type Ticket = { id: string; phoneNumber: string; name: string; startBy: number; exp: number };
+type Ticket = { id: string; phoneNumber: string; name: string; startBy: number; exp: number; contactAuthorization?: string };
 type PhoneServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "updateParticipant" | "deleteRoom">;
   sip: Pick<SipClient, "createSipParticipant">;
@@ -74,17 +75,24 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
   const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
 
   if (action === "prepare") {
-    const { phoneNumber, name } = input;
+    const { phoneNumber, name, contactAuthorization } = input;
     if (typeof phoneNumber !== "string" || !numberPattern.test(phoneNumber) ||
         typeof name !== "string" || !name.trim() || name.trim().length > 80) {
       return callJSON({ error: "Enter a phone number with + and the country code, and the person's name." }, 400);
     }
     const numbers = approvedNumbers();
-    if (!numbers || !process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID) {
-      return callJSON({ error: "Phone fallback isn't configured. Set the server's outbound SIP trunk and approved phone numbers." }, 503);
+    if (!process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID || (contactAuthorization === undefined && !numbers)) {
+      return callJSON({ error: "Phone fallback needs an outbound trunk and an approved contact. Ask a caregiver to check setup and save the contact in the updated Porch app." }, 503);
     }
-    if (!numbers.includes(phoneNumber)) return callJSON({ error: "A caregiver needs to approve this phone number on the calling server." }, 403);
-    const ticket: Ticket = { id: randomUUID(), phoneNumber, name: name.trim(), startBy: now + 120, exp: now + 1200 };
+    if (contactAuthorization !== undefined) {
+      if (!verifyContactApproval(contactAuthorization, phoneNumber, new URL(request.url).origin, config, now)) {
+        return callJSON({ error: "This contact's phone approval is invalid or expired. Ask a caregiver to save the contact again." }, 403);
+      }
+    } else if (!numbers?.includes(phoneNumber)) {
+      return callJSON({ error: "A caregiver needs to save and approve this phone contact in Porch." }, 403);
+    }
+    const ticket: Ticket = { id: randomUUID(), phoneNumber, name: name.trim(), startBy: now + 120, exp: now + 1200,
+      ...(typeof contactAuthorization === "string" ? { contactAuthorization } : {}) };
     const room = `porch-phone-${ticket.id}`;
     const token = new AccessToken(config.apiKey, config.apiSecret, { identity: `porch-${ticket.id}`, name: "Porch iPad", ttl: "2m" });
     token.roomConfig = new RoomConfiguration({ maxParticipants: 2, emptyTimeout: 90, departureTimeout: 5 });
@@ -106,7 +114,10 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
 
   const trunk = process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID;
   if (ticket.startBy <= now) return callJSON({ error: "This phone call attempt expired. Start a new call from Porch." }, 410);
-  if (!trunk || !approvedNumbers()?.includes(ticket.phoneNumber)) return callJSON({ error: "Phone fallback is disabled or this number is no longer approved." }, 403);
+  const approved = ticket.contactAuthorization !== undefined
+    ? verifyContactApproval(ticket.contactAuthorization, ticket.phoneNumber, new URL(request.url).origin, config, now)
+    : approvedNumbers()?.includes(ticket.phoneNumber);
+  if (!trunk || !approved) return callJSON({ error: "Phone fallback is disabled or this number is no longer approved." }, 403);
   if (dialing.has(room)) return callJSON({ error: "This phone call is already starting." }, 409);
   dialing.add(room);
   try {

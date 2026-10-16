@@ -448,7 +448,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         isPhoneCall = true
         do {
             try Task.checkCancellation()
-            let data = try await phoneRequest("prepare", body: ["phoneNumber": phoneNumber, "name": contact.name])
+            var details = ["phoneNumber": phoneNumber, "name": contact.name]
+            if !NativeCallSettings.caregiverCode.isEmpty {
+                details["contactAuthorization"] = try await NativeCallSettings.authorizePhone(phoneNumber, server: server)
+            }
+            try Task.checkCancellation()
+            let data = try await phoneRequest("prepare", body: details)
             let join = try JSONDecoder().decode(JoinResponse.self, from: data)
             guard let ticket = join.controlToken, URL(string: join.serverUrl)?.scheme == "wss" else {
                 throw CallError(message: "The calling server returned invalid phone call settings.")

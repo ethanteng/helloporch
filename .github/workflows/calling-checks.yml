@@ -2,9 +2,9 @@ name: Calling server checks
 
 on:
   push:
-    paths: ['app/**', 'lib/calls/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
+    paths: ['app/**', 'lib/calls/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
   pull_request:
-    paths: ['app/**', 'lib/calls/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
+    paths: ['app/**', 'lib/calls/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,5 +22,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: node --check scripts/check-calling.mjs
       - run: npm run typecheck
       - run: npm run build

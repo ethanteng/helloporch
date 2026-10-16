@@ -102,6 +102,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
     private let explanation = UILabel()
     private let initialContact: CallContact?
     private let slot: Int
+    private var saveTask: Task<Void, Never>?
 
     init(slot: Int, contact: CallContact?) {
         self.slot = slot
@@ -227,7 +228,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         addressField.isHidden = useNative || useShortcut
         choose.isHidden = useNative || useShortcut
         if useNative {
-            explanation.text = "Porch always tries the shared room first. The other person joins the same room and mode from another iPad or the server's /call page; app notifications aren't included yet.\n\nIf phone fallback is enabled and nobody joins within 20 seconds, Porch turns off video and rings their regular phone. They don't need the Porch app. Their number must also be approved on your calling server. Carrier charges apply.\n\nChoose Voice or Video for the Porch attempt; phone fallback is always voice only. Configure Native calling server before testing. Saving never places a call. Holding setup prevents accidental edits; it isn't a password lock."
+            explanation.text = "Porch always tries the shared room first. The other person joins the same room and mode from another iPad or the server's /call page; app notifications aren't included yet.\n\nIf phone fallback is enabled and nobody joins within 20 seconds, Porch turns off video and rings their regular phone. They don't need the Porch app. Saving approves their number automatically using the caregiver setup code in Native calling server. An internet connection is needed when saving a phone contact. Carrier charges apply.\n\nChoose Voice or Video for the Porch attempt; phone fallback is always voice only. Saving never places a call. Holding setup prevents accidental edits; it isn't a password lock."
             return
         }
         let instructions = useShortcut
@@ -259,6 +260,7 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
     }
 
     @objc private func save() {
+        guard saveTask == nil else { return }
         do {
             let contact: CallContact
             if methodControl.selectedSegmentIndex == 0 {
@@ -269,13 +271,43 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
                 contact = try CallContact(name: nameField.text ?? "", address: addressField.text ?? "",
                     shortcutName: methodControl.selectedSegmentIndex == 1 ? (shortcutField.text ?? "") : nil)
             }
-            try onSave?(contact)
-            navigationController?.popViewController(animated: true)
+            view.isUserInteractionEnabled = false
+            navigationItem.rightBarButtonItem?.isEnabled = false
+            navigationItem.rightBarButtonItem?.title = "Saving…"
+            saveTask = Task { [weak self] in
+                guard let self else { return }
+                defer {
+                    self.saveTask = nil
+                    self.view.isUserInteractionEnabled = true
+                    self.navigationItem.rightBarButtonItem?.isEnabled = true
+                    self.navigationItem.rightBarButtonItem?.title = "Save"
+                }
+                do {
+                    if let number = contact.phoneNumber {
+                        let server = try NativeCallSettings.load()
+                        _ = try await NativeCallSettings.authorizePhone(number, server: server, refresh: true)
+                    }
+                    try Task.checkCancellation()
+                    try self.onSave?(contact)
+                    self.navigationController?.popViewController(animated: true)
+                } catch {
+                    if !Task.isCancelled { self.showContactError(error) }
+                }
+            }
         } catch {
-            let alert = UIAlertController(title: "Check the contact", message: error.localizedDescription, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
+            showContactError(error)
         }
+    }
+
+    private func showContactError(_ error: Error) {
+        let alert = UIAlertController(title: "Couldn't save the contact", message: error.localizedDescription, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent || navigationController?.isBeingDismissed == true { saveTask?.cancel() }
     }
 
     @objc private func removePerson() {
@@ -295,5 +327,8 @@ final class SetupViewController: UIViewController, CNContactPickerDelegate {
         present(alert, animated: true)
     }
 
-    @objc private func cancel() { navigationController?.popViewController(animated: true) }
+    @objc private func cancel() {
+        saveTask?.cancel()
+        navigationController?.popViewController(animated: true)
+    }
 }
