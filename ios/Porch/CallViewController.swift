@@ -37,7 +37,13 @@ final class CallViewController: UIViewController {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-contact") || ProcessInfo.processInfo.arguments.contains("--preview-six") {
             slots = CallSlots()
-            let names = ProcessInfo.processInfo.arguments.contains("--preview-chinese") ? ["家人", "陳先生", "林小姐", "王阿姨", "李叔叔", "朋友"] : ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
+            let names: [String]
+            switch BedsideText.language {
+            case .traditionalChinese, .cantonese: names = ["家人", "陳先生", "林小姐", "王阿姨", "李叔叔", "朋友"]
+            case .simplifiedChinese: names = ["家人", "陈先生", "林小姐", "王阿姨", "李叔叔", "朋友"]
+            case .spanish: names = ["María", "José", "Ana", "Carlos", "Isabel", "David"]
+            case .english: names = ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
+            }
             for (index, name) in names.enumerated() {
                 try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "preview-person-\(index + 1)", mode: .video)), for: index + 1)
             }
@@ -146,7 +152,7 @@ final class CallViewController: UIViewController {
 
         } else if args.contains("--preview-incoming-video") {
             let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-            let data = try! JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "dropIn", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": args.contains("--preview-chinese") ? "家人" : "A family member"])
+            let data = try! JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "dropIn", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": BedsideText.string("A family member")])
             let call = try! JSONDecoder().decode(FamilyCallRecord.self, from: data)
             present(IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "preview", role: .bedside)), animated: false)
         } else if args.contains("--preview-caregiver") { showUnlockedSetup() }

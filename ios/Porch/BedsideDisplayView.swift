@@ -5,7 +5,10 @@ enum BedsideText {
     static var language: BedsideLanguage {
         guard PorchDevice.experience == .bedside else { return .english }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--preview-chinese") { return .traditionalChinese }
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "--preview-language"), args.count > i + 1,
+           let language = BedsideLanguage(rawValue: args[i + 1]) { return language }
+        if args.contains("--preview-chinese") { return .traditionalChinese }
         #endif
         return BedsidePreferences.load().language
     }
@@ -14,7 +17,7 @@ enum BedsideText {
     }
     static func error(_ description: String) -> String {
         let translated = language.text(description)
-        return language == .traditionalChinese && translated == description ? string("Please ask your caregiver for help, then try again.") : translated
+        return language != .english && translated == description ? string("Please ask your caregiver for help, then try again.") : translated
     }
     static func applyAccessibilityLanguage(to view: UIView) {
         if view is UILabel || view is UIButton { view.accessibilityLanguage = language.speechLanguage }
@@ -145,7 +148,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private var preferences = BedsidePreferences.load()
     private let appearance = UISegmentedControl(items: ["Default", "Dynamic"])
     private let hemisphere = UISegmentedControl(items: ["Northern", "Southern"])
-    private let language = UISegmentedControl(items: ["English", "繁體中文"])
+    private var languageButtons: [BedsideLanguage: UIButton] = [:]
     private let day = UIStepper(), night = UIStepper()
     private let dayLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let nightLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
@@ -158,18 +161,29 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         appearance.accessibilityLabel = "Bedside view"
         hemisphere.selectedSegmentIndex = preferences.hemisphere == .northern ? 0 : 1
         hemisphere.accessibilityLabel = "Season hemisphere"
-        language.selectedSegmentIndex = preferences.language == .traditionalChinese ? 1 : 0
-        language.accessibilityLabel = "Bedside language"
-        language.accessibilityIdentifier = "bedside.language"
-        for control in [appearance, hemisphere, language] {
+        for control in [appearance, hemisphere] {
             control.selectedSegmentTintColor = PorchStyle.accent; control.backgroundColor = PorchStyle.page
             control.setTitleTextAttributes([.foregroundColor: PorchStyle.ink], for: .normal)
             control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
             control.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
             control.addTarget(self, action: #selector(update), for: .valueChanged)
         }
+        let languages = UIStackView()
+        languages.axis = .vertical; languages.spacing = 4
+        languages.accessibilityIdentifier = "bedside.language"
+        for choice in BedsideLanguage.allCases {
+            let button = PorchStyle.button(choice.displayName, symbol: "circle", filled: false)
+            button.contentHorizontalAlignment = .leading
+            button.accessibilityIdentifier = "bedside.language.\(choice.rawValue)"
+            button.accessibilityLanguage = choice.speechLanguage
+            button.addAction(UIAction { [weak self] _ in
+                self?.preferences.language = choice; self?.update()
+            }, for: .touchUpInside)
+            languageButtons[choice] = button
+            languages.addArrangedSubview(button)
+        }
         form.addArrangedSubview(section("Clock view", detail: "Both views always show the current date and time in large, clear text. Default keeps the screen dark. Dynamic brightens with daylight, warms at sunset, and darkens at night, with a sun or moon and seasonal landscape.", views: [appearance]))
-        form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens and spoken drop-in announcements. Caregiver settings and family mode stay in English. 繁體中文 uses Mandarin announcements.", views: [language]))
+        form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens and spoken drop-in announcements. Caregiver settings and family mode stay in English. 繁體中文 and 简体中文 use Mandarin; 廣東話 uses Cantonese.", views: [languages]))
         example.heightAnchor.constraint(equalToConstant: 210).isActive = true
         example.layer.cornerRadius = 20; example.clipsToBounds = true
         previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
@@ -191,7 +205,11 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     @objc private func update() {
         preferences.appearance = appearance.selectedSegmentIndex == 0 ? .default : .dynamic
         preferences.hemisphere = hemisphere.selectedSegmentIndex == 0 ? .northern : .southern
-        preferences.language = language.selectedSegmentIndex == 0 ? .english : .traditionalChinese
+        for (choice, button) in languageButtons {
+            let selected = choice == preferences.language
+            button.configuration?.image = UIImage(systemName: selected ? "checkmark.circle.fill" : "circle")
+            button.accessibilityTraits = selected ? [.button, .selected] : [.button]
+        }
         preferences.dayStart = Int(day.value); preferences.nightStart = Int(night.value)
         func hour(_ value: Int) -> String {
             let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: value))!
