@@ -4,16 +4,20 @@ Landing page for **Porch**, a tablet plus large-button keypad that lets individu
 
 ## Develop
 
-The native iPad calling/keypad prototype lives in [`ios/`](ios/README.md). Open `ios/Porch.xcodeproj` in Xcode. It supports in-app LiveKit voice/video calls as well as the existing FaceTime/Shortcut methods.
+The native iPhone/iPad calling prototype lives in [`ios/`](ios/README.md). Open `ios/Porch.xcodeproj` in Xcode. It supports in-app LiveKit voice/video calls as well as the existing FaceTime/Shortcut methods.
 
 ```sh
 npm install
 npm run dev
 ```
 
+## Bedside and family calling
+
+The universal app now includes family pairing, ordinary incoming calls and approved audio/video drop-in while Mom’s iPad is open. Start with the [family setup guide](ios/FAMILY-SETUP.md) for invitations, the six-digit caregiver PIN, managed storage, permissions and beta limits. iPhone recipients must keep Porch in the foreground in this beta. Existing manual rooms remain available for browser testing.
+
 ## Native voice and video calling prototype
 
-The iPad and browser join a private LiveKit room manually. There is no incoming app-call notification, background calling, account system, or recording in this version. An optional phone fallback rings a regular phone if Porch isn't answered. Each new room is configured for at most two participants. Use a distinct room name for each contact, and use the same voice/video mode on both devices.
+The instructions in this section describe the legacy manual-room flow. The iPad and browser join a private LiveKit room manually. There is no incoming app-call notification, background calling, account system, or recording in this version. An optional phone fallback rings a regular phone if Porch isn't answered. Each new room is configured for at most two participants. Use a distinct room name for each contact, and use the same voice/video mode on both devices.
 
 1. Create a LiveKit Cloud project and get its WebSocket URL, API key, and API secret from its dashboard.
 2. Copy `.env.example` to `.env.local`. Fill in `LIVEKIT_URL` (`wss://…`), `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. Generate a separate `PORCH_CALL_ACCESS_CODE` with `openssl rand -hex 24` and save it in that file too. Never put API credentials in `NEXT_PUBLIC_` variables or in the iPad app.
@@ -51,13 +55,13 @@ To enable real telephone dialing:
 
 Older iPad builds still use `PORCH_PHONE_NUMBERS`, an optional comma-separated list of destinations. Keep it during migration; once all iPads are updated and configured with the caregiver code, it can be removed. Removing it does not disable dialing for approved contacts. To disable new phone calls, remove `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` and redeploy; hangup remains available for active sessions.
 
-Contact approvals are server-signed, bound to one exact phone number and server origin, valid for 30 days, and stored in the iPad Keychain. The iPad renews them as needed using its saved caregiver code, so there is no monthly manual step. The shared calling access code alone cannot authorize new phone contacts. Rotating/removing the caregiver code invalidates existing approvals; configure the new code on the iPads and save contacts again. These stateless approvals survive server restarts without a database. Removing a contact stops calls from that app slot but does not centrally revoke a copied approval before expiry. Per-device revocation and family accounts remain future work.
+Contact approvals are server-signed, bound to one exact phone number and server origin, valid for 30 days, and stored in the iPad Keychain. The iPad renews them as needed using its saved caregiver PIN or legacy setup code, so there is no monthly manual step. The shared calling access code alone cannot authorize new phone contacts. Changing the six-digit PIN preserves approvals. Rotating/removing the long server signing/recovery secret invalidates existing approvals; configure the new code on the iPads and save contacts again. These stateless approvals survive server restarts without a database. Removing a contact stops calls from that app slot but does not centrally revoke a copied approval before expiry. Paired family devices can now be revoked; these legacy stateless phone approvals retain their expiry limitation.
 
 The recipient answers a normal mobile or landline voice call and needs no Porch app. Telephone and LiveKit SIP charges apply. The iPad still needs an internet connection. Native Porch contacts support this fallback; FaceTime/Shortcut handoffs cannot report call outcomes, so they don't offer automatic fallback. Browser guests join Porch calls but do not initiate phone fallback themselves.
 
 Dialing begins only after the iPad joins the voice room. A signed, short-lived control ticket fixes the destination and limits hang-up access to that call. Client tokens have no SIP calling privileges. End Call, backgrounding, no-answer, and a disconnected recipient all trigger room deletion to release the telephone leg. The client retries a failed hangup and shows **Retry ending phone call** if it cannot confirm cleanup. An offline or terminated iPad cannot guarantee immediate remote hangup; server-side calls have a 45-second ring limit and a 15-minute maximum duration. Voicemail can answer a regular call; answering-machine detection isn't configured.
 
-Dial requests are never automatically retried. A participant marker blocks sequential replays, and a process-local guard blocks simultaneous submissions to the same process. Distributed atomic dialing locks, durable call status, rate limits, family/device authorization, and provider-side spending limits are still needed before public use. This remains a trusted-tester prototype. The server forwards the approved phone number to LiveKit and the telephone provider; regular telephone calls do not provide application-level end-to-end encryption.
+Dial requests are never automatically retried. A participant marker blocks sequential replays, and a process-local guard blocks simultaneous submissions to the same process. Distributed atomic SIP dialing locks, durable telephone-call status, abuse rate limits and provider-side spending limits are still needed before public use. Paired devices now have family/role authorization. This remains a trusted-tester prototype. The server forwards the approved phone number to LiveKit and the telephone provider; regular telephone calls do not provide application-level end-to-end encryption.
 
 Phone tests use fake LiveKit service clients and **never place real calls**. Device verification still needed with a configured trunk: saving a new phone number without a Vercel edit, failed/ offline save preserving the old contact, caregiver-code errors, approval renewal, answer Porch before 20 seconds (no telephone call), leave Porch unanswered (one telephone call), camera release and mute preservation, cancel during dialing, busy/no-answer/voicemail, hang up from either end, backgrounding, unavailable server, and recovery after a failed hangup.
 

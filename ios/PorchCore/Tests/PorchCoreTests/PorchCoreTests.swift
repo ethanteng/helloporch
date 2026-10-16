@@ -275,3 +275,40 @@ final class PorchCoreTests: XCTestCase {
     }
 
 }
+
+final class PhoneNormalizationTests: XCTestCase {
+    func testContactsNumbersBecomeE164UsingTheirRegion() throws {
+        for input in ["(415) 867-6937", "4158676937", "1 (415) 867-6937", "+1 415 867 6937"] {
+            XCTAssertEqual(try PhoneNumberNormalization.e164(input, region: "US"), "+14158676937")
+        }
+        XCTAssertEqual(try PhoneNumberNormalization.e164("020 7031 3000", region: "GB"), "+442070313000")
+        XCTAssertEqual(try PhoneNumberNormalization.e164("+44 20 7031 3000", region: "US"), "+442070313000")
+        for invalid in ["911", "not a number", "+1 415 867 6937 ext 42"] {
+            XCTAssertThrowsError(try PhoneNumberNormalization.e164(invalid, region: "US"))
+        }
+    }
+}
+
+final class FamilyModelTests: XCTestCase {
+    func testInvitationCarriesOnlyItsServerAndOneTimeCode() throws {
+        let origin = URL(string: "https://porch.example")!
+        let code = String(repeating: "a", count: 64)
+        let url = FamilyInvitation.url(origin: origin, code: code)
+        let parsed = try FamilyInvitation(url: url)
+        XCTAssertEqual(parsed.origin, origin); XCTAssertEqual(parsed.code, code)
+        for raw in ["https://porch.example/pair?code=\(code)", "porch://pair?server=https://porch.example&code=short", "porch://pair?server=https://porch.example&code=\(code)&server=https://evil.example", "porch://pair?server=http://public.example&code=\(code)", "porch://pair?server=https://porch.example/path&code=\(code)", "porch://user@pair?server=https://porch.example&code=\(code)"] {
+            XCTAssertThrowsError(try FamilyInvitation(url: URL(string: raw)!))
+        }
+    }
+    func testLinkedContactSurvivesPersistenceWithoutChangingPhoneFallback() throws {
+        let key = UUID().uuidString
+        let defaults = UserDefaults(suiteName: key)!
+        defer { defaults.removePersistentDomain(forName: key) }
+        let person = UUID().uuidString.lowercased()
+        let contact = try CallContact(name: "Ethan", nativeCall: NativeCall(room: "paired", mode: .video), phoneNumber: "+14158676937", familyMemberID: person)
+        var slots = CallSlots(); try slots.setContact(contact, for: 3); try slots.save(to: defaults)
+        let loaded = try CallSlots.load(from: defaults).contact(for: 3)
+        XCTAssertEqual(loaded?.familyMemberID, person); XCTAssertEqual(loaded?.phoneNumber, "+14158676937")
+        XCTAssertThrowsError(try CallContact(name: "Ethan", nativeCall: NativeCall(room: "paired", mode: .voice), familyMemberID: "a display name"))
+    }
+}

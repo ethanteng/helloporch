@@ -102,10 +102,10 @@ final class CaregiverTouchKeyboard: UIView {
         system.addAction(UIAction { [weak self] _ in self?.onSystemKeyboard?() }, for: .touchUpInside)
         heading.addArrangedSubview(system)
         rows.addArrangedSubview(heading)
-        let phone = field.keyboardType == .phonePad
+        let phone = field.keyboardType == .phonePad || field.keyboardType == .numberPad
         let layouts: [[String]]
         if phone {
-            layouts = [["1", "2", "3", "4", "5", "6"], ["7", "8", "9", "0", "+", "⌫"]]
+            layouts = field.keyboardType == .numberPad ? [["1", "2", "3", "4", "5"], ["6", "7", "8", "9", "0", "⌫"]] : [["1", "2", "3", "4", "5", "6"], ["7", "8", "9", "0", "+", "⌫"]]
         } else if symbols {
             layouts = [Array("@#$%&*()-_+").map(String.init), Array("[]{}<>^~|\\").map(String.init), Array("/:;!?.,='\"`").map(String.init)]
         } else {

@@ -6,8 +6,10 @@ public struct CallContact: Codable, Equatable {
     public let shortcutName: String?
     public let nativeCall: NativeCall?
     public let phoneNumber: String?
+    public let familyMemberID: String?
 
     public init(name: String, address: String = "", shortcutName: String? = nil) throws {
+        self.familyMemberID = nil
         self.nativeCall = nil
         self.phoneNumber = nil
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,10 +49,12 @@ public struct CallContact: Codable, Equatable {
         self.shortcutName = nil
     }
 
-    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil) throws {
+    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil) throws {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
         guard name.count <= 80 else { throw ValidationError.nameTooLong }
+        if let familyMemberID, UUID(uuidString: familyMemberID) == nil { throw ValidationError.invalidFamilyMember }
+        self.familyMemberID = familyMemberID
         self.name = name
         self.address = ""
         self.shortcutName = nil
@@ -86,10 +90,11 @@ public struct CallContact: Codable, Equatable {
     }
 
     public enum ValidationError: LocalizedError {
-        case missingName, missingShortcutName, invalidAddress, nameTooLong, invalidPhoneNumber
+        case missingName, missingShortcutName, invalidAddress, nameTooLong, invalidPhoneNumber, invalidFamilyMember
 
         public var errorDescription: String? {
             switch self {
+            case .invalidFamilyMember: return "Choose a paired family member."
             case .missingName: return "Enter the person's name."
             case .nameTooLong: return "Use a name with 80 characters or fewer."
             case .invalidPhoneNumber: return "Enter the fallback phone number with + and the country code, such as +1 415 555 0123. Extensions aren't supported."

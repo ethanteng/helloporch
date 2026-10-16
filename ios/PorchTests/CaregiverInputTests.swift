@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import PorchCore
 @testable import Porch
 
 final class CaregiverInputTests: XCTestCase {
@@ -99,6 +100,40 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(contrast(.white, PorchStyle.accent), 4.5)
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.nightSecondary, PorchStyle.night), 4.5)
         XCTAssertEqual(field.textColor, PorchStyle.ink)
+    }
+
+
+    @MainActor func testPINKeyboardProvidesDigitsWithoutPhoneSymbols() {
+        let field = UITextField()
+        field.keyboardType = .numberPad
+        field.isSecureTextEntry = true
+        let keyboard = CaregiverTouchKeyboard()
+        keyboard.field = field
+        XCTAssertNil(buttons(in: keyboard).first { $0.title(for: .normal) == "+" })
+        for key in ["0", "1", "2", "3", "4", "5"] {
+            buttons(in: keyboard).first { $0.title(for: .normal) == key }!.sendActions(for: .touchUpInside)
+        }
+        XCTAssertEqual(field.text, "012345", "PINs must preserve a leading zero")
+    }
+
+    @MainActor func testIncomingCallControlsRemainReachableOnSmallPhone() throws {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let data = try JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "call", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": "A family member with a long display name"])
+        let call = try JSONDecoder().decode(FamilyCallRecord.self, from: data)
+        for size in [CGSize(width: 320, height: 568), CGSize(width: 568, height: 320)] {
+            let incoming = IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .family))
+            incoming.loadViewIfNeeded()
+            incoming.view.frame = CGRect(origin: .zero, size: size)
+            incoming.view.layoutIfNeeded()
+            for button in buttons(in: incoming.view) {
+                let frame = button.convert(button.bounds, to: incoming.view)
+                XCTAssertGreaterThanOrEqual(frame.height, 64)
+                XCTAssertGreaterThanOrEqual(frame.minY, 0)
+                XCTAssertLessThanOrEqual(frame.maxY, size.height)
+                XCTAssertGreaterThanOrEqual(frame.minX, 0)
+                XCTAssertLessThanOrEqual(frame.maxX, size.width)
+            }
+        }
     }
 
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {

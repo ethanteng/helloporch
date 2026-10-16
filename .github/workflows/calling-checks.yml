@@ -2,9 +2,9 @@ name: Calling server checks
 
 on:
   push:
-    paths: ['app/**', 'lib/calls/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
+    paths: ['app/**', 'lib/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
   pull_request:
-    paths: ['app/**', 'lib/calls/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
+    paths: ['app/**', 'lib/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
   workflow_dispatch:
 
 permissions:

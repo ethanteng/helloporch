@@ -3,7 +3,7 @@ import AVFoundation
 import LiveKit
 import PorchCore
 
-/// Foreground, manually joined prototype. The server owns all API credentials.
+/// Foreground LiveKit media for paired calls, legacy rooms and phone fallback.
 final class NativeCallViewController: UIViewController, RoomDelegate {
     private let contact: CallContact
     private let call: NativeCall
@@ -30,6 +30,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var mediaReady = false
     private let ringback = PorchRingback()
     private let fallbackSeconds = CallPreferences.fallbackSeconds()
+    private var familySession: FamilyCallSession?
+    private var familyAccepted = false
+    private var beginWithPhoneFallback = false
 
     init(contact: CallContact, call: NativeCall, server: NativeCallServer) {
         self.contact = contact
@@ -38,6 +41,23 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
         isModalInPresentation = true
+    }
+
+    static func paired(_ session: FamilyCallSession, contact original: CallContact? = nil) throws -> NativeCallViewController {
+        let call = try NativeCall(room: "paired-\(session.call.id.prefix(8))", mode: session.call.mode)
+        let contact = try CallContact(name: session.peerName, nativeCall: call, phoneNumber: original?.phoneNumber)
+        let server = try NativeCallServer(url: session.credential.origin.absoluteString, accessCode: session.credential.credential)
+        let controller = NativeCallViewController(contact: contact, call: call, server: server)
+        controller.familySession = session
+        controller.familyAccepted = session.call.state == "accepted"
+        return controller
+    }
+
+    static func phoneFallback(_ contact: CallContact) throws -> NativeCallViewController {
+        guard let call = contact.nativeCall else { throw CallError(message: "Choose a Porch contact.") }
+        let controller = NativeCallViewController(contact: contact, call: call, server: try NativeCallSettings.loadForPhone())
+        controller.beginWithPhoneFallback = true
+        return controller
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(contact:call:server:)") }
@@ -130,7 +150,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         ])
         // This first version intentionally ends when leaving the foreground.
         NotificationCenter.default.addObserver(self, selector: #selector(endCall), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        connectionTask = Task { await connect() }
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
+        connectionTask = Task { if beginWithPhoneFallback { await switchToPhone() } else { await connect() } }
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -162,6 +183,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     private func connect() async {
         do {
+            let join: JoinResponse
+            if let session = familySession {
+                let response = try await session.service.send("joinCall", ["callID": session.call.id])
+                guard let token = response.token, let url = response.serverUrl else { throw CallError(message: "The call invitation is no longer valid.") }
+                join = JoinResponse(token: token, serverUrl: url, controlToken: nil)
+            } else {
             var request = URLRequest(url: server.tokenURL)
             request.httpMethod = "POST"
             request.timeoutInterval = 20
@@ -177,7 +204,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                     ?? "Couldn't reach the calling server. Check the server address and try again."
                 throw CallError(message: message)
             }
-            let join = try JSONDecoder().decode(JoinResponse.self, from: data)
+            join = try JSONDecoder().decode(JoinResponse.self, from: data)
+            }
             guard URL(string: join.serverUrl)?.scheme == "wss" else {
                 throw CallError(message: "The calling server returned an invalid LiveKit address.")
             }
@@ -194,7 +222,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             try Task.checkCancellation()
             try await room.connect(url: join.serverUrl, token: join.token)
             try Task.checkCancellation()
-            try await room.localParticipant.setMicrophone(enabled: true)
+            #if DEBUG && targetEnvironment(simulator)
+            let microphoneEnabled = !ProcessInfo.processInfo.arguments.contains("--family-silent")
+            #else
+            let microphoneEnabled = true
+            #endif
+            try await room.localParticipant.setMicrophone(enabled: microphoneEnabled)
+            microphoneButton.configuration?.title = microphoneEnabled ? "Mute" : "Unmute"
             try Task.checkCancellation()
             if call.mode == .video { try await room.localParticipant.setCamera(enabled: true) }
             try Task.checkCancellation()
@@ -203,10 +237,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             cameraButton.isEnabled = true
             refresh()
             waitTask = Task { [weak self] in
-                let seconds: UInt64 = self?.contact.phoneNumber == nil ? 90 : UInt64(self?.fallbackSeconds ?? CallPreferences.defaultFallbackSeconds)
+                let seconds: UInt64 = self?.familyAccepted == true ? 30 : self?.contact.phoneNumber == nil ? (self?.familySession == nil ? 90 : 45) : UInt64(self?.fallbackSeconds ?? CallPreferences.defaultFallbackSeconds)
                 do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }
                 guard let self, !self.hasConnectedPeer else { return }
-                if self.contact.phoneNumber != nil {
+                if self.contact.phoneNumber != nil && !self.familyAccepted {
                     self.fallbackTask = Task { await self.switchToPhone() }
                 } else {
                     self.finish(message: "No one joined. Returning to the clock…")
@@ -214,7 +248,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
         } catch {
             if Task.isCancelled || isEnding { return }
-            if contact.phoneNumber != nil, !hasConnectedPeer {
+            if contact.phoneNumber != nil, !hasConnectedPeer, !familyAccepted {
                 fallbackTask = Task { await switchToPhone() }
                 return
             }
@@ -250,11 +284,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             return
         }
         if !peers.isEmpty { hasConnectedPeer = true; waitTask?.cancel(); ringback.stop() }
-        else if mediaReady && !hasConnectedPeer && !isSwitchingToPhone { ringback.start() }
+        else if mediaReady && !hasConnectedPeer && !isSwitchingToPhone && !familyAccepted { ringback.start() }
         statusLabel.text = peers.isEmpty
             ? "Waiting for \(contact.name)…\nJoin room \(call.room) in \(call.mode.rawValue) mode."
             : (mediaReady ? "\(call.mode == .voice ? "Voice" : "Video") call connected" : "Connecting audio…")
-        if peers.isEmpty, contact.phoneNumber != nil {
+        if peers.isEmpty, familySession != nil { statusLabel.text = familyAccepted ? "Connecting with \(contact.name)…" : "Calling \(contact.name) on Porch…" }
+        if peers.isEmpty, contact.phoneNumber != nil, !familyAccepted {
             statusLabel.text = "Trying \(contact.name) on Porch…\nTheir phone will ring if Porch isn't answered."
         }
         if call.mode == .video {
@@ -263,6 +298,21 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             placeholder.isHidden = remoteTrack != nil
             localVideo.track = room.localParticipant.videoTracks.first { !$0.isMuted }?.track as? VideoTrack
             localVideo.isHidden = localVideo.track == nil
+        }
+    }
+
+    @objc private func familyChanged() {
+        guard let session = familySession, let state = FamilyCoordinator.shared.state, !isEnding, !isSwitchingToPhone else { return }
+        guard let call = state.call, call.id == session.call.id, call.state != "ended" else {
+            finish(message: state.call?.reason ?? "Call ended. Returning to Porch…"); return
+        }
+        if call.state == "accepted", !familyAccepted {
+            familyAccepted = true; waitTask?.cancel(); ringback.stop(); refresh()
+            waitTask = Task { [weak self] in
+                do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { return }
+                guard let self, !self.hasConnectedPeer else { return }
+                self.finish(message: "Couldn't connect the call. Please try again.")
+            }
         }
     }
 
@@ -316,6 +366,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             await fallbackTask?.value
             await controlTask?.value
             await room.disconnect()
+            let family = familySession; familySession = nil
+            await family?.end()
             remoteVideo.track = nil
             localVideo.track = nil
             if let ticket = phoneControlToken {
@@ -430,11 +482,46 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     private func switchToPhone() async {
-        guard let phoneNumber = contact.phoneNumber, !isEnding, !hasFailed, !hasConnectedPeer else { return }
+        guard let phoneNumber = contact.phoneNumber, !isEnding, !hasFailed, !hasConnectedPeer, !familyAccepted else { return }
+        guard await AVCaptureDevice.requestAccess(for: .audio) else {
+            hasFailed = true; ringback.stop()
+            statusLabel.text = "Microphone access is required."
+            placeholder.text = "Allow Porch's microphone in Settings to make a phone call."
+            endButton.configuration?.title = "Back to clock"
+            return
+        }
         await controlTask?.value
         guard !Task.isCancelled, !isEnding, !hasConnectedPeer else { return }
         // Prefer a Porch answer delivered just as the fallback timer fires.
         guard room.remoteParticipants.isEmpty else { refresh(); return }
+        if let session = familySession {
+            isSwitchingToPhone = true
+            do {
+                let response = try await session.service.send("fallback", ["callID": session.call.id])
+                familySession = nil
+                FamilyCoordinator.shared.update(response)
+            } catch {
+                isSwitchingToPhone = false
+                if (error as? FamilyServiceError)?.code == "answered" {
+                    familyAccepted = true; waitTask?.cancel()
+                    if !mediaReady { finish(message: "They answered Porch, but this device couldn't connect. Please try again.") }
+                    else {
+                        waitTask = Task { [weak self] in
+                            do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { return }
+                            guard let self, !self.hasConnectedPeer else { return }
+                            self.finish(message: "Couldn't finish connecting the Porch call.")
+                        }
+                    }
+                } else {
+                    hasFailed = true; ringback.stop()
+                    statusLabel.text = "Couldn't switch to their phone."
+                    placeholder.text = error.localizedDescription
+                    endButton.configuration?.title = "Back to clock"
+                }
+                return
+            }
+        }
+        guard !Task.isCancelled, !isEnding else { return }
         let microphoneEnabled = !mediaReady || room.localParticipant.isMicrophoneEnabled()
         isSwitchingToPhone = true
         ringback.stop()
@@ -449,6 +536,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         room = Room()
         room.add(delegate: self)
         await porchRoom.disconnect()
+        let family = familySession; familySession = nil
+        await family?.end()
         remoteVideo.track = nil
         localVideo.track = nil
         localVideo.isHidden = true

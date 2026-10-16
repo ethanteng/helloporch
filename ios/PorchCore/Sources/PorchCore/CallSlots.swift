@@ -22,9 +22,9 @@ public struct CallSlots: Equatable {
         contacts[slot - 1] = try contact.map {
             if let native = $0.nativeCall {
                 guard $0.shortcutName == nil, $0.address.isEmpty else { throw ValidationError.invalidSavedSlots }
-                return try CallContact(name: $0.name, nativeCall: native, phoneNumber: $0.phoneNumber)
+                return try CallContact(name: $0.name, nativeCall: native, phoneNumber: $0.phoneNumber, familyMemberID: $0.familyMemberID)
             }
-            guard $0.phoneNumber == nil else { throw ValidationError.invalidSavedSlots }
+            guard $0.phoneNumber == nil, $0.familyMemberID == nil else { throw ValidationError.invalidSavedSlots }
             return try CallContact(name: $0.name, address: $0.address, shortcutName: $0.shortcutName)
         }
     }

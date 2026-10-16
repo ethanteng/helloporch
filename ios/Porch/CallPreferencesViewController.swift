@@ -43,6 +43,9 @@ final class PorchRingback {
     private var player: AVAudioPlayer?
 
     func start() {
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--family-silent") { return }
+        #endif
         guard player == nil else { return }
         guard let audio = try? AVAudioPlayer(data: Self.wave()) else { return }
         audio.numberOfLoops = -1

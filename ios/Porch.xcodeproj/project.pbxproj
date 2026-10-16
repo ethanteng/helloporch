@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A00000000000000000000022 = {isa = PBXBuildFile; fileRef = B00000000000000000000022; };
+        A00000000000000000000021 = {isa = PBXBuildFile; fileRef = B00000000000000000000021; };
+        A00000000000000000000020 = {isa = PBXBuildFile; fileRef = B00000000000000000000020; };
         A00000000000000000000012 = {isa = PBXBuildFile; fileRef = B00000000000000000000014; };
         A00000000000000000000011 /* CaregiverInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012; };
 		A00000000000000000000010 /* CaregiverUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* CaregiverUI.swift */; };
@@ -22,6 +25,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        B00000000000000000000022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PorchContainerViewController.swift; sourceTree = "<group>"; };
+        B00000000000000000000021 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyViewControllers.swift; sourceTree = "<group>"; };
+        B00000000000000000000020 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyService.swift; sourceTree = "<group>"; };
         B00000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPreferencesViewController.swift; sourceTree = "<group>"; };
         B00000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaregiverInputTests.swift; sourceTree = "<group>"; };
         B00000000000000000000013 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PorchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -71,6 +77,9 @@
 				B00000000000000000000009 /* NativeCallSettings.swift */,
 				B00000000000000000000010 /* NativeCallViewController.swift */,
 				B00000000000000000000011 /* CaregiverUI.swift */,
+                B00000000000000000000022,
+                B00000000000000000000021,
+                B00000000000000000000020,
                 B00000000000000000000014 /* CallPreferencesViewController.swift */,
 				B00000000000000000000006 /* Info.plist */,
 			);
@@ -184,6 +193,9 @@
 				A00000000000000000000007 /* NativeCallSettings.swift in Sources */,
 				A00000000000000000000008 /* NativeCallViewController.swift in Sources */,
 				A00000000000000000000010 /* CaregiverUI.swift in Sources */,
+                A00000000000000000000022,
+                A00000000000000000000021,
+                A00000000000000000000020,
                 A00000000000000000000012 /* CallPreferencesViewController.swift in Sources */,
 				A00000000000000000000003 /* SetupViewController.swift in Sources */,
 			);
@@ -238,7 +250,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -262,12 +274,12 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
-        100000000000000000000005 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Porch.app/Porch"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.ethanteng.helloporch.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 2; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 7U9T57JPF7;}; };
-        100000000000000000000006 = {isa = XCBuildConfiguration; name = Release; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Porch.app/Porch"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.ethanteng.helloporch.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 2; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 7U9T57JPF7;}; };
+        100000000000000000000005 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Porch.app/Porch"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.ethanteng.helloporch.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 7U9T57JPF7;}; };
+        100000000000000000000006 = {isa = XCBuildConfiguration; name = Release; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Porch.app/Porch"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.ethanteng.helloporch.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 7U9T57JPF7;}; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */

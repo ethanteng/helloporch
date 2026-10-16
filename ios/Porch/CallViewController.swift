@@ -73,7 +73,7 @@ final class CallViewController: UIViewController {
         callButton.accessibilityIdentifier = "clock.call"
         callButton.addTarget(self, action: #selector(showPeople), for: .touchUpInside)
         let caregiver = UIButton(type: .system)
-        caregiver.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        caregiver.setImage(UIImage(systemName: "gearshape", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)), for: .normal)
         caregiver.tintColor = PorchStyle.nightSecondary
         caregiver.accessibilityLabel = "Caregiver mode"
         caregiver.accessibilityHint = "Touch and hold to manage contacts and settings."
@@ -246,6 +246,7 @@ final class CallViewController: UIViewController {
             return
         }
         if let native = contact.nativeCall {
+            if let memberID = contact.familyMemberID { startFamilyCall(contact, memberID: memberID, mode: native.mode); return }
             do {
                 let server = try NativeCallSettings.load()
                 guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
@@ -277,6 +278,30 @@ final class CallViewController: UIViewController {
         }
     }
 
+    private func startFamilyCall(_ contact: CallContact, memberID: String, mode: NativeCall.Mode) {
+        guard PorchDevice.credential(for: .bedside) != nil, !opening else {
+            showError("Porch isn't ready", message: "Check Family & drop-in in caregiver mode, then try again."); return
+        }
+        guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
+        opening = true; refreshCallButton()
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.opening = false; self.refreshCallButton() }
+            do {
+                let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
+                guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
+                self.present(try NativeCallViewController.paired(session, contact: contact), animated: true)
+            } catch {
+                // A lost response may still have created a Porch call. Only a
+                // confirmed offline result permits an unpaired phone handoff.
+                if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
+                    do { self.present(try NativeCallViewController.phoneFallback(contact), animated: true) }
+                    catch { self.showError("Couldn't call \(contact.name)", message: error.localizedDescription) }
+                } else { self.showError("Couldn't call \(contact.name)", message: error.localizedDescription) }
+            }
+        }
+    }
+
     @objc private func heldSetup(_ gesture: UILongPressGestureRecognizer) {
         if gesture.state == .began { showSetup() }
     }
@@ -286,6 +311,16 @@ final class CallViewController: UIViewController {
     @objc private func accessibleSetup() -> Bool { showSetup(); return true }
 
     private func showSetup() {
+        guard presentedViewController == nil else { return }
+        if PorchDevice.credential(for: .bedside) != nil {
+            let gate = CaregiverPINViewController()
+            gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
+            present(PorchStyle.navigation(gate), animated: true); return
+        }
+        showUnlockedSetup()
+    }
+
+    private func showUnlockedSetup() {
         guard presentedViewController == nil else { return }
         trigger.resetKeys()
         resignFirstResponder()

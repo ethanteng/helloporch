@@ -1,8 +1,12 @@
-# Porch for iPad
+# Porch for iPhone and iPad
 
 Native iPad prototype: configure up to **six people**, each using an in-app **Porch voice/video call**, a named Apple Shortcut, or a direct FaceTime contact. Press their number (**1–6**) on a connected keypad to start the call. Tap **Call someone** on the clock to use the on-screen contact buttons. The Next.js website and LiveKit token endpoint live at the repository root.
 
-## LiveKit voice and video calls
+## Family calling and drop-in
+
+Follow the [bedside and family beta guide](FAMILY-SETUP.md) to pair devices with private invitations, configure the six-digit caregiver PIN and approve audio/video drop-in. The same app runs on iPhone and iPad. Bedside mode keeps the large dark clock; family mode provides incoming calls and approved drop-in while Porch is open. No server/shared calling code is needed for family recipients. Background or lock-screen calling is not implemented.
+
+## Legacy manual-room LiveKit calls
 
 Follow the root [calling setup](../README.md#native-voice-and-video-calling-prototype) to configure the server. The LiveKit Swift SDK is pinned to 2.17.0 through Swift Package Manager; Xcode downloads it and its WebRTC dependency on first build.
 
@@ -14,7 +18,7 @@ Choose a keypad slot, select **Porch**, enter the person's name and a shared roo
 - Video requests microphone and camera access, shows the remote video and a local preview, and provides camera on/off. Camera denial explains how to grant permission or change the contact to Voice.
 - Both modes provide mute/unmute and a large End call button. End disconnects and releases media before returning to the clock. If nobody joins within 90 seconds and no phone fallback is configured, Porch returns automatically. When the remote person leaves, Porch also ends the call.
 - Network interruptions show a reconnecting state; a final disconnect returns to the clock. An initial failure leaves an explanation and a Back to your people button.
-- The app ends its call on entering the background or locking the iPad. CallKit, PushKit, incoming calls, and background audio are not implemented.
+- The app ends its call on entering the background or locking the iPad. CallKit, PushKit and background audio are not implemented. Paired incoming calls work while Porch is open.
 - Native calls do not leave Porch, so the FaceTime-specific Guided Access block does not apply. Verify permissions, controls, and recovery in Guided Access on the actual iPad before use.
 - The shared code is for trusted prototype testers. It grants access to all prototype rooms. Family/device authentication and per-person authorization are still required for a public product. There is no recording or application-level end-to-end encryption configuration.
 
@@ -45,7 +49,7 @@ Only configured people appear on the call screen. Unassigned keys do not call an
 
 Porch opens in a dark bedside mode with a large local date/time display and a small **Call someone** button. Press a configured keypad number directly from the clock, or tap the button to choose a person. Calls return to the clock when ended. The display stays awake while Porch is active; normal iPad brightness still controls its backlight.
 
-Hold the settings icon in the top-right corner for 1.5 seconds to enter the light **Caregiver mode**. Choose a number to edit its contact, or open **Calling connection** for server and access-code setup. **Back to clock** returns to bedside mode. Removing a person never renumbers the other slots. The hold prevents accidental edits; it isn't authentication. VoiceOver offers an **Open caregiver mode** custom action.
+Hold the gear in the top-right corner for 1.5 seconds to enter the light **Caregiver mode**. Paired bedside devices require the six-digit caregiver PIN. Choose a number to edit its contact, or open **Calling connection** for server and access-code setup. **Back to clock** returns to bedside mode. Removing a person never renumbers the other slots. Before pairing, the hold prevents accidental edits. After pairing, the PIN is verified by the server before settings open. VoiceOver offers an **Open caregiver mode** custom action.
 
 Caregiver fields use explicit, high-contrast labels and a keyboard-aware scrolling form. Porch does not reclaim first-responder status while setup or a call is presented. A connected hardware keypad can suppress the iPad keyboard; caregiver forms automatically offer a built-in touch keyboard when a keyboard is detected, and an **On-screen keyboard** button is always available. It supports letters, numbers, symbols, paste, deletion, next field, and Done; **Use iPad keyboard** switches back to the system keyboard. Input is local and keypad digits typed during setup never start calls.
 
@@ -65,7 +69,7 @@ For a dedicated iPad, configure Guided Access in iPad Settings → Accessibility
 
 App: **Porch Family Calling**, App Store Connect ID **6822602923**. Bundle ID: **com.ethanteng.helloporch**. Apple team: **7U9T57JPF7**.
 
-**iPad build** runs the core and caregiver keyboard/focus tests and compiles the simulator and iPad release app without signing credentials. **Upload iPad to TestFlight** is manually dispatched, and tests, archives, signs, validates, and uploads the app. It does not publish to the App Store or invite testers.
+**iPhone and iPad build** runs the core and caregiver keyboard/focus tests and compiles the simulator and iPad release app without signing credentials. **Upload Porch to TestFlight** is manually dispatched, and tests, archives, signs, validates, and uploads the app. It does not publish to the App Store or invite testers.
 
 Configure these encrypted GitHub secrets in the `testflight` environment or repository:
 
@@ -94,13 +98,13 @@ xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-Tests cover keypad and top-row routing for all six numbers, six-slot persistence with both calling methods, empty and out-of-range slots, clearing without renumbering, migration of existing FaceTime/shortcut contacts into key 1, malformed saved data, shortcut URL encoding (including Unicode and query syntax), contact validation, held-key suppression, and the cooldown shared across people and touch input. UIKit tests also check touch-keyboard insertion and selection replacement, phone entry, caregiver focus across app activation, and text contrast. CI runs them on an iPad simulator and compiles both device and simulator builds. A real iPad is required to verify an actual FaceTime call through Shortcuts.
+Tests cover keypad and top-row routing for all six numbers, six-slot persistence with both calling methods, empty and out-of-range slots, clearing without renumbering, migration of existing FaceTime/shortcut contacts into key 1, malformed saved data, shortcut URL encoding (including Unicode and query syntax), contact validation, held-key suppression, and the cooldown shared across people and touch input. UIKit tests also check touch-keyboard insertion and selection replacement, phone entry, caregiver focus across app activation, and text contrast. CI runs them on iPhone and iPad simulators and compiles a universal device and simulator build. A real iPad is required to verify an actual FaceTime call through Shortcuts.
 
 Device checks: configure all six people with mixed calling methods, press each key and its matching button, clear a middle slot without changing other key assignments, relaunch and verify all six settings, run the shortcut directly, run it from Porch using both keypad and touch, first-run permissions, missing/renamed shortcut, Shortcuts uninstalled, successful call, cancellation, no answer, offline use, FaceTime disabled, held/repeated keys, return to Porch, relaunch persistence, rotation, large text, and the intended keypad/charging setup.
 
 ## Privacy
 
-For each configured slot, the display name and either native room/mode, shortcut name, or selected FaceTime address are saved locally in UserDefaults. The native server address is also local; the calling access code, caregiver setup code, and signed phone approvals are stored in Keychain. Saving a phone contact sends its number to the server to obtain an approval; contact names remain local until a call is prepared. For native calls, Porch sends the room, mode, and a generic “Porch iPad” participant name to its token endpoint, then LiveKit handles audio/video transport and connection metadata. No call recording is configured. Review LiveKit's data handling and update App Store privacy disclosures before distributing this version. The privacy manifest declares local preferences and elapsed-time measurement for cooldown; LiveKit includes its own manifest.
+The [family guide](FAMILY-SETUP.md#server-and-privacy) describes shared pairing, permission, PIN and call-signaling storage. For legacy manual rooms and each configured slot, the display name and either native room/mode, shortcut name, or selected FaceTime address are saved locally in UserDefaults. The native server address is also local; the calling access code, caregiver setup code, and signed phone approvals are stored in Keychain. Saving a phone contact sends its number to the server to obtain an approval; contact names remain local until a call is prepared. For native calls, Porch sends the room, mode, and a generic “Porch iPad” participant name to its token endpoint, then LiveKit handles audio/video transport and connection metadata. No call recording is configured. Review LiveKit's data handling and update App Store privacy disclosures before distributing this version. The privacy manifest declares local preferences and elapsed-time measurement for cooldown; LiveKit includes its own manifest.
 
 In Shortcut mode, only the shortcut name is passed to Shortcuts; the recipient is configured there. In direct FaceTime mode, the Contacts picker gives access only to the selection, without full address-book permission, and the selected address is passed to FaceTime. FaceTime handles media and permissions for those calls. Porch has no advertising, tracking, or analytics integration.
 
