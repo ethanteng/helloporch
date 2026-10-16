@@ -66,6 +66,7 @@ enum PorchStyle {
 /// Input stays local and uses UITextField's selection, insertion and deletion behavior.
 final class CaregiverTouchKeyboard: UIView {
     weak var field: UITextField? { didSet { rebuild() } }
+    var hardwareKeyboardConnected = false
     var onDone: (() -> Void)?
     var onNext: (() -> Void)?
     var onSystemKeyboard: (() -> Void)?
@@ -96,7 +97,7 @@ final class CaregiverTouchKeyboard: UIView {
         let heading = UIStackView(arrangedSubviews: [PorchStyle.label(field.accessibilityLabel ?? "Touch keyboard", size: 15), UIView()])
         heading.alignment = .center
         let system = UIButton(type: .system)
-        system.setTitle(UIDevice.current.userInterfaceIdiom == .phone ? "Use iPhone keyboard" : "Use iPad keyboard", for: .normal)
+        system.setTitle(hardwareKeyboardConnected ? "Keyboard help" : (UIDevice.current.userInterfaceIdiom == .phone ? "Use iPhone keyboard" : "Use iPad keyboard"), for: .normal)
         system.accessibilityIdentifier = "caregiver.touchKeyboard.useNative"
         system.tintColor = PorchStyle.accent
         system.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
@@ -160,7 +161,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     private let keyboardButton = PorchStyle.button("Porch keyboard", symbol: "square.grid.3x3", filled: false)
     private let nativeKeyboardButton = PorchStyle.button(UIDevice.current.userInterfaceIdiom == .phone ? "iPhone keyboard" : "iPad keyboard", symbol: "keyboard", filled: false)
     private let keyboardFooter = UIStackView()
-    private let hardwareHint = PorchStyle.label("If your keypad hides the iPad keyboard, tap the keyboard button in the iPad's bottom bar, then Show Keyboard. Porch keyboard is also available.", size: 14)
+    private let hardwareHint = PorchStyle.label("Your keypad can hide the iPad keyboard. Disconnect it during setup to use the iPad keyboard, or choose Porch keyboard to keep the keypad connected.", size: 15)
     private var keyboardControlsEnabled = true
     private var hardwareKeyboardConnected = GCKeyboard.coalesced != nil
     private var fields: [UITextField] = []
@@ -185,9 +186,9 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         keyboard.isHidden = true
         keyboard.onDone = { [weak self] in self?.view.endEditing(true) }
         keyboard.onNext = { [weak self] in self?.nextField() }
-        keyboard.onSystemKeyboard = { [weak self] in self?.showSystemKeyboard() }
+        keyboard.onSystemKeyboard = { [weak self] in self?.requestSystemKeyboard() }
         keyboardButton.addTarget(self, action: #selector(showTouchKeyboard), for: .touchUpInside)
-        nativeKeyboardButton.addTarget(self, action: #selector(showSystemKeyboard), for: .touchUpInside)
+        nativeKeyboardButton.addTarget(self, action: #selector(requestSystemKeyboard), for: .touchUpInside)
         keyboardButton.accessibilityIdentifier = "caregiver.porchKeyboard"
         nativeKeyboardButton.accessibilityIdentifier = "caregiver.nativeKeyboard"
         for button in [nativeKeyboardButton, keyboardButton] {
@@ -200,6 +201,8 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         let options = UIStackView(arrangedSubviews: [nativeKeyboardButton, keyboardButton])
         options.distribution = .fillEqually
         keyboardFooter.axis = .vertical; keyboardFooter.spacing = 4
+        keyboardFooter.isLayoutMarginsRelativeArrangement = true
+        keyboardFooter.directionalLayoutMargins = .init(top: 0, leading: 16, bottom: 8, trailing: 16)
         keyboardFooter.accessibilityIdentifier = "caregiver.keyboardOptions"
         hardwareHint.textAlignment = .center; hardwareHint.isHidden = true
         keyboardFooter.addArrangedSubview(options); keyboardFooter.addArrangedSubview(hardwareHint)
@@ -227,8 +230,18 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardConnected), name: .GCKeyboardDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDisconnected), name: .GCKeyboardDidDisconnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(scrollToField), name: UIResponder.keyboardDidShowNotification, object: nil)
+        updateKeyboardUI()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    #if DEBUG
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if ProcessInfo.processInfo.arguments.contains("--preview-keyboard-help") {
+            DispatchQueue.main.async { [weak self] in self?.requestSystemKeyboard() }
+        }
+    }
+    #endif
 
     func hideKeyboardControl() { setKeyboardControlVisible(false) }
     func setKeyboardControlVisible(_ visible: Bool) { keyboardControlsEnabled = visible; updateKeyboardUI() }
@@ -310,7 +323,9 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     private func updateKeyboardUI() {
         let customVisible = keyboardControlsEnabled && useTouchKeyboard && activeField != nil
         keyboard.isHidden = !customVisible
+        keyboard.hardwareKeyboardConnected = hardwareKeyboardConnected
         keyboard.field = customVisible ? activeField : nil
+        nativeKeyboardButton.configuration?.title = hardwareKeyboardConnected ? "Keyboard help" : (UIDevice.current.userInterfaceIdiom == .phone ? "iPhone keyboard" : "iPad keyboard")
         keyboardFooter.isHidden = !keyboardControlsEnabled || customVisible
         hardwareHint.isHidden = !hardwareKeyboardConnected || useTouchKeyboard || activeField == nil || UIDevice.current.userInterfaceIdiom != .pad
     }
@@ -329,6 +344,34 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         hardwareKeyboardConnected = true; updateKeyboardUI()
     }
     @objc private func keyboardDisconnected() { hardwareKeyboardConnected = false; updateKeyboardUI() }
+
+    @objc private func requestSystemKeyboard() {
+        guard keyboardControlsEnabled else { return }
+        guard hardwareKeyboardConnected else { showSystemKeyboard(); return }
+        guard presentedViewController == nil else { return }
+        let target = activeField ?? fields.first(where: isVisible)
+        let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
+        let operatingSystem = UIDevice.current.userInterfaceIdiom == .phone ? "iOS" : "iPadOS"
+        let help = UIAlertController(title: "\(device) keyboard with a keypad", message: "\(operatingSystem) can hide the native keyboard while a physical keypad is connected. If there is no system keyboard control, disconnect the keypad during setup. Porch cannot force the native keyboard open.\n\nTo type while keeping the keypad connected, use Porch keyboard.\n\nIf Guided Access is on, pause it and enable Software Keyboards in Session Settings (or Options).", preferredStyle: .alert)
+        help.view.accessibilityIdentifier = "caregiver.keyboardHelp"
+        for (title, mode) in [("Use Porch keyboard", true), ("Try \(device) keyboard", false)] {
+            help.addAction(UIAlertAction(title: title, style: .default) { [weak self, weak target, weak help] _ in
+                let restore = { [weak self, weak target] in
+                    guard let self else { return }
+                    self.activeField = target
+                    if mode { self.showTouchKeyboard() } else { self.showSystemKeyboard() }
+                }
+                if let help { help.dismiss(animated: false, completion: restore) }
+                else { restore() }
+            })
+        }
+        help.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak target, weak help] _ in
+            let restore = { [weak target] in _ = target?.becomeFirstResponder() }
+            if let help { help.dismiss(animated: false, completion: restore) }
+            else { restore() }
+        })
+        present(help, animated: true)
+    }
 
     @objc private func showSystemKeyboard() {
         guard keyboardControlsEnabled else { return }

@@ -121,6 +121,7 @@ final class CaregiverInputTests: XCTestCase {
         let name = UITextField(), phone = UITextField(); phone.keyboardType = .phonePad
         form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
         form.form.addArrangedSubview(form.field(phone, title: "Phone", placeholder: "Phone"))
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
         XCTAssertTrue(name.becomeFirstResponder()); name.insertText("Pat")
         buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.porchKeyboard" }!.sendActions(for: .touchUpInside)
         XCTAssertNotNil(name.inputView); XCTAssertNotNil(phone.inputView)
@@ -156,10 +157,64 @@ final class CaregiverInputTests: XCTestCase {
         let group = UIBarButtonItemGroup(barButtonItems: [item], representativeItem: nil)
         editable.inputAssistantItem.leadingBarButtonGroups = [group]
         form.form.addArrangedSubview(form.field(editable, title: "Name", placeholder: "Name"))
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
         XCTAssertEqual(editable.inputAssistantItem.leadingBarButtonGroups.count, 1)
         buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.nativeKeyboard" }!.sendActions(for: .touchUpInside)
         XCTAssertTrue(editable.isFirstResponder); XCTAssertNil(editable.inputView)
         XCTAssertFalse(hidden.isFirstResponder); XCTAssertFalse(disabled.isFirstResponder); XCTAssertFalse(detached.isFirstResponder)
+    }
+
+    @MainActor func testKeyboardButtonExplainsHardwareSuppressionInsteadOfSilentlyRetrying() async {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let name = UITextField()
+        form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
+        XCTAssertTrue(name.becomeFirstResponder()); name.insertText("Pat")
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        let button = buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.nativeKeyboard" }!
+        XCTAssertEqual(button.configuration?.title, "Keyboard help")
+        button.sendActions(for: .touchUpInside)
+        let help = try! XCTUnwrap(form.presentedViewController as? UIAlertController)
+        XCTAssertTrue(help.message?.contains("disconnect the keypad during setup") == true)
+        XCTAssertTrue(help.message?.contains("cannot force the native keyboard open") == true)
+        XCTAssertTrue(help.message?.contains("Software Keyboards") == true)
+        XCTAssertFalse(help.message?.contains("bottom bar") == true, "A missing system bar cannot be the only recovery path")
+        XCTAssertTrue(help.actions.contains { $0.title == "Use Porch keyboard" })
+        XCTAssertNil(name.inputView, "Help must not silently replace the chosen native input")
+        XCTAssertEqual(name.text, "Pat")
+        await withCheckedContinuation { continuation in help.dismiss(animated: false) { continuation.resume() } }
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertEqual(button.configuration?.title, UIDevice.current.userInterfaceIdiom == .phone ? "iPhone keyboard" : "iPad keyboard")
+        button.sendActions(for: .touchUpInside)
+        XCTAssertTrue(name.isFirstResponder); XCTAssertNil(name.inputView)
+    }
+
+    @MainActor func testNativeKeyboardHelpDoesNotDiscardThePorchKeyboardChoice() async {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let pin = UITextField(); pin.keyboardType = .numberPad; pin.isSecureTextEntry = true
+        form.form.addArrangedSubview(form.field(pin, title: "PIN", placeholder: "PIN"))
+        XCTAssertTrue(pin.becomeFirstResponder()); pin.insertText("012345")
+        buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.porchKeyboard" }!.sendActions(for: .touchUpInside)
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        let system = buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.touchKeyboard.useNative" }!
+        XCTAssertEqual(system.title(for: .normal), "Keyboard help")
+        system.sendActions(for: .touchUpInside)
+        let help = try! XCTUnwrap(form.presentedViewController as? UIAlertController)
+        XCTAssertNotNil(pin.inputView, "Opening help must keep the working touch keyboard selected")
+        XCTAssertEqual(pin.text, "012345")
+        await withCheckedContinuation { continuation in help.dismiss(animated: false) { continuation.resume() } }
+        XCTAssertTrue(pin.becomeFirstResponder())
+        let keyboard = descendants(form.view).first { $0.accessibilityIdentifier == "caregiver.touchKeyboard" }!
+        XCTAssertFalse(keyboard.isHidden)
+        buttons(in: keyboard).first { $0.title(for: .normal) == "6" }!.sendActions(for: .touchUpInside)
+        XCTAssertEqual(pin.text, "0123456")
     }
 
     @MainActor private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
