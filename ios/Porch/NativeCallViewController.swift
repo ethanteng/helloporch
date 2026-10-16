@@ -244,8 +244,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 ringback.stop()
                 statusLabel.text = "Phone call connected"
             } else {
-                if mediaReady { ringback.start() }
-                statusLabel.text = "Calling \(contact.name)'s phone…"
+                if mediaReady && !hasConnectedPeer { ringback.start() }
+                statusLabel.text = hasConnectedPeer ? "Reconnecting phone call…" : "Calling \(contact.name)'s phone…"
             }
             return
         }
