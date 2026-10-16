@@ -29,7 +29,7 @@ For the call-control key: tap and release to answer an ordinary incoming call; h
 
 ## Bedside display
 
-Open **Caregiver mode → Bedside display** and choose **Default** (the dark clock) or **Dynamic**. **Both always show the current local date and time in large text.** Dynamic adds the time-of-day and season in words, a sun or moon traveling across the sky, and a seasonal tree and landscape. Colors follow the daily cycle. The scene updates each minute with a short dissolve; Reduce Motion removes that dissolve. There is no perpetual decorative animation, location request, or external weather service.
+Open **Caregiver mode → Bedside display** and choose **Default** (the dark clock) or **Dynamic**. **Both always show the current local date and time in large text.** Dynamic adds the time-of-day and season in words, a sun or moon traveling across the sky, and a seasonal tree and landscape. The background brightens through the morning to a blue daytime sky, warms to peach and pink near sunset, and darkens to navy at night. The large clock uses dark lettering on a light wash by day and light lettering on a dark wash at night, keeping the current date and time readable throughout the cycle. The scene updates each minute with a short dissolve; Reduce Motion removes that dissolve. There is no perpetual decorative animation, location request, or external weather service.
 
 Set **Day begins** and **Night begins** to match the loved one's routine (initially 6 AM and 6 PM). The scene illustrates that schedule, rather than calculating astronomical sunrise/sunset or moon phase. Seasons use calendar months and the chosen **Northern / Southern** hemisphere (initially northern). Keep the iPad's date, time, and time zone correct in system settings.
 

@@ -13,12 +13,14 @@ final class CallViewController: UIViewController {
     private let timeLabel = UILabel()
     private let dateLabel = UILabel()
     private let statusLabel = UILabel()
+    private let caregiver = UIButton(type: .system)
     private let callButton = PorchStyle.button("Call someone", symbol: "phone.fill")
     private var clockTimer: Timer?
     private var timeFormatter = DateFormatter()
     private var weekdayFormatter = DateFormatter()
     private var dateFormatter = DateFormatter()
     private var typographySize = CGSize.zero
+    private var appliedDisplayStyle: Int?
     #if DEBUG
     private var previewShown = false
     #endif
@@ -82,7 +84,7 @@ final class CallViewController: UIViewController {
         callButton.configuration = callConfig
         callButton.accessibilityIdentifier = "clock.call"
         callButton.addTarget(self, action: #selector(showPeople), for: .touchUpInside)
-        let caregiver = UIButton(type: .system)
+        caregiver.layer.cornerRadius = 32
         caregiver.setImage(UIImage(systemName: "gearshape", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)), for: .normal)
         caregiver.tintColor = PorchStyle.nightSecondary
         caregiver.accessibilityLabel = "Caregiver mode"
@@ -221,15 +223,40 @@ final class CallViewController: UIViewController {
             now = Calendar.current.date(bySettingHour: hour, minute: 30, second: 0, of: now) ?? now
         }
         #endif
+        var clockColor = PorchStyle.nightText
         if !sceneView.isHidden {
             let scene = BedsideScene(date: now, preferences: BedsidePreferences.load())
+            let palette = BedsideScenePalette(scene: scene)
+            clockColor = palette.foreground
+            let style = scene.isDay ? 1 : 2
+            if appliedDisplayStyle != style {
+                for label in [contextLabel, weekdayLabel, dateLabel] { label.textColor = palette.foreground }
+                caregiver.tintColor = palette.controlForeground; caregiver.backgroundColor = palette.controlBackground
+                var config = callButton.configuration!
+                config.baseBackgroundColor = palette.controlBackground; config.baseForegroundColor = palette.controlForeground
+                callButton.configuration = config
+                statusLabel.textColor = palette.controlForeground; statusLabel.backgroundColor = palette.controlBackground
+                statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
+                appliedDisplayStyle = style
+            }
             contextLabel.text = "\(scene.period.rawValue) · \(scene.season.rawValue)"
-            if sceneView.window != nil && !UIAccessibility.isReduceMotionEnabled && sceneView.scene != scene {
+            // Switch the complete contrast treatment at a schedule boundary;
+            // a crossfade between light and dark text would briefly lose contrast.
+            if sceneView.window != nil && !UIAccessibility.isReduceMotionEnabled && sceneView.scene.isDay == scene.isDay && sceneView.scene != scene {
                 UIView.transition(with: sceneView, duration: 1.5, options: [.transitionCrossDissolve, .allowUserInteraction]) { self.sceneView.scene = scene }
             } else { sceneView.scene = scene }
+        } else if appliedDisplayStyle != 0 {
+            appliedDisplayStyle = 0
+            contextLabel.textColor = PorchStyle.nightText
+            for label in [weekdayLabel, dateLabel] { label.textColor = PorchStyle.nightSecondary }
+            caregiver.tintColor = PorchStyle.nightSecondary; caregiver.backgroundColor = .clear
+            var config = callButton.configuration!
+            config.baseBackgroundColor = PorchStyle.nightSurface; config.baseForegroundColor = PorchStyle.nightText
+            callButton.configuration = config
+            statusLabel.textColor = PorchStyle.nightSecondary; statusLabel.backgroundColor = .clear
         }
         let time = timeFormatter.string(from: now).replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
-        let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: PorchStyle.nightText])
+        let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: clockColor])
         for symbol in [timeFormatter.amSymbol, timeFormatter.pmSymbol] {
             guard let symbol, !symbol.isEmpty, let range = time.range(of: symbol, options: .caseInsensitive) else { continue }
             text.addAttributes([.font: UIFont.systemFont(ofSize: timeLabel.font.pointSize * 0.25, weight: .medium)], range: NSRange(range, in: time))
@@ -246,7 +273,6 @@ final class CallViewController: UIViewController {
         if ProcessInfo.processInfo.arguments.contains("--preview-dynamic") { dynamic = true }
         #endif
         sceneView.isHidden = !dynamic; contextLabel.isHidden = !dynamic
-        for label in [weekdayLabel, dateLabel] { label.textColor = dynamic ? PorchStyle.nightText : PorchStyle.nightSecondary }
         updateClock()
     }
     @objc private func reloadSlots() {

@@ -1,6 +1,52 @@
 import UIKit
 import PorchCore
 
+/// A bright daytime palette and a quiet nighttime palette, following the
+/// caregiver's schedule. Sky keyframes meet at dawn/dusk without a color jump.
+struct BedsideScenePalette {
+    let skyTop: UIColor
+    let skyBottom: UIColor
+    let foreground: UIColor
+    let clockWash: UIColor
+    let controlBackground: UIColor
+    let controlForeground: UIColor
+    let illumination: Double
+    let usesDarkText: Bool
+
+    static func blend(_ a: UIColor, _ b: UIColor, _ amount: Double) -> UIColor {
+        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa); b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        let t = CGFloat(max(0, min(1, amount)))
+        return UIColor(red: ar + (br - ar) * t, green: ag + (bg - ag) * t, blue: ab + (bb - ab) * t, alpha: aa + (ba - aa) * t)
+    }
+    init(scene: BedsideScene) {
+        func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> UIColor { UIColor(red: r, green: g, blue: b, alpha: 1) }
+        func ramp(_ stops: [(Double, UIColor)], _ progress: Double) -> UIColor {
+            for index in 1..<stops.count where progress <= stops[index].0 {
+                let lower = stops[index - 1], upper = stops[index]
+                return Self.blend(lower.1, upper.1, (progress - lower.0) / (upper.0 - lower.0))
+            }
+            return stops.last!.1
+        }
+        let dawnTop = rgb(0.86, 0.69, 0.70), dawnBottom = rgb(1, 0.82, 0.65)
+        let duskTop = rgb(0.86, 0.61, 0.59), duskBottom = rgb(0.99, 0.72, 0.49)
+        if scene.isDay {
+            skyTop = ramp([(0, dawnTop), (0.18, rgb(0.64, 0.81, 0.94)), (0.5, rgb(0.35, 0.68, 0.91)), (0.8, rgb(0.67, 0.77, 0.91)), (1, duskTop)], scene.progress)
+            skyBottom = ramp([(0, dawnBottom), (0.18, rgb(0.94, 0.95, 0.87)), (0.5, rgb(0.78, 0.91, 0.96)), (0.8, rgb(0.99, 0.86, 0.68)), (1, duskBottom)], scene.progress)
+        } else {
+            skyTop = ramp([(0, duskTop), (0.12, rgb(0.25, 0.25, 0.44)), (0.25, rgb(0.025, 0.045, 0.11)), (0.8, rgb(0.025, 0.045, 0.11)), (0.93, rgb(0.37, 0.30, 0.43)), (1, dawnTop)], scene.progress)
+            skyBottom = ramp([(0, duskBottom), (0.12, rgb(0.38, 0.28, 0.39)), (0.25, rgb(0.07, 0.12, 0.19)), (0.8, rgb(0.07, 0.12, 0.19)), (0.93, rgb(0.62, 0.40, 0.40)), (1, dawnBottom)], scene.progress)
+        }
+        usesDarkText = scene.isDay
+        foreground = scene.isDay ? PorchStyle.ink : PorchStyle.nightText
+        clockWash = scene.isDay ? rgb(1, 0.99, 0.95).withAlphaComponent(0.66) : UIColor.black.withAlphaComponent(0.80)
+        controlBackground = scene.isDay ? rgb(0.97, 0.98, 0.94) : PorchStyle.nightSurface
+        controlForeground = scene.isDay ? PorchStyle.ink : PorchStyle.nightText
+        illumination = scene.isDay ? 0.4 + 0.6 * sin(.pi * scene.progress) : 0.4 * (1 - min(1, min(scene.progress, 1 - scene.progress) / 0.16))
+    }
+}
+
 /// Decorative artwork stays behind the real clock. No flashing, parallax, or
 /// perpetual animation: the sky follows local time at the clock's minute tick.
 final class BedsideSceneView: UIView {
@@ -11,26 +57,15 @@ final class BedsideSceneView: UIView {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         let w = bounds.width, h = bounds.height
         func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> UIColor { UIColor(red: r, green: g, blue: b, alpha: 1) }
-        func blend(_ a: UIColor, _ b: UIColor, _ amount: Double) -> UIColor {
-            var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
-            var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
-            a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa); b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
-            let t = CGFloat(max(0, min(1, amount)))
-            return color(ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t)
-        }
-        let twilightTop = color(0.27, 0.18, 0.27), twilightBottom = color(0.39, 0.24, 0.20)
-        let midnightTop = color(0.025, 0.045, 0.11), midnightBottom = color(0.07, 0.12, 0.19)
-        let daylight = sin(.pi * scene.progress)
-        let top = scene.isDay ? blend(twilightTop, color(0.08, 0.23, 0.34), daylight) : blend(twilightTop, midnightTop, min(1, daylight * 3))
-        let bottom = scene.isDay ? blend(twilightBottom, color(0.18, 0.32, 0.35), daylight) : blend(twilightBottom, midnightBottom, min(1, daylight * 3))
-        let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [top.cgColor, bottom.cgColor] as CFArray, locations: [0, 1])!
+        let palette = BedsideScenePalette(scene: scene)
+        let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [palette.skyTop.cgColor, palette.skyBottom.cgColor] as CFArray, locations: [0, 1])!
         ctx.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: h), options: [])
         func ellipse(_ rect: CGRect, _ c: UIColor) { c.setFill(); UIBezierPath(ovalIn: rect).fill() }
         if !scene.isDay {
             for i in 0..<24 {
                 let x = CGFloat((i * 157 + 37) % 997) / 997 * w
                 let y = CGFloat((i * 73 + 11) % 211) / 1000 * h
-                ellipse(CGRect(x: x, y: y, width: i % 3 == 0 ? 3 : 2, height: i % 3 == 0 ? 3 : 2), UIColor(white: 0.85, alpha: 0.45))
+                ellipse(CGRect(x: x, y: y, width: i % 3 == 0 ? 3 : 2, height: i % 3 == 0 ? 3 : 2), UIColor(white: 0.85, alpha: 0.45 * (1 - palette.illumination / 0.4)))
             }
         }
         let radius = min(w, h) * 0.047
@@ -56,8 +91,8 @@ final class BedsideSceneView: UIView {
             path.addLine(to: CGPoint(x: w, y: h)); path.addLine(to: CGPoint(x: 0, y: h)); path.close(); c.setFill(); path.fill()
         }
         let snow = scene.season == .winter
-        hill(0.86, snow ? color(0.24, 0.31, 0.36) : color(0.10, 0.23, 0.22), -0.01)
-        hill(0.94, snow ? color(0.33, 0.39, 0.41) : color(0.065, 0.17, 0.16), -0.025)
+        hill(0.86, BedsideScenePalette.blend(snow ? color(0.24, 0.31, 0.36) : color(0.10, 0.23, 0.22), snow ? color(0.80, 0.88, 0.91) : color(0.51, 0.72, 0.48), palette.illumination), -0.01)
+        hill(0.94, BedsideScenePalette.blend(snow ? color(0.33, 0.39, 0.41) : color(0.065, 0.17, 0.16), snow ? color(0.91, 0.94, 0.93) : color(0.34, 0.59, 0.40), palette.illumination), -0.025)
         ctx.saveGState(); ctx.translateBy(x: w * 0.87, y: h * 0.92)
         let unit = min(w, h) * 0.18
         let branches = UIBezierPath(); branches.move(to: .zero); branches.addLine(to: CGPoint(x: -unit * 0.04, y: -unit))
@@ -77,8 +112,10 @@ final class BedsideSceneView: UIView {
             color(0.75, 0.79, 0.79).setStroke(); branches.lineWidth = max(1, unit * 0.014); branches.stroke()
         }
         ctx.restoreGState()
-        // Keeps cream clock lettering readable over every sky and season.
-        let shade = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [UIColor.clear.cgColor, UIColor.black.withAlphaComponent(0.76).cgColor, UIColor.black.withAlphaComponent(0.76).cgColor, UIColor.clear.cgColor] as CFArray, locations: [0, 0.28, 0.74, 1])!
+        // A light wash with dark lettering by day; a dark wash at night.
+        // The sun, moon and seasonal art cannot obscure the large clock.
+        let transparentWash = palette.clockWash.withAlphaComponent(0)
+        let shade = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [transparentWash.cgColor, palette.clockWash.cgColor, palette.clockWash.cgColor, transparentWash.cgColor] as CFArray, locations: [0, 0.18, 0.78, 1])!
         ctx.drawLinearGradient(shade, start: .zero, end: CGPoint(x: 0, y: h), options: [])
     }
 }
@@ -91,6 +128,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private let dayLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let nightLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let example = BedsideSceneView()
+    private let previewClock = PorchStyle.label("", size: 24, color: PorchStyle.ink, weight: .semibold)
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Bedside display"
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
@@ -105,10 +143,10 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             control.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
             control.addTarget(self, action: #selector(update), for: .valueChanged)
         }
-        form.addArrangedSubview(section("Clock view", detail: "Both views always show the current date and time in large, clear text. Default keeps the screen dark. Dynamic adds a quiet sky, a sun or moon, and a seasonal landscape.", views: [appearance]))
+        form.addArrangedSubview(section("Clock view", detail: "Both views always show the current date and time in large, clear text. Default keeps the screen dark. Dynamic brightens with daylight, warms at sunset, and darkens at night, with a sun or moon and seasonal landscape.", views: [appearance]))
         example.heightAnchor.constraint(equalToConstant: 210).isActive = true
         example.layer.cornerRadius = 20; example.clipsToBounds = true
-        let previewClock = PorchStyle.label(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short), size: 24, color: PorchStyle.nightText, weight: .semibold)
+        previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
         previewClock.textAlignment = .center; previewClock.translatesAutoresizingMaskIntoConstraints = false
         example.addSubview(previewClock)
         NSLayoutConstraint.activate([previewClock.centerYAnchor.constraint(equalTo: example.centerYAnchor), previewClock.leadingAnchor.constraint(equalTo: example.leadingAnchor, constant: 20), previewClock.trailingAnchor.constraint(equalTo: example.trailingAnchor, constant: -20)])
@@ -136,6 +174,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         day.accessibilityValue = hour(preferences.dayStart); night.accessibilityValue = hour(preferences.nightStart)
         example.isHidden = preferences.appearance != .dynamic
         example.scene = BedsideScene(date: Date(), preferences: preferences)
+        previewClock.textColor = BedsideScenePalette(scene: example.scene).foreground
     }
     @objc private func save() {
         preferences.save()

@@ -53,6 +53,8 @@ jobs:
           mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-day.png --preview-dynamic --preview-hour 10
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-dawn.png --preview-dynamic --preview-hour 6
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-sunset.png --preview-dynamic --preview-hour 17
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-night.png --preview-dynamic --preview-hour 22
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
