@@ -11,14 +11,15 @@ enum PorchStyle {
 }
 
 final class CallViewController: UIViewController {
-    private let storageKey = "porch.contact.v1"
-    private var contact: CallContact?
+    private var slots = CallSlots()
     private var trigger = CallTrigger()
     private var opening = false
+    private var loadError: String?
     private let titleLabel = UILabel()
     private let hintLabel = UILabel()
-    private let callButton = UIButton(type: .system)
+    private let grid = UIStackView()
     private let setupButton = UIButton(type: .system)
+    private var renderedColumns = 0
     #if DEBUG
     private var previewSetupShown = false
     #endif
@@ -28,14 +29,23 @@ final class CallViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = PorchStyle.cream
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let saved = try? JSONDecoder().decode(CallContact.self, from: data) {
-            contact = try? CallContact(name: saved.name, address: saved.address, shortcutName: saved.shortcutName)
+        do {
+            slots = try CallSlots.load()
+        } catch {
+            loadError = error.localizedDescription
         }
         #if DEBUG
-        // CI screenshots use a fictional recipient, without altering storage.
+        // Previews are fictional and never saved to the device's preferences.
         if ProcessInfo.processInfo.arguments.contains("--preview-contact") {
-            contact = try? CallContact(name: "David", shortcutName: "Call David")
+            slots = CallSlots()
+            try? slots.setContact(CallContact(name: "David", shortcutName: "Call David"), for: 1)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--preview-six") {
+            slots = CallSlots()
+            for (index, name) in ["David", "Maria", "James", "Sarah", "Michael", "Anna"].enumerated() {
+                let contact = try? CallContact(name: name, shortcutName: "Call \(name)")
+                try? slots.setContact(contact, for: index + 1)
+            }
         }
         #endif
 
@@ -46,49 +56,35 @@ final class CallViewController: UIViewController {
         brand.textAlignment = .center
         brand.adjustsFontForContentSizeCategory = true
 
-        titleLabel.font = PorchStyle.font(42, weight: .semibold)
-        titleLabel.textColor = PorchStyle.ink
-        titleLabel.textAlignment = .center
-        titleLabel.numberOfLines = 0
-        titleLabel.adjustsFontForContentSizeCategory = true
-
+        titleLabel.font = PorchStyle.font(36, weight: .semibold)
         hintLabel.font = PorchStyle.font(24)
-        hintLabel.textColor = PorchStyle.ink
-        hintLabel.textAlignment = .center
-        hintLabel.numberOfLines = 0
-        hintLabel.adjustsFontForContentSizeCategory = true
-
-        var configuration = UIButton.Configuration.filled()
-        configuration.baseBackgroundColor = PorchStyle.terracotta
-        configuration.baseForegroundColor = .white
-        configuration.cornerStyle = .large
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 40, leading: 32, bottom: 40, trailing: 32)
-        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = PorchStyle.font(44, weight: .semibold)
-            return attributes
+        for label in [titleLabel, hintLabel] {
+            label.textColor = PorchStyle.ink
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            label.adjustsFontForContentSizeCategory = true
         }
-        callButton.configuration = configuration
-        callButton.titleLabel?.numberOfLines = 0
-        callButton.addTarget(self, action: #selector(call), for: .touchUpInside)
+
+        grid.axis = .vertical
+        grid.spacing = 20
 
         setupButton.setTitle("Hold here to set up", for: .normal)
         setupButton.setTitleColor(PorchStyle.ink, for: .normal)
         setupButton.titleLabel?.font = PorchStyle.font(18)
         setupButton.titleLabel?.adjustsFontForContentSizeCategory = true
         setupButton.accessibilityLabel = "Contact setup"
-        setupButton.accessibilityHint = "Press and hold for two seconds to change the saved contact."
+        setupButton.accessibilityHint = "Press and hold for two seconds to configure people for keys 1 to 6."
         setupButton.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Open contact setup", target: self, selector: #selector(accessibleSetup))]
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(heldSetup(_:)))
         hold.minimumPressDuration = 2
         setupButton.addGestureRecognizer(hold)
 
-        // Scrolling keeps all controls reachable with large accessibility text.
+        // The grid scrolls when large accessibility text needs additional space.
         let scroll = UIScrollView()
         let content = UIView()
-        let stack = UIStackView(arrangedSubviews: [brand, titleLabel, hintLabel, callButton, setupButton])
+        let stack = UIStackView(arrangedSubviews: [brand, titleLabel, hintLabel, grid, setupButton])
         stack.axis = .vertical
-        stack.spacing = 28
+        stack.spacing = 24
         [scroll, content, stack].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         view.addSubview(scroll)
         scroll.addSubview(content)
@@ -109,10 +105,9 @@ final class CallViewController: UIViewController {
             stack.centerYAnchor.constraint(equalTo: content.centerYAnchor),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 24),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(greaterThanOrEqualTo: content.topAnchor, constant: 32),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -32),
-            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 640),
-            callButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 150),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: content.topAnchor, constant: 24),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -24),
+            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 1000),
             setupButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
         let preferredWidth = stack.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -48)
@@ -121,11 +116,28 @@ final class CallViewController: UIViewController {
         render()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if renderedColumns != columnCount { render() }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard isViewLoaded else { return }
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+            render()
+        }
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+        if let message = loadError {
+            loadError = nil
+            showError("Couldn't load your people", message: message)
+        }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--preview-setup"), !previewSetupShown {
+        if ProcessInfo.processInfo.arguments.contains("--preview-setup"), !previewSetupShown, presentedViewController == nil {
             previewSetupShown = true
             showSetup()
         }
@@ -140,27 +152,89 @@ final class CallViewController: UIViewController {
 
     func pause() { trigger.resetKeys() }
 
+    private var columnCount: Int {
+        let count = slots.contacts.compactMap { $0 }.count
+        if count <= 1 || traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 {
+            return 1
+        }
+        return view.bounds.width > view.bounds.height ? 3 : 2
+    }
+
     private func render() {
-        titleLabel.text = contact.map { "Call \($0.name)" } ?? "Let's set up your call"
-        hintLabel.text = contact == nil ? "Hold the setup button below to choose someone." : "Press 1 on the keypad\nor tap the button below."
-        var configuration = callButton.configuration
-        configuration?.title = contact == nil ? "Choose a contact" : "1   Call \(contact!.name)"
-        callButton.configuration = configuration
-        callButton.accessibilityLabel = contact.map { "Video call \($0.name)" } ?? "Choose a contact"
-        callButton.isEnabled = !opening
+        let people = (1...CallSlots.count).compactMap { number in
+            slots.contact(for: number).map { (number, $0) }
+        }
+        titleLabel.text = people.isEmpty ? "Let's set up your calls"
+            : people.count == 1 ? "Call \(people[0].1.name)" : "Who would you like to call?"
+        hintLabel.text = people.isEmpty ? "Hold the setup button below to choose people."
+            : people.count == 1 ? "Press \(people[0].0) on the keypad\nor tap the button below."
+            : "Press their number on the keypad\nor tap their name."
+
+        renderedColumns = columnCount
+        for row in grid.arrangedSubviews {
+            grid.removeArrangedSubview(row)
+            row.removeFromSuperview()
+        }
+
+        if people.isEmpty {
+            let button = makeButton(title: "Choose people", number: 0)
+            grid.addArrangedSubview(button)
+        } else {
+            for start in stride(from: 0, to: people.count, by: renderedColumns) {
+                let row = UIStackView()
+                row.axis = .horizontal
+                row.spacing = 20
+                row.distribution = .fillEqually
+                for index in start..<min(start + renderedColumns, people.count) {
+                    let (number, contact) = people[index]
+                    let button = makeButton(title: "\(number)   \(contact.name)", number: number)
+                    button.accessibilityLabel = "Key \(number), call \(contact.name)"
+                    row.addArrangedSubview(button)
+                }
+                // Keep the last row aligned with the columns above.
+                for _ in row.arrangedSubviews.count..<min(renderedColumns, people.count) {
+                    row.addArrangedSubview(UIView())
+                }
+                grid.addArrangedSubview(row)
+            }
+        }
+    }
+
+    private func makeButton(title: String, number: Int) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = title
+        configuration.baseBackgroundColor = PorchStyle.terracotta
+        configuration.baseForegroundColor = .white
+        configuration.cornerStyle = .large
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 28, leading: 20, bottom: 28, trailing: 20)
+        configuration.titleAlignment = .center
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = PorchStyle.font(36, weight: .semibold)
+            return attributes
+        }
+        button.configuration = configuration
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.textAlignment = .center
+        button.tag = number
+        button.isEnabled = !opening
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+        button.addTarget(self, action: #selector(tappedCall(_:)), for: .touchUpInside)
+        return button
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
             guard let key = press.key,
-                  CallTrigger.supports(Int(key.keyCode.rawValue)),
+                  let slot = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
                   key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
                   presentedViewController == nil else {
                 unhandled.insert(press)
                 continue
             }
-            if trigger.keyDown(Int(key.keyCode.rawValue)) { call() }
+            if trigger.keyDown(Int(key.keyCode.rawValue)) { call(slot: slot) }
         }
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
     }
@@ -177,10 +251,17 @@ final class CallViewController: UIViewController {
         super.pressesCancelled(presses, with: event)
     }
 
-    @objc private func call() {
+    @objc private func tappedCall(_ sender: UIButton) {
+        if sender.tag == 0 { showSetup() } else { call(slot: sender.tag) }
+    }
+
+    private func call(slot: Int) {
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
-        guard let contact else { showSetup(); return }
+        guard let contact = slots.contact(for: slot) else {
+            hintLabel.text = "No one is assigned to \(slot).\nChoose another number."
+            return
+        }
         guard !UIAccessibility.isGuidedAccessEnabled else {
             showError("Exit Guided Access", message: "Porch needs to open Shortcuts or FaceTime. Guided Access keeps this iPad in one app, so a caregiver must exit it before calling.")
             return
@@ -197,8 +278,7 @@ final class CallViewController: UIViewController {
             if !opened {
                 self.showError("Couldn't open \(appName)", message: "Check that \(appName) is installed and enabled, then try again.")
             }
-            // opened only means the URL was handed off. It does not report
-            // shortcut execution, ringing, connection, or the end of the call.
+            // URL handoff doesn't report shortcut execution or call status.
         }
     }
 
@@ -211,11 +291,11 @@ final class CallViewController: UIViewController {
     private func showSetup() {
         guard presentedViewController == nil else { return }
         trigger.resetKeys()
-        let setup = SetupViewController(contact: contact)
-        setup.onSave = { [weak self] contact in
-            guard let self, let data = try? JSONEncoder().encode(contact) else { return }
-            UserDefaults.standard.set(data, forKey: self.storageKey)
-            self.contact = contact
+        let setup = SlotsViewController(slots: slots)
+        setup.onSave = { [weak self] updated in
+            guard let self else { return }
+            try updated.save()
+            self.slots = updated
             self.render()
         }
         let navigation = UINavigationController(rootViewController: setup)
