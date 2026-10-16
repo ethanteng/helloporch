@@ -118,6 +118,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     private let modeControl = UISegmentedControl(items: ["Voice", "Video"])
     private let phoneFallbackSwitch = UISwitch()
     private let phoneField = UITextField()
+    private let chooseContactButton = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
     private var nativeGroup = UIView()
     private var fallbackGroup = UIView()
     private var phoneGroup = UIView()
@@ -163,9 +164,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         nameField.autocapitalizationType = .words
         let method = UIStackView(arrangedSubviews: [PorchStyle.label("Call using", size: 16, color: PorchStyle.ink, weight: .semibold), methodControl])
         method.axis = .vertical; method.spacing = 8
-        let choose = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
-        choose.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
-        form.addArrangedSubview(section("Their details", views: [personName, choose, method]))
+        chooseContactButton.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
+        form.addArrangedSubview(section("Their details", views: [personName, chooseContactButton, method]))
         let room = field(roomField, title: "Porch room", placeholder: "A shared room name", helper: "Already filled in. Use this same room on the other device to join a Porch call.")
         roomField.keyboardType = .asciiCapable
         nativeGroup = section("Porch call", detail: "Choose how the call starts. The other person joins manually in this beta.", views: [modeControl, room])
@@ -203,16 +203,18 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneGroup.isHidden = !phoneFallbackSwitch.isOn
         faceTimeGroup.isHidden = methodControl.selectedSegmentIndex != 1
         shortcutGroup.isHidden = methodControl.selectedSegmentIndex != 2
+        chooseContactButton.isHidden = methodControl.selectedSegmentIndex == 2
     }
     @objc private func pickContact() {
         view.endEditing(true)
         let picker = CNContactPickerViewController()
         picker.overrideUserInterfaceStyle = .light
         picker.delegate = self
-        picker.displayedPropertyKeys = [CNContactPhoneNumbersKey, CNContactEmailAddressesKey]
-        picker.predicateForEnablingContact = NSPredicate(format: "phoneNumbers.@count > 0 OR emailAddresses.@count > 0")
+        let porch = methodControl.selectedSegmentIndex == 0
+        picker.displayedPropertyKeys = porch ? [CNContactPhoneNumbersKey] : [CNContactPhoneNumbersKey, CNContactEmailAddressesKey]
+        picker.predicateForEnablingContact = NSPredicate(format: porch ? "phoneNumbers.@count > 0" : "phoneNumbers.@count > 0 OR emailAddresses.@count > 0")
         picker.predicateForSelectionOfContact = NSPredicate(value: false)
-        picker.predicateForSelectionOfProperty = NSPredicate(format: "key == 'phoneNumbers' OR key == 'emailAddresses'")
+        picker.predicateForSelectionOfProperty = NSPredicate(format: porch ? "key == 'phoneNumbers'" : "key == 'phoneNumbers' OR key == 'emailAddresses'")
         present(picker, animated: true)
     }
     func contactPicker(_ picker: CNContactPickerViewController, didSelect property: CNContactProperty) {
