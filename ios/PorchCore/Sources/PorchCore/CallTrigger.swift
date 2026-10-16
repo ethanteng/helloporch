@@ -8,7 +8,15 @@ public struct CallTrigger {
     public init() {}
 
     public static func supports(_ keyCode: Int) -> Bool {
-        keyCode == 0x59 || keyCode == 0x1E // keypad 1, keyboard 1
+        slot(for: keyCode) != nil
+    }
+
+    public static func slot(for keyCode: Int) -> Int? {
+        switch keyCode {
+        case 0x59...0x5E: return keyCode - 0x59 + 1 // keypad 1–6
+        case 0x1E...0x23: return keyCode - 0x1E + 1 // keyboard 1–6
+        default: return nil
+        }
     }
 
     public mutating func keyDown(_ keyCode: Int) -> Bool {
