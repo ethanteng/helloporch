@@ -76,13 +76,14 @@ archive_path="$PWD/ios/build/Porch.xcarchive"
 export_path="$PWD/ios/build/export"
 build_number="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
 xcodebuild -version
+# Only the app target consumes this profile; Swift package resource bundles do not.
 xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$archive_path" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
   CURRENT_PROJECT_VERSION="$build_number" \
   CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Apple Distribution' \
-  PROVISIONING_PROFILE_SPECIFIER="$profile_name" archive
+  PORCH_APP_PROVISIONING_PROFILE="$profile_name" archive
 
 xcodebuild -exportArchive -archivePath "$archive_path" \
   -exportPath "$export_path" -exportOptionsPlist "$signing_dir/ExportOptions.plist"
