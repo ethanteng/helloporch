@@ -28,7 +28,9 @@ for row in 1...40 {
         }
         if (0.10...0.40).contains(r), g > r + 0.05, b < g { green += 1 }
         if r < 0.43 && g < 0.40 && b < 0.40 { sky += 1 }
-        if r < 0.10 && (0.03...0.15).contains(g) && g > r && b < g { night += 1 }
+        // Large contact cards can cover most of the screen. Include their
+        // green surface after screenshot color conversion, as well as the clock background.
+        if r < 0.14 && (0.03...0.19).contains(g) && g > r + 0.015 && b > r && b < g { night += 1 }
         if (0.45...0.85).contains(r), g > r + 0.015, b < g {
             nightText += 1
         }
