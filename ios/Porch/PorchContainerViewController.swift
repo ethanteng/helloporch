@@ -48,7 +48,7 @@ final class PorchContainerViewController: UIViewController {
         incomingID = call.id
         let show = { [weak self] in
             guard let self, UIApplication.shared.applicationState == .active else { return }
-            let incoming = IncomingFamilyCallViewController(call: call, credential: credential)
+            let incoming = IncomingFamilyCallViewController(call: call, credential: credential, snapshot: state)
             incoming.onDismiss = { [weak self] in (self?.content as? CallViewController)?.resume() }
             incoming.onAnswer = { [weak self] session in
                 guard let self else { return }

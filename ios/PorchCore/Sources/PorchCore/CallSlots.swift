@@ -55,13 +55,24 @@ public struct CallSlots: Equatable {
         guard state.me.role == .bedside else { return }
         for digit in Self.digits {
             guard let contact = contact(for: digit), let native = contact.nativeCall else { continue }
-            let member = contact.invitationID.flatMap { id in state.people.first { $0.invitationID == id } }
-            let linked = member?.id ?? contact.familyMemberID.flatMap { id in state.people.first { $0.id == id }?.id }
+            let linked = Self.member(for: contact, in: state)?.id
             if linked != contact.familyMemberID {
                 try setContact(CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
                     familyMemberID: linked, invitationID: contact.invitationID), for: digit)
             }
         }
+    }
+    /// The caregiver's saved name also labels incoming calls and announcements.
+    /// Resolve through the same identities as pairing, including newly accepted invites.
+    public func incomingCallerName(for call: FamilyCallRecord, in state: FamilySnapshot) -> String {
+        guard state.me.role == .bedside, call.to == state.me.id else { return call.callerName }
+        return contacts.compactMap { $0 }.first {
+            $0.nativeCall != nil && Self.member(for: $0, in: state)?.id == call.from
+        }?.name ?? call.callerName
+    }
+    private static func member(for contact: CallContact, in state: FamilySnapshot) -> FamilyPerson? {
+        contact.invitationID.flatMap { id in state.people.first { $0.invitationID == id } }
+            ?? contact.familyMemberID.flatMap { id in state.people.first { $0.id == id } }
     }
     public static func load(from defaults: UserDefaults = .standard) throws -> Self {
         var result = Self()

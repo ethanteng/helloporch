@@ -14,11 +14,40 @@ final class CaregiverInputTests: XCTestCase {
         return { defaults.set(saved, forKey: "porch.bedsideDisplay.v1"); defaults.set(experience, forKey: "porch.experience") }
     }
     @MainActor private func labels(in view: UIView) -> [UILabel] { (view as? UILabel).map { [$0] } ?? view.subviews.flatMap { labels(in: $0) } }
-    @MainActor private func incoming(_ kind: String, audio: IncomingCallAudioPlaying) throws -> IncomingFamilyCallViewController {
+    @MainActor private func incoming(_ kind: String, mode: NativeCall.Mode = .video, callerName: String = "家人", snapshot: FamilySnapshot? = nil, audio: IncomingCallAudioPlaying) throws -> IncomingFamilyCallViewController {
         let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-        let data = try JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": kind, "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": "家人"])
+        let data = try JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": snapshot?.me.id ?? id, "mode": mode.rawValue, "kind": kind, "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": callerName])
         let call = try JSONDecoder().decode(FamilyCallRecord.self, from: data)
-        return IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .bedside), audio: audio)
+        return IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .bedside), snapshot: snapshot, audio: audio)
+    }
+    @MainActor func testRenamedContactIsShownAndAnnouncedForIncomingVoiceVideoAndDropIn() throws {
+        let restoreLanguage = chineseBedside(); defer { restoreLanguage() }
+        let defaults = UserDefaults.standard, keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
+        let caller = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let data = try JSONSerialization.data(withJSONObject: ["householdID": "home", "householdName": "Pat", "dropInEnabled": true,
+            "me": ["id": "bedside", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true],
+            "people": [["id": caller, "name": "Ethan", "role": "family", "permissions": ["audio": true, "video": true], "online": true]], "busy": false, "serverTime": 1])
+        let snapshot = try JSONDecoder().decode(FamilySnapshot.self, from: data)
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .video), familyMemberID: caller), for: 1)
+        try slots.save()
+        for kind in ["call", "dropIn"] {
+            for mode in [NativeCall.Mode.voice, .video] {
+                let audio = TestIncomingAudio()
+                let controller = try incoming(kind, mode: mode, callerName: "Ethan", snapshot: snapshot, audio: audio)
+                controller.loadViewIfNeeded(); controller.viewDidAppear(false)
+                XCTAssertTrue(labels(in: controller.view).contains { $0.text == "David" })
+                XCTAssertFalse(labels(in: controller.view).contains { $0.text == "Ethan" })
+                XCTAssertEqual(controller.session.peerName, "David", "The active call must keep the displayed/announced name")
+                if kind == "dropIn" {
+                    XCTAssertEqual(audio.name, "David"); XCTAssertEqual(audio.video, mode == .video)
+                    XCTAssertEqual(audio.language, .traditionalChinese)
+                } else { XCTAssertEqual(audio.ringCount, 1); XCTAssertNil(audio.name) }
+                controller.viewWillDisappear(false)
+            }
+        }
     }
     @MainActor func testChineseBedsideClockAndLargeContactCards() throws {
         let restore = chineseBedside(); defer { restore() }
@@ -481,12 +510,13 @@ final class CaregiverInputTests: XCTestCase {
 
 @MainActor private final class TestIncomingAudio: IncomingCallAudioPlaying {
     var ringCount = 0, stopCount = 0
+    var name: String?
     var language: BedsideLanguage?
     var video: Bool?
     var completion: ((Bool) -> Void)?
     func ring() -> Bool { ringCount += 1; return true }
     func announce(name: String, video: Bool, language: BedsideLanguage, completion: @escaping (Bool) -> Void) {
-        self.language = language; self.video = video; self.completion = completion
+        self.name = name; self.language = language; self.video = video; self.completion = completion
     }
     func stop() { stopCount += 1; completion = nil }
 }

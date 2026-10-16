@@ -297,8 +297,9 @@ final class FamilyInviteViewController: CaregiverFormViewController {
 }
 
 final class IncomingFamilyCallViewController: UIViewController {
-    let call: FamilyCallRecord
-    let credential: FamilyCredential
+    let session: FamilyCallSession
+    var call: FamilyCallRecord { session.call }
+    var credential: FamilyCredential { session.credential }
     var onAnswer: ((FamilyCallSession) -> Void)?
     var onDismiss: (() -> Void)?
     private let countdown = UILabel()
@@ -353,14 +354,19 @@ final class IncomingFamilyCallViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated); audio.stop(); timer?.invalidate(); holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); resignFirstResponder()
     }
-    init(call: FamilyCallRecord, credential: FamilyCredential, audio: IncomingCallAudioPlaying? = nil) {
-        self.call = call; self.credential = credential; self.audio = audio ?? PorchIncomingAudio(); super.init(nibName: nil, bundle: nil)
+    init(call: FamilyCallRecord, credential: FamilyCredential, snapshot: FamilySnapshot? = nil, audio: IncomingCallAudioPlaying? = nil) {
+        let slots = (try? CallSlots.load()) ?? CallSlots()
+        let name: String
+        if credential.role == .bedside, let snapshot { name = slots.incomingCallerName(for: call, in: snapshot) }
+        else { name = call.callerName }
+        session = FamilyCallSession(credential: credential, call: call, peerName: name)
+        self.audio = audio ?? PorchIncomingAudio(); super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
     }
     required init?(coder: NSCoder) { fatalError("Use init(call:credential:)") }
     override func viewDidLoad() {
         super.viewDidLoad(); overrideUserInterfaceStyle = .dark; view.backgroundColor = PorchStyle.night
-        let name = PorchStyle.label(call.callerName, size: 48, color: PorchStyle.nightText, weight: .semibold)
+        let name = PorchStyle.label(session.peerName, size: 48, color: PorchStyle.nightText, weight: .semibold)
         name.textAlignment = .center
         countdown.font = PorchStyle.font(28); countdown.textColor = PorchStyle.nightText; countdown.numberOfLines = 0; countdown.textAlignment = .center
         answer.configuration?.title = BedsideText.string(call.mode == .video ? "Answer video call" : "Answer audio call")
@@ -400,7 +406,7 @@ final class IncomingFamilyCallViewController: UIViewController {
         #endif
         if call.kind == "dropIn" {
             updateCountdown()
-            audio.announce(name: call.callerName, video: call.mode == .video, language: BedsideText.language) { [weak self] success in
+            audio.announce(name: session.peerName, video: call.mode == .video, language: BedsideText.language) { [weak self] success in
                 guard let self, !self.answering, self.view.window != nil, UIApplication.shared.applicationState == .active else { return }
                 if success {
                     self.announcementFinished = true; self.remaining = 5; self.updateCountdown()
@@ -444,16 +450,16 @@ final class IncomingFamilyCallViewController: UIViewController {
             guard let self else { return }
             do {
                 let result = try await FamilyService(self.credential).send("acceptCall", ["callID": self.call.id, "available": true])
-                guard UIApplication.shared.applicationState == .active, self.view.window != nil else { await FamilyCallSession(credential: self.credential, call: self.call, peerName: self.call.callerName).end(); return }
+                guard UIApplication.shared.applicationState == .active, self.view.window != nil else { await self.session.end(); return }
                 FamilyCoordinator.shared.update(result)
-                let session = FamilyCallSession(credential: self.credential, call: result.state?.call ?? self.call, peerName: self.call.callerName)
+                let session = FamilyCallSession(credential: self.credential, call: result.state?.call ?? self.call, peerName: self.session.peerName)
                 self.dismiss(animated: false) { self.onAnswer?(session) }
-            } catch { self.answering = false; self.answer.isEnabled = true; await FamilyCallSession(credential: self.credential, call: self.call, peerName: self.call.callerName).end(); self.dismiss(animated: true, completion: self.onDismiss) }
+            } catch { self.answering = false; self.answer.isEnabled = true; await self.session.end(); self.dismiss(animated: true, completion: self.onDismiss) }
         }
     }
     @objc private func reject() {
         timer?.invalidate(); audio.stop(); answering = true
-        Task { await FamilyCallSession(credential: credential, call: call, peerName: call.callerName).end() }
+        Task { await session.end() }
         dismiss(animated: true, completion: onDismiss)
     }
 }

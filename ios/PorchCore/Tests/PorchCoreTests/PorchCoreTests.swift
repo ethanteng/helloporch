@@ -315,6 +315,71 @@ final class FamilyModelTests: XCTestCase {
     }
 }
 
+final class IncomingCallerNameTests: XCTestCase {
+    private let caller = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    private let bedside = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    private let invitation = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+    private func snapshot(role: String = "bedside", includeCaller: Bool = true) throws -> FamilySnapshot {
+        let object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": true,
+            "me": ["id": bedside, "name": "Pat", "role": role, "permissions": ["audio": false, "video": false], "online": true],
+            "people": includeCaller ? [["id": caller, "invitationID": invitation, "name": "Ethan", "role": "family", "permissions": ["audio": true, "video": true], "online": true]] : [],
+            "busy": false, "serverTime": 1]
+        return try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+    }
+    private func call(kind: String = "call", mode: String = "video", recipient: String? = nil) throws -> FamilyCallRecord {
+        let object: [String: Any] = ["id": "test-call", "from": caller, "to": recipient ?? bedside, "mode": mode,
+            "kind": kind, "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": "Ethan"]
+        return try JSONDecoder().decode(FamilyCallRecord.self, from: JSONSerialization.data(withJSONObject: object))
+    }
+    func testSavedRenameOverridesOriginalInviteNameForVoiceVideoCallsAndDropIns() throws {
+        let suite = "CallerNameTests.\(UUID().uuidString)", state = try snapshot()
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .video),
+            phoneNumber: "+14155550123", familyMemberID: caller), for: 1)
+        try slots.save(to: defaults)
+        var loaded = try CallSlots.load(from: defaults)
+        try loaded.reconcile(with: state)
+        for kind in ["call", "dropIn"] {
+            for mode in ["voice", "video"] {
+                let incoming = try call(kind: kind, mode: mode)
+                XCTAssertEqual(loaded.incomingCallerName(for: incoming, in: state), "David")
+                XCTAssertEqual(incoming.callerName, "Ethan", "The local label must not change the caller's server identity")
+            }
+        }
+        XCTAssertEqual(loaded.contact(for: 1)?.phoneNumber, "+14155550123")
+    }
+    func testAcceptedInvitationUsesSavedNameBeforeAndAfterLinkReconciliation() throws {
+        let state = try snapshot(), incoming = try call()
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "家駿", nativeCall: NativeCall(room: "paired", mode: .video),
+            familyMemberID: UUID().uuidString, invitationID: invitation), for: 1)
+        XCTAssertEqual(slots.incomingCallerName(for: incoming, in: state), "家駿")
+        try slots.reconcile(with: state)
+        XCTAssertEqual(slots.contact(for: 1)?.familyMemberID, caller)
+        XCTAssertEqual(slots.incomingCallerName(for: incoming, in: state), "家駿")
+    }
+    func testMissingRemovedAndUnrelatedSlotsFallBackWithoutMatchingByName() throws {
+        let state = try snapshot(), incoming = try call()
+        var slots = CallSlots()
+        XCTAssertEqual(slots.incomingCallerName(for: incoming, in: state), "Ethan")
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "other", mode: .voice),
+            familyMemberID: UUID().uuidString, invitationID: UUID().uuidString), for: 1)
+        XCTAssertEqual(slots.incomingCallerName(for: incoming, in: state), "Ethan")
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .voice), familyMemberID: caller), for: 1)
+        XCTAssertEqual(try slots.incomingCallerName(for: incoming, in: snapshot(includeCaller: false)), "Ethan")
+        try slots.setAction(.callControl, for: 1)
+        XCTAssertEqual(slots.incomingCallerName(for: incoming, in: state), "Ethan")
+    }
+    func testBedsideAliasesDoNotLabelFamilyModeOrCallsToAnotherRecipient() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .voice), familyMemberID: caller), for: 1)
+        XCTAssertEqual(try slots.incomingCallerName(for: call(), in: snapshot(role: "family")), "Ethan")
+        XCTAssertEqual(try slots.incomingCallerName(for: call(recipient: caller), in: snapshot()), "Ethan")
+    }
+}
+
 final class BedsideInvitationTests: XCTestCase {
     func testActivationLinksCannotBeConfusedWithFamilyInvitations() throws {
         let code = String(repeating: "a", count: 64)

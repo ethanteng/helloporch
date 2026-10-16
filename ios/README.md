@@ -12,6 +12,8 @@ In **Family & drop-in**, edit the bedside display name (default **Your loved one
 
 Choose a keypad slot to edit a person's name, import a phone number from Contacts, choose voice/video and link their paired Porch app. Optionally enable phone fallback. Everything calls through Porch; no calling-method or manual-room configuration is shown. Old FaceTime/Shortcut contact records remain readable so names/key assignments survive, but must be edited into a Porch contact before calling.
 
+The saved slot name is also used for that person's incoming calls, spoken drop-in announcements and active call screen on the bedside device. Existing renames take effect without inviting or pairing again. Porch matches the linked device/invitation identity; callers without a matching slot use their caregiver-assigned invitation name.
+
 Porch attempts the paired app first. A person without a linked app gets a confirmed unavailable result before phone fallback. An online family app can ring for the wait set in **Call preferences** (20 seconds by default). Answering Porch atomically cancels phone fallback. Phone numbers use E.164; saving approves the destination without placing a telephone call. Failed approval preserves the original contact.
 
 ## Dedicated bedside use
