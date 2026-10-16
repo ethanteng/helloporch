@@ -1,8 +1,143 @@
 import XCTest
 import UIKit
+import GameController
+import AVFoundation
+import PorchCore
 @testable import Porch
 
 final class CaregiverInputTests: XCTestCase {
+    @MainActor private func chineseBedside() -> () -> Void {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: "porch.bedsideDisplay.v1"), experience = defaults.object(forKey: "porch.experience")
+        var preferences = BedsidePreferences(); preferences.language = .traditionalChinese; preferences.appearance = .dynamic; preferences.save()
+        defaults.set("bedside", forKey: "porch.experience")
+        return { defaults.set(saved, forKey: "porch.bedsideDisplay.v1"); defaults.set(experience, forKey: "porch.experience") }
+    }
+    @MainActor private func labels(in view: UIView) -> [UILabel] { (view as? UILabel).map { [$0] } ?? view.subviews.flatMap { labels(in: $0) } }
+    @MainActor private func incoming(_ kind: String, mode: NativeCall.Mode = .video, callerName: String = "家人", snapshot: FamilySnapshot? = nil, audio: IncomingCallAudioPlaying) throws -> IncomingFamilyCallViewController {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let data = try JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": snapshot?.me.id ?? id, "mode": mode.rawValue, "kind": kind, "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": callerName])
+        let call = try JSONDecoder().decode(FamilyCallRecord.self, from: data)
+        return IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .bedside), snapshot: snapshot, audio: audio)
+    }
+    @MainActor func testRenamedContactIsShownAndAnnouncedForIncomingVoiceVideoAndDropIn() throws {
+        let restoreLanguage = chineseBedside(); defer { restoreLanguage() }
+        let defaults = UserDefaults.standard, keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
+        let caller = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let data = try JSONSerialization.data(withJSONObject: ["householdID": "home", "householdName": "Pat", "dropInEnabled": true,
+            "me": ["id": "bedside", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true],
+            "people": [["id": caller, "name": "Ethan", "role": "family", "permissions": ["audio": true, "video": true], "online": true]], "busy": false, "serverTime": 1])
+        let snapshot = try JSONDecoder().decode(FamilySnapshot.self, from: data)
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .video), familyMemberID: caller), for: 1)
+        try slots.save()
+        for kind in ["call", "dropIn"] {
+            for mode in [NativeCall.Mode.voice, .video] {
+                let audio = TestIncomingAudio()
+                let controller = try incoming(kind, mode: mode, callerName: "Ethan", snapshot: snapshot, audio: audio)
+                controller.loadViewIfNeeded(); controller.viewDidAppear(false)
+                XCTAssertTrue(labels(in: controller.view).contains { $0.text == "David" })
+                XCTAssertFalse(labels(in: controller.view).contains { $0.text == "Ethan" })
+                XCTAssertEqual(controller.session.peerName, "David", "The active call must keep the displayed/announced name")
+                if kind == "dropIn" {
+                    XCTAssertEqual(audio.name, "David"); XCTAssertEqual(audio.video, mode == .video)
+                    XCTAssertEqual(audio.language, .traditionalChinese)
+                } else { XCTAssertEqual(audio.ringCount, 1); XCTAssertNil(audio.name) }
+                controller.viewWillDisappear(false)
+            }
+        }
+    }
+    @MainActor func testChineseBedsideClockAndLargeContactCards() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let clock = CallViewController(); clock.loadViewIfNeeded()
+        clock.view.frame = CGRect(x: 0, y: 0, width: 1032, height: 1376); clock.view.layoutIfNeeded(); clock.viewDidLayoutSubviews()
+        XCTAssertEqual(buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.call" }?.configuration?.title, "打電話")
+        XCTAssertTrue(labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.weekday" }?.text?.contains("星期") == true)
+        XCTAssertTrue(labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.date" }?.text?.contains("年") == true)
+        let time = labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.time" }!.attributedText!
+        if let first = time.string.first, !first.isNumber {
+            let number = time.string.firstIndex(where: \.isNumber)!
+            let numberIndex = time.string.distance(from: time.string.startIndex, to: number)
+            XCTAssertLessThan((time.attribute(.font, at: 0, effectiveRange: nil) as! UIFont).pointSize, (time.attribute(.font, at: numberIndex, effectiveRange: nil) as! UIFont).pointSize / 2)
+        }
+        for _ in 0..<8 { NotificationCenter.default.post(name: .porchBedsideDisplayChanged, object: nil) }
+        let repeated = labels(in: clock.view).first { $0.accessibilityIdentifier == "clock.time" }!.attributedText!
+        let digit = repeated.string.firstIndex(where: \.isNumber)!
+        let digitIndex = (repeated.string as NSString).range(of: String(repeated.string[digit])).location
+        XCTAssertGreaterThan((repeated.attribute(.font, at: digitIndex, effectiveRange: nil) as! UIFont).pointSize, 250, "Chinese day-period prefixes must not shrink the clock on each update")
+        var slots = CallSlots()
+        for digit in CallSlots.digits { try slots.setContact(CallContact(name: digit == 1 ? "家人" : "A relative with a longer name", nativeCall: NativeCall(room: "test", mode: .video)), for: digit) }
+        let picker = PeoplePickerViewController(slots: slots); picker.loadViewIfNeeded()
+        for size in [CGSize(width: 744, height: 1133), CGSize(width: 1133, height: 744), CGSize(width: 1032, height: 1376)] {
+            picker.view.frame = CGRect(origin: .zero, size: size); picker.view.layoutIfNeeded(); picker.viewDidLayoutSubviews(); picker.view.layoutIfNeeded()
+            XCTAssertTrue(labels(in: picker.view).contains { $0.text == "您想打給誰？" })
+            let people = buttons(in: picker.view).filter { $0.accessibilityIdentifier?.hasPrefix("people.person.") == true }
+            XCTAssertEqual(people.count, 10)
+            for person in people {
+                person.layoutIfNeeded()
+                XCTAssertNil(person.configuration?.image)
+                XCTAssertGreaterThanOrEqual(person.titleLabel?.font.pointSize ?? 0, 44)
+                XCTAssertGreaterThanOrEqual(person.bounds.height, 200)
+                XCTAssertTrue(person.configuration?.subtitle?.hasPrefix("按 ") == true)
+            }
+        }
+        UserDefaults.standard.set("family", forKey: "porch.experience")
+        XCTAssertEqual(BedsideText.string("End call"), "End call", "Family mode keeps its existing language")
+    }
+    @MainActor func testCaregiverCanChooseAndSaveTraditionalChineseWithoutChangingSchedule() {
+        let restore = chineseBedside(); defer { restore() }
+        var preferences = BedsidePreferences(); preferences.dayStart = 7; preferences.nightStart = 21; preferences.save()
+        let settings = BedsideDisplaySettingsViewController(); settings.loadViewIfNeeded()
+        let language = descendants(settings.view).first { $0.accessibilityIdentifier == "bedside.language" } as! UISegmentedControl
+        XCTAssertEqual(language.titleForSegment(at: 1), "繁體中文")
+        language.selectedSegmentIndex = 1; language.sendActions(for: .valueChanged)
+        let save = settings.navigationItem.rightBarButtonItem!
+        UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
+        let saved = BedsidePreferences.load()
+        XCTAssertEqual(saved.language, .traditionalChinese); XCTAssertEqual(saved.dayStart, 7); XCTAssertEqual(saved.nightStart, 21)
+    }
+    @MainActor func testIncomingRingingRepeatsUntilTheScreenLeavesAndUsesChineseControls() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let audio = TestIncomingAudio()
+        let ringing = try incoming("call", audio: audio)
+        ringing.loadViewIfNeeded(); ringing.viewDidAppear(false); ringing.viewDidAppear(false)
+        XCTAssertEqual(audio.ringCount, 1)
+        XCTAssertTrue(buttons(in: ringing.view).contains { $0.configuration?.title == "接聽視訊" })
+        XCTAssertTrue(buttons(in: ringing.view).contains { $0.configuration?.title == "拒接" })
+        ringing.viewWillDisappear(false); XCTAssertGreaterThan(audio.stopCount, 0)
+    }
+    @MainActor func testDropInWaitsForAnnouncementBeforeCountingDownAndStopsOnLeaving() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!), audio = TestIncomingAudio()
+        let controller = try incoming("dropIn", audio: audio)
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        defer { controller.viewWillDisappear(false); window.isHidden = true; original.makeKeyAndVisible() }
+        controller.viewDidAppear(false)
+        XCTAssertEqual(audio.language, .traditionalChinese); XCTAssertEqual(audio.video, true)
+        for _ in 0..<6 { controller.advanceCountdown() }
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "正在提示視訊自動接聽…" })
+        audio.completion?(true)
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "視訊自動接聽\n5 秒後接通…" })
+        controller.advanceCountdown()
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "視訊自動接聽\n4 秒後接通…" })
+        controller.viewWillDisappear(false); XCTAssertGreaterThan(audio.stopCount, 0)
+    }
+    @MainActor func testFailedAnnouncementRequiresManualAnswerInsteadOfStartingSilentVideo() throws {
+        let restore = chineseBedside(); defer { restore() }
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!), audio = TestIncomingAudio()
+        let controller = try incoming("dropIn", audio: audio)
+        window.rootViewController = controller; window.makeKeyAndVisible()
+        defer { controller.viewWillDisappear(false); window.isHidden = true; original.makeKeyAndVisible() }
+        controller.viewDidAppear(false); audio.completion?(false)
+        for _ in 0..<6 { controller.advanceCountdown() }
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "無法播放提示音，請按接聽以接通。" })
+        XCTAssertTrue(buttons(in: controller.view).contains { $0.configuration?.title == "接聽視訊" && !$0.isHidden })
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text?.contains("接聽，長按") == true })
+    }
     @MainActor func testLargeClockFitsPortraitAndLandscapeWithoutCoveringCallButton() {
         func find(_ identifier: String, in view: UIView) -> UIView? {
             if view.accessibilityIdentifier == identifier { return view }
@@ -88,6 +223,135 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(clock.isFirstResponder, "Returning to the clock restores keypad calling")
     }
 
+    @MainActor func testConnectingAKeypadDoesNotReplaceTheNativeKeyboard() {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let name = UITextField(), pin = UITextField(); pin.keyboardType = .numberPad
+        form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
+        form.form.addArrangedSubview(form.field(pin, title: "PIN", placeholder: "Six digits"))
+        XCTAssertTrue(name.becomeFirstResponder())
+        XCTAssertNil(name.inputView)
+        XCTAssertFalse(name.inputAssistantItem.allowsHidingShortcuts)
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertNil(name.inputView, "Connecting a keypad must not suppress the system keyboard")
+        XCTAssertNil(pin.inputView, "Other fields must keep the native keyboard too")
+        XCTAssertTrue(name.isFirstResponder)
+        name.insertText("Pat")
+        XCTAssertEqual(name.text, "Pat")
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertNil(name.inputView)
+    }
+
+    @MainActor func testPorchKeyboardIsOptInAndSwitchingBackRestoresEveryField() {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let name = UITextField(), phone = UITextField(); phone.keyboardType = .phonePad
+        form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
+        form.form.addArrangedSubview(form.field(phone, title: "Phone", placeholder: "Phone"))
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertTrue(name.becomeFirstResponder()); name.insertText("Pat")
+        buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.porchKeyboard" }!.sendActions(for: .touchUpInside)
+        XCTAssertNotNil(name.inputView); XCTAssertNotNil(phone.inputView)
+        let keyboard = form.view.subviews.flatMap { descendants($0) }.first { $0.accessibilityIdentifier == "caregiver.touchKeyboard" }!
+        XCTAssertFalse(keyboard.isHidden)
+        buttons(in: keyboard).first { $0.title(for: .normal) == "m" }!.sendActions(for: .touchUpInside)
+        XCTAssertEqual(name.text, "Patm")
+        buttons(in: keyboard).first { $0.accessibilityIdentifier == "caregiver.touchKeyboard.useNative" }!.sendActions(for: .touchUpInside)
+        XCTAssertNil(name.inputView); XCTAssertNil(phone.inputView)
+        XCTAssertTrue(keyboard.isHidden); XCTAssertTrue(name.isFirstResponder)
+        XCTAssertEqual(name.text, "Patm", "Changing keyboards must preserve the text and selection")
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertNil(name.inputView)
+        _ = form.textFieldShouldReturn(name)
+        XCTAssertTrue(phone.isFirstResponder); XCTAssertNil(phone.inputView)
+        phone.insertText("+1415"); XCTAssertEqual(phone.text, "+1415")
+        form.setKeyboardControlVisible(false); form.view.endEditing(true)
+        XCTAssertTrue(descendants(form.view).first { $0.accessibilityIdentifier == "caregiver.keyboardOptions" }!.isHidden)
+    }
+
+    @MainActor func testRequestingNativeKeyboardFocusesAnEditableFieldAndPreservesAssistant() {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let hidden = UITextField(), disabled = UITextField(), detached = UITextField(), editable = UITextField()
+        let hiddenGroup = form.field(hidden, title: "Hidden", placeholder: "Hidden"); hiddenGroup.isHidden = true
+        form.form.addArrangedSubview(hiddenGroup)
+        disabled.isEnabled = false; form.form.addArrangedSubview(form.field(disabled, title: "Disabled", placeholder: "Disabled"))
+        _ = form.field(detached, title: "Detached", placeholder: "Detached")
+        let item = UIBarButtonItem(title: "Test shortcut", style: .plain, target: nil, action: nil)
+        let group = UIBarButtonItemGroup(barButtonItems: [item], representativeItem: nil)
+        editable.inputAssistantItem.leadingBarButtonGroups = [group]
+        form.form.addArrangedSubview(form.field(editable, title: "Name", placeholder: "Name"))
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertEqual(editable.inputAssistantItem.leadingBarButtonGroups.count, 1)
+        buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.nativeKeyboard" }!.sendActions(for: .touchUpInside)
+        XCTAssertTrue(editable.isFirstResponder); XCTAssertNil(editable.inputView)
+        XCTAssertFalse(hidden.isFirstResponder); XCTAssertFalse(disabled.isFirstResponder); XCTAssertFalse(detached.isFirstResponder)
+    }
+
+    @MainActor func testKeyboardButtonExplainsHardwareSuppressionInsteadOfSilentlyRetrying() async {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let name = UITextField()
+        form.form.addArrangedSubview(form.field(name, title: "Name", placeholder: "Name"))
+        XCTAssertTrue(name.becomeFirstResponder()); name.insertText("Pat")
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        let button = buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.nativeKeyboard" }!
+        XCTAssertEqual(button.configuration?.title, "Keyboard help")
+        button.sendActions(for: .touchUpInside)
+        let help = try! XCTUnwrap(form.presentedViewController as? UIAlertController)
+        XCTAssertTrue(help.message?.contains("disconnect the keypad during setup") == true)
+        XCTAssertTrue(help.message?.contains("cannot force the native keyboard open") == true)
+        XCTAssertTrue(help.message?.contains("Software Keyboards") == true)
+        XCTAssertFalse(help.message?.contains("bottom bar") == true, "A missing system bar cannot be the only recovery path")
+        XCTAssertTrue(help.actions.contains { $0.title == "Use Porch keyboard" })
+        XCTAssertNil(name.inputView, "Help must not silently replace the chosen native input")
+        XCTAssertEqual(name.text, "Pat")
+        await withCheckedContinuation { continuation in help.dismiss(animated: false) { continuation.resume() } }
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertEqual(button.configuration?.title, UIDevice.current.userInterfaceIdiom == .phone ? "iPhone keyboard" : "iPad keyboard")
+        button.sendActions(for: .touchUpInside)
+        XCTAssertTrue(name.isFirstResponder); XCTAssertNil(name.inputView)
+    }
+
+    @MainActor func testNativeKeyboardHelpDoesNotDiscardThePorchKeyboardChoice() async {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let form = CaregiverFormViewController()
+        window.rootViewController = form; window.makeKeyAndVisible()
+        defer { form.view.endEditing(true); window.isHidden = true; original.makeKeyAndVisible() }
+        let pin = UITextField(); pin.keyboardType = .numberPad; pin.isSecureTextEntry = true
+        form.form.addArrangedSubview(form.field(pin, title: "PIN", placeholder: "PIN"))
+        XCTAssertTrue(pin.becomeFirstResponder()); pin.insertText("012345")
+        buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.porchKeyboard" }!.sendActions(for: .touchUpInside)
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        let system = buttons(in: form.view).first { $0.accessibilityIdentifier == "caregiver.touchKeyboard.useNative" }!
+        XCTAssertEqual(system.title(for: .normal), "Keyboard help")
+        system.sendActions(for: .touchUpInside)
+        let help = try! XCTUnwrap(form.presentedViewController as? UIAlertController)
+        XCTAssertNotNil(pin.inputView, "Opening help must keep the working touch keyboard selected")
+        XCTAssertEqual(pin.text, "012345")
+        await withCheckedContinuation { continuation in help.dismiss(animated: false) { continuation.resume() } }
+        XCTAssertTrue(pin.becomeFirstResponder())
+        let keyboard = descendants(form.view).first { $0.accessibilityIdentifier == "caregiver.touchKeyboard" }!
+        XCTAssertFalse(keyboard.isHidden)
+        buttons(in: keyboard).first { $0.title(for: .normal) == "6" }!.sendActions(for: .touchUpInside)
+        XCTAssertEqual(pin.text, "0123456")
+    }
+
+    @MainActor private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
+
     @MainActor func testCaregiverFieldsRemainLegibleWhenDeviceUsesDarkMode() {
         let form = CaregiverFormViewController()
         form.loadViewIfNeeded()
@@ -101,6 +365,137 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(field.textColor, PorchStyle.ink)
     }
 
+
+    @MainActor func testPINKeyboardProvidesDigitsWithoutPhoneSymbols() {
+        let field = UITextField()
+        field.keyboardType = .numberPad
+        field.isSecureTextEntry = true
+        let keyboard = CaregiverTouchKeyboard()
+        keyboard.field = field
+        XCTAssertNil(buttons(in: keyboard).first { $0.title(for: .normal) == "+" })
+        for key in ["0", "1", "2", "3", "4", "5"] {
+            buttons(in: keyboard).first { $0.title(for: .normal) == key }!.sendActions(for: .touchUpInside)
+        }
+        XCTAssertEqual(field.text, "012345", "PINs must preserve a leading zero")
+    }
+
+    @MainActor func testIncomingCallControlsRemainReachableOnSmallPhone() throws {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let data = try JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "call", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": "A family member with a long display name"])
+        let call = try JSONDecoder().decode(FamilyCallRecord.self, from: data)
+        for size in [CGSize(width: 320, height: 568), CGSize(width: 568, height: 320)] {
+            let incoming = IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.com")!, credential: "test", role: .family))
+            incoming.loadViewIfNeeded()
+            incoming.view.frame = CGRect(origin: .zero, size: size)
+            incoming.view.layoutIfNeeded()
+            for button in buttons(in: incoming.view) {
+                let frame = button.convert(button.bounds, to: incoming.view)
+                XCTAssertGreaterThanOrEqual(frame.height, 64)
+                XCTAssertGreaterThanOrEqual(frame.minY, 0)
+                XCTAssertLessThanOrEqual(frame.maxY, size.height)
+                XCTAssertGreaterThanOrEqual(frame.minX, 0)
+                XCTAssertLessThanOrEqual(frame.maxX, size.width)
+            }
+        }
+    }
+
+
+    @MainActor func testContactEditorOnlyOffersPorchDetailsAndPhoneFallback() {
+        let editor = SetupViewController(slot: 1, contact: nil)
+        editor.loadViewIfNeeded()
+        func labels(_ view: UIView) -> [String] {
+            (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels)
+        }
+        let text = labels(editor.view)
+        XCTAssertTrue(text.contains("Their details"))
+        XCTAssertTrue(text.contains("Default calling mode"))
+        XCTAssertTrue(text.contains("Phone number"))
+        for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
+        let settings = SlotsViewController(slots: CallSlots())
+        settings.loadViewIfNeeded()
+        let headings = (0..<settings.numberOfSections(in: settings.tableView)).compactMap { settings.tableView(settings.tableView, titleForHeaderInSection: $0) }
+        XCTAssertEqual(headings, ["Keypad · people & controls", "Settings", "Device mode"])
+    }
+
+    @MainActor func testFirstCaregiverEntryAsksForChosenPINAndConfirmation() {
+        let setup = CaregiverPINViewController(profile: nil)
+        setup.loadViewIfNeeded()
+        func find(_ id: String, _ view: UIView) -> UITextField? {
+            if view.accessibilityIdentifier == id { return view as? UITextField }
+            return view.subviews.compactMap { find(id, $0) }.first
+        }
+        let pin = find("caregiver.pin", setup.view)
+        let confirm = find("caregiver.confirm", setup.view)
+        XCTAssertNotNil(pin); XCTAssertNotNil(confirm)
+        XCTAssertEqual(pin?.text ?? "", "", "A generated PIN must never prefill the chooser")
+        XCTAssertEqual(pin?.keyboardType, .numberPad)
+        XCTAssertTrue(confirm?.isSecureTextEntry == true)
+    }
+
+    @MainActor func testFirstTapOnGearOpensCaregiverGate() async {
+        let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
+        let window = UIWindow(windowScene: original.windowScene!)
+        let clock = CallViewController(); window.rootViewController = clock; window.makeKeyAndVisible()
+        defer { window.isHidden = true; original.makeKeyAndVisible() }
+        let gear = buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.caregiver" }!
+        gear.sendActions(for: .touchUpInside)
+        XCTAssertTrue((clock.presentedViewController as? UINavigationController)?.topViewController is CaregiverPINViewController)
+        await withCheckedContinuation { continuation in clock.dismiss(animated: false) { continuation.resume() } }
+    }
+
+    @MainActor func testAllTenKeypadRowsIncludeDefaultControlsAndCanBeRemapped() throws {
+        let settings = SlotsViewController(slots: CallSlots()); settings.loadViewIfNeeded()
+        XCTAssertEqual(settings.tableView(settings.tableView, numberOfRowsInSection: 0), 10)
+        let nine = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 8, section: 0))
+        let zero = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 9, section: 0))
+        XCTAssertEqual(nine.accessibilityLabel, "Key 9, Turn video off / on")
+        XCTAssertEqual(zero.accessibilityLabel, "Key 0, Answer / decline / hang up")
+        let editor = SetupViewController(slot: 4, contact: nil, action: .callControl)
+        editor.loadViewIfNeeded()
+        var saved: KeypadAction?
+        editor.onSaveSlot = { action, contact in saved = action; XCTAssertNil(contact) }
+        let save = editor.navigationItem.rightBarButtonItem!
+        _ = editor.perform(save.action)
+        XCTAssertEqual(saved, .callControl, "A control can be saved on any digit without a person's name or phone number")
+    }
+
+    @MainActor func testDynamicClockRetainsCurrentDateTimeAndReadableLayout() {
+        let old = UserDefaults.standard.data(forKey: "porch.bedsideDisplay.v1")
+        defer { UserDefaults.standard.set(old, forKey: "porch.bedsideDisplay.v1") }
+        var preferences = BedsidePreferences(); preferences.appearance = .dynamic; preferences.save()
+        func find(_ id: String, _ view: UIView) -> UIView? {
+            if view.accessibilityIdentifier == id { return view }
+            return view.subviews.compactMap { find(id, $0) }.first
+        }
+        for size in [CGSize(width: 744, height: 1133), CGSize(width: 1133, height: 744), CGSize(width: 320, height: 568), CGSize(width: 568, height: 320)] {
+            let clock = CallViewController(); clock.loadViewIfNeeded(); clock.view.frame = CGRect(origin: .zero, size: size)
+            clock.view.layoutIfNeeded(); clock.viewDidLayoutSubviews(); clock.view.layoutIfNeeded()
+            let time = find("clock.time", clock.view) as! UILabel
+            let date = find("clock.date", clock.view) as! UILabel
+            let context = find("clock.context", clock.view) as! UILabel
+            let call = find("clock.call", clock.view)!
+            XCTAssertFalse(time.isHidden); XCTAssertFalse(date.isHidden); XCTAssertFalse(context.isHidden)
+            XCTAssertFalse(time.attributedText?.string.isEmpty ?? true)
+            XCTAssertEqual(date.text, { let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("MMMMdyyyy"); return f.string(from: Date()) }())
+            XCTAssertGreaterThanOrEqual(context.convert(context.bounds, to: clock.view).minY, 0)
+            XCTAssertLessThan(date.convert(date.bounds, to: clock.view).maxY, call.frame.minY)
+        }
+    }
+
+    @MainActor func testFamilyInvitationCopyAndGearAreClear() {
+        func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
+        let home = FamilyHomeViewController(); home.loadViewIfNeeded()
+        XCTAssertFalse(labels(home.view).contains("Close, even from here."))
+        XCTAssertNotNil(home.navigationItem.rightBarButtonItem?.image)
+        let pairing = FamilyPairingViewController(); pairing.loadViewIfNeeded()
+        XCTAssertTrue(labels(pairing.view).contains("Your Porch invite"))
+        let editor = SetupViewController(slot: 1, contact: nil); editor.loadViewIfNeeded()
+        func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
+        let mode = segments(editor.view).first { $0.accessibilityLabel == "Default calling mode" }
+        XCTAssertEqual(mode?.titleForSegment(at: 0), "Voice-only")
+        XCTAssertFalse(buttons(in: editor.view).contains { $0.configuration?.title == "Link their Porch app" })
+    }
+
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {
         func luminance(_ color: UIColor) -> CGFloat {
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -111,4 +506,17 @@ final class CaregiverInputTests: XCTestCase {
         let a = luminance(first), b = luminance(second)
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
+}
+
+@MainActor private final class TestIncomingAudio: IncomingCallAudioPlaying {
+    var ringCount = 0, stopCount = 0
+    var name: String?
+    var language: BedsideLanguage?
+    var video: Bool?
+    var completion: ((Bool) -> Void)?
+    func ring() -> Bool { ringCount += 1; return true }
+    func announce(name: String, video: Bool, language: BedsideLanguage, completion: @escaping (Bool) -> Void) {
+        self.name = name; self.language = language; self.video = video; self.completion = completion
+    }
+    func stop() { stopCount += 1; completion = nil }
 }

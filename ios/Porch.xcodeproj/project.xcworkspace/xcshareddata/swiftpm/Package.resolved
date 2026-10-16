@@ -1,5 +1,5 @@
 {
-  "originHash" : "c9c1c91a7d1cf86ab62cf216cbbbd3b8c6401a4c092876f30352a28c7a2a6ea4",
+  "originHash" : "5605c3328782998b9f67aa99d55da75bb407e53946dd6af932c12bf93cbcd1db",
   "pins" : [
     {
       "identity" : "client-sdk-swift",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "7a9bf91b1601d5c408ae0cac7dc2047b5a4f615e",
         "version" : "0.1.9"
+      }
+    },
+    {
+      "identity" : "phonenumberkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/PhoneNumberKit/PhoneNumberKit",
+      "state" : {
+        "revision" : "15c27dbf811e96b9fe48525389ffe042adb9f8cb",
+        "version" : "5.0.9"
       }
     },
     {

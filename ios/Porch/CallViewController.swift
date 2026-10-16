@@ -6,16 +6,22 @@ final class CallViewController: UIViewController {
     private var trigger = CallTrigger()
     private var opening = false
     private var loadError: String?
+    private let sceneView = BedsideSceneView()
+    private let clock = UIStackView()
+    private let contextLabel = UILabel()
     private let weekdayLabel = UILabel()
     private let timeLabel = UILabel()
+    private var clockFont = UIFont.monospacedDigitSystemFont(ofSize: 360, weight: .regular)
     private let dateLabel = UILabel()
     private let statusLabel = UILabel()
+    private let caregiver = UIButton(type: .system)
     private let callButton = PorchStyle.button("Call someone", symbol: "phone.fill")
     private var clockTimer: Timer?
     private var timeFormatter = DateFormatter()
     private var weekdayFormatter = DateFormatter()
     private var dateFormatter = DateFormatter()
     private var typographySize = CGSize.zero
+    private var appliedDisplayStyle: Int?
     #if DEBUG
     private var previewShown = false
     #endif
@@ -31,14 +37,21 @@ final class CallViewController: UIViewController {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-contact") || ProcessInfo.processInfo.arguments.contains("--preview-six") {
             slots = CallSlots()
-            let names = ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
+            let names = ProcessInfo.processInfo.arguments.contains("--preview-chinese") ? ["家人", "陳先生", "林小姐", "王阿姨", "李叔叔", "朋友"] : ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
             for (index, name) in names.enumerated() {
-                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "family-\(name.lowercased())", mode: .video)), for: index + 1)
+                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "preview-person-\(index + 1)", mode: .video)), for: index + 1)
             }
         }
         #endif
+        sceneView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(sceneView)
+        NSLayoutConstraint.activate([sceneView.leadingAnchor.constraint(equalTo: view.leadingAnchor), sceneView.trailingAnchor.constraint(equalTo: view.trailingAnchor), sceneView.topAnchor.constraint(equalTo: view.topAnchor), sceneView.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
+        contextLabel.textColor = PorchStyle.nightText; contextLabel.textAlignment = .center
+        contextLabel.font = PorchStyle.font(32, weight: .semibold)
+        contextLabel.accessibilityIdentifier = "clock.context"
+        contextLabel.adjustsFontSizeToFitWidth = true; contextLabel.minimumScaleFactor = 0.5
         weekdayLabel.font = PorchStyle.font(72, weight: .medium)
-        timeLabel.font = .monospacedDigitSystemFont(ofSize: 360, weight: .regular)
+        timeLabel.font = clockFont
         timeLabel.adjustsFontSizeToFitWidth = true
         timeLabel.minimumScaleFactor = 0.28
         timeLabel.numberOfLines = 1
@@ -56,7 +69,7 @@ final class CallViewController: UIViewController {
             label.adjustsFontForContentSizeCategory = true
         }
         timeLabel.accessibilityTraits.insert(.updatesFrequently)
-        let clock = UIStackView(arrangedSubviews: [weekdayLabel, timeLabel, dateLabel])
+        [contextLabel, weekdayLabel, timeLabel, dateLabel].forEach { clock.addArrangedSubview($0) }
         clock.axis = .vertical
         clock.spacing = 24
         clock.isAccessibilityElement = false
@@ -72,17 +85,18 @@ final class CallViewController: UIViewController {
         callButton.configuration = callConfig
         callButton.accessibilityIdentifier = "clock.call"
         callButton.addTarget(self, action: #selector(showPeople), for: .touchUpInside)
-        let caregiver = UIButton(type: .system)
-        caregiver.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        caregiver.layer.cornerRadius = 32
+        caregiver.setImage(UIImage(systemName: "gearshape", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)), for: .normal)
         caregiver.tintColor = PorchStyle.nightSecondary
         caregiver.accessibilityLabel = "Caregiver mode"
-        caregiver.accessibilityHint = "Touch and hold to manage contacts and settings."
+        caregiver.accessibilityHint = "Tap or hold to manage contacts and settings."
         caregiver.accessibilityIdentifier = "clock.caregiver"
         caregiver.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Open caregiver mode", target: self, selector: #selector(accessibleSetup))]
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(heldSetup(_:)))
-        hold.minimumPressDuration = 1.5
+        hold.minimumPressDuration = 0.5
+        hold.allowableMovement = 30
         caregiver.addGestureRecognizer(hold)
-        caregiver.addTarget(self, action: #selector(explainCaregiver), for: .touchUpInside)
+        caregiver.addTarget(self, action: #selector(tappedSetup), for: .touchUpInside)
         statusLabel.font = PorchStyle.font(17)
         statusLabel.textColor = PorchStyle.nightSecondary
         statusLabel.textAlignment = .center
@@ -97,8 +111,8 @@ final class CallViewController: UIViewController {
             clock.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
             caregiver.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
             caregiver.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
-            caregiver.widthAnchor.constraint(equalToConstant: 56),
-            caregiver.heightAnchor.constraint(equalToConstant: 56),
+            caregiver.widthAnchor.constraint(equalToConstant: 64),
+            caregiver.heightAnchor.constraint(equalToConstant: 64),
             callButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             callButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -36),
             callButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 210),
@@ -111,7 +125,9 @@ final class CallViewController: UIViewController {
         width.priority = .defaultHigh; width.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: UIApplication.significantTimeChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: NSLocale.currentLocaleDidChangeNotification, object: nil)
-        resetClock()
+        NotificationCenter.default.addObserver(self, selector: #selector(updateDisplay), name: .porchBedsideDisplayChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(reloadSlots), name: .porchFamilyChanged, object: nil)
+        updateDisplay(); resetClock()
     }
 
     deinit { clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
@@ -127,10 +143,18 @@ final class CallViewController: UIViewController {
         if args.contains("--preview-phone-setup") {
             let person = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
             present(PorchStyle.navigation(SetupViewController(slot: 1, contact: person)), animated: false)
-        } else if args.contains("--preview-server") {
-            present(PorchStyle.navigation(NativeCallSettingsViewController()), animated: false)
-        } else if args.contains("--preview-setup") { showSetup() }
+
+        } else if args.contains("--preview-incoming-video") {
+            let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            let data = try! JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "dropIn", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": args.contains("--preview-chinese") ? "家人" : "A family member"])
+            let call = try! JSONDecoder().decode(FamilyCallRecord.self, from: data)
+            present(IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "preview", role: .bedside)), animated: false)
+        } else if args.contains("--preview-caregiver") { showUnlockedSetup() }
+        else if args.contains("--preview-family-settings") { present(PorchStyle.navigation(FamilyAdminViewController()), animated: false) }
+        else if args.contains("--preview-pin-setup") { present(PorchStyle.navigation(CaregiverPINViewController(profile: nil)), animated: false) }
+        else if args.contains("--preview-setup") { showSetup() }
         else if args.contains("--preview-people") { showPeople() }
+        else if args.contains("--preview-display-settings") { present(PorchStyle.navigation(BedsideDisplaySettingsViewController()), animated: false) }
         #endif
     }
 
@@ -148,10 +172,13 @@ final class CallViewController: UIViewController {
         // Fit the clock to the iPad, rather than capping it at phone-sized text.
         // Reserve the bottom area for calling and allow long localized dates to fit.
         let width = max(200, size.width - 64)
-        let height = max(240, size.height - 200)
+        let height = max(120, size.height - 200)
+        clock.spacing = min(24, size.height * 0.025)
+        contextLabel.font = PorchStyle.font(max(18, min(32, height * 0.07)), weight: .semibold)
         weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
         dateLabel.font = .systemFont(ofSize: min(width * 0.061, height * 0.11))
-        timeLabel.font = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
+        clockFont = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
+        timeLabel.font = clockFont
         updateClock()
     }
 
@@ -161,6 +188,7 @@ final class CallViewController: UIViewController {
         // from a caregiver's text field or from an active call.
         guard isViewLoaded, presentedViewController == nil else { return }
         opening = false
+        updateDisplay()
         statusLabel.text = nil
         refreshCallButton()
         resetClock()
@@ -179,12 +207,10 @@ final class CallViewController: UIViewController {
         for formatter in [timeFormatter, weekdayFormatter, dateFormatter] {
             formatter.timeZone = .autoupdatingCurrent
             formatter.calendar = .autoupdatingCurrent
+            formatter.locale = BedsideText.language.locale
         }
-        timeFormatter.locale = .autoupdatingCurrent
         timeFormatter.dateStyle = .none; timeFormatter.timeStyle = .short
-        weekdayFormatter.locale = .autoupdatingCurrent
         weekdayFormatter.setLocalizedDateFormatFromTemplate("EEEE")
-        dateFormatter.locale = .autoupdatingCurrent
         dateFormatter.setLocalizedDateFormatFromTemplate("MMMMdyyyy")
         updateClock()
         clockTimer?.fireDate = nextMinute
@@ -195,18 +221,73 @@ final class CallViewController: UIViewController {
     }
 
     private func updateClock() {
-        let now = Date()
+        var now = Date()
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "--preview-hour"), args.count > i + 1, let hour = Int(args[i + 1]) {
+            now = Calendar.current.date(bySettingHour: hour, minute: 30, second: 0, of: now) ?? now
+        }
+        #endif
+        var clockColor = PorchStyle.nightText
+        if !sceneView.isHidden {
+            let scene = BedsideScene(date: now, preferences: BedsidePreferences.load())
+            let palette = BedsideScenePalette(scene: scene)
+            clockColor = palette.foreground
+            let style = scene.isDay ? 1 : 2
+            if appliedDisplayStyle != style {
+                for label in [contextLabel, weekdayLabel, dateLabel] { label.textColor = palette.foreground }
+                caregiver.tintColor = palette.controlForeground; caregiver.backgroundColor = palette.controlBackground
+                var config = callButton.configuration!
+                config.baseBackgroundColor = palette.controlBackground; config.baseForegroundColor = palette.controlForeground
+                callButton.configuration = config
+                statusLabel.textColor = palette.controlForeground; statusLabel.backgroundColor = palette.controlBackground
+                statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
+                appliedDisplayStyle = style
+            }
+            contextLabel.text = "\(BedsideText.string(scene.period.rawValue)) · \(BedsideText.string(scene.season.rawValue))"
+            // Switch the complete contrast treatment at a schedule boundary;
+            // a crossfade between light and dark text would briefly lose contrast.
+            if sceneView.window != nil && !UIAccessibility.isReduceMotionEnabled && sceneView.scene.isDay == scene.isDay && sceneView.scene != scene {
+                UIView.transition(with: sceneView, duration: 1.5, options: [.transitionCrossDissolve, .allowUserInteraction]) { self.sceneView.scene = scene }
+            } else { sceneView.scene = scene }
+        } else if appliedDisplayStyle != 0 {
+            appliedDisplayStyle = 0
+            contextLabel.textColor = PorchStyle.nightText
+            for label in [weekdayLabel, dateLabel] { label.textColor = PorchStyle.nightSecondary }
+            caregiver.tintColor = PorchStyle.nightSecondary; caregiver.backgroundColor = .clear
+            var config = callButton.configuration!
+            config.baseBackgroundColor = PorchStyle.nightSurface; config.baseForegroundColor = PorchStyle.nightText
+            callButton.configuration = config
+            statusLabel.textColor = PorchStyle.nightSecondary; statusLabel.backgroundColor = .clear
+        }
         let time = timeFormatter.string(from: now).replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
-        let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: PorchStyle.nightText])
-        for symbol in [timeFormatter.amSymbol, timeFormatter.pmSymbol] {
-            guard let symbol, !symbol.isEmpty, let range = time.range(of: symbol, options: .caseInsensitive) else { continue }
-            text.addAttributes([.font: UIFont.systemFont(ofSize: timeLabel.font.pointSize * 0.25, weight: .medium)], range: NSRange(range, in: time))
+        let text = NSMutableAttributedString(string: time, attributes: [.font: clockFont, .foregroundColor: clockColor])
+        // Flexible Chinese periods include 中午/凌晨, beyond the AM/PM symbols.
+        let periods = try? NSRegularExpression(pattern: "[\\p{L}\\p{M}]+")
+        for match in periods?.matches(in: time, range: NSRange(time.startIndex..., in: time)) ?? [] {
+            text.addAttributes([.font: UIFont.systemFont(ofSize: clockFont.pointSize * 0.25, weight: .medium)], range: match.range)
         }
         timeLabel.attributedText = text
         weekdayLabel.text = weekdayFormatter.string(from: now)
         dateLabel.text = dateFormatter.string(from: now)
     }
 
+    @objc private func updateDisplay() {
+        guard isViewLoaded else { return }
+        var dynamic = BedsidePreferences.load().appearance == .dynamic
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-dynamic") { dynamic = true }
+        #endif
+        sceneView.isHidden = !dynamic; contextLabel.isHidden = !dynamic
+        callButton.configuration?.title = BedsideText.string("Call someone")
+        caregiver.accessibilityLabel = BedsideText.string("Caregiver mode")
+        caregiver.accessibilityHint = BedsideText.string("Tap or hold to manage contacts and settings.")
+        BedsideText.applyAccessibilityLanguage(to: view)
+        resetClock()
+    }
+    @objc private func reloadSlots() {
+        do { slots = try CallSlots.load() } catch { statusLabel.text = error.localizedDescription }
+    }
     private func refreshCallButton() { callButton.isEnabled = !opening }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
@@ -241,51 +322,59 @@ final class CallViewController: UIViewController {
     private func call(slot: Int) {
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
+        guard slots.action(for: slot) == .person else {
+            statusLabel.text = BedsideText.string(slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call.")
+            return
+        }
         guard let contact = slots.contact(for: slot) else {
-            statusLabel.text = "No one is assigned to \(slot).\nPlease choose another number."
+            statusLabel.text = BedsideText.string("No one is assigned to %d.\nPlease choose another number.", slot)
             return
         }
-        if let native = contact.nativeCall {
-            do {
-                let server = try NativeCallSettings.load()
-                guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
-                opening = true
-                refreshCallButton()
-                present(NativeCallViewController(contact: contact, call: native, server: server), animated: true)
-            } catch {
-                showError("Set up native calling", message: error.localizedDescription)
-            }
-            return
+        guard let native = contact.nativeCall else {
+            showError("Finish Porch setup", message: "Open caregiver mode and invite this person to Porch or add their phone number."); return
         }
-        guard !UIAccessibility.isGuidedAccessEnabled else {
-            showError("Exit Guided Access", message: "Porch needs to open Shortcuts or FaceTime. Guided Access keeps this iPad in one app, so a caregiver must exit it before calling.")
-            return
+        startFamilyCall(contact, memberID: contact.familyMemberID, mode: native.mode)
+    }
+
+    private func startFamilyCall(_ contact: CallContact, memberID: String?, mode: NativeCall.Mode) {
+        guard PorchDevice.credential(for: .bedside) != nil, !opening else {
+            showError("Porch isn't ready", message: "Check Family & drop-in in caregiver mode, then try again."); return
         }
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
-        opening = true
-        refreshCallButton()
-        let appName = contact.shortcutName == nil ? "FaceTime" : "Shortcuts"
-        statusLabel.text = "Opening \(appName)…"
-        UIApplication.shared.open(contact.launchURL, options: [:]) { [weak self] opened in
+        opening = true; refreshCallButton()
+        Task { [weak self] in
             guard let self else { return }
-            self.opening = false
-            self.refreshCallButton()
-            if !opened {
-                self.showError("Couldn't open \(appName)", message: "Check that \(appName) is installed and enabled, then try again.")
+            defer { self.opening = false; self.refreshCallButton() }
+            do {
+                let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
+                guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
+                self.present(try NativeCallViewController.paired(session, contact: contact), animated: true)
+            } catch {
+                // A lost response may still have created a Porch call. Only a
+                // confirmed offline result permits an unpaired phone handoff.
+                if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
+                    do { self.present(try NativeCallViewController.phoneFallback(contact), animated: true) }
+                    catch { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
+                } else { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
             }
-            // URL handoff doesn't report shortcut execution or call status.
         }
     }
 
     @objc private func heldSetup(_ gesture: UILongPressGestureRecognizer) {
-        if gesture.state == .began { showSetup() }
+        if gesture.state == .began { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showSetup() }
     }
-    @objc private func explainCaregiver() {
-        statusLabel.text = "Hold the settings icon to open caregiver mode."
-    }
+    @objc private func tappedSetup() { showSetup() }
     @objc private func accessibleSetup() -> Bool { showSetup(); return true }
 
-    private func showSetup() {
+    func showSetup() {
+        guard presentedViewController == nil else { return }
+        trigger.resetKeys(); resignFirstResponder()
+        let gate = CaregiverPINViewController()
+        gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
+        present(PorchStyle.navigation(gate), animated: true)
+    }
+
+    private func showUnlockedSetup() {
         guard presentedViewController == nil else { return }
         trigger.resetKeys()
         resignFirstResponder()
@@ -298,8 +387,8 @@ final class CallViewController: UIViewController {
     }
 
     private func showError(_ title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        let alert = UIAlertController(title: BedsideText.string(title), message: BedsideText.error(message), preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: BedsideText.string("OK"), style: .default))
         present(alert, animated: true)
     }
 }
@@ -310,6 +399,7 @@ final class PeoplePickerViewController: UIViewController {
     private let grid = UIStackView()
     private var trigger = CallTrigger()
     private var columns = 0
+    private var gridWidth: CGFloat = 0
     private var choosing = false
     init(slots: CallSlots) {
         self.slots = slots
@@ -323,11 +413,15 @@ final class PeoplePickerViewController: UIViewController {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .dark
         view.backgroundColor = PorchStyle.night
-        let heading = PorchStyle.label("Who would you like to call?", size: 36, color: PorchStyle.nightText, weight: .semibold)
-        let hint = PorchStyle.label("Tap a name or press their number on the keypad.", size: 20, color: PorchStyle.nightSecondary)
+        let heading = PorchStyle.label(BedsideText.string("Who would you like to call?"), size: 36, color: PorchStyle.nightText, weight: .semibold)
+        let hint = PorchStyle.label(BedsideText.string("Tap a name or press their number on the keypad."), size: 20, color: PorchStyle.nightSecondary)
         heading.textAlignment = .center; hint.textAlignment = .center
-        let back = PorchStyle.button("Back to clock", symbol: "clock", filled: false)
+        let back = PorchStyle.button(BedsideText.string("Back to clock"), symbol: "clock", filled: false)
         back.configuration?.baseForegroundColor = PorchStyle.nightText
+        back.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes; attributes.font = PorchStyle.font(28, weight: .medium); return attributes
+        }
+        back.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
         back.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
         grid.axis = .vertical; grid.spacing = 16
         let scroll = UIScrollView()
@@ -348,34 +442,46 @@ final class PeoplePickerViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -32),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -64)
         ])
+        BedsideText.applyAccessibilityLanguage(to: view)
     }
     override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); becomeFirstResponder() }
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let count = traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 ? 1 : view.bounds.width > view.bounds.height ? 3 : 2
-        guard columns != count else { return }
-        columns = count
+        guard columns != count || abs(gridWidth - view.bounds.width) > 1 else { return }
+        columns = count; gridWidth = view.bounds.width
+        let cardWidth = (view.bounds.width - 64 - CGFloat(count - 1) * 16) / CGFloat(count)
+        let nameSize = max(44, min(76, cardWidth * 0.15))
+        let numberSize = max(28, min(38, cardWidth * 0.075))
         grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
-        let people = (1...CallSlots.count).compactMap { index in slots.contact(for: index).map { (index, $0) } }
+        let people = CallSlots.digits.compactMap { index in slots.contact(for: index).map { (index, $0) } }
         if people.isEmpty {
-            grid.addArrangedSubview(PorchStyle.label("Your caregiver can add people using the settings icon on the clock screen.", size: 24, color: PorchStyle.nightText))
+            grid.addArrangedSubview(PorchStyle.label(BedsideText.string("Your caregiver can add people using the settings icon on the clock screen."), size: 24, color: PorchStyle.nightText))
         }
         for start in stride(from: 0, to: people.count, by: columns) {
             let row = UIStackView(); row.spacing = 16; row.distribution = .fillEqually
             for index in start..<min(start + columns, people.count) {
                 let (number, person) = people[index]
                 let button = PorchStyle.button(person.name)
-                button.configuration?.subtitle = "Press \(number)"
-                button.configuration?.image = UIImage(systemName: "phone.fill")
-                button.configuration?.imagePlacement = .top
-                button.configuration?.imagePadding = 16
+                button.configuration?.subtitle = BedsideText.string("Press %d", number)
+                button.configuration?.image = nil
+                button.configuration?.titleAlignment = .center
+                button.configuration?.titleLineBreakMode = .byWordWrapping
+                button.configuration?.subtitleLineBreakMode = .byWordWrapping
+                button.configuration?.titlePadding = 12
+                button.configuration?.contentInsets = .init(top: 28, leading: 20, bottom: 28, trailing: 20)
                 button.configuration?.baseBackgroundColor = PorchStyle.nightSurface
                 button.configuration?.baseForegroundColor = PorchStyle.nightText
                 button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = attributes; attributes.font = PorchStyle.font(30, weight: .semibold); return attributes
+                    var attributes = attributes; attributes.font = PorchStyle.font(nameSize, weight: .semibold); return attributes
                 }
-                button.accessibilityLabel = "Call \(person.name), key \(number)"
-                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
+                button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                    var attributes = attributes; attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = PorchStyle.nightText; return attributes
+                }
+                button.accessibilityIdentifier = "people.person.\(number)"
+                button.accessibilityLanguage = BedsideText.language.speechLanguage
+                button.accessibilityLabel = BedsideText.string("Call %@, key %d", person.name, number)
+                button.heightAnchor.constraint(greaterThanOrEqualToConstant: max(200, nameSize * 3.5)).isActive = true
                 button.addAction(UIAction { [weak self] _ in self?.choose(number) }, for: .touchUpInside)
                 row.addArrangedSubview(button)
             }

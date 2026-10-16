@@ -1,0 +1,176 @@
+import UIKit
+import PorchCore
+
+final class PorchContainerViewController: UIViewController {
+    private var content: UIViewController?
+    private var incomingID: String?
+    override var childForStatusBarHidden: UIViewController? { content }
+    override var childForStatusBarStyle: UIViewController? { content }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        NotificationCenter.default.addObserver(self, selector: #selector(changeExperience), name: .porchExperienceChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
+        FamilyCoordinator.shared.canReceive = { [weak self] in self?.readyForIncoming == true }
+        installExperience()
+    }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    private var readyForIncoming: Bool {
+        guard UIApplication.shared.applicationState == .active, presentedViewController == nil, view.window != nil else { return false }
+        if let clock = content as? CallViewController { return clock.presentedViewController == nil || clock.presentedViewController is PeoplePickerViewController }
+        if let nav = content as? UINavigationController { return nav.topViewController is FamilyHomeViewController && nav.presentedViewController == nil }
+        return false
+    }
+    private func installExperience() {
+        content?.willMove(toParent: nil); content?.view.removeFromSuperview(); content?.removeFromParent()
+        let child: UIViewController = PorchDevice.experience == .bedside ? CallViewController() : PorchStyle.navigation(FamilyHomeViewController())
+        addChild(child); child.view.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(child.view)
+        NSLayoutConstraint.activate([child.view.leadingAnchor.constraint(equalTo: view.leadingAnchor), child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor), child.view.topAnchor.constraint(equalTo: view.topAnchor), child.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
+        child.didMove(toParent: self); content = child; setNeedsStatusBarAppearanceUpdate()
+        UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside && UIApplication.shared.applicationState == .active
+    }
+    @objc private func changeExperience() {
+        FamilyCoordinator.shared.pause()
+        let finish = { [weak self] in
+            self?.installExperience(); self?.incomingID = nil
+            if UIApplication.shared.applicationState == .active { FamilyCoordinator.shared.start() }
+        }
+        if presentedViewController != nil { dismiss(animated: false, completion: finish) }
+        else if content?.presentedViewController != nil { content?.dismiss(animated: false, completion: finish) }
+        else { finish() }
+    }
+    func resume() { (content as? CallViewController)?.resume(); FamilyCoordinator.shared.start() }
+    func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
+    @objc private func familyChanged() {
+        let coordinator = FamilyCoordinator.shared
+        guard let credential = coordinator.credential, let state = coordinator.state else { return }
+        guard let call = state.call, call.state == "pending", call.to == state.me.id else { if state.call?.state == "ended" || state.call == nil { incomingID = nil }; return }
+        guard incomingID != call.id, readyForIncoming else { return }
+        incomingID = call.id
+        let show = { [weak self] in
+            guard let self, UIApplication.shared.applicationState == .active else { return }
+            let incoming = IncomingFamilyCallViewController(call: call, credential: credential, snapshot: state)
+            incoming.onDismiss = { [weak self] in (self?.content as? CallViewController)?.resume() }
+            incoming.onAnswer = { [weak self] session in
+                guard let self else { return }
+                do { self.present(try NativeCallViewController.paired(session), animated: false) }
+                catch { Task { await session.end() }; showPorchError(error, on: self) }
+            }
+            self.present(incoming, animated: true)
+        }
+        if let picker = content?.presentedViewController as? PeoplePickerViewController { picker.dismiss(animated: false, completion: show) }
+        else { show() }
+    }
+    func openInvitation(_ url: URL) {
+        guard presentedViewController == nil, content?.presentedViewController == nil else { return }
+        if (try? BedsideInvitation(url: url)) != nil {
+            guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This bedside device is already set up. Use the activation link on the new iPad.", status: 409), on: self); return }
+            do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
+            PorchDevice.experience = .bedside
+            DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup() }
+            return
+        }
+        guard (try? FamilyInvitation(url: url)) != nil else { return }
+        PorchDevice.experience = .family
+        guard let nav = content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
+        nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
+    }
+}
+
+final class CaregiverPINViewController: CaregiverFormViewController {
+    var onUnlock: (() -> Void)?
+    private let profile: FamilyCredential?
+    init(profile: FamilyCredential? = PorchDevice.credential(for: .bedside)) {
+        self.profile = profile; super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(profile:)") }
+    private let pin = UITextField(), confirmation = UITextField(), activation = UITextField(), bedsideName = UITextField()
+    private let content = UIStackView()
+    private let submit = PorchStyle.button("Continue", symbol: "lock.fill")
+    private var creating = false
+    private var task: Task<Void, Never>?
+
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Caregiver mode"
+        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
+        content.axis = .vertical; content.spacing = 20; form.addArrangedSubview(content)
+        for field in [pin, confirmation] { field.isSecureTextEntry = true; field.keyboardType = .numberPad }
+        pin.accessibilityIdentifier = "caregiver.pin"
+        confirmation.accessibilityIdentifier = "caregiver.confirm"
+        bedsideName.text = "Your loved one"; bedsideName.autocapitalizationType = .words
+        activation.keyboardType = .URL; activation.text = PorchDevice.bedsideActivation?.absoluteString
+        submit.addTarget(self, action: #selector(save), for: .touchUpInside)
+        loadStatus()
+    }
+    private func loadStatus() {
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        guard let profile else { creating = true; showForm(); return }
+        content.addArrangedSubview(PorchStyle.label("Checking caregiver setup…"))
+        task = Task { [weak self] in
+            guard let self else { return }
+            defer { self.task = nil }
+            do {
+                let result = try await FamilyService(profile).send("caregiverStatus")
+                self.creating = result.pinConfigured != true; self.showForm()
+            } catch {
+                self.content.arrangedSubviews.forEach { self.content.removeArrangedSubview($0); $0.removeFromSuperview() }
+                self.content.addArrangedSubview(PorchStyle.label("Connect to the internet to open caregiver mode."))
+                let retry = PorchStyle.button("Try again", symbol: "arrow.clockwise")
+                retry.addAction(UIAction { [weak self] _ in self?.loadStatus() }, for: .touchUpInside)
+                self.content.addArrangedSubview(retry)
+            }
+        }
+    }
+    private func showForm() {
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        var fields: [UIView] = []
+        if creating && profile == nil {
+            fields.append(field(bedsideName, title: "Who is this Porch for?", placeholder: "Your loved one"))
+            if NativeCallSettings.caregiverCode.count < 16 && PorchDevice.bedsideActivation == nil {
+                fields.append(field(activation, title: "Bedside activation link", placeholder: "Paste your private activation link", helper: "Open the private link for this new iPad. It connects the device without a server address or a preset PIN."))
+            }
+        }
+        fields.append(field(pin, title: creating ? "Choose a six-digit PIN" : "Six-digit PIN", placeholder: "Enter six digits"))
+        if creating { fields.append(field(confirmation, title: "Confirm your PIN", placeholder: "Repeat the six digits")) }
+        submit.configuration?.title = creating ? "Save PIN and continue" : "Open caregiver mode"
+        fields.append(submit)
+        bedsideName.autocapitalizationType = .words
+        content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", detail: creating ? "Choose a PIN you will remember. You'll use it to manage contacts and settings on this bedside device." : "Enter your PIN to manage this bedside device.", views: fields))
+    }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if navigationController?.isBeingDismissed == true { task?.cancel() }
+    }
+    @objc private func cancel() { task?.cancel(); try? PorchDevice.saveActivation(nil); dismiss(animated: true) }
+    @objc private func save() {
+        guard task == nil else { return }
+        let value = pin.text ?? ""
+        guard value.range(of: "^[0-9]{6}$", options: .regularExpression) != nil, !creating || value == confirmation.text else {
+            showPorchError(FamilyServiceError(message: creating ? "Enter the same six digits in both PIN fields." : "Enter six digits.", status: 400), on: self); return
+        }
+        submit.isEnabled = false; view.endEditing(true)
+        task = Task { [weak self] in
+            guard let self else { return }
+            defer { self.task = nil; self.submit.isEnabled = true }
+            do {
+                if let profile = self.profile {
+                    _ = try await FamilyService(profile).send(self.creating ? "initializeCaregiverPIN" : "verifyPIN", self.creating ? ["pin": value] : [:], pin: self.creating ? nil : value)
+                } else {
+                    let linkText = self.activation.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let invitation = try linkText.isEmpty ? nil : BedsideInvitation(url: URL(string: linkText) ?? URL(fileURLWithPath: "/"))
+                    let origin = invitation?.origin ?? URL(string: NativeCallSettings.savedURL) ?? PorchDevice.defaultOrigin
+                    let pending = try PorchDevice.pending(role: .bedside, origin: origin, invitation: invitation?.code ?? "")
+                    var registration = PorchDevice.registration(pending)
+                    registration["name"] = self.bedsideName.text ?? "Your loved one"; registration["pin"] = value
+                    if let invitation { registration["activation"] = invitation.code }
+                    let response = try await FamilyService(origin: origin).send("enrollBedside", registration, pin: NativeCallSettings.caregiverCode.isEmpty ? nil : NativeCallSettings.caregiverCode)
+                    guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
+                    try PorchDevice.save(FamilyCredential(origin: origin, credential: token, role: .bedside))
+                    FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)
+                    try PorchDevice.saveActivation(nil)
+                }
+                try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code")
+                self.dismiss(animated: true, completion: self.onUnlock)
+            } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
+        }
+    }
+}

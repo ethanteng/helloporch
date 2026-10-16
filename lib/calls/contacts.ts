@@ -1,5 +1,7 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { authorizeCalls, callInput, callJSON, type CallServer } from "./server.ts";
+import { checkCaregiverCode, CaregiverAuthError } from "../family/caregiver.ts";
+import { authorizeNativeOrBedside } from "../family/auth-calls.ts";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { callInput, callJSON, type CallServer } from "./server.ts";
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const lifetime = 30 * 24 * 60 * 60;
@@ -31,16 +33,14 @@ export function verifyContactApproval(value: unknown, phoneNumber: string, audie
 }
 
 export async function authorizeContact(request: Request, now = Math.floor(Date.now() / 1000)) {
-  const config = authorizeCalls(request);
+  const config = await authorizeNativeOrBedside(request);
   if (config instanceof Response) return config;
   const code = setupCode();
   if (!code || !process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID) {
     return callJSON({ error: "A caregiver needs to configure a separate contact setup code and outbound phone trunk on this server." }, 503);
   }
-  const digest = (value: string) => createHash("sha256").update(value).digest();
-  if (!timingSafeEqual(digest(request.headers.get("x-porch-setup-code") ?? ""), digest(code))) {
-    return callJSON({ error: "Check the caregiver setup code in Calling connection." }, 403);
-  }
+  try { await checkCaregiverCode(request, undefined, now, config.householdID); }
+  catch (error) { return callJSON({ error: error instanceof CaregiverAuthError ? error.message : "Caregiver verification is unavailable." }, error instanceof CaregiverAuthError ? error.status : 503); }
   const input = await callInput(request);
   if (input instanceof Response) return input;
   if (typeof input.phoneNumber !== "string" || !numberPattern.test(input.phoneNumber)) {
@@ -48,6 +48,6 @@ export async function authorizeContact(request: Request, now = Math.floor(Date.n
   }
   const approval: Approval = { phoneNumber: input.phoneNumber, audience: new URL(request.url).origin, exp: now + lifetime };
   const body = Buffer.from(JSON.stringify(approval)).toString("base64url");
-  // No dial, room creation, or third-party request occurs when a contact is saved.
+  // PIN verification uses managed storage; saving never dials or creates a media room.
   return callJSON({ authorization: `${body}.${signature(body, config, code).toString("base64url")}`, expiresAt: approval.exp });
 }

@@ -1,4 +1,4 @@
-name: Upload iPad to TestFlight
+name: Upload Porch to TestFlight
 
 on:
   workflow_dispatch:

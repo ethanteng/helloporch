@@ -17,19 +17,27 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
                options: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
+        #if DEBUG
+        PorchDevice.installPreviewFixture()
+        #endif
         let window = UIWindow(windowScene: scene)
-        window.rootViewController = CallViewController()
+        window.rootViewController = PorchContainerViewController()
         window.makeKeyAndVisible()
         self.window = window
+        if let url = options.urlContexts.first?.url { (window.rootViewController as? PorchContainerViewController)?.openInvitation(url) }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+        if let url = contexts.first?.url { (window?.rootViewController as? PorchContainerViewController)?.openInvitation(url) }
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        (window?.rootViewController as? CallViewController)?.resume()
-        UIApplication.shared.isIdleTimerDisabled = true
+        (window?.rootViewController as? PorchContainerViewController)?.resume()
+        UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
-        (window?.rootViewController as? CallViewController)?.pause()
+        (window?.rootViewController as? PorchContainerViewController)?.pause()
         UIApplication.shared.isIdleTimerDisabled = false
     }
 }

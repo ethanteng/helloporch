@@ -1,4 +1,4 @@
-name: iPad build
+name: iPhone and iPad build
 
 on:
   push:
@@ -17,19 +17,19 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Check Xcode
         run: xcodebuild -version
       - name: Test contact validation and keypad handling
         run: swift test --package-path ios/PorchCore
-      - name: Build iPad simulator app
+      - name: Build universal simulator app
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch
           -configuration Debug -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=NO build
-      - name: Build release app for an iPad
+          -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
+      - name: Build release app for iPhone and iPad
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch
           -configuration Release -destination 'generic/platform=iOS'
@@ -43,7 +43,7 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
             -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
-            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test
+            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
       - name: Launch on an iPad simulator and capture the screens
         timeout-minutes: 10
         shell: bash
@@ -52,14 +52,40 @@ jobs:
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
           mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-setup
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-day.png --preview-dynamic --preview-hour 10
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-dawn.png --preview-dynamic --preview-hour 6
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-sunset.png --preview-dynamic --preview-hour 17
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-night.png --preview-dynamic --preview-hour 22
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people-chinese.png --preview-six --preview-people --preview-chinese --family-silent
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock-chinese.png --preview-chinese --family-silent
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-chinese.png --preview-dynamic --preview-chinese --preview-hour 10 --family-silent
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-phone-setup --preview-touch-keyboard
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-phone-setup --preview-system-keyboard --preview-hardware-keyboard
       - name: Save the iPad screenshots
         uses: actions/upload-artifact@v4
         with:
           name: Porch-iPad-screenshots
           path: ios/build/screenshots/*.png
+          retention-days: 7
+      - name: Test layouts and keyboard on an iPhone simulator
+        shell: bash
+        run: |
+          xcrun simctl shutdown "$PORCH_SIMULATOR_ID"
+          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPhone" in d["name"]))')"
+          xcrun simctl boot "$device_id"
+          xcrun simctl bootstatus "$device_id" -b
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
+            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
+            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png
+      - name: Save the iPhone screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: Porch-iPhone-screenshot
+          path: ios/build/screenshots/family-iphone.png
           retention-days: 7
       - name: Save simulator app for local testing
         uses: actions/upload-artifact@v4

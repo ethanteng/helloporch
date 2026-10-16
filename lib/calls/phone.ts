@@ -1,3 +1,4 @@
+import { authorizeNativeOrBedside } from "../family/auth-calls.ts";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { AccessToken, RoomConfiguration, RoomServiceClient, SipClient, TrackSource } from "livekit-server-sdk";
 import { authorizeCalls, callInput, callJSON, type CallServer } from "./server.ts";
@@ -68,7 +69,7 @@ function approvedNumbers(): string[] | undefined {
 }
 
 export async function handlePhoneCall(request: Request, action: Action, dependencies: Dependencies = {}) {
-  const config = authorizeCalls(request);
+  const config = await authorizeNativeOrBedside(request);
   if (config instanceof Response) return config;
   const input = await callInput(request);
   if (input instanceof Response) return input;

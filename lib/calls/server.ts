@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-export type CallServer = { apiKey: string; apiSecret: string; serverUrl: string };
+export type CallServer = { apiKey: string; apiSecret: string; serverUrl: string; householdID?: string };
 
 export function callJSON(body: object, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });

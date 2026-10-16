@@ -37,6 +37,10 @@ func icon(size: Int) throws {
 }
 
 let entries: [(String, String, String, Int)] = [
+    ("iphone", "20x20", "2x", 40), ("iphone", "20x20", "3x", 60),
+    ("iphone", "29x29", "2x", 58), ("iphone", "29x29", "3x", 87),
+    ("iphone", "40x40", "2x", 80), ("iphone", "40x40", "3x", 120),
+    ("iphone", "60x60", "2x", 120), ("iphone", "60x60", "3x", 180),
     ("ipad", "20x20", "1x", 20), ("ipad", "20x20", "2x", 40),
     ("ipad", "29x29", "1x", 29), ("ipad", "29x29", "2x", 58),
     ("ipad", "40x40", "1x", 40), ("ipad", "40x40", "2x", 80),
