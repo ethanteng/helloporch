@@ -15,6 +15,7 @@ final class CallViewController: UIViewController {
     private var timeFormatter = DateFormatter()
     private var weekdayFormatter = DateFormatter()
     private var dateFormatter = DateFormatter()
+    private var typographySize = CGSize.zero
     #if DEBUG
     private var previewShown = false
     #endif
@@ -36,13 +37,19 @@ final class CallViewController: UIViewController {
             }
         }
         #endif
-        weekdayLabel.font = PorchStyle.font(34, weight: .medium)
-        timeLabel.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: .monospacedDigitSystemFont(ofSize: 172, weight: .regular), maximumPointSize: 240)
+        weekdayLabel.font = PorchStyle.font(72, weight: .medium)
+        timeLabel.font = .monospacedDigitSystemFont(ofSize: 360, weight: .regular)
         timeLabel.adjustsFontSizeToFitWidth = true
         timeLabel.minimumScaleFactor = 0.28
         timeLabel.numberOfLines = 1
         timeLabel.accessibilityIdentifier = "clock.time"
-        dateLabel.font = PorchStyle.font(29)
+        weekdayLabel.accessibilityIdentifier = "clock.weekday"
+        dateLabel.accessibilityIdentifier = "clock.date"
+        dateLabel.font = PorchStyle.font(58)
+        for label in [weekdayLabel, dateLabel] {
+            label.adjustsFontSizeToFitWidth = true
+            label.minimumScaleFactor = 0.5
+        }
         for label in [weekdayLabel, timeLabel, dateLabel] {
             label.textColor = label === timeLabel ? PorchStyle.nightText : PorchStyle.nightSecondary
             label.textAlignment = .center
@@ -51,7 +58,7 @@ final class CallViewController: UIViewController {
         timeLabel.accessibilityTraits.insert(.updatesFrequently)
         let clock = UIStackView(arrangedSubviews: [weekdayLabel, timeLabel, dateLabel])
         clock.axis = .vertical
-        clock.spacing = 16
+        clock.spacing = 24
         clock.isAccessibilityElement = false
         clock.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(clock)
@@ -88,7 +95,6 @@ final class CallViewController: UIViewController {
             clock.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             clock.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 32),
             clock.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
-            clock.widthAnchor.constraint(lessThanOrEqualToConstant: 960),
             caregiver.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
             caregiver.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
             caregiver.widthAnchor.constraint(equalToConstant: 56),
@@ -132,6 +138,21 @@ final class CallViewController: UIViewController {
         super.viewWillDisappear(animated)
         clockTimer?.invalidate(); clockTimer = nil
         resignFirstResponder()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let size = view.safeAreaLayoutGuide.layoutFrame.size
+        guard size != typographySize, size.width > 0, size.height > 0 else { return }
+        typographySize = size
+        // Fit the clock to the iPad, rather than capping it at phone-sized text.
+        // Reserve the bottom area for calling and allow long localized dates to fit.
+        let width = max(200, size.width - 64)
+        let height = max(240, size.height - 200)
+        weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
+        dateLabel.font = .systemFont(ofSize: min(width * 0.061, height * 0.11))
+        timeLabel.font = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
+        updateClock()
     }
 
     func resume() {
@@ -179,7 +200,7 @@ final class CallViewController: UIViewController {
         let text = NSMutableAttributedString(string: time, attributes: [.font: timeLabel.font ?? UIFont.systemFont(ofSize: 172), .foregroundColor: PorchStyle.nightText])
         for symbol in [timeFormatter.amSymbol, timeFormatter.pmSymbol] {
             guard let symbol, !symbol.isEmpty, let range = time.range(of: symbol, options: .caseInsensitive) else { continue }
-            text.addAttributes([.font: PorchStyle.font(42, weight: .medium)], range: NSRange(range, in: time))
+            text.addAttributes([.font: UIFont.systemFont(ofSize: timeLabel.font.pointSize * 0.25, weight: .medium)], range: NSRange(range, in: time))
         }
         timeLabel.attributedText = text
         weekdayLabel.text = weekdayFormatter.string(from: now)

@@ -3,6 +3,29 @@ import UIKit
 @testable import Porch
 
 final class CaregiverInputTests: XCTestCase {
+    @MainActor func testLargeClockFitsPortraitAndLandscapeWithoutCoveringCallButton() {
+        func find(_ identifier: String, in view: UIView) -> UIView? {
+            if view.accessibilityIdentifier == identifier { return view }
+            return view.subviews.compactMap { find(identifier, in: $0) }.first
+        }
+        for size in [CGSize(width: 744, height: 1133), CGSize(width: 1133, height: 744), CGSize(width: 1032, height: 1376), CGSize(width: 1376, height: 1032)] {
+            let clock = CallViewController()
+            clock.loadViewIfNeeded()
+            clock.view.frame = CGRect(origin: .zero, size: size)
+            clock.view.layoutIfNeeded()
+            clock.viewDidLayoutSubviews()
+            clock.view.layoutIfNeeded()
+            let time = find("clock.time", in: clock.view) as! UILabel
+            let date = find("clock.date", in: clock.view)!
+            let weekday = find("clock.weekday", in: clock.view)!
+            let button = find("clock.call", in: clock.view)!
+            XCTAssertGreaterThan(time.font.pointSize, 200)
+            XCTAssertGreaterThan(time.bounds.width, size.width * 0.85)
+            XCTAssertGreaterThanOrEqual(weekday.convert(weekday.bounds, to: clock.view).minY, 0)
+            XCTAssertLessThan(date.convert(date.bounds, to: clock.view).maxY, button.frame.minY)
+        }
+    }
+
     @MainActor private func buttons(in view: UIView) -> [UIButton] {
         (view as? UIButton).map { [$0] } ?? view.subviews.flatMap { buttons(in: $0) }
     }
