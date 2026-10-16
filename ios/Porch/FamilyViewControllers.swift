@@ -39,8 +39,10 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         form.addArrangedSubview(status); form.addArrangedSubview(people)
         hideKeyboardControl()
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchFamilyChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshPushStatus), name: .porchSystemCallChanged, object: nil)
         refresh()
     }
+    @objc private func refreshPushStatus() { displayed = nil; refresh() }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func newInvitation() { showPairing() }
     @objc private func changeMode() { offerExperienceChange(on: self) }
@@ -62,7 +64,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             join.addAction(UIAction { [weak self] _ in self?.showPairing() }, for: .touchUpInside)
             people.addArrangedSubview(join); return
         }
-        status.text = coordinator.error ?? "Keep Porch open to receive calls in this beta."
+        status.text = coordinator.error ?? (SystemIncomingCalls.shared.pushReady ? "Incoming Porch calls can ring while your iPhone is locked." : "Keep Porch open to receive calls. Background ringing is connecting or unavailable.")
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .denied { status.text = "Allow microphone access in iPhone Settings → Porch to answer calls." }
         guard let state else { if coordinator.error == nil { status.text = "Connecting to your family…" }; return }
         for person in state.people {
             let availability = PorchStyle.label(person.online ? (state.busy ? "On a call" : "Porch is open") : "Porch isn't ready", size: 17)
@@ -122,6 +125,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
                     var registration = PorchDevice.registration(pending); registration["code"] = invite.code
                     let response = try await FamilyService(origin: invite.origin).send("claimInvite", registration)
                     guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
+                    try await SystemIncomingCalls.shared.prepareForPairing()
                     try PorchDevice.save(FamilyCredential(origin: invite.origin, credential: token, role: .family))
                     FamilyCoordinator.shared.start()
                     self.navigationController?.popToRootViewController(animated: true)
@@ -204,7 +208,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
                 alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in Task { await self?.perform("revoke", ["memberID": person.id]) } })
                 self?.present(alert, animated: true)
             }, for: .touchUpInside)
-            details.addArrangedSubview(section(person.name, detail: person.online ? "Porch is open on their device" : "Their device is offline", views: [row("Audio drop-in", audio), row("Video drop-in", video), remove]))
+            details.addArrangedSubview(section(person.name, detail: person.online ? "Porch is open on their device" : person.canReceiveCalls == true ? "Porch calls can ring while their device is locked" : "Their device is offline", views: [row("Audio drop-in", audio), row("Video drop-in", video), remove]))
         }
         let cancel = PorchStyle.button("Cancel unused invitations", filled: false)
         cancel.addAction(UIAction { [weak self] _ in Task { await self?.perform("cancelInvites") } }, for: .touchUpInside)

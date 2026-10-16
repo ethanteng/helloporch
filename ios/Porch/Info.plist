@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>UIBackgroundModes</key>
+    <array><string>voip</string><string>audio</string></array>
+    <key>PorchAPNsEnvironment</key>
+    <string>$(PORCH_APNS_ENVIRONMENT)</string>
 	<key>PorchServerURL</key>
     <string>https://porch-calling-prototype.vercel.app</string>
     <key>CFBundleURLTypes</key>

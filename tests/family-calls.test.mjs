@@ -14,10 +14,10 @@ const env = { LIVEKIT_URL:'wss://test.livekit.cloud', LIVEKIT_API_KEY:'test-key'
 let previous;
 beforeEach(() => { previous = Object.fromEntries(Object.keys(env).map(k => [k,process.env[k]])); Object.assign(process.env,env); });
 afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefined) delete process.env[k]; else process.env[k]=v; } });
-function fixture() {
+function fixture(dependencies = {}) {
  const store = new MemoryStore(), ended=[];
  let now=1_800_000_000;
- const send = (action, values={}, credential, pin) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`} : {}),...(pin?{'X-Porch-Setup-Code':pin}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")} : {}),...values})}),{store,now:()=>now,endRoom:async room=>ended.push(room)});
+ const send = (action, values={}, credential, pin) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`} : {}),...(pin?{'X-Porch-Setup-Code':pin}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")} : {}),...values})}),{store,now:()=>now,endRoom:async room=>ended.push(room),...dependencies});
  const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
  const setup = async (permissions={audio:true,video:true}) => {
   const bedside = await json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
@@ -269,4 +269,114 @@ test('contact invitations expose pending status and a durable accepted identity 
  assert.equal((await f.send('claimInvite',{code:next.code})).status,410);
  await f.json('revoke',{memberID:family.state.me.id},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.deepEqual((await f.json('poll',{available:true},bedside.credential)).state.people,[]);
+});
+
+
+test('VoIP registration is authenticated, family scoped, validated and never exposed in snapshots', async()=>{
+ const f=fixture({sendPush:async()=>({delivered:true})}),{bedside,family}=await f.setup();
+ const token='ab'.repeat(32);
+ assert.equal((await f.send('registerVoIP',{token,environment:'production'})).status,401);
+ assert.equal((await f.send('registerVoIP',{token,environment:'production'},bedside.credential)).status,403);
+ for (const value of [{token:'bad',environment:'production'},{token,environment:'arbitrary-host'},{token:'a'.repeat(65),environment:'sandbox'}]) {
+  assert.equal((await f.send('registerVoIP',value,family.credential)).status,400);
+ }
+ const registered=await f.json('registerVoIP',{token,environment:'production'},family.credential);
+ assert.equal(registered.pushReady,true);
+ assert.ok(!JSON.stringify(registered.state).includes(token));
+ assert.equal(registered.state.me.canReceiveCalls,true);
+ assert.ok(!JSON.stringify((await f.json('poll',{available:true},bedside.credential)).state).includes(token));
+ await f.json('registerVoIP',{token:null},family.credential);
+ await f.json('poll',{available:false},family.credential);
+ assert.equal((await f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential)).status,409);
+});
+
+test('offline family devices receive ordinary-call pushes once after the winning reservation',async()=>{
+ const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push({device,call});return {delivered:true};}});
+ const {bedside,family}=await f.setup();
+ const registration={token:'ab'.repeat(32),environment:'sandbox'};
+ await f.json('registerVoIP',registration,family.credential);
+ await f.json('poll',{available:false},family.credential); f.advance(31);
+ const presence=(await f.json('poll',{available:true},bedside.credential)).state.people[0];
+ assert.equal(presence.online,false);assert.equal(presence.canReceiveCalls,true);
+ const values={targetID:family.state.me.id,mode:'video',kind:'call',waitSeconds:20};
+ const responses=await Promise.all([f.send('startCall',values,bedside.credential),f.send('startCall',values,bedside.credential)]);
+ assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);
+ assert.equal(pushes.length,1);assert.deepEqual(pushes[0].device,registration);
+ const call=(await responses.find(r=>r.status===200).json()).state.call;
+ assert.deepEqual(pushes[0].call,{callID:call.id,recipientID:family.state.me.id,callerName:'Mom',mode:'video',expiresAt:call.expiresAt});
+ assert.ok(!JSON.stringify(pushes).includes(family.credential));
+ await f.json('endCall',{callID:call.id},bedside.credential);
+ assert.equal(pushes.length,1,'cancellation never sends another VoIP push');
+ assert.equal((await f.send('acceptCall',{callID:call.id,available:true},family.credential)).status,410);
+});
+
+test('CallKit answer retains the atomic phone fallback race and heartbeats keep locked calls alive',async()=>{
+ const f=fixture({sendPush:async()=>({delivered:true})}),{bedside,family}=await f.setup();
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+ await f.json('poll',{available:false},family.credential);
+ const created=await f.json('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential),callID=created.state.call.id;
+ await f.json('acceptCall',{callID,available:true},family.credential);
+ for(let n=0;n<10;n++) {
+  f.advance(10);
+  const state=await f.json('poll',{available:false},family.credential);
+  assert.equal(state.state.call.state,'accepted');
+  await f.json('poll',{available:false},bedside.credential);
+ }
+ assert.equal((await f.send('fallback',{callID},bedside.credential)).status,409);
+ await f.json('joinCall',{callID},family.credential);
+});
+
+test('push failures release unreachable calls for existing phone fallback and clear invalid tokens',async()=>{
+ const f=fixture({sendPush:async()=>({delivered:false,invalidToken:true})}),{bedside,family}=await f.setup();
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+ await f.json('poll',{available:false},family.credential);
+ const failed=await f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+ assert.equal(failed.status,409);assert.equal((await failed.json()).errorCode,'offline');
+ const state=await f.json('poll',{available:true},bedside.credential);
+ assert.equal(state.state.call.state,'ended');assert.equal(f.ended.length,1);
+ assert.ok(![...f.store.values.values()].some(value=>value.includes('abababab')));
+});
+
+test('failed pushes do not cancel a foreground delivery, and drop-in never wakes a background bedside',async()=>{
+ const pushes=[],f=fixture({sendPush:async(...args)=>{pushes.push(args);return {delivered:false};}}),{bedside,family}=await f.setup();
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+ const created=await f.json('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+ await f.json('acceptCall',{callID:created.state.call.id,available:true},family.credential);
+ await f.json('endCall',{callID:created.state.call.id},family.credential);
+ await f.json('setDropIn',{enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ await f.json('poll',{available:false},bedside.credential);
+ assert.equal((await f.send('startCall',{targetID:bedside.state.me.id,mode:'voice',kind:'dropIn'},family.credential)).status,409);
+ assert.equal(pushes.length,1);
+ await f.json('revoke',{memberID:family.state.me.id},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await f.send('registerVoIP',{token:'cd'.repeat(32),environment:'production'},family.credential)).status,401);
+});
+
+test('token rotation during delivery is preserved, and an answer wins over a push failure',async()=>{
+ let deliver, sent;
+ const arrived=new Promise(resolve=>sent=resolve);
+ const f=fixture({sendPush:async()=>{sent();return new Promise(resolve=>deliver=resolve);}}),{bedside,family}=await f.setup();
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+ await f.json('poll',{available:false},family.credential);
+ const request=f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+ await arrived;
+ const poll=await f.json('poll',{available:false},family.credential),callID=poll.state.call.id;
+ await f.json('registerVoIP',{token:'cd'.repeat(32),environment:'production'},family.credential);
+ await f.json('acceptCall',{callID,available:true},family.credential);
+ deliver({delivered:false,invalidToken:true});
+ const response=await request;assert.equal(response.status,200);assert.equal((await response.json()).state.call.state,'accepted');
+ assert.ok([...f.store.values.values()].some(value=>value.includes('cd'.repeat(32))));
+ assert.equal(f.ended.length,0);
+});
+
+
+test('a decline during a failed push is preserved instead of being reclassified for phone fallback',async()=>{
+ let deliver,sent;const arrived=new Promise(resolve=>sent=resolve);
+ const f=fixture({sendPush:async()=>{sent();return new Promise(resolve=>deliver=resolve);}}),{bedside,family}=await f.setup();
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
+ const pending=f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+ await arrived;
+ const state=await f.json('poll',{available:false},family.credential);
+ await f.json('endCall',{callID:state.state.call.id},family.credential);
+ deliver({delivered:false});
+ const result=await pending;assert.equal(result.status,200);assert.equal((await result.json()).state.call.reason,'Call ended.');
 });

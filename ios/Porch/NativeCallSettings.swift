@@ -27,10 +27,10 @@ enum NativeCallSettings {
         readSecret("porch.contact-setup-code").flatMap { String(data: $0, encoding: .utf8) } ?? ""
     }
 
-    static func writeSecret(_ data: Data, account: String) throws {
+    static func writeSecret(_ data: Data, account: String, accessibleAfterFirstUnlock: Bool = false) throws {
         let attributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessible as String: accessibleAfterFirstUnlock ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly : kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         ]
         let query = query(account)
         var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)

@@ -2,10 +2,32 @@ import XCTest
 import UIKit
 import GameController
 import AVFoundation
+import Security
 import PorchCore
 @testable import Porch
 
 final class CaregiverInputTests: XCTestCase {
+    @MainActor func testCallCredentialsCanMigrateToLockScreenAccessWithoutChangingOtherSecrets() throws {
+        let account = "porch.test.incoming.\(UUID().uuidString)"
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Bundle.main.bundleIdentifier!, kSecAttrAccount as String: account]
+        defer { SecItemDelete(query as CFDictionary) }
+        func accessibility() throws -> String {
+            var result: CFTypeRef?
+            var attributes = query; attributes[kSecReturnAttributes as String] = true
+            XCTAssertEqual(SecItemCopyMatching(attributes as CFDictionary, &result), errSecSuccess)
+            return try XCTUnwrap((result as? [String: Any])?[kSecAttrAccessible as String] as? String)
+        }
+        let secret = Data("private-device-credential".utf8)
+        try NativeCallSettings.writeSecret(secret, account: account)
+        XCTAssertEqual(try accessibility(), kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        try NativeCallSettings.writeSecret(secret, account: account, accessibleAfterFirstUnlock: true)
+        XCTAssertEqual(try accessibility(), kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        XCTAssertEqual(NativeCallSettings.readSecret(account), secret)
+        try NativeCallSettings.writeSecret(secret, account: account)
+        XCTAssertEqual(try accessibility(), kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+    }
+
     @MainActor private func chineseBedside() -> () -> Void {
         let defaults = UserDefaults.standard
         let saved = defaults.object(forKey: "porch.bedsideDisplay.v1"), experience = defaults.object(forKey: "porch.experience")

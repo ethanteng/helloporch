@@ -59,11 +59,12 @@ enum PorchDevice {
     }
     #endif
     static func save(_ credential: FamilyCredential) throws {
-        try NativeCallSettings.writeSecret(try JSONEncoder().encode(credential), account: "porch.family.\(credential.role.rawValue)")
+        try NativeCallSettings.writeSecret(try JSONEncoder().encode(credential), account: "porch.family.\(credential.role.rawValue)", accessibleAfterFirstUnlock: credential.role == .family)
     }
 }
 
 struct FamilyResponse: Decodable {
+    let pushReady: Bool?
     let pinConfigured: Bool?
     let state: FamilySnapshot?
     let credential: String?
@@ -127,6 +128,7 @@ struct FamilyCallSession {
         credential = PorchDevice.credential(for: PorchDevice.experience)
         state = nil; error = nil
         guard let credential else { changed(); return }
+        SystemIncomingCalls.shared.registerDevice()
         let generation = UUID(); self.generation = generation
         task = Task { [weak self] in
             while !Task.isCancelled {
