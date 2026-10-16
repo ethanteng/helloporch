@@ -3,13 +3,225 @@ import Foundation
 public enum BedsideLanguage: String, Codable, CaseIterable {
     case english = "en"
     case traditionalChinese = "zh-Hant"
+    case simplifiedChinese = "zh-Hans"
+    case cantonese = "yue-Hant"
+    case spanish = "es"
 
-    public var locale: Locale { Locale(identifier: self == .traditionalChinese ? "zh_Hant_TW" : "en_US") }
-    public var speechLanguage: String { self == .traditionalChinese ? "zh-TW" : "en-US" }
-    public func text(_ english: String) -> String { self == .traditionalChinese ? Self.traditional[english] ?? english : english }
+    public var displayName: String {
+        switch self {
+        case .english: return "English"
+        case .traditionalChinese: return "繁體中文"
+        case .simplifiedChinese: return "简体中文"
+        case .cantonese: return "廣東話"
+        case .spanish: return "Español"
+        }
+    }
+    public var locale: Locale {
+        switch self {
+        case .english: return Locale(identifier: "en_US")
+        case .traditionalChinese: return Locale(identifier: "zh_Hant_TW")
+        case .simplifiedChinese: return Locale(identifier: "zh_Hans_CN")
+        case .cantonese: return Locale(identifier: "zh_Hant_HK")
+        case .spanish: return Locale(identifier: "es_ES")
+        }
+    }
+    public var speechLanguage: String {
+        switch self {
+        case .english: return "en-US"
+        case .traditionalChinese: return "zh-TW"
+        case .simplifiedChinese: return "zh-CN"
+        case .cantonese: return "zh-HK"
+        case .spanish: return "es-ES"
+        }
+    }
+    var translations: [String: String] {
+        switch self {
+        case .english: return [:]
+        case .traditionalChinese: return Self.traditionalStrings
+        case .simplifiedChinese: return Self.simplifiedStrings
+        case .cantonese: return Self.cantoneseStrings
+        case .spanish: return Self.spanishStrings
+        }
+    }
+    public func text(_ english: String) -> String { translations[english] ?? english }
     public func format(_ english: String, arguments: [CVarArg]) -> String { String(format: text(english), locale: locale, arguments: arguments) }
 
-    private static let traditional: [String: String] = [
+    private static let simplifiedStrings: [String: String] = [
+        "Morning": "早上", "Afternoon": "下午", "Evening": "傍晚", "Night": "夜晚",
+        "Spring": "春天", "Summer": "夏天", "Fall": "秋天", "Winter": "冬天",
+        "Call someone": "打电话", "Caregiver mode": "照护者设置",
+        "Tap or hold to manage contacts and settings.": "轻点或长按，即可管理联系人和设置。",
+        "Who would you like to call?": "您想打给谁？",
+        "Tap a name or press their number on the keypad.": "请轻点姓名，或按下键盘上对应的数字。",
+        "Back to clock": "返回时钟", "Press %d": "按 %d",
+        "Call %@, key %d": "打给%@，按 %d",
+        "Your caregiver can add people using the settings icon on the clock screen.": "请照护者使用时钟画面的设置图标添加联系人。",
+        "Use this key to answer or end a call.": "通话时，按此键即可接听或挂断。",
+        "Use this key to turn your camera off or on during a video call.": "视频通话时，按此键即可开启或关闭摄像头。",
+        "No one is assigned to %d.\nPlease choose another number.": "%d 号尚未设置联系人。\n请选择其他号码。",
+        "Finish Porch setup": "请完成 Porch 设置",
+        "Open caregiver mode and invite this person to Porch or add their phone number.": "请照护者邀请这位联系人加入 Porch，或添加电话号码。",
+        "Porch isn't ready": "Porch 尚未准备好",
+        "Check Family & drop-in in caregiver mode, then try again.": "请照护者检查家人与自动接听设置，再试一次。",
+        "Couldn't call %@": "无法打给%@", "Please ask your caregiver for help, then try again.": "请照护者协助检查后，再试一次。",
+        "OK": "好", "Connecting…": "正在连接…", "Your camera preview": "您的摄像头画面",
+        "Voice call\nCamera is off": "语音通话\n摄像头已关闭", "Waiting for video": "正在等待视频画面",
+        "Mute": "关闭麦克风", "Unmute": "开启麦克风", "Camera off": "关闭摄像头", "Camera on": "开启摄像头", "End call": "挂断",
+        "Couldn't start the call.": "无法开始通话。", "Key %d: hang up": "按 %d：挂断",
+        "Key %d: video off / on": "按 %d：关闭／开启摄像头", "Phone call connected": "电话已接通",
+        "Reconnecting phone call…": "正在重新连接电话…", "Calling %@'s phone…": "正在拨打%@的电话…",
+        "Voice call connected": "语音已接通", "Video call connected": "视频已接通", "Connecting audio…": "正在连接声音…",
+        "Waiting for %@…": "正在等待%@…", "Connecting with %@…": "正在与%@连接…", "Calling %@ on Porch…": "正在通过 Porch 打给%@…",
+        "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered.": "正在通过 Porch 打给%@…\n若无人接听，将改拨电话。",
+        "Couldn't connect the call. Please try again.": "无法接通，请再试一次。",
+        "Couldn't change camera. Try again.": "无法切换摄像头，请再试一次。", "Couldn't change microphone. Try again.": "无法切换麦克风，请再试一次。",
+        "Ending call…": "正在结束通话…", "Reconnecting…": "正在重新连接…",
+        "Retry ending phone call": "重试挂断电话",
+        "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.": "Porch 已断开，无法确认电话是否已挂断。请检查网络后再试一次。",
+        "Call ended. Returning to the clock…": "通话已结束，正在返回时钟…", "Call ended. Returning to Porch…": "通话已结束，正在返回 Porch…",
+        "No one joined. Returning to the clock…": "无人接听，正在返回时钟…",
+        "The call disconnected. Returning to the clock…": "通话已断开，正在返回时钟…",
+        "The phone call ended before it was answered.": "电话尚未接听就已结束。",
+        "Microphone access is required.": "需要开启麦克风权限。",
+        "Allow Porch's microphone in Settings to make a phone call.": "请照护者在 iPad 设置中允许 Porch 使用麦克风。",
+        "Couldn't switch to their phone.": "无法改拨电话。", "Couldn't finish connecting the Porch call.": "无法完成 Porch 连接。",
+        "They answered Porch, but this device couldn't connect. Please try again.": "对方已接听，但此设备无法连接。请再试一次。",
+        "Porch wasn't answered. Trying %@'s phone…": "Porch 无人接听，正在改拨%@的电话…",
+        "Phone call\nCamera is off": "电话通话\n摄像头已关闭", "Couldn't connect their phone.": "无法接通电话。",
+        "Their phone didn't answer. Returning to the clock…": "电话无人接听，正在返回时钟…",
+        "Answer": "接听", "Answer video call": "接听视频", "Answer audio call": "接听语音", "Don't connect": "不要接通", "Decline": "拒接",
+        "Press %d to stop this drop-in.": "按 %d 即可取消自动接听。",
+        "Tap %d to answer. Hold %d to decline.": "轻按 %d 接听，长按 %d 拒接。",
+        "Video drop-in\nConnecting in %d…": "视频自动接听\n%d 秒后接通…",
+        "Audio drop-in\nConnecting in %d…": "语音自动接听\n%d 秒后接通…",
+        "Incoming video call": "有视频来电", "Incoming audio call": "有语音来电",
+        "Announcing video drop-in…": "正在提示视频自动接听…", "Announcing audio drop-in…": "正在提示语音自动接听…",
+        "%@ is dropping in with video. Connecting in five seconds.": "%@要和您视频通话，五秒后接通。",
+        "%@ is dropping in with audio. Connecting in five seconds.": "%@要和您语音通话，五秒后接通。",
+        "The sound couldn't play. Tap Answer to connect.": "无法播放提示音，请按接听以接通。",
+        "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls.": "请照护者在 iPad「设置」→「隐私与安全性」→「麦克风」中允许 Porch 使用麦克风。",
+        "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup.": "请照护者在 iPad 设置中允许 Porch 使用相机，或改用语音通话。",
+        "A family member": "家人"
+    ]
+
+    private static let cantoneseStrings: [String: String] = [
+        "Morning": "朝早", "Afternoon": "下晝", "Evening": "黃昏", "Night": "夜晚",
+        "Spring": "春天", "Summer": "夏天", "Fall": "秋天", "Winter": "冬天",
+        "Call someone": "打電話", "Caregiver mode": "照顧者設定",
+        "Tap or hold to manage contacts and settings.": "輕按或長按，就可以管理聯絡人同設定。",
+        "Who would you like to call?": "您想打畀邊個？",
+        "Tap a name or press their number on the keypad.": "請輕按姓名，或者按鍵盤上對應嘅數字。",
+        "Back to clock": "返回時鐘", "Press %d": "按 %d",
+        "Call %@, key %d": "打畀%@，按 %d",
+        "Your caregiver can add people using the settings icon on the clock screen.": "請照顧者用時鐘畫面嘅設定圖示加入聯絡人。",
+        "Use this key to answer or end a call.": "通話時，按呢個掣就可以接聽或者收線。",
+        "Use this key to turn your camera off or on during a video call.": "視像通話時，按呢個掣就可以開關鏡頭。",
+        "No one is assigned to %d.\nPlease choose another number.": "%d 號未有設定聯絡人。\n請揀另一個號碼。",
+        "Finish Porch setup": "請完成 Porch 設定",
+        "Open caregiver mode and invite this person to Porch or add their phone number.": "請照顧者邀請呢位聯絡人加入 Porch，或者加入電話號碼。",
+        "Porch isn't ready": "Porch 仲未準備好",
+        "Check Family & drop-in in caregiver mode, then try again.": "請照顧者檢查家人同自動接聽設定，再試一次。",
+        "Couldn't call %@": "打唔到畀%@", "Please ask your caregiver for help, then try again.": "請照顧者幫手檢查，再試一次。",
+        "OK": "好", "Connecting…": "連線中…", "Your camera preview": "您嘅鏡頭畫面",
+        "Voice call\nCamera is off": "語音通話\n鏡頭已關閉", "Waiting for video": "等緊視像畫面",
+        "Mute": "關閉咪高峰", "Unmute": "開啟咪高峰", "Camera off": "關閉鏡頭", "Camera on": "開啟鏡頭", "End call": "收線",
+        "Couldn't start the call.": "開始唔到通話。", "Key %d: hang up": "按 %d：收線",
+        "Key %d: video off / on": "按 %d：關閉／開啟鏡頭", "Phone call connected": "電話已接通",
+        "Reconnecting phone call…": "重新接駁電話中…", "Calling %@'s phone…": "打緊畀%@嘅電話…",
+        "Voice call connected": "語音已接通", "Video call connected": "視像已接通", "Connecting audio…": "接駁聲音中…",
+        "Waiting for %@…": "等緊%@…", "Connecting with %@…": "同%@連線中…", "Calling %@ on Porch…": "用緊 Porch 打畀%@…",
+        "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered.": "用緊 Porch 打畀%@…\n如果冇人接聽，就會改打電話。",
+        "Couldn't connect the call. Please try again.": "接唔通，請再試一次。",
+        "Couldn't change camera. Try again.": "切換唔到鏡頭，請再試一次。", "Couldn't change microphone. Try again.": "切換唔到咪高峰，請再試一次。",
+        "Ending call…": "結束通話中…", "Reconnecting…": "重新連線中…",
+        "Retry ending phone call": "再試收線",
+        "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.": "Porch 已斷線，確認唔到電話係咪已經收線。請檢查網絡，再試一次。",
+        "Call ended. Returning to the clock…": "通話已結束，返回時鐘中…", "Call ended. Returning to Porch…": "通話已結束，返回 Porch 中…",
+        "No one joined. Returning to the clock…": "冇人接聽，返回時鐘中…",
+        "The call disconnected. Returning to the clock…": "通話已斷線，返回時鐘中…",
+        "The phone call ended before it was answered.": "電話未接聽就已經結束。",
+        "Microphone access is required.": "需要開啟咪高峰權限。",
+        "Allow Porch's microphone in Settings to make a phone call.": "請照顧者喺 iPad 設定入面允許 Porch 使用咪高峰。",
+        "Couldn't switch to their phone.": "改打唔到電話。", "Couldn't finish connecting the Porch call.": "完成唔到 Porch 連線。",
+        "They answered Porch, but this device couldn't connect. Please try again.": "對方已接聽，但呢部裝置連唔到線。請再試一次。",
+        "Porch wasn't answered. Trying %@'s phone…": "Porch 冇人接聽，改打%@嘅電話中…",
+        "Phone call\nCamera is off": "電話通話\n鏡頭已關閉", "Couldn't connect their phone.": "打唔通電話。",
+        "Their phone didn't answer. Returning to the clock…": "電話冇人接聽，返回時鐘中…",
+        "Answer": "接聽", "Answer video call": "接聽視像", "Answer audio call": "接聽語音", "Don't connect": "唔好接通", "Decline": "拒接",
+        "Press %d to stop this drop-in.": "按 %d 就可以取消自動接聽。",
+        "Tap %d to answer. Hold %d to decline.": "輕按 %d 接聽，長按 %d 拒接。",
+        "Video drop-in\nConnecting in %d…": "視像自動接聽\n%d 秒後接通…",
+        "Audio drop-in\nConnecting in %d…": "語音自動接聽\n%d 秒後接通…",
+        "Incoming video call": "有視像來電", "Incoming audio call": "有語音來電",
+        "Announcing video drop-in…": "提示視像自動接聽中…", "Announcing audio drop-in…": "提示語音自動接聽中…",
+        "%@ is dropping in with video. Connecting in five seconds.": "%@想同您視像通話，五秒後接通。",
+        "%@ is dropping in with audio. Connecting in five seconds.": "%@想同您語音通話，五秒後接通。",
+        "The sound couldn't play. Tap Answer to connect.": "播唔到提示聲，請按接聽嚟接通。",
+        "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls.": "請照顧者喺 iPad「設定」→「私隱與保安」→「咪高峰」入面允許 Porch 使用咪高峰。",
+        "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup.": "請照顧者喺 iPad 設定入面允許 Porch 使用相機，或者改用語音通話。",
+        "A family member": "屋企人"
+    ]
+
+    private static let spanishStrings: [String: String] = [
+        "Morning": "Mañana", "Afternoon": "Tarde", "Evening": "Atardecer", "Night": "Noche",
+        "Spring": "Primavera", "Summer": "Verano", "Fall": "Otoño", "Winter": "Invierno",
+        "Call someone": "Llamar a alguien", "Caregiver mode": "Ajustes del cuidador",
+        "Tap or hold to manage contacts and settings.": "Toque o mantenga pulsado para gestionar contactos y ajustes.",
+        "Who would you like to call?": "¿A quién quiere llamar?",
+        "Tap a name or press their number on the keypad.": "Toque un nombre o pulse su número en el teclado.",
+        "Back to clock": "Volver al reloj", "Press %d": "Pulse %d",
+        "Call %@, key %d": "Llamar a %@, tecla %d",
+        "Your caregiver can add people using the settings icon on the clock screen.": "Su cuidador puede añadir contactos con el icono de ajustes en la pantalla del reloj.",
+        "Use this key to answer or end a call.": "Use esta tecla para contestar o colgar una llamada.",
+        "Use this key to turn your camera off or on during a video call.": "Use esta tecla para apagar o encender la cámara durante una videollamada.",
+        "No one is assigned to %d.\nPlease choose another number.": "No hay ningún contacto asignado al %d.\nElija otro número.",
+        "Finish Porch setup": "Complete la configuración de Porch",
+        "Open caregiver mode and invite this person to Porch or add their phone number.": "Pida a su cuidador que invite a esta persona a Porch o añada su número de teléfono.",
+        "Porch isn't ready": "Porch aún no está listo",
+        "Check Family & drop-in in caregiver mode, then try again.": "Pida a su cuidador que revise los ajustes de familia y conexión automática e inténtelo de nuevo.",
+        "Couldn't call %@": "No se pudo llamar a %@", "Please ask your caregiver for help, then try again.": "Pida ayuda a su cuidador e inténtelo de nuevo.",
+        "OK": "Aceptar", "Connecting…": "Conectando…", "Your camera preview": "Vista de su cámara",
+        "Voice call\nCamera is off": "Llamada de voz\nCámara apagada", "Waiting for video": "Esperando el vídeo",
+        "Mute": "Silenciar", "Unmute": "Activar micrófono", "Camera off": "Apagar cámara", "Camera on": "Encender cámara", "End call": "Colgar",
+        "Couldn't start the call.": "No se pudo iniciar la llamada.", "Key %d: hang up": "Tecla %d: colgar",
+        "Key %d: video off / on": "Tecla %d: apagar / encender cámara", "Phone call connected": "Llamada telefónica conectada",
+        "Reconnecting phone call…": "Reconectando la llamada telefónica…", "Calling %@'s phone…": "Llamando al teléfono de %@…",
+        "Voice call connected": "Llamada de voz conectada", "Video call connected": "Videollamada conectada", "Connecting audio…": "Conectando el audio…",
+        "Waiting for %@…": "Esperando a %@…", "Connecting with %@…": "Conectando con %@…", "Calling %@ on Porch…": "Llamando a %@ por Porch…",
+        "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered.": "Llamando a %@ por Porch…\nSi no contesta, sonará su teléfono.",
+        "Couldn't connect the call. Please try again.": "No se pudo conectar la llamada. Inténtelo de nuevo.",
+        "Couldn't change camera. Try again.": "No se pudo cambiar la cámara. Inténtelo de nuevo.", "Couldn't change microphone. Try again.": "No se pudo cambiar el micrófono. Inténtelo de nuevo.",
+        "Ending call…": "Finalizando la llamada…", "Reconnecting…": "Reconectando…",
+        "Retry ending phone call": "Intentar colgar de nuevo",
+        "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.": "Porch se ha desconectado. No se pudo confirmar que la llamada haya terminado. Compruebe la conexión a internet e inténtelo de nuevo.",
+        "Call ended. Returning to the clock…": "Llamada finalizada. Volviendo al reloj…", "Call ended. Returning to Porch…": "Llamada finalizada. Volviendo a Porch…",
+        "No one joined. Returning to the clock…": "Nadie ha contestado. Volviendo al reloj…",
+        "The call disconnected. Returning to the clock…": "Se ha desconectado la llamada. Volviendo al reloj…",
+        "The phone call ended before it was answered.": "La llamada telefónica terminó antes de que contestaran.",
+        "Microphone access is required.": "Se necesita acceso al micrófono.",
+        "Allow Porch's microphone in Settings to make a phone call.": "Pida a su cuidador que permita a Porch usar el micrófono en los ajustes del iPad.",
+        "Couldn't switch to their phone.": "No se pudo llamar a su teléfono.", "Couldn't finish connecting the Porch call.": "No se pudo completar la conexión de Porch.",
+        "They answered Porch, but this device couldn't connect. Please try again.": "Han contestado en Porch, pero este dispositivo no pudo conectarse. Inténtelo de nuevo.",
+        "Porch wasn't answered. Trying %@'s phone…": "No han contestado en Porch. Llamando al teléfono de %@…",
+        "Phone call\nCamera is off": "Llamada telefónica\nCámara apagada", "Couldn't connect their phone.": "No se pudo conectar con su teléfono.",
+        "Their phone didn't answer. Returning to the clock…": "No han contestado al teléfono. Volviendo al reloj…",
+        "Answer": "Contestar", "Answer video call": "Contestar videollamada", "Answer audio call": "Contestar llamada de voz", "Don't connect": "No conectar", "Decline": "Rechazar",
+        "Press %d to stop this drop-in.": "Pulse %d para cancelar esta conexión automática.",
+        "Tap %d to answer. Hold %d to decline.": "Pulse %d para contestar. Mantenga pulsado %d para rechazar.",
+        "Video drop-in\nConnecting in %d…": "Videollamada automática\nConexión en %d…",
+        "Audio drop-in\nConnecting in %d…": "Llamada de voz automática\nConexión en %d…",
+        "Incoming video call": "Videollamada entrante", "Incoming audio call": "Llamada de voz entrante",
+        "Announcing video drop-in…": "Anunciando videollamada automática…", "Announcing audio drop-in…": "Anunciando llamada de voz automática…",
+        "%@ is dropping in with video. Connecting in five seconds.": "%@ quiere hablar con usted por vídeo. La llamada se conectará en cinco segundos.",
+        "%@ is dropping in with audio. Connecting in five seconds.": "%@ quiere hablar con usted por voz. La llamada se conectará en cinco segundos.",
+        "The sound couldn't play. Tap Answer to connect.": "No se pudo reproducir el aviso. Toque Contestar para conectar.",
+        "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls.": "Pida a su cuidador que permita el acceso al micrófono en Ajustes del iPad → Privacidad y seguridad → Micrófono.",
+        "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup.": "Pida a su cuidador que permita el acceso a la cámara en los ajustes del iPad o que elija una llamada de voz.",
+        "A family member": "Un familiar"
+    ]
+
+    private static let traditionalStrings: [String: String] = [
+        "A family member": "家人",
         "Morning": "早上", "Afternoon": "下午", "Evening": "傍晚", "Night": "夜晚",
         "Spring": "春天", "Summer": "夏天", "Fall": "秋天", "Winter": "冬天",
         "Call someone": "打電話", "Caregiver mode": "照顧者設定",

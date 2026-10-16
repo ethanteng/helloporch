@@ -353,7 +353,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     @objc private func familyChanged() {
         guard let session = familySession, let state = FamilyCoordinator.shared.state, !isEnding, !isSwitchingToPhone else { return }
         guard let call = state.call, call.id == session.call.id, call.state != "ended" else {
-            finish(message: BedsideText.language == .traditionalChinese ? "Call ended. Returning to Porch…" : state.call?.reason ?? "Call ended. Returning to Porch…"); return
+            finish(message: BedsideText.language != .english ? "Call ended. Returning to Porch…" : state.call?.reason ?? "Call ended. Returning to Porch…"); return
         }
         if call.state == "accepted", !familyAccepted {
             familyAccepted = true; waitTask?.cancel(); ringback.stop(); refresh()
