@@ -11,7 +11,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  calling-server:
+    uses: ./.github/workflows/calling-server-deploy.yml
+    secrets:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
   upload:
+    needs: calling-server
     runs-on: macos-26
     timeout-minutes: 30
     environment: testflight
