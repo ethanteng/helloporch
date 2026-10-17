@@ -42,10 +42,10 @@ public struct CallSlots: Equatable {
             if let native = contact.nativeCall {
                 guard contact.shortcutName == nil, contact.address.isEmpty else { throw ValidationError.invalidSavedSlots }
                 return try CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
-                    familyMemberID: contact.familyMemberID, invitationID: contact.invitationID)
+                    familyMemberID: contact.familyMemberID, invitationID: contact.invitationID, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
             }
             guard contact.phoneNumber == nil, contact.familyMemberID == nil, contact.invitationID == nil else { throw ValidationError.invalidSavedSlots }
-            return try CallContact(name: contact.name, address: contact.address, shortcutName: contact.shortcutName)
+            return try CallContact(name: contact.name, address: contact.address, shortcutName: contact.shortcutName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
         }
         slots[index] = Slot(action: .person, contact: validated)
     }
@@ -58,47 +58,60 @@ public struct CallSlots: Equatable {
             let linked = Self.member(for: contact, in: state)?.id
             if linked != contact.familyMemberID {
                 try setContact(CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
-                    familyMemberID: linked, invitationID: contact.invitationID), for: digit)
+                    familyMemberID: linked, invitationID: contact.invitationID, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact), for: digit)
             }
         }
     }
     /// The caregiver's saved name also labels incoming calls and announcements.
     /// Resolve through the same identities as pairing, including newly accepted invites.
     public func incomingCallerName(for call: FamilyCallRecord, in state: FamilySnapshot) -> String {
-        guard state.me.role == .bedside, call.to == state.me.id else { return call.callerName }
+        incomingContact(for: call, in: state)?.name ?? call.callerName
+    }
+    public func incomingContact(for call: FamilyCallRecord, in state: FamilySnapshot) -> CallContact? {
+        guard state.me.role == .bedside, call.to == state.me.id else { return nil }
         return contacts.compactMap { $0 }.first {
             $0.nativeCall != nil && Self.member(for: $0, in: state)?.id == call.from
-        }?.name ?? call.callerName
+        }
     }
     private static func member(for contact: CallContact, in state: FamilySnapshot) -> FamilyPerson? {
         contact.invitationID.flatMap { id in state.people.first { $0.invitationID == id } }
             ?? contact.familyMemberID.flatMap { id in state.people.first { $0.id == id } }
     }
-    public static func load(from defaults: UserDefaults = .standard) throws -> Self {
+    public static func load(from defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) throws -> Self {
         var result = Self()
+        let decoder = JSONDecoder()
+        decoder.userInfo[ContactPhotoStore.codingKey] = photoStore
         if let data = defaults.data(forKey: storageKey) {
-            let saved = try JSONDecoder().decode([Slot].self, from: data)
+            let saved = try decoder.decode([Slot].self, from: data)
             guard saved.count == count else { throw ValidationError.invalidSavedSlots }
             for (digit, slot) in zip(digits, saved) {
                 guard slot.action == .person || slot.contact == nil else { throw ValidationError.invalidSavedSlots }
                 try result.setContact(slot.contact, for: digit)
                 try result.setAction(slot.action, for: digit)
             }
+            if result.contacts.contains(where: { $0?.hasInlinePhoto == true }) {
+                // An unavailable filesystem must not make existing contacts
+                // unusable. Keep the inline record and retry migration later.
+                try? result.save(to: defaults, photoStore: photoStore)
+            }
         } else if let data = defaults.data(forKey: "porch.slots.v1") {
-            let saved = try JSONDecoder().decode([CallContact?].self, from: data)
+            let saved = try decoder.decode([CallContact?].self, from: data)
             guard saved.count == 6 else { throw ValidationError.invalidSavedSlots }
             for (index, contact) in saved.enumerated() { try result.setContact(contact, for: index + 1) }
-            try result.save(to: defaults)
+            try result.save(to: defaults, photoStore: photoStore)
         } else if let data = defaults.data(forKey: "porch.contact.v1") {
-            try result.setContact(JSONDecoder().decode(CallContact.self, from: data), for: 1)
-            try result.save(to: defaults)
+            try result.setContact(decoder.decode(CallContact.self, from: data), for: 1)
+            try result.save(to: defaults, photoStore: photoStore)
         }
         return result
     }
-    public func save(to defaults: UserDefaults = .standard) throws {
-        defaults.set(try JSONEncoder().encode(slots), forKey: Self.storageKey)
+    public func save(to defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) throws {
+        let encoder = JSONEncoder()
+        encoder.userInfo[ContactPhotoStore.codingKey] = photoStore
+        defaults.set(try encoder.encode(slots), forKey: Self.storageKey)
         defaults.removeObject(forKey: "porch.slots.v1")
         defaults.removeObject(forKey: "porch.contact.v1")
+        photoStore.prune(keeping: Set(contacts.compactMap { $0?.photoID }))
     }
     public enum ValidationError: LocalizedError {
         case invalidSlot, invalidSavedSlots

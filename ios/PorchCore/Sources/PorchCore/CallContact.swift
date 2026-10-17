@@ -8,8 +8,21 @@ public struct CallContact: Codable, Equatable {
     public let phoneNumber: String?
     public let familyMemberID: String?
     public let invitationID: String?
+    public let buttonColorHex: String?
+    private var photo: ContactPhoto?
+    public var photoID: String? { photo?.id }
+    public var photoData: Data? { photo?.data }
+    var hasInlinePhoto: Bool { photo?.inlineData != nil }
 
-    public init(name: String, address: String = "", shortcutName: String? = nil) throws {
+    // Metadata validation and pairing must preserve the reference without
+    // reading the image file on the main actor.
+    func preservingPhoto(from original: Self) -> Self {
+        var result = self; result.photo = original.photo; return result
+    }
+
+    public init(name: String, address: String = "", shortcutName: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
+        self.buttonColorHex = try Self.validatedColor(buttonColorHex)
+        self.photo = try photoData.map { try ContactPhoto(data: $0) }
         self.familyMemberID = nil
         self.invitationID = nil
         self.nativeCall = nil
@@ -51,7 +64,9 @@ public struct CallContact: Codable, Equatable {
         self.shortcutName = nil
     }
 
-    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil) throws {
+    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
+        self.buttonColorHex = try Self.validatedColor(buttonColorHex)
+        self.photo = try photoData.map { try ContactPhoto(data: $0) }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
         guard name.count <= 80 else { throw ValidationError.nameTooLong }
@@ -64,6 +79,48 @@ public struct CallContact: Codable, Equatable {
         self.shortcutName = nil
         self.nativeCall = try NativeCall(room: nativeCall.room, mode: nativeCall.mode)
         self.phoneNumber = try phoneNumber.map(Self.normalizedPhoneNumber)
+    }
+
+    private static func validatedColor(_ value: String?) throws -> String? {
+        guard let value else { return nil }
+        guard value.range(of: "^[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { throw ValidationError.invalidAppearance }
+        return value.uppercased()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, address, shortcutName, nativeCall, phoneNumber, familyMemberID, invitationID, buttonColorHex, photoID, photoData
+    }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        address = try values.decode(String.self, forKey: .address)
+        shortcutName = try values.decodeIfPresent(String.self, forKey: .shortcutName)
+        nativeCall = try values.decodeIfPresent(NativeCall.self, forKey: .nativeCall)
+        phoneNumber = try values.decodeIfPresent(String.self, forKey: .phoneNumber)
+        familyMemberID = try values.decodeIfPresent(String.self, forKey: .familyMemberID)
+        invitationID = try values.decodeIfPresent(String.self, forKey: .invitationID)
+        buttonColorHex = try values.decodeIfPresent(String.self, forKey: .buttonColorHex)
+        let store = decoder.userInfo[ContactPhotoStore.codingKey] as? ContactPhotoStore ?? .standard
+        if let data = try values.decodeIfPresent(Data.self, forKey: .photoData) {
+            // The first load migrates earlier inline-photo records to files.
+            photo = try ContactPhoto(data: data, store: store)
+        } else if let id = try values.decodeIfPresent(String.self, forKey: .photoID) {
+            photo = try ContactPhoto(id: id, store: store)
+        }
+    }
+    public func encode(to encoder: Encoder) throws {
+        let store = encoder.userInfo[ContactPhotoStore.codingKey] as? ContactPhotoStore ?? photo?.store ?? .standard
+        try photo?.persist(to: store)
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(name, forKey: .name)
+        try values.encode(address, forKey: .address)
+        try values.encodeIfPresent(shortcutName, forKey: .shortcutName)
+        try values.encodeIfPresent(nativeCall, forKey: .nativeCall)
+        try values.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
+        try values.encodeIfPresent(familyMemberID, forKey: .familyMemberID)
+        try values.encodeIfPresent(invitationID, forKey: .invitationID)
+        try values.encodeIfPresent(buttonColorHex, forKey: .buttonColorHex)
+        try values.encodeIfPresent(photo?.id, forKey: .photoID)
     }
 
     public static func normalizedPhoneNumber(_ value: String) throws -> String {
@@ -94,10 +151,11 @@ public struct CallContact: Codable, Equatable {
     }
 
     public enum ValidationError: LocalizedError {
-        case missingName, missingShortcutName, invalidAddress, nameTooLong, invalidPhoneNumber, invalidFamilyMember
+        case missingName, missingShortcutName, invalidAddress, nameTooLong, invalidPhoneNumber, invalidFamilyMember, invalidAppearance
 
         public var errorDescription: String? {
             switch self {
+            case .invalidAppearance: return "Choose a button color and a photo smaller than 1 MB."
             case .invalidFamilyMember: return "Choose a paired family member."
             case .missingName: return "Enter the person's name."
             case .nameTooLong: return "Use a name with 80 characters or fewer."

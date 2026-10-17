@@ -8,6 +8,70 @@ import PorchCore
 @testable import LiveKit
 
 final class CaregiverInputTests: XCTestCase {
+    @MainActor private func portraitData() -> Data {
+        UIGraphicsImageRenderer(size: CGSize(width: 600, height: 800)).image { context in
+            UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 800))
+        }.jpegData(compressionQuality: 0.8)!
+    }
+
+    @MainActor func testRecipientPhotosColorsAndLargerCallingControls() throws {
+        let restore = localizedBedside(.english); defer { restore() }
+        let photo = portraitData()
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .video), buttonColorHex: "FFCC00", photoData: photo), for: 1)
+        let picker = PeoplePickerViewController(slots: slots); picker.loadViewIfNeeded()
+        for size in [CGSize(width: 375, height: 667), CGSize(width: 1032, height: 1376), CGSize(width: 1376, height: 1032)] {
+            picker.view.frame = CGRect(origin: .zero, size: size); picker.view.layoutIfNeeded(); picker.viewDidLayoutSubviews(); picker.view.layoutIfNeeded()
+            let card = try XCTUnwrap(buttons(in: picker.view).first { $0.accessibilityIdentifier == "people.person.1" })
+            XCTAssertNotNil(card.configuration?.image)
+            XCTAssertGreaterThanOrEqual(card.configuration?.image?.size.width ?? 0, 250)
+            XCTAssertGreaterThanOrEqual(card.titleLabel?.font.pointSize ?? 0, 54)
+            XCTAssertEqual(card.configuration?.baseForegroundColor, .black)
+            XCTAssertEqual(card.configuration?.baseBackgroundColor, RecipientAppearance.color(hex: "FFCC00"))
+            XCTAssertEqual(card.configuration?.subtitle, "Press 1")
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(buttons(in: picker.view).first { $0.accessibilityIdentifier == "people.back" }).bounds.height, 96)
+        }
+        let clock = CallViewController(); clock.loadViewIfNeeded()
+        clock.view.frame = CGRect(x: 0, y: 0, width: 1032, height: 1376); clock.view.layoutIfNeeded()
+        let call = try XCTUnwrap(buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.call" })
+        XCTAssertGreaterThanOrEqual(call.bounds.width, 700); XCTAssertGreaterThanOrEqual(call.bounds.height, 96)
+        XCTAssertGreaterThanOrEqual(call.titleLabel?.font.pointSize ?? 0, 32)
+        XCTAssertEqual(RecipientAppearance.foreground(on: .white), .black)
+        XCTAssertEqual(RecipientAppearance.foreground(on: .black), .white)
+    }
+
+    @MainActor func testSelectedPhotosAreDownsampledAndInvalidPhotosRejected() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("porch-photo-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1800, height: 2400)).image { context in
+            UIColor.systemBlue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 1800, height: 2400))
+        }
+        try image.jpegData(compressionQuality: 1)!.write(to: url)
+        let data = try XCTUnwrap(RecipientAppearance.preparedPhoto(at: url))
+        let resized = try XCTUnwrap(UIImage(data: data))
+        XCTAssertLessThanOrEqual(max(resized.size.width, resized.size.height), 768)
+        XCTAssertLessThanOrEqual(data.count, 1_000_000)
+        try Data("invalid photo".utf8).write(to: url)
+        XCTAssertNil(RecipientAppearance.preparedPhoto(at: url))
+    }
+
+    @MainActor func testCaregiverCanChangeColorRemovePhotoAndSave() async throws {
+        let person = try CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), familyMemberID: UUID().uuidString, buttonColorHex: "FFCC00", photoData: portraitData())
+        let editor = SetupViewController(slot: 1, contact: person); editor.loadViewIfNeeded()
+        let colorPicker = UIColorPickerViewController(); colorPicker.selectedColor = .white
+        editor.colorPickerViewControllerDidSelectColor(colorPicker)
+        let remove = try XCTUnwrap(buttons(in: editor.view).first { $0.accessibilityIdentifier == "recipient.removePhoto" })
+        remove.sendActions(for: .touchUpInside)
+        let saved = expectation(description: "Appearance saved with contact")
+        editor.onSaveSlot = { action, contact in
+            XCTAssertEqual(action, .person); XCTAssertEqual(contact?.buttonColorHex, "FFFFFF"); XCTAssertNil(contact?.photoData)
+            saved.fulfill()
+        }
+        let save = try XCTUnwrap(editor.navigationItem.rightBarButtonItem)
+        _ = editor.perform(try XCTUnwrap(save.action))
+        await fulfillment(of: [saved], timeout: 2)
+    }
+
     @MainActor func testCaregiverAdvancedMenuOpensSilenceSettings() throws {
         let slots = SlotsViewController(slots: CallSlots())
         let navigation = UINavigationController(rootViewController: slots)
@@ -114,7 +178,7 @@ final class CaregiverInputTests: XCTestCase {
             "people": [["id": caller, "name": "Ethan", "role": "family", "permissions": ["audio": true, "video": true], "online": true]], "busy": false, "serverTime": 1])
         let snapshot = try JSONDecoder().decode(FamilySnapshot.self, from: data)
         var slots = CallSlots()
-        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .video), familyMemberID: caller), for: 1)
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .video), familyMemberID: caller, buttonColorHex: "FFCC00", photoData: portraitData()), for: 1)
         try slots.save()
         for kind in ["call", "dropIn"] {
             for mode in [NativeCall.Mode.voice, .video] {
@@ -124,6 +188,9 @@ final class CaregiverInputTests: XCTestCase {
                 XCTAssertTrue(labels(in: controller.view).contains { $0.text == "David" })
                 XCTAssertFalse(labels(in: controller.view).contains { $0.text == "Ethan" })
                 XCTAssertEqual(controller.session.peerName, "David", "The active call must keep the displayed/announced name")
+                XCTAssertNotNil(controller.session.peerContact?.photoData)
+                func images(_ view: UIView) -> [UIImageView] { (view as? UIImageView).map { [$0] } ?? view.subviews.flatMap(images) }
+                XCTAssertTrue(images(controller.view).contains { $0.accessibilityIdentifier == "recipient.photo" && $0.image != nil })
                 if kind == "dropIn" {
                     XCTAssertEqual(audio.name, "David"); XCTAssertEqual(audio.video, mode == .video)
                     XCTAssertEqual(audio.language, .traditionalChinese)
@@ -286,7 +353,10 @@ final class CaregiverInputTests: XCTestCase {
             let date = find("clock.date", in: clock.view)!
             let weekday = find("clock.weekday", in: clock.view)!
             let button = find("clock.call", in: clock.view)!
-            XCTAssertGreaterThan(time.font.pointSize, 200)
+            let attributed = time.attributedText!
+            let digit = attributed.string.first(where: \.isNumber)!
+            let digitIndex = (attributed.string as NSString).range(of: String(digit)).location
+            XCTAssertGreaterThan((attributed.attribute(.font, at: digitIndex, effectiveRange: nil) as! UIFont).pointSize, 200)
             XCTAssertGreaterThan(time.bounds.width, size.width * 0.85)
             XCTAssertGreaterThanOrEqual(weekday.convert(weekday.bounds, to: clock.view).minY, 0)
             XCTAssertLessThan(date.convert(date.bounds, to: clock.view).maxY, button.frame.minY)
@@ -726,4 +796,147 @@ final class PhoneFallbackHangupTests: XCTestCase {
 /// avoid constructing a transport/protobuf fixture or publishing any tracks.
 private final class HangupTestParticipant: Participant, @unchecked Sendable {
     override func unpublishAll(notify: Bool = true) async {}
+}
+
+final class CallScreenLayoutTests: XCTestCase {
+    @MainActor func testLargePortraitFitsCallingSpaceAndRemainsBesideNameDuringVideo() throws {
+        for size in [CGSize(width: 320, height: 568), CGSize(width: 568, height: 320), CGSize(width: 1032, height: 1376)] {
+            let screen = UIViewController(), video = VideoView()
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).image { context in
+                UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+            }
+            let photo = RecipientAppearance.photoView(image.jpegData(compressionQuality: 0.8))
+            let title = PorchStyle.label("David", size: 40, color: .white)
+            let status = PorchStyle.label("Calling David…", size: 17, color: .white)
+            let placeholder = PorchStyle.label("Voice call", size: 28, color: .white)
+            let end = PorchStyle.button("End call")
+            CallScreenLayout.install(in: screen.view, video: video, placeholder: placeholder, title: title, status: status, photo: photo, buttons: [end])
+            screen.view.frame = CGRect(origin: .zero, size: size); screen.view.layoutIfNeeded()
+            let rect = photo.convert(photo.bounds, to: screen.view)
+            XCTAssertGreaterThan(rect.height, 20)
+            XCTAssertTrue(screen.view.bounds.contains(rect), "Photo must fit in \(size): \(rect)")
+            XCTAssertLessThan(title.convert(title.bounds, to: screen.view).maxY, rect.minY)
+            XCTAssertLessThan(rect.maxY, end.convert(end.bounds, to: screen.view).minY)
+            XCTAssertFalse(photo.hasAmbiguousLayout)
+            photo.isHidden = true; placeholder.isHidden = true; screen.view.layoutIfNeeded()
+            func photos(_ view: UIView) -> [UIImageView] { (view as? UIImageView).map { [$0] } ?? view.subviews.flatMap(photos) }
+            XCTAssertTrue(photos(screen.view).contains { $0 !== photo && $0.accessibilityIdentifier == "recipient.photo" && !$0.isHidden && $0.image != nil })
+        }
+    }
+
+    @MainActor func testLongNamesAndAccessibilityTextScrollWithoutCoveringControls() throws {
+        let traits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+        for size in [CGSize(width: 320, height: 568), CGSize(width: 568, height: 320), CGSize(width: 1024, height: 768)] {
+            let screen = UIViewController(), remote = VideoView(), preview = VideoView()
+            remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
+            preview.backgroundColor = UIColor(white: 0.35, alpha: 1)
+            let title = PorchStyle.label(String(String(repeating: "Family member ", count: 7).prefix(80)), size: 26)
+            let status = PorchStyle.label("Trying your family on Porch…\nTheir phone will ring if Porch isn't answered.", size: 17)
+            let hint = PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16)
+            for (label, pointSize) in [(title, CGFloat(26)), (status, CGFloat(17)), (hint, CGFloat(16))] {
+                // Keep the explicit accessibility metrics when this unmounted
+                // fixture inherits the test host's default content-size trait.
+                label.adjustsFontForContentSizeCategory = false
+                label.textColor = .white
+                label.font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: pointSize), compatibleWith: traits)
+            }
+            let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
+            for (button, text) in zip(buttons, ["Mute", "Camera off", "End call"]) {
+                CallScreenLayout.configure(button, title: text, symbol: "phone")
+                button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                    var attributes = PorchStyle.centeredTextAttributes(attributes)
+                    attributes.font = UIFont.systemFont(ofSize: UIFontMetrics.default.scaledValue(for: 16, compatibleWith: traits))
+                    return attributes
+                }
+            }
+            CallScreenLayout.install(in: screen.view, video: remote, preview: preview,
+                                     title: title, status: status, hint: hint, buttons: buttons)
+            screen.view.frame = CGRect(origin: .zero, size: size)
+            screen.view.layoutIfNeeded()
+            let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
+            let heading = try XCTUnwrap(scroll.subviews.first { $0.accessibilityIdentifier == "call.heading" })
+            let controls = try XCTUnwrap(scroll.subviews.first { $0.accessibilityIdentifier == "call.controls" })
+            XCTAssertGreaterThan(scroll.contentSize.height, scroll.bounds.height)
+            XCTAssertGreaterThanOrEqual(controls.frame.minY - heading.frame.maxY, 16)
+            XCTAssertGreaterThanOrEqual(preview.frame.minY - heading.frame.maxY, 12)
+            for label in [title, status, hint] {
+                let fitting = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+                XCTAssertGreaterThanOrEqual(label.bounds.height + 1, fitting.height, "Large text must remain readable")
+            }
+            let end = buttons[2]
+            scroll.scrollRectToVisible(end.convert(end.bounds, to: scroll), animated: false)
+            let endRect = end.convert(end.bounds, to: screen.view)
+            XCTAssertTrue(screen.view.bounds.insetBy(dx: -0.5, dy: -0.5).contains(endRect), "End call must be reachable in \(size): \(endRect)")
+            let attachment = XCTAttachment(image: UIGraphicsImageRenderer(size: size).image { screen.view.layer.render(in: $0.cgContext) })
+            attachment.name = "Accessibility call controls \(Int(size.width))x\(Int(size.height))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTAssertEqual(remote.frame, screen.view.bounds, "Scrolling overlays must not move or shrink the remote video")
+            XCTAssertFalse(heading.hasAmbiguousLayout)
+            XCTAssertFalse(controls.hasAmbiguousLayout)
+
+        }
+    }
+
+    @MainActor func testRemoteVideoFillsPhoneAndTabletInBothOrientations() throws {
+        // Both call controllers use this layout. Include the smallest supported
+        // phone, landscape safe areas, and iPad split-view widths.
+        for hasPreview in [true, false] {
+            let screen = UIViewController()
+            let remote = VideoView(), preview = VideoView()
+            remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
+            preview.backgroundColor = UIColor(white: 0.35, alpha: 1)
+            let title = PorchStyle.label("Family", size: 26, color: .white)
+            let status = PorchStyle.label("Video call connected", size: 17, color: .white)
+            let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
+            for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video", "phone.down.fill"]) {
+                CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
+            }
+            let hint = PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16, color: .white)
+            CallScreenLayout.install(in: screen.view, video: remote, preview: hasPreview ? preview : nil,
+                                     title: title, status: status, hint: hasPreview ? hint : nil, buttons: buttons)
+            for size in [CGSize(width: 320, height: 568), CGSize(width: 393, height: 852),
+                         CGSize(width: 568, height: 320), CGSize(width: 852, height: 393), CGSize(width: 768, height: 1024),
+                         CGSize(width: 1024, height: 768), CGSize(width: 375, height: 1024)] {
+                screen.view.frame = CGRect(origin: .zero, size: size)
+                screen.additionalSafeAreaInsets = size.width > size.height && size.height < 500
+                    ? UIEdgeInsets(top: 0, left: 59, bottom: 21, right: 59)
+                    : UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0)
+                screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+                XCTAssertEqual(remote.frame, screen.view.bounds)
+                XCTAssertEqual(remote.layoutMode, .fill)
+                let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
+                let controls = try XCTUnwrap(scroll.subviews.first { $0.accessibilityIdentifier == "call.controls" })
+                let controlsRect = controls.convert(controls.bounds, to: screen.view)
+                XCTAssertGreaterThan(controlsRect.minY, title.convert(title.bounds, to: screen.view).maxY)
+                XCTAssertLessThanOrEqual(controlsRect.maxY, screen.view.safeAreaLayoutGuide.layoutFrame.maxY)
+                XCTAssertLessThanOrEqual(scroll.contentSize.height, scroll.bounds.height + 1)
+                for button in buttons {
+                    let rect = button.convert(button.bounds, to: screen.view)
+                    XCTAssertGreaterThanOrEqual(rect.width, 44)
+                    XCTAssertGreaterThanOrEqual(rect.height, 64)
+                    XCTAssertTrue(screen.view.bounds.contains(rect))
+                    XCTAssertFalse(button.hasAmbiguousLayout)
+                }
+                if hasPreview {
+                    XCTAssertLessThanOrEqual(preview.bounds.width, 112)
+                    XCTAssertLessThan(preview.bounds.width * preview.bounds.height, size.width * size.height * 0.04)
+                    XCTAssertLessThan(preview.frame.maxY, controls.frame.minY)
+                    XCTAssertTrue(screen.view.safeAreaLayoutGuide.layoutFrame.contains(preview.convert(preview.bounds, to: screen.view)))
+                }
+                XCTAssertFalse(remote.hasAmbiguousLayout)
+                if size == CGSize(width: 393, height: 852) || size == CGSize(width: 1024, height: 768) {
+                    let image = UIGraphicsImageRenderer(size: size).image { screen.view.layer.render(in: $0.cgContext) }
+                    let attachment = XCTAttachment(image: image)
+                    attachment.name = "Call layout \(Int(size.width))x\(Int(size.height)) preview-\(hasPreview)"
+                    attachment.lifetime = .keepAlways
+                    add(attachment)
+                }
+            }
+            // Audio-only calls hide the camera control without wasting its slot.
+            buttons[1].isHidden = true
+            screen.view.layoutIfNeeded()
+            XCTAssertGreaterThan(buttons[0].bounds.width, 100)
+        }
+    }
 }
