@@ -48,6 +48,28 @@ import PorchCore
     func stop()
 }
 
+@MainActor enum PorchAnnouncementVoice {
+    static func available(for language: BedsideLanguage) -> [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { language.supportsSpeechVoice(language: $0.language) }
+            .sorted { label($0).localizedStandardCompare(label($1)) == .orderedAscending }
+    }
+    static func label(_ voice: AVSpeechSynthesisVoice) -> String {
+        let region = Locale(identifier: "en").localizedString(forIdentifier: voice.language) ?? voice.language
+        let quality: String
+        if #available(iOS 16.0, *), voice.quality == .premium { quality = " · Premium" }
+        else { quality = voice.quality == .enhanced ? " · Enhanced" : "" }
+        return "\(voice.name) · \(region)\(quality)"
+    }
+    static func resolve(for language: BedsideLanguage, identifier: String?) -> AVSpeechSynthesisVoice? {
+        if let identifier, let voice = AVSpeechSynthesisVoice(identifier: identifier),
+           language.supportsSpeechVoice(language: voice.language) { return voice }
+        guard let fallback = AVSpeechSynthesisVoice(language: language.speechLanguage),
+              language.supportsSpeechVoice(language: fallback.language) else { return nil }
+        return fallback
+    }
+}
+
 /// Plays only on this device, before joining a room or enabling its camera/mic.
 @MainActor final class PorchIncomingAudio: NSObject, IncomingCallAudioPlaying, AVSpeechSynthesizerDelegate {
     private let tone = PorchTonePlayer()
@@ -61,12 +83,17 @@ import PorchCore
     override init() { super.init(); speech.delegate = self; speech.usesApplicationAudioSession = true }
     func ring() -> Bool { stop(); return tone.play(.incoming) }
     func announce(name: String, video: Bool, language: BedsideLanguage, completion: @escaping (Bool) -> Void) {
+        announce(name: name, video: video, language: language,
+                 voiceIdentifier: BedsidePreferences.load().announcementVoiceIdentifier(for: language), completion: completion)
+    }
+    /// An explicit choice lets settings preview unsaved changes, including System default.
+    func announce(name: String, video: Bool, language: BedsideLanguage, voiceIdentifier: String?, completion: @escaping (Bool) -> Void) {
         stop()
         if PorchTonePlayer.isSilentPreview { completion(true); return }
         self.completion = completion
         do { session = try AudioManager.shared.audioSession.acquire(requirement: .playbackOnly) }
         catch { finish(false); return }
-        guard tone.play(.announcement), let voice = AVSpeechSynthesisVoice(language: language.speechLanguage) else { finish(false); return }
+        guard tone.play(.announcement), let voice = PorchAnnouncementVoice.resolve(for: language, identifier: voiceIdentifier) else { finish(false); return }
         let message = language.format(video ? "%@ is dropping in with video. Connecting in five seconds." : "%@ is dropping in with audio. Connecting in five seconds.", arguments: [name])
         let utterance = AVSpeechUtterance(string: message)
         utterance.voice = voice; utterance.rate = AVSpeechUtteranceDefaultSpeechRate

@@ -7,12 +7,55 @@ final class BedsideLanguageTests: XCTestCase {
         let saved = try JSONDecoder().decode(BedsidePreferences.self, from: data)
         XCTAssertEqual(saved.appearance, .dynamic); XCTAssertEqual(saved.hemisphere, .southern)
         XCTAssertEqual(saved.dayStart, 7); XCTAssertEqual(saved.nightStart, 21); XCTAssertEqual(saved.language, .english)
+        XCTAssertTrue(saved.announcementVoiceIdentifiers.isEmpty)
         for language in BedsideLanguage.allCases {
             var localized = saved; localized.language = language
             XCTAssertEqual(try JSONDecoder().decode(BedsidePreferences.self, from: JSONEncoder().encode(localized)), localized)
         }
         let future = Data(#"{"appearance":"dynamic","dayStart":7,"nightStart":21,"language":"future"}"#.utf8)
         XCTAssertEqual(try JSONDecoder().decode(BedsidePreferences.self, from: future).language, .english)
+    }
+    func testAnnouncementVoiceChoicesSurviveLanguageChangesAndRelaunch() throws {
+        let suite = "voice-preferences-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var preferences = BedsidePreferences()
+        preferences.dayStart = 7; preferences.nightStart = 21; preferences.hemisphere = .southern
+        for language in BedsideLanguage.allCases {
+            XCTAssertNil(preferences.announcementVoiceIdentifier(for: language))
+            preferences.setAnnouncementVoiceIdentifier("voice-\(language.rawValue)", for: language)
+        }
+        preferences.language = .cantonese
+        preferences.save(to: defaults)
+        var loaded = BedsidePreferences.load(from: defaults)
+        XCTAssertEqual(loaded, preferences)
+        loaded.language = .spanish
+        loaded.setAnnouncementVoiceIdentifier(nil, for: .spanish)
+        loaded.save(to: defaults)
+        let reopened = BedsidePreferences.load(from: defaults)
+        XCTAssertNil(reopened.announcementVoiceIdentifier(for: .spanish))
+        for language in BedsideLanguage.allCases where language != .spanish {
+            XCTAssertEqual(reopened.announcementVoiceIdentifier(for: language), "voice-\(language.rawValue)")
+        }
+        XCTAssertEqual(reopened.dayStart, 7); XCTAssertEqual(reopened.nightStart, 21)
+        XCTAssertEqual(reopened.hemisphere, .southern)
+    }
+    func testVoiceMatchingAllowsRegionalAccentsButKeepsChineseDialectsSeparate() {
+        let cases: [(String, BedsideLanguage)] = [
+            ("en-US", .english), ("en-GB", .english), ("en_AU", .english),
+            ("es-ES", .spanish), ("es-MX", .spanish), ("es-US", .spanish),
+            ("zh-TW", .traditionalChinese), ("zh-Hant-TW", .traditionalChinese), ("cmn-TW", .traditionalChinese),
+            ("zh-CN", .simplifiedChinese), ("zh-Hans-CN", .simplifiedChinese), ("cmn-CN", .simplifiedChinese),
+            ("zh-HK", .cantonese), ("zh-Hant-HK", .cantonese), ("yue-HK", .cantonese), ("yue-Hant-HK", .cantonese),
+        ]
+        for (tag, expected) in cases {
+            for language in BedsideLanguage.allCases {
+                XCTAssertEqual(language.supportsSpeechVoice(language: tag), language == expected, "\(tag) / \(language)")
+            }
+        }
+        for unsupported in ["fr-FR", "zh", "zh-SG", "enochian", "", "yue-CN"] {
+            XCTAssertFalse(BedsideLanguage.allCases.contains { $0.supportsSpeechVoice(language: unsupported) }, unsupported)
+        }
     }
     func testEveryLanguageCoversAllBedsideStringsAndPreservesFormatArguments() throws {
         let keys = Set(BedsideLanguage.traditionalChinese.translations.keys)
