@@ -137,6 +137,8 @@ struct FamilyCallSession {
     let call: FamilyCallRecord
     let peerName: String
     var peerContact: CallContact? = nil
+    /// How long this caller rings before giving up. Family phones use the household's voicemail wait.
+    var waitSeconds = CallPreferences.defaultVoicemailSeconds
     var service: FamilyService { FamilyService(credential) }
     func end() async { _ = try? await service.send("endCall", ["callID": call.id]) }
     func endConfirmed() async throws {
@@ -215,6 +217,7 @@ struct FamilyCallSession {
         let result = try await FamilyService(credential).send("startCall", values)
         update(result)
         guard let call = result.state?.call else { throw FamilyServiceError(message: "Couldn't start the call.", status: 503) }
-        return FamilyCallSession(credential: credential, call: call, peerName: name)
+        let wait = credential.role != .family ? waitSeconds : dropIn ? CallPreferences.dropInWaitSeconds : result.state?.ringSeconds ?? CallPreferences.defaultVoicemailSeconds
+        return FamilyCallSession(credential: credential, call: call, peerName: name, waitSeconds: wait)
     }
 }

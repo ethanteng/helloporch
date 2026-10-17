@@ -60,7 +60,7 @@ final class MessagePosterView: UIControl {
     required init?(coder: NSCoder) { fatalError("Use init(image:playable:)") }
 }
 
-/// Plays a stored message from a short-lived signed link.
+/// Plays a message: a stored one from a short-lived signed link, or a recording before it's sent.
 @MainActor func playMessage(from url: URL, on presenter: UIViewController) {
     try? AVAudioSession.sharedInstance().setCategory(.playback)
     let player = AVPlayerViewController(); player.player = AVPlayer(url: url)
@@ -110,7 +110,6 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
     private var recorder: AVAudioRecorder?
     private var recordStarted = Date()
     private var recordTimer: Timer?
-    private var audioPreview: AVAudioPlayer?
     private var startedAutomatically = false
     private let timerLabel = PorchStyle.label("", size: 28, color: PorchStyle.ink, weight: .semibold)
 
@@ -134,7 +133,6 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
     }
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        audioPreview?.stop()
         if isMovingFromParent {
             recordTimer?.invalidate(); recorder?.stop(); _ = recorder?.deleteRecording()
             if let file = recording?.file, phase != .sending { try? FileManager.default.removeItem(at: file) }
@@ -249,24 +247,17 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
     }
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true) }
 
+    /// Audio and video use the same on-screen player as Listen again, so playing it back always shows something.
     private func preview() {
         guard let recording else { return }
-        if recording.mode == "video" {
-            playMessage(from: recording.file, on: self)
-        } else {
-            try? AVAudioSession.sharedInstance().setCategory(.playback)
-            audioPreview = try? AVAudioPlayer(contentsOf: recording.file)
-            audioPreview?.play()
-        }
+        playMessage(from: recording.file, on: self)
     }
     private func discard() {
-        audioPreview?.stop()
         if let file = recording?.file { try? FileManager.default.removeItem(at: file) }
         recording = nil; phase = .idle; render()
     }
     private func send() {
         guard let recording, phase == .recorded, let credential = PorchDevice.credential(for: .family) else { return }
-        audioPreview?.stop()
         phase = .sending; render()
         Task { [weak self] in
             guard let self else { return }

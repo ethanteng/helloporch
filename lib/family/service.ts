@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { callRoom, config, dropInAllowed, expire, FamilyError, mutate, phoneDropIn, requireValue, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { callRoom, config, dropInAllowed, expire, FamilyError, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom } from "./messages.ts";
@@ -50,7 +50,7 @@ function memberFor(house: Household, auth: Auth): Member {
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
 // The bedside device is always a caregiver; family devices need the caregiver's approval (and the PIN).
 function isCaregiver(member: Member) { return member.role === "bedside" || member.caregiver === true; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn"];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds"];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 function publicPerson(m: Member, now: number, pushEnabled: boolean) {
   return { id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled), ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}) };
@@ -74,6 +74,8 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     : house.members.find(m => m.id === call.from)?.name ?? "Family";
   // Approved numbers are caregiver data: only the bedside and PIN-checked admin state carry them.
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false,
+    // Family phones ring the bedside this long before offering voicemail.
+    ringSeconds: ringSeconds(house),
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [] } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
     ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}), me: publicMember(me),
@@ -232,6 +234,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (bedside) bedside.name = house.name;
         return undefined;
       }
+      if (action === "setRingSeconds") {
+        const seconds = input.seconds;
+        requireValue(typeof seconds === "number" && Number.isInteger(seconds) && seconds >= ringLimits.minimum && seconds <= ringLimits.maximum,
+          `Choose a ringing time from ${ringLimits.minimum} to ${ringLimits.maximum} seconds.`);
+        // A call that's already ringing keeps its deadline.
+        house.ringSeconds = seconds;
+        return undefined;
+      }
       if (action === "leaveHousehold") {
         requireValue(me.role === "family", "A bedside device can't leave its household.", 403);
         me.revoked = true; delete me.voip; delete me.caregiver;
@@ -322,7 +332,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
         if (!online(target, now) && !(input.kind === "call" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
-        const wait = me.role === "bedside" && input.waitSeconds !== undefined ? input.waitSeconds : 45;
+        // Family phones call only the bedside, which rings for the caregiver's chosen time.
+        const wait = me.role === "family" ? ringSeconds(house, input.kind) : input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
         me.seenAt = now;
         house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind: input.kind, state: "pending", createdAt: now, expiresAt: now + wait + 30 };

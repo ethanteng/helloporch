@@ -11,7 +11,7 @@ Each household has its own number. Managed Redis stores `phone-number:<E.164 num
 - All callers reaching the assigned number can ring it; callers don't need to be paired app members. Calls require a manual answer, except [approved, verified drop-ins](#audio-drop-in-by-phone).
 - Answer connects two-way audio. The camera stays off. Mute, keypad hangup, either person's hangup, and automatic silence hangup work with the existing call controls.
 - A call reserves the same household slot as ordinary Porch calls and drop-ins. A second caller cannot interrupt or join the first call. There is no call waiting. With [voicemail](#voicemail) set up, callers who aren't answered, are declined, or find Porch busy or offline can leave a message. Without it they are disconnected, and the provider decides which tone or message they hear.
-- LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing is limited to 45 seconds and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
+- LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing stops after the caregiver's **Call preferences → Ring before voicemail** time (15 seconds to 2 minutes, 45 by default; approved drop-ins always get 45) and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
 - Paired app calls and outbound phone fallback continue to use their existing flows. Existing family builds can decode the incoming audio call; the updated build adds faster ringing, telephone connection status, and confirmed phone hangup retries.
 
 ## Audio drop-in by phone
@@ -56,7 +56,7 @@ Deploy the server containing `POST /api/calls/inbound/webhook` before enabling p
 
    With a single number on the existing Twilio outbound trunk, the script selects it automatically. Otherwise set `PORCH_INBOUND_NUMBER` privately to the intended number on that trunk. The plan names the bedside the number will ring, for example: Calls to this number will ring the bedside “Grandma”. Check that name before `--apply`, because household IDs are hard to tell apart. It also verifies existing trunks and dispatch rules, and refuses to take a number from another household unless you [reassign it](#move-a-number-to-another-household).
 
-4. Repeat with `--apply` to create the inbound trunk, configure Twilio SIP signaling source ranges, set 45-second ringing and a 30-minute SIP limit, map Twilio's `X-Twilio-VerStat` verification header to the `porch.callerVerification` participant attribute, create an individual dispatch rule with at most two participants, and persist the number assignment. A household configured before phone drop-in needs this `--apply` run once more for the header mapping; until then, every phone call rings for a normal answer. The script is safe to repeat for the same assignment; it does not overwrite unrelated trunks or routes. IDs and the selected number are saved privately in `.env.inbound-setup.local`.
+4. Repeat with `--apply` to create the inbound trunk, configure Twilio SIP signaling source ranges, set a 120-second ringing cap and a 30-minute SIP limit, map Twilio's `X-Twilio-VerStat` verification header to the `porch.callerVerification` participant attribute, create an individual dispatch rule with at most two participants, and persist the number assignment. A household configured before phone drop-in needs this `--apply` run once more for the header mapping; until then, every phone call rings for a normal answer. Trunks set up before the ring time became a caregiver setting have a 45-second cap: run `--apply` once more so a ring time over 45 seconds takes effect. The script is safe to repeat for the same assignment; it does not overwrite unrelated trunks or routes. IDs and the selected number are saved privately in `.env.inbound-setup.local`.
 5. In LiveKit Cloud → project Settings → Webhooks, add the calling server's public HTTPS endpoint:
 
    ```text
@@ -91,7 +91,7 @@ The plan names both bedsides, for example: calls to this number will ring the be
 Voicemail uses a Twilio **voice webhook** for the number instead of Elastic SIP Trunking origination. Twilio runs Porch's instructions for each call:
 
 1. `POST /api/calls/inbound/voice` dials LiveKit (`<Dial><Sip>`) with a digest login. LiveKit rings the bedside exactly as before, and the caller hears ringing until Porch answers.
-2. If the call isn't answered within 45 seconds, is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
+2. If the call isn't answered within the household's ring time (Twilio's own dial timeout is 10 seconds longer than that or a drop-in's 45 seconds, whichever is more, as a backstop), is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
 3. When the recording is ready, Twilio calls `/api/calls/inbound/voice/recording`. The server downloads the MP3 and stores it in the private Blob store. It then **deletes Twilio's copy**, so the recording isn't kept at the phone provider.
 
 The voicemail then waits for review:
@@ -148,7 +148,7 @@ xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
 Before relying on the feature, test with the bedside iPad and a real phone:
 
 - Dial the assigned number, hear ringing, answer by touch and by the keypad, and verify two-way audio with the camera off.
-- Hang up from each end, decline, ignore for 45 seconds, cancel before the iPad answers, and retry immediately afterward.
+- Hang up from each end, decline, ignore until the ring time in Call preferences runs out (try a short and a long setting), cancel before the iPad answers, and retry immediately afterward.
 - Call during an existing Porch call, during outbound phone fallback, and from two phones at once. Only one conversation may reach the bedside device, with no audio shared across calls.
 - Open the updated app once, allow microphone access, then background Porch and dial the number. Repeat with the iPad locked; answer without unlocking and verify two-way audio, system mute/hangup, foreground keypad controls, and audio continuing after another lock.
 - Cancel before answer, ignore the call, decline from the lock screen, disconnect Wi-Fi, restore it, and call again. Test Focus/Do Not Disturb, a cold launch after unlocking once since reboot, and production TestFlight push delivery. Record deliberate force-quit behavior on hardware; simulator tests cannot prove APNs wakeup or ringing.

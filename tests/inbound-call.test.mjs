@@ -195,6 +195,25 @@ test('offline bedside devices and expired ringing calls release the SIP room', a
   }
 });
 
+test('phone calls ring for the household ring time before the SIP room is released', async () => {
+  for (const seconds of [15, 120]) {
+    const f = fixture(), { bedside } = await f.setup();
+    await f.json('setRingSeconds', { seconds }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+    const event = f.call(); await f.webhook(event);
+    assert.equal(f.house(bedside).call.expiresAt, event.createdAt + seconds);
+    f.advance(seconds - 1); assert.equal((await f.poll(bedside)).state.call.state, 'pending');
+    assert.ok(!f.ended.includes(event.room.name));
+    f.advance(1); assert.equal((await f.poll(bedside)).state.call.state, 'ended');
+    assert.ok(f.ended.includes(event.room.name));
+  }
+  // A join event older than the ring time never starts ringing.
+  const f = fixture(), { bedside } = await f.setup();
+  await f.json('setRingSeconds', { seconds: 15 }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+  const stale = f.call(); f.advance(15); await f.webhook(stale);
+  assert.equal(f.house(bedside).call, undefined);
+  assert.ok(f.ended.includes(stale.room.name));
+});
+
 test('cleanup failure can be retried after state becomes ended', async () => {
   const f = fixture(), { bedside } = await f.setup(), event = f.call();
   await f.webhook(event); const callID = f.house(bedside).call.id;
@@ -303,6 +322,17 @@ test('a carrier-verified, caregiver-approved number drops in with audio after th
   const token = await new TokenVerifier(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET).verify(join.token);
   assert.equal(join.room, event.room.name);
   assert.deepEqual(token.video.canPublishSources, ['microphone']);
+});
+
+test('approved phone drop-ins keep the standard deadline when the ring time is short', async () => {
+  const f = fixture(), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  await f.json('setRingSeconds', { seconds: 15 }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+  const event = f.call(undefined, verified); await f.webhook(event);
+  const call = f.house(bedside).call;
+  assert.equal(call.kind, 'dropIn'); assert.equal(call.expiresAt, event.createdAt + 45);
+  f.advance(20); assert.equal((await f.poll(bedside)).state.call.state, 'pending');
+  assert.ok(!f.ended.includes(event.room.name));
 });
 
 test('caller ID without full carrier attestation, an unapproved number, or paused drop-in rings normally', async () => {

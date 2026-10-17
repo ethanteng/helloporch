@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { forwardedVerificationHeader, inboundRingSeconds, sipInboundCredentials, verifiedCaller, type InboundRoute } from "./inbound.ts";
-import type { Household } from "./household.ts";
+import { forwardedVerificationHeader, sipInboundCredentials, verifiedCaller, type InboundRoute } from "./inbound.ts";
+import { ringSeconds, type Household } from "./household.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { messageLimits, receivePhoneVoicemail, voicemailOpen } from "./messages.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
@@ -97,14 +97,18 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
   try {
     if (step === "incoming") {
       const calledNumber = params.get("To");
-      if (!configured.sipHost || !configured.sip || !await household(store, calledNumber)) return twiml("<Reject/>");
+      if (!configured.sipHost || !configured.sip) return twiml("<Reject/>");
+      const house = await household(store, calledNumber);
+      if (!house) return twiml("<Reject/>");
       // LiveKit keeps this leg ringing until the bedside answers; answerOnBridge lets the caller hear it.
+      // Porch stops the ringing after the household's ring time; Twilio's timeout is only a backstop,
+      // long enough for an approved phone drop-in, which isn't known until LiveKit reports the call.
       // Twilio's signed STIR/SHAKEN result travels on as a SIP header, so phone drop-in still works.
       const verification = params.get("StirVerstat");
       // Remembered for voicemail: only a verified caller on the keypad skips caregiver review.
       if (verification === verifiedCaller && callSIDPattern.test(callSID)) await store.create(verifiedKey(callSID), "1", 3600);
       const headers = verification && /^[A-Za-z0-9-]{1,64}$/.test(verification) ? `?${forwardedVerificationHeader}=${verification}` : "";
-      return twiml(`<Dial answerOnBridge="true" timeout="${inboundRingSeconds + 10}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
+      return twiml(`<Dial answerOnBridge="true" timeout="${Math.max(ringSeconds(house), ringSeconds(house, "dropIn")) + 10}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
         `<Sip username="${escape(configured.sip.username)}" password="${escape(configured.sip.password)}">${escape(`sip:${calledNumber}@${configured.sipHost};transport=tcp${headers}`)}</Sip></Dial>`);
     }
     if (step === "dialed") {

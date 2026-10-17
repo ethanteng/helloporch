@@ -173,6 +173,32 @@ test('a new invitation cannot reuse an existing bedside identity or inherit acce
  assert.equal((await f.send('setCaregiverPIN',{pin:'654321'},undefined,'123456')).status,401);
 });
 
+test('caregivers choose how long calls to the bedside ring before voicemail',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ assert.equal(bedside.state.ringSeconds,45); assert.equal(family.state.ringSeconds,45);
+ assert.equal((await f.send('setRingSeconds',{seconds:30},bedside.credential)).status,403,'needs the PIN');
+ assert.equal((await f.send('setRingSeconds',{seconds:30},family.credential,env.PORCH_CONTACT_SETUP_CODE)).status,403,'family devices need caregiver approval');
+ for (const seconds of [14,121,30.5,'30',null]) assert.equal((await f.send('setRingSeconds',{seconds},bedside.credential,env.PORCH_CONTACT_SETUP_CODE)).status,400,String(seconds));
+ assert.equal((await f.json('setRingSeconds',{seconds:30},bedside.credential,env.PORCH_CONTACT_SETUP_CODE)).state.ringSeconds,30);
+ assert.equal((await f.json('poll',{available:true},family.credential)).state.ringSeconds,30);
+ // A family phone's call rings for that long; a waiting time it sends is ignored.
+ const created=await f.json('startCall',{targetID:bedside.state.me.id,mode:'video',kind:'call',waitSeconds:120},family.credential);
+ assert.equal(created.state.call.expiresAt-created.state.call.createdAt,60);
+ // A call that's already ringing keeps its deadline.
+ await f.json('setRingSeconds',{seconds:120},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await f.json('poll',{available:true},bedside.credential)).state.call.expiresAt,created.state.call.expiresAt);
+ await f.json('endCall',{callID:created.state.call.id},family.credential);
+ // Drop-ins keep the standard time for their announcement and countdown, even with a short ring time.
+ await f.json('setRingSeconds',{seconds:15},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ await f.json('setDropIn',{enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const dropIn=await f.json('startCall',{targetID:bedside.state.me.id,mode:'voice',kind:'dropIn'},family.credential);
+ assert.equal(dropIn.state.call.expiresAt-dropIn.state.call.createdAt,75);
+ await f.json('endCall',{callID:dropIn.state.call.id},family.credential);
+ // The bedside's own calls still use the waiting time it sends.
+ const outgoing=await f.json('startCall',{targetID:family.state.me.id,mode:'video',kind:'call',waitSeconds:20},bedside.credential);
+ assert.equal(outgoing.state.call.expiresAt-outgoing.state.call.createdAt,50);
+});
+
 test('answer and phone fallback race atomically: an answered Porch call never starts fallback',async()=>{
  const f=fixture(),{bedside,family}=await f.setup();
  const created=await f.json('startCall',{targetID:family.state.me.id,mode:'video',kind:'call',waitSeconds:120},bedside.credential);
