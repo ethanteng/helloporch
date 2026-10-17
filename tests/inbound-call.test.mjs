@@ -402,3 +402,17 @@ test('only PIN-checked caregivers manage approved numbers, and family devices ne
   assert.equal((await set({ name: 'David' })).status, 200);
   assert.equal((await approve(f, bedside, { number: '+14155559999', enabled: false })).state.phoneDropIns.length, 20);
 });
+
+test('changing an approved number swaps it in one update and ends a drop-in from the old number', async () => {
+  const f = fixture(), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  const event = f.call(undefined, verified); await f.webhook(event);
+  assert.equal((await f.poll(bedside)).state.call.kind, 'dropIn');
+  const swapped = await approve(f, bedside, { number: '+14155550300', replacing: '+14155550200' });
+  assert.deepEqual(swapped.state.phoneDropIns, [{ number: '+14155550300', name: 'David' }]);
+  assert.equal(f.house(bedside).call.state, 'ended'); assert.ok(f.ended.includes(event.room.name));
+  for (const values of [{ name: 'David', enabled: true, replacing: '4155550300' }, { enabled: false, replacing: '+14155550300' }]) {
+    assert.equal((await f.send('setPhoneDropIn', { number: '+14155550200', ...values }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE)).status, 400);
+  }
+  assert.deepEqual(f.house(bedside).phoneDropIns, [{ number: '+14155550300', name: 'David' }]);
+});

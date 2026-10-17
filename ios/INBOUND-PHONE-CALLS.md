@@ -21,7 +21,7 @@ A caregiver can let specific phone numbers drop in with audio, the same way an a
 Approve a number in either place:
 
 - **Family & drop-in → Audio drop-in by phone → Approve a phone number** (name, number, or **Choose from Contacts**). Approved numbers are listed there with **Remove**. Caregivers on approved family phones can also manage this list from caregiver mode.
-- When editing a keypad person on the bedside iPad, turn on **Call their phone**, enter their number, then turn on **Drop-in by phone → Audio drop-in when they call**. **Save** approves that number under the person's name. Changing or removing their number, turning the switch off, or removing the person withdraws it. The keypad list shows **Phone drop-in on**.
+- When editing a keypad person on the bedside iPad, turn on **Call their phone**, enter their number, then turn on **Drop-in by phone → Audio drop-in when they call**. **Save** approves that number under the person's name. Changing their number moves the approval to the new number in a single update. Removing their number, turning the switch off, removing the person, or giving their key a different action withdraws it. The keypad list shows **Phone drop-in on**.
 
 Approving on the bedside iPad asks for microphone access. Approvals are stored per household, at most 20 numbers. Each phone drop-in needs all of these; otherwise the call rings for a normal answer:
 

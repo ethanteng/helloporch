@@ -271,8 +271,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         } else if (action === "setPhoneDropIn") {
           requireValue(typeof input.number === "string" && phonePattern.test(input.number), "Enter the phone number with + and the country code, such as +14155550123.");
           requireValue(typeof input.enabled === "boolean", "Choose whether this number can drop in.");
-          const number = input.number;
-          const others = (house.phoneDropIns ?? []).filter(p => p.number !== number);
+          // A changed number is swapped in this one update, so a failed request can't leave both approved.
+          requireValue(input.replacing === undefined || (input.enabled && typeof input.replacing === "string" && phonePattern.test(input.replacing)), "Choose the approved number this replaces.");
+          const number = input.number, replaced = input.replacing;
+          const others = (house.phoneDropIns ?? []).filter(p => p.number !== number && p.number !== replaced);
           if (input.enabled) {
             requireValue(others.length < 20, "Remove an approved phone number before adding another.");
             others.push({ number, name: name(input.name) });

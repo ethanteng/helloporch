@@ -390,8 +390,24 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         guard saveTask == nil else { return }
         do {
             if chosenAction != .person {
-                try onSaveSlot?(chosenAction, nil)
-                navigationController?.popViewController(animated: true); return
+                guard approvedNumber != nil else {
+                    try onSaveSlot?(chosenAction, nil)
+                    navigationController?.popViewController(animated: true); return
+                }
+                // A control replaces the person on this key, so their phone drop-in goes too.
+                view.isUserInteractionEnabled = false
+                saveTask = Task { [weak self] in
+                    guard let self else { return }
+                    defer { self.saveTask = nil; self.view.isUserInteractionEnabled = true }
+                    do {
+                        self.phoneDropInTouched = true; self.phoneDropInSwitch.isOn = false
+                        try await self.syncPhoneDropIn(number: nil, name: "")
+                        try Task.checkCancellation()
+                        try self.onSaveSlot?(self.chosenAction, nil)
+                        self.navigationController?.popViewController(animated: true)
+                    } catch { if !Task.isCancelled { self.showContactError(error) } }
+                }
+                return
             }
             configureFamilyLinks()
             guard selectedFamilyID != nil || invitationID != nil || phoneFallbackSwitch.isOn else {
@@ -436,18 +452,18 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         let wanted = phoneDropInSwitch.isOn && PorchDevice.credential(for: .bedside) != nil ? number : nil
         guard wanted != nil || approvedNumber != nil else { return }
         guard let credential = PorchDevice.credential(for: .bedside) else { throw FamilyServiceError(message: "Finish bedside setup before changing phone drop-in.", status: 409) }
-        let service = FamilyService(credential), pin = NativeCallSettings.caregiverCode
+        var values: [String: Any]
         if let wanted {
             // A drop-in answers on this iPad, so only it can grant its own microphone.
             let microphone = await AVCaptureDevice.requestAccess(for: .audio)
             guard microphone else { throw FamilyServiceError(message: "Allow microphone access in iPad Settings before approving drop-in.", status: 403) }
-            let response = try await service.send("setPhoneDropIn", ["number": wanted, "name": name, "enabled": true], pin: pin)
-            FamilyCoordinator.shared.update(response)
-        }
-        if let previous = approvedNumber, previous != wanted {
-            let response = try await service.send("setPhoneDropIn", ["number": previous, "enabled": false], pin: pin)
-            FamilyCoordinator.shared.update(response)
-        }
+            values = ["number": wanted, "name": name, "enabled": true]
+            // One request swaps a changed number, so a failure never leaves both approved.
+            if let previous = approvedNumber, previous != wanted { values["replacing"] = previous }
+        } else if let previous = approvedNumber { values = ["number": previous, "enabled": false] }
+        else { return }
+        let response = try await FamilyService(credential).send("setPhoneDropIn", values, pin: NativeCallSettings.caregiverCode)
+        FamilyCoordinator.shared.update(response)
         approvedNumber = wanted
     }
 
