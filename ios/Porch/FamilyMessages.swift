@@ -4,7 +4,68 @@ import AVKit
 import AudioToolbox
 import PorchCore
 
-struct MessageRecording { let file: URL; let mode: String; let contentType: String; let duration: TimeInterval }
+struct MessageRecording { let file: URL; let mode: String; let contentType: String; let duration: TimeInterval; var poster: UIImage? = nil }
+
+/// Preview frames for video messages. Saved on this phone when a video is sent, or made
+/// once from the stored video (reading only the start of it) and kept by message ID.
+enum MessagePosters {
+    private static let folder = (FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
+        .appendingPathComponent("PorchMessagePosters", isDirectory: true)
+    private static func file(_ id: String) -> URL { folder.appendingPathComponent("\(id).jpg") }
+    static func cached(_ id: String) -> UIImage? { UIImage(contentsOfFile: file(id).path) }
+    static func save(_ image: UIImage, for id: String) {
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? data.write(to: file(id), options: .atomic)
+    }
+    static func frame(from url: URL) async -> UIImage? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 720, height: 720)
+        generator.requestedTimeToleranceBefore = .positiveInfinity; generator.requestedTimeToleranceAfter = .positiveInfinity
+        return await withCheckedContinuation { continuation in
+            generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: CMTime(seconds: 0.5, preferredTimescale: 600))]) { _, image, _, _, _ in
+                _ = generator // Kept alive until the frame is ready.
+                continuation.resume(returning: image.map { UIImage(cgImage: $0) })
+            }
+        }
+    }
+}
+
+/// A video message's preview frame, with a play symbol when it can be watched.
+final class MessagePosterView: UIControl {
+    private let imageView = UIImageView()
+    var image: UIImage? { get { imageView.image } set { imageView.image = newValue } }
+    init(image: UIImage?, playable: Bool) {
+        super.init(frame: .zero)
+        backgroundColor = .secondarySystemFill
+        layer.cornerRadius = 16; layer.cornerCurve = .continuous; clipsToBounds = true
+        imageView.image = image; imageView.contentMode = .scaleAspectFill
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        let glyph = UIImageView(image: UIImage(systemName: "play.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 56)))
+        glyph.tintColor = .white; glyph.isHidden = !playable; glyph.translatesAutoresizingMaskIntoConstraints = false
+        glyph.layer.shadowColor = UIColor.black.cgColor; glyph.layer.shadowOpacity = 0.4; glyph.layer.shadowRadius = 6; glyph.layer.shadowOffset = .zero
+        addSubview(imageView); addSubview(glyph)
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: leadingAnchor), imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: topAnchor), imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            glyph.centerXAnchor.constraint(equalTo: centerXAnchor), glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
+            heightAnchor.constraint(equalToConstant: 200)
+        ])
+        isEnabled = playable
+        isAccessibilityElement = true
+        accessibilityLabel = playable ? "Play video message" : "Video message preview"
+        accessibilityTraits = playable ? .button : .image
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(image:playable:)") }
+}
+
+/// Plays a stored message from a short-lived signed link.
+@MainActor func playMessage(from url: URL, on presenter: UIViewController) {
+    try? AVAudioSession.sharedInstance().setCategory(.playback)
+    let player = AVPlayerViewController(); player.player = AVPlayer(url: url)
+    presenter.present(player, animated: true) { player.player?.play() }
+}
 
 /// Sends a recording: the server signs a one-time upload URL and the file goes straight to storage.
 /// A retry reuses the same message, so a dropped connection doesn't use up another queue slot.
@@ -105,7 +166,13 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
             again.addAction(UIAction { [weak self] _ in self?.discard() }, for: .touchUpInside)
             [play, send, again].forEach { $0.isEnabled = !sending }
             let length = recording.map { duration($0.duration) } ?? ""
-            content.addArrangedSubview(section(recording?.mode == "video" ? "Video message · \(length)" : "Audio message · \(length)", detail: sending ? "Keep Porch open until it finishes sending." : nil, views: [play, send, again]))
+            var views: [UIView] = [play, send, again]
+            if recording?.mode == "video" {
+                let poster = MessagePosterView(image: recording?.poster, playable: !sending)
+                poster.addAction(UIAction { [weak self] _ in self?.preview() }, for: .touchUpInside)
+                views.insert(poster, at: 0)
+            }
+            content.addArrangedSubview(section(recording?.mode == "video" ? "Video message · \(length)" : "Audio message · \(length)", detail: sending ? "Keep Porch open until it finishes sending." : nil, views: views))
         }
     }
     private func duration(_ seconds: TimeInterval) -> String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
@@ -174,14 +241,18 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
         let seconds = CMTimeGetSeconds(AVURLAsset(url: file).duration)
         recording = MessageRecording(file: file, mode: "video", contentType: ext == "mp4" ? "video/mp4" : "video/quicktime", duration: seconds.isFinite ? min(120, seconds) : 1)
         phase = .recorded; render()
+        Task { [weak self] in
+            let poster = await MessagePosters.frame(from: file)
+            guard let self, self.recording?.file == file else { return }
+            self.recording?.poster = poster; self.render()
+        }
     }
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true) }
 
     private func preview() {
         guard let recording else { return }
         if recording.mode == "video" {
-            let player = AVPlayerViewController(); player.player = AVPlayer(url: recording.file)
-            present(player, animated: true) { player.player?.play() }
+            playMessage(from: recording.file, on: self)
         } else {
             try? AVAudioSession.sharedInstance().setCategory(.playback)
             audioPreview = try? AVAudioPlayer(contentsOf: recording.file)
@@ -200,7 +271,8 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
         Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.uploader.send(recording, kind: self.kind, credential: credential)
+                let sent = try await self.uploader.send(recording, kind: self.kind, credential: credential)
+                if let poster = self.recording?.poster ?? recording.poster { MessagePosters.save(poster, for: sent.id) }
                 try? FileManager.default.removeItem(at: recording.file)
                 self.recording = nil; self.phase = .idle
                 let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch. See when it's played in Your messages.", preferredStyle: .alert)
@@ -228,6 +300,8 @@ enum MessageText {
 final class SentMessagesViewController: CaregiverFormViewController {
     private let list = UIStackView()
     private var loading = false
+    private var opening = false
+    private var posterTask: Task<Void, Never>?
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Your messages"
         list.axis = .vertical; list.spacing = 20
@@ -236,6 +310,7 @@ final class SentMessagesViewController: CaregiverFormViewController {
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadMessages))
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
     @objc private func reloadMessages() {
         guard !loading, let credential = PorchDevice.credential(for: .family) else { return }
         loading = true
@@ -256,9 +331,23 @@ final class SentMessagesViewController: CaregiverFormViewController {
     }
     private func render(_ messages: [SentMessage]) {
         guard !messages.isEmpty else { show([PorchStyle.label("You haven't sent any messages yet.")]); return }
+        var missing: [(String, MessagePosterView)] = []
         show(messages.map { (message: SentMessage) -> UIView in
             let type = message.kind == "voicemail" ? "Voicemail" : message.mode == "video" ? "Video message" : "Audio message"
+            let replayable = message.replayable == true
             var views: [UIView] = []
+            let cached = message.mode == "video" ? MessagePosters.cached(message.id) : nil
+            if message.mode == "video", cached != nil || replayable {
+                let poster = MessagePosterView(image: cached, playable: replayable)
+                poster.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
+                if poster.image == nil { missing.append((message.id, poster)) }
+                views.append(poster)
+            }
+            if replayable {
+                let play = PorchStyle.button(message.mode == "video" ? "Watch again" : "Listen again", symbol: "play.fill", filled: false)
+                play.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
+                views.append(play)
+            }
             if message.state == "uploading" || message.state == "queued" {
                 let unsend = PorchStyle.button("Unsend", symbol: "arrow.uturn.backward", filled: false)
                 unsend.configuration?.baseForegroundColor = .systemRed
@@ -267,13 +356,40 @@ final class SentMessagesViewController: CaregiverFormViewController {
             }
             return section("\(type) · \(MessageText.length(message.durationSeconds))", detail: status(message), views: views)
         })
+        loadPosters(missing)
+    }
+    private func play(_ message: SentMessage) {
+        guard !opening, let credential = PorchDevice.credential(for: .family) else { return }
+        opening = true
+        Task { [weak self] in
+            defer { self?.opening = false }
+            do {
+                guard let media = try await FamilyService(credential).send("sentMessageMedia", ["messageID": message.id]).media,
+                      let url = URL(string: media.url), let self else { return }
+                playMessage(from: url, on: self)
+            } catch { if let self { showPorchError(error, on: self) } }
+        }
+    }
+    /// Makes missing preview frames one at a time; each is kept, so this happens once per video.
+    private func loadPosters(_ missing: [(String, MessagePosterView)]) {
+        posterTask?.cancel()
+        guard !missing.isEmpty, let credential = PorchDevice.credential(for: .family) else { return }
+        posterTask = Task {
+            for (id, poster) in missing {
+                guard !Task.isCancelled else { return }
+                guard let media = try? await FamilyService(credential).send("sentMessageMedia", ["messageID": id]).media,
+                      let url = URL(string: media.url), let image = await MessagePosters.frame(from: url) else { continue }
+                MessagePosters.save(image, for: id)
+                poster.image = image
+            }
+        }
     }
     private func status(_ message: SentMessage) -> String {
         let sent = "Sent \(MessageText.when(message.sentAt ?? message.createdAt))"
         switch message.state {
         case "uploading": return "Still sending. Open it again if it doesn't finish."
         case "queued": return message.deliveredAt != nil ? "\(sent). On their Porch, not played yet." : "\(sent). Waiting for their Porch to download it."
-        case "played": return "\(sent). Played \(MessageText.when(message.playedAt))."
+        case "played": return "\(sent). Played \(MessageText.when(message.playedAt))." + (message.replayable == true ? "" : " The recording was deleted after 90 days.")
         case "expired": return "\(sent). Not played within a week, so it was removed."
         case "removed": return "\(sent). A caregiver removed it."
         case "unsent": return "You unsent this message."
@@ -302,6 +418,7 @@ final class MessageQueueViewController: CaregiverFormViewController {
     private var messages: [FamilyMessage]
     private let list = UIStackView()
     private var busy = false
+    private var posterTask: Task<Void, Never>?
     init(remote: FamilyCredential?, messages: [FamilyMessage]) {
         self.remote = remote; self.messages = messages; super.init(nibName: nil, bundle: nil)
     }
@@ -313,18 +430,62 @@ final class MessageQueueViewController: CaregiverFormViewController {
         hideKeyboardControl()
         render()
     }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
+    static func senderName(_ message: FamilyMessage) -> String {
+        guard message.fromPhone else { return message.fromName }
+        return message.callerNumber.map { PhoneNumberNormalization.display($0) } ?? "an unknown caller"
+    }
     private func render() {
         list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard !messages.isEmpty else { list.addArrangedSubview(PorchStyle.label("No messages are waiting.")); return }
-        for message in messages.sorted(by: { $0.sentAt < $1.sentAt }) {
-            let preview = PorchStyle.button("Preview", symbol: "play.fill", filled: false)
+        var missing: [(String, MessagePosterView)] = []
+        // Held phone voicemail first: it's what needs a decision.
+        for message in messages.sorted(by: { ($0.held == true ? 0 : 1, $0.sentAt) < ($1.held == true ? 0 : 1, $1.sentAt) }) {
+            var views: [UIView] = []
+            if message.mode == "video" {
+                let poster = MessagePosterView(image: MessagePosters.cached(message.id), playable: true)
+                poster.addAction(UIAction { [weak self] _ in Task { await self?.preview(message) } }, for: .touchUpInside)
+                if poster.image == nil { missing.append((message.id, poster)) }
+                views.append(poster)
+            }
+            let preview = PorchStyle.button(message.held == true ? "Listen first" : "Preview", symbol: "play.fill", filled: false)
             preview.addAction(UIAction { [weak self] _ in Task { await self?.preview(message) } }, for: .touchUpInside)
+            views.append(preview)
+            if message.held == true {
+                let release = PorchStyle.button("Let it play on Porch", symbol: "checkmark.circle.fill")
+                release.addAction(UIAction { [weak self] _ in Task { await self?.change("releaseMessage", message) } }, for: .touchUpInside)
+                views.append(release)
+            }
             let remove = PorchStyle.button("Remove", symbol: "trash", filled: false)
             remove.configuration?.baseForegroundColor = .systemRed
             remove.addAction(UIAction { [weak self] _ in self?.confirmRemove(message) }, for: .touchUpInside)
-            let type = message.kind == "voicemail" ? "Voicemail" : message.mode == "video" ? "Video message" : "Audio message"
-            list.addArrangedSubview(section("\(type) from \(message.fromName)", detail: "\(MessageText.length(message.durationSeconds)) · Sent \(MessageText.when(message.sentAt)) · \(message.delivered ? "Downloaded to the iPad" : "Not downloaded yet")", views: [preview, remove]))
+            views.append(remove)
+            let type = message.fromPhone ? "Phone voicemail" : message.kind == "voicemail" ? "Voicemail" : message.mode == "video" ? "Video message" : "Audio message"
+            let state = message.held == true ? "Waiting for your OK: this number isn't saved on the Porch keypad" : message.delivered ? "Downloaded to the iPad" : "Not downloaded yet"
+            list.addArrangedSubview(section("\(type) from \(Self.senderName(message))", detail: "\(MessageText.length(message.durationSeconds)) · Sent \(MessageText.when(message.sentAt)) · \(state)", views: views))
         }
+        loadPosters(missing)
+    }
+    private func loadPosters(_ missing: [(String, MessagePosterView)]) {
+        posterTask?.cancel()
+        guard !missing.isEmpty else { return }
+        posterTask = Task { [weak self] in
+            for (id, poster) in missing {
+                guard !Task.isCancelled, let self else { return }
+                guard let media = try? await self.request("caregiverMessageMedia", ["messageID": id])?.media,
+                      let url = URL(string: media.url), let image = await MessagePosters.frame(from: url) else { continue }
+                MessagePosters.save(image, for: id)
+                poster.image = image
+            }
+        }
+    }
+    private func change(_ action: String, _ message: FamilyMessage) async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        do {
+            guard let admin = try await request(action, ["messageID": message.id])?.admin else { return }
+            messages = admin.messages ?? []; render(); onChange?(admin)
+        } catch { showPorchError(error, on: self) }
     }
     private func request(_ action: String, _ values: [String: Any]) async throws -> FamilyResponse? {
         guard let credential = remote ?? PorchDevice.credential(for: .bedside) else { return nil }
@@ -340,23 +501,14 @@ final class MessageQueueViewController: CaregiverFormViewController {
         busy = true; defer { busy = false }
         do {
             guard let media = try await request("caregiverMessageMedia", ["messageID": message.id])?.media, let url = URL(string: media.url) else { return }
-            try? AVAudioSession.sharedInstance().setCategory(.playback)
-            let player = AVPlayerViewController(); player.player = AVPlayer(url: url)
-            present(player, animated: true) { player.player?.play() }
+            playMessage(from: url, on: self)
         } catch { showPorchError(error, on: self) }
     }
     private func confirmRemove(_ message: FamilyMessage) {
-        let alert = UIAlertController(title: "Remove this message?", message: "It won't play on the bedside Porch. \(message.fromName) will see that a caregiver removed it.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Remove this message?", message: message.fromPhone ? "It won't play on the bedside Porch, and the recording is deleted." : "It won't play on the bedside Porch. \(message.fromName) will see that a caregiver removed it.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
-            Task { [weak self] in
-                guard let self, !self.busy else { return }
-                self.busy = true; defer { self.busy = false }
-                do {
-                    guard let admin = try await self.request("removeMessage", ["messageID": message.id])?.admin else { return }
-                    self.messages = admin.messages ?? []; self.render(); self.onChange?(admin)
-                } catch { showPorchError(error, on: self) }
-            }
+            Task { [weak self] in await self?.change("removeMessage", message) }
         })
         present(alert, animated: true)
     }

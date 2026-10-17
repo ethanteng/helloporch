@@ -45,7 +45,14 @@ public struct FamilyMessage: Codable, Equatable, Identifiable {
     public let durationSeconds: Int
     public let sentAt: TimeInterval
     public let delivered: Bool
-    public var fileExtension: String { contentType == "video/quicktime" ? "mov" : contentType == "video/mp4" ? "mp4" : "m4a" }
+    /// Voicemail from a regular phone call: the caller's number, when caller ID was shown.
+    public let callerNumber: String?
+    /// Phone voicemail waiting for a caregiver (or a matching keypad contact) before it plays.
+    public let held: Bool?
+    public var fromPhone: Bool { from == "phone" }
+    public var fileExtension: String {
+        switch contentType { case "video/quicktime": return "mov"; case "video/mp4": return "mp4"; case "audio/mpeg": return "mp3"; default: return "m4a" }
+    }
 }
 /// A message this device sent. States: uploading, queued, played, expired, removed, unsent, failed.
 public struct SentMessage: Codable, Equatable, Identifiable {
@@ -59,6 +66,8 @@ public struct SentMessage: Codable, Equatable, Identifiable {
     public let deliveredAt: TimeInterval?
     public let playedAt: TimeInterval?
     public let endedAt: TimeInterval?
+    /// The recording can still be played back (it's kept for 90 days after playback).
+    public let replayable: Bool?
 }
 public struct PendingFamilyInvitation: Codable, Equatable {
     public let id: String
@@ -76,6 +85,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let serverTime: TimeInterval
     public let messagesEnabled: Bool?
     public let messages: [FamilyMessage]?
+    /// For approved caregivers: phone voicemails waiting for review.
+    public let heldMessages: Int?
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
 /// family device's own snapshot doesn't include.

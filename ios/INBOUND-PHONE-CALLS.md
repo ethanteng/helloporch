@@ -10,7 +10,7 @@ Each household has its own number. Managed Redis stores `phone-number:<E.164 num
 - The screen shows the caller's telephone number, or “Phone caller” when caller ID is unavailable. The number is display information, not authentication. There is no shared-number menu or caller recognition for routing.
 - All callers reaching the assigned number can ring it; this first version does not require callers to be paired app members. Every call requires a manual answer, even if Porch drop-in is enabled.
 - Answer connects two-way audio. The camera stays off. Mute, keypad hangup, either person's hangup, and automatic silence hangup work with the existing call controls.
-- A call reserves the same household slot as ordinary Porch calls and drop-ins. A second caller cannot interrupt or join the first call. Busy/unavailable callers are disconnected; this version has no voicemail or call waiting. The provider determines which tone/message they hear.
+- A call reserves the same household slot as ordinary Porch calls and drop-ins. A second caller cannot interrupt or join the first call. There is no call waiting. With [voicemail](#voicemail) set up, callers who aren't answered, are declined, or find Porch busy or offline can leave a message. Without it they are disconnected, and the provider decides which tone or message they hear.
 - LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing is limited to 45 seconds and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
 - Paired app calls and outbound phone fallback continue to use their existing flows. Existing family builds can decode the incoming audio call; the updated build adds faster ringing, telephone connection status, and confirmed phone hangup retries.
 
@@ -55,6 +55,40 @@ Deploy the server containing `POST /api/calls/inbound/webhook` before enabling p
 
 The Twilio SIP signaling CIDRs in the script come from [Twilio's official gateway list](https://www.twilio.com/docs/sip-trunking/ip-addresses); review them if the provider changes its network. Twilio Elastic SIP Trunking origination does not support the outbound trunk's username/password authentication, so this trunk restricts SIP sources by IP instead. See [LiveKit's Twilio setup](https://docs.livekit.io/telephony/start/providers/twilio/) and [inbound authentication](https://docs.livekit.io/telephony/accepting-calls/inbound-trunk/).
 
+## Voicemail
+
+Voicemail uses a Twilio **voice webhook** for the number instead of Elastic SIP Trunking origination. Twilio runs Porch's instructions for each call:
+
+1. `POST /api/calls/inbound/voice` dials LiveKit (`<Dial><Sip>`) with a digest login. LiveKit rings the bedside exactly as before, and the caller hears ringing until Porch answers.
+2. If the call isn't answered within 45 seconds, is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
+3. When the recording is ready, Twilio calls `/api/calls/inbound/voice/recording`. The server downloads the MP3 and stores it in the private Blob store. It then **deletes Twilio's copy**, so the recording isn't kept at the phone provider.
+
+The voicemail then waits for review:
+
+- **Held for review.** Every phone voicemail starts out held. If the caller's number is saved on one of the bedside keypad contacts, the bedside iPad releases it and it plays like any other message, announced with that contact's name. Otherwise an approved caregiver has to listen first and choose **Let it play on Porch** or **Remove**, either on the iPad (Family & drop-in → Review waiting messages) or from their phone. Caregivers' phones show "phone voicemail needs your review" on the home screen. Withheld numbers always need a caregiver.
+- **Limits.** Held voicemail expires after a week like any other message. Each number can have 3 voicemails waiting, at most 10 can be held at once, and the queue holds 30. When voicemail is off or full, callers hear "please try again later".
+- **Security.** Webhooks are accepted only when the `X-Twilio-Signature` matches the account's auth token and the request names the configured account. The SIP digest password is derived from `LIVEKIT_API_SECRET`, so no extra secret is stored. Rotating the LiveKit secret means re-running the setup script.
+
+### Turn on voicemail
+
+1. In Vercel → the calling project → Settings → Environment Variables (Production), add:
+   - `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, from Twilio Console → Account info. Mark both sensitive.
+   - `LIVEKIT_SIP_URI`, the project's SIP URI from LiveKit Cloud → Settings, for example `sip:abc123.sip.livekit.cloud`.
+
+   Messages must already be set up (`BLOB_READ_WRITE_TOKEN`). Redeploy.
+2. Switch the LiveKit inbound trunk to the digest login:
+
+   ```sh
+   node --env-file=.env.inbound-production.local --env-file=.env.local \
+     scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID --voicemail --apply
+   ```
+
+   This replaces the Twilio IP allowlist with the login, because Twilio doesn't publish the addresses its voice webhook dials from. Once a trunk has the login, later runs keep it.
+3. In Twilio → Elastic SIP Trunking → the existing trunk → **Numbers**, remove the Porch number. Keep the trunk itself and its Termination settings: outbound phone calls still use them, and a number on your account remains a valid caller ID. Then go to Phone Numbers → the number → **Voice configuration** and set "A call comes in" to **Webhook**, `https://YOUR-CALLING-SERVER/api/calls/inbound/voice`, HTTP POST.
+4. Test from a phone that isn't saved on the keypad. Let it ring out, leave a message, approve it from caregiver mode, and check that it plays on the iPad. Then test from a saved contact's phone, whose voicemail should play without approval. Also place an outbound phone-fallback call to confirm outbound calling still works.
+
+Between steps 2 and 3, incoming calls on the old routing fail, so do them together. To turn voicemail off again, point the number's voice webhook somewhere else or turn off messages in caregiver mode. Callers then hear "please try again later" when no one answers.
+
 ## Delivery and cleanup
 
 The dispatch rule creates a unique `porch-inbound-…` room for each call. LiveKit's signed `participant_joined` webhook identifies the SIP caller and dialed number. Porch verifies the participant against LiveKit, looks up the number assignment, and atomically reserves the household if its bedside device is foreground-ready or has a registered VoIP token with APNs configured. One atomic delivery claim per SIP room prevents duplicate webhooks from sending repeated pushes. A failed push releases an unreachable telephone leg, while an authenticated receipt or answer preserves the call. Invalid-token removal preserves a newer registration.
@@ -89,4 +123,4 @@ Before relying on the feature, test with the bedside iPad and a real phone:
 - Verify caller ID withheld, microphone permission denied, mute, speaker/Bluetooth output, and automatic silence hangup.
 - Test the configured 30-minute SIP limit. Inspect LiveKit and Twilio logs for failed provider routing; never paste credentials or private call payloads into public logs.
 
-To disable inbound calling, disable its Twilio Origination destination. Outbound Termination can remain enabled. Number assignments and per-call state are scoped to the configured Redis namespace; keep preview/test namespaces separate from production.
+To disable inbound calling, disable its Twilio Origination destination, or with voicemail, remove the number's voice webhook. Outbound Termination can remain enabled. Number assignments and per-call state are scoped to the configured Redis namespace; keep preview/test namespaces separate from production.

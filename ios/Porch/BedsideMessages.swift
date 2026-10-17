@@ -18,6 +18,7 @@ extension Notification.Name {
     /// Played here; hidden at once even before the server confirms.
     private var played = Set<String>()
     private var unreported = Set<String>()
+    private var releasing = Set<String>()
     private var started = false
     private let folder = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
         .appendingPathComponent("PorchMessages", isDirectory: true)
@@ -33,9 +34,15 @@ extension Notification.Name {
     @objc func sync() {
         guard PorchDevice.experience == .bedside, let credential = PorchDevice.credential(for: .bedside),
               let state = FamilyCoordinator.shared.state, state.me.role == .bedside else { return }
-        let waiting = state.messages ?? []
-        let waitingIDs = Set(waiting.map(\.id))
-        played.formIntersection(waitingIDs); unreported.formIntersection(waitingIDs)
+        let all = state.messages ?? []
+        played.formIntersection(Set(all.map(\.id))); unreported.formIntersection(Set(all.map(\.id))); releasing.formIntersection(Set(all.map(\.id)))
+        // Phone voicemail plays only once it's released: by a caregiver, or here when the
+        // caller's number is saved on the keypad. Unknown callers wait for a caregiver.
+        let slots: CallSlots? = all.contains(where: { $0.held == true }) ? (try? CallSlots.load()) : nil
+        for message in all where message.held == true && !releasing.contains(message.id) && slots?.contact(forPhoneNumber: message.callerNumber) != nil {
+            releaseKnownCaller(message, credential: credential)
+        }
+        let waiting = all.filter { $0.held != true }
         let queue = waiting.filter { !played.contains($0.id) }.sorted { $0.sentAt < $1.sentAt }
         // Removed, expired and played messages leave the iPad too.
         let keep = Set(queue.map { file(for: $0).lastPathComponent })
@@ -76,6 +83,25 @@ extension Notification.Name {
                 self?.retryAfter[message.id] = Date().addingTimeInterval(60)
             }
         }
+    }
+
+    private func releaseKnownCaller(_ message: FamilyMessage, credential: FamilyCredential) {
+        releasing.insert(message.id)
+        Task { [weak self] in
+            // The next poll carries it as released; after a failure, a later sync tries again.
+            do { _ = try await FamilyService(credential).send("releaseKnownCaller", ["messageID": message.id]) }
+            catch { self?.releasing.remove(message.id) }
+        }
+    }
+
+    /// Who a message is from, as the bedside shows and speaks it: the keypad contact's name
+    /// first, then the family member's name, or the caller's number for phone voicemail.
+    static func sender(of message: FamilyMessage, slots: CallSlots) -> (name: String, contact: CallContact?) {
+        let contact = message.fromPhone ? slots.contact(forPhoneNumber: message.callerNumber)
+            : slots.contacts.compactMap { $0 }.first { $0.familyMemberID == message.from }
+        if let contact { return (contact.name, contact) }
+        guard message.fromPhone else { return (message.fromName, nil) }
+        return (message.callerNumber.map { PhoneNumberNormalization.display($0) } ?? BedsideText.string("Unknown caller"), nil)
     }
 
     /// Played to the end: the message leaves the queue for good (the sender sees it was played).
@@ -151,6 +177,9 @@ final class MessagePlayerViewController: UIViewController {
     private var photo = UIImageView()
     private let nameLabel = UILabel()
     private let detailLabel = UILabel()
+    /// Who and when, kept on screen over a playing video.
+    private let banner = UILabel()
+    private let bannerView = UIView()
     private let stopButton = PorchStyle.button("Stop", symbol: "stop.fill")
     private let announcer = MessageAnnouncer()
     private var session: SessionRequirementHandle?
@@ -181,6 +210,15 @@ final class MessagePlayerViewController: UIViewController {
         identity.axis = .vertical; identity.spacing = 20; identity.alignment = .center
         identity.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(identity)
+        bannerView.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        bannerView.layer.cornerRadius = 24; bannerView.layer.cornerCurve = .continuous
+        bannerView.isHidden = true; bannerView.translatesAutoresizingMaskIntoConstraints = false
+        banner.font = PorchStyle.font(30, weight: .semibold); banner.textColor = .white
+        banner.textAlignment = .center; banner.numberOfLines = 2; banner.adjustsFontSizeToFitWidth = true; banner.minimumScaleFactor = 0.6
+        banner.accessibilityIdentifier = "messages.banner"
+        banner.translatesAutoresizingMaskIntoConstraints = false
+        bannerView.addSubview(banner)
+        view.addSubview(bannerView)
         var config = stopButton.configuration!
         config.title = BedsideText.string("Stop")
         config.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
@@ -201,6 +239,14 @@ final class MessagePlayerViewController: UIViewController {
             identity.centerYAnchor.constraint(equalTo: guide.centerYAnchor, constant: -60),
             identity.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 32),
             identity.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
+            bannerView.topAnchor.constraint(equalTo: guide.topAnchor, constant: 24),
+            bannerView.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            bannerView.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 32),
+            bannerView.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
+            banner.topAnchor.constraint(equalTo: bannerView.topAnchor, constant: 14),
+            banner.bottomAnchor.constraint(equalTo: bannerView.bottomAnchor, constant: -14),
+            banner.leadingAnchor.constraint(equalTo: bannerView.leadingAnchor, constant: 28),
+            banner.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor, constant: -28),
             stopButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             stopButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -36),
             stopButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 96)
@@ -227,11 +273,11 @@ final class MessagePlayerViewController: UIViewController {
         let file = BedsideMessages.shared.file(for: message)
         guard FileManager.default.fileExists(atPath: file.path) else { playNext(); return }
         current = message
-        let contact = slots.contacts.compactMap { $0 }.first { $0.familyMemberID == message.from }
-        let name = contact?.name ?? message.fromName
+        let (name, contact) = BedsideMessages.sender(of: message, slots: slots)
         let sent = MessagePlayerViewController.sentText(message.sentAt)
         nameLabel.text = BedsideText.string(message.kind == "voicemail" ? "Voicemail from %@" : "Message from %@", name)
         detailLabel.text = BedsideText.string("Sent %@", sent)
+        banner.text = "\(nameLabel.text ?? "") · \(detailLabel.text ?? "")"
         identity.arrangedSubviews.forEach { identity.removeArrangedSubview($0); $0.removeFromSuperview() }
         if RecipientAppearance.photo(contact?.photoData) != nil {
             photo = RecipientAppearance.photoView(contact?.photoData)
@@ -240,7 +286,7 @@ final class MessagePlayerViewController: UIViewController {
             identity.addArrangedSubview(photo)
         }
         identity.addArrangedSubview(nameLabel); identity.addArrangedSubview(detailLabel)
-        identity.isHidden = false; videoView.isHidden = true
+        identity.isHidden = false; videoView.isHidden = true; bannerView.isHidden = true
         BedsideText.applyAccessibilityLanguage(to: view)
         announcer.announce(BedsideText.string(message.kind == "voicemail" ? "Voicemail from %@. Sent %@." : "Message from %@. Sent %@.", name, sent)) { [weak self] in
             self?.play(message, file: file)
@@ -251,7 +297,7 @@ final class MessagePlayerViewController: UIViewController {
         let item = AVPlayerItem(url: file)
         let player = AVPlayer(playerItem: item)
         playerLayer.player = player
-        if message.mode == "video" { identity.isHidden = true; videoView.isHidden = false }
+        if message.mode == "video" { identity.isHidden = true; videoView.isHidden = false; bannerView.isHidden = false }
         observers.append(NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in self?.completed(message) }
         })
