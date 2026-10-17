@@ -5,10 +5,11 @@
   --muted-2: oklch(0.36 0.04 50);
   --paper: oklch(0.99 0.008 85);
   --honey: oklch(0.88 0.075 80);
-  --terracotta: oklch(0.52 0.13 40);
   --help: oklch(0.55 0.17 28);
   --help-edge: oklch(0.44 0.14 28);
   --tomato: #e05d3d;
+  /* Deeper tomato for small text, focus rings and white-text fills; plain tomato is under 4.5:1 there. */
+  --tomato-deep: #c0401f;
   --brown-ink: #64281a;
   --serif: var(--font-serif), "Newsreader", Georgia, serif;
   --sans: var(--font-sans), "DM Sans", system-ui, sans-serif;
@@ -42,7 +43,7 @@ ul {
 }
 
 a {
-  color: var(--terracotta);
+  color: var(--tomato-deep);
 }
 
 input::placeholder {
@@ -118,7 +119,7 @@ input::placeholder {
   font-size: 0.85em;
   font-weight: 700;
   letter-spacing: -0.025em;
-  color: var(--terracotta);
+  color: var(--tomato);
 }
 .hero__lede {
   font: 400 21px/1.55 var(--sans);
@@ -164,7 +165,7 @@ input::placeholder {
   cursor: progress;
 }
 .pill-form:focus-within {
-  outline: 2px solid var(--terracotta);
+  outline: 2px solid var(--tomato-deep);
   outline-offset: 2px;
 }
 .pill-form--hero {
@@ -177,7 +178,7 @@ input::placeholder {
   color: #fff;
 }
 .pill-form--hero button:hover {
-  background: var(--terracotta);
+  background: var(--tomato-deep);
 }
 .pill-form--join {
   max-width: 500px;
@@ -522,7 +523,7 @@ input::placeholder {
   position: absolute;
   inset: 0;
   border-radius: 99px;
-  border: 3px solid var(--terracotta);
+  border: 3px solid var(--tomato);
   pointer-events: none;
   animation: porchRing 2s ease-out infinite;
 }
@@ -589,7 +590,7 @@ input::placeholder {
 }
 .step__num {
   font: italic 400 40px/1 var(--serif);
-  color: var(--terracotta);
+  color: var(--tomato);
 }
 .step__copy {
   display: flex;
