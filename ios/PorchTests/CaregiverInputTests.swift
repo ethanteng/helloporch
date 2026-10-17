@@ -297,6 +297,30 @@ final class CaregiverInputTests: XCTestCase {
             XCTAssertEqual(BedsideText.string("End call"), "End call")
         }
     }
+    @MainActor func testInboundTelephoneCallRingsWithManualAudioAnswerAndNeverStartsDropInCountdown() throws {
+        let restore = localizedBedside(.english); defer { restore() }
+        let audio = TestIncomingAudio()
+        let data = try JSONSerialization.data(withJSONObject: [
+            "id": UUID().uuidString, "from": "sip:PA_caller", "to": "bedside", "mode": "voice", "kind": "call",
+            "source": "phone", "state": "pending", "createdAt": 1, "expiresAt": 46, "callerName": "+14155550123",
+        ])
+        let call = try JSONDecoder().decode(FamilyCallRecord.self, from: data)
+        let controller = IncomingFamilyCallViewController(call: call,
+            credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "test", role: .bedside), audio: audio)
+        var answered = false
+        controller.onAnswer = { _ in answered = true }
+        controller.loadViewIfNeeded(); controller.viewDidAppear(false)
+        for _ in 0..<50 { controller.advanceCountdown() }
+        XCTAssertEqual(audio.ringCount, 1)
+        XCTAssertNil(audio.completion, "Telephone caller ID must never trigger a drop-in announcement")
+        XCTAssertFalse(answered)
+        XCTAssertTrue(labels(in: controller.view).contains { $0.text == "+14155550123" })
+        XCTAssertTrue(buttons(in: controller.view).contains { $0.configuration?.title == "Answer audio call" && !$0.isHidden })
+        XCTAssertFalse(buttons(in: controller.view).contains { $0.configuration?.title == "Answer video call" })
+        controller.viewWillDisappear(false)
+        XCTAssertGreaterThan(audio.stopCount, 0)
+    }
+
     @MainActor func testIncomingRingingRepeatsUntilTheScreenLeavesAndUsesChineseControls() throws {
         let restore = localizedBedside(); defer { restore() }
         let audio = TestIncomingAudio()

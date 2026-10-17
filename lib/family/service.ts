@@ -4,32 +4,21 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
+import { callRoom, config, expire, FamilyError, mutate, requireValue, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
+
+export type FamilyDependencies = InboundDependencies & { sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult> };
+
 import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
-type Role = "bedside" | "family";
-type Mode = "voice" | "video";
-type Permissions = { audio: boolean; video: boolean };
-type Member = { voip?: VoIPRegistration; invitationID?: string; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
-type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; expiresAt: number; claimedBy?: string };
-type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string };
-type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call };
-type Auth = { householdID: string; deviceID: string; hash: string };
-export type FamilyDependencies = { sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult>; store?: FamilyStore; now?: () => number; endRoom?: (room: string, config: CallServer) => Promise<void> };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const codePattern = /^[a-f0-9]{64}$/;
 const equal = (a: string, b: string) => timingSafeEqual(Buffer.from(hash(a), "hex"), Buffer.from(hash(b), "hex"));
-class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
-function requireValue(condition: unknown, message: string, status = 400): asserts condition { if (!condition) throw new FamilyError(message, status); }
 function name(value: unknown): string { requireValue(typeof value === "string" && value.trim().length > 0 && value.trim().length <= 80, "Enter a name with 1–80 characters."); return value.trim(); }
 function permissions(value: unknown): Permissions {
   requireValue(value !== null && typeof value === "object" && "audio" in value && "video" in value && typeof value.audio === "boolean" && typeof value.video === "boolean", "Choose audio and video permissions.");
   return { audio: value.audio, video: value.video };
-}
-function config(): CallServer {
-  const { LIVEKIT_URL: serverUrl, LIVEKIT_API_KEY: apiKey, LIVEKIT_API_SECRET: apiSecret } = process.env;
-  requireValue(serverUrl?.startsWith("wss://") && apiKey && apiSecret, "Calling is not configured.", 503);
-  return { serverUrl: serverUrl!, apiKey, apiSecret };
 }
 function registration(input: Record<string, unknown>) {
   requireValue(typeof input.deviceID === "string" && uuid.test(input.deviceID) && typeof input.deviceSecret === "string" && codePattern.test(input.deviceSecret), "Retry pairing from your Porch app.");
@@ -56,37 +45,18 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-function expire(house: Household, now: number) {
-  const call = house.call;
-  if (!call || call.state === "ended") return;
-  if (call.expiresAt <= now || (call.state === "accepted" && [call.from, call.to].some(id => {
-    const member = house.members.find(m => m.id === id);
-    return !member || member.revoked || member.seenAt < now - 35;
-  }))) { call.state = "ended"; call.reason = "The call timed out or a device went offline."; }
-}
-async function mutate<T>(store: FamilyStore, id: string, change: (house: Household) => T): Promise<{ house: Household; result: T }> {
-  for (let attempt = 0; attempt < 12; attempt++) {
-    const raw = await store.get(`house:${id}`);
-    requireValue(raw, "This household was not found.", 404);
-    const house: Household = JSON.parse(raw);
-    const result = change(house);
-    const updated = JSON.stringify(house);
-    if (updated === raw || await store.compareAndSet(`house:${id}`, raw, updated)) return { house, result };
-  }
-  throw new FamilyError("Porch is busy. Please try again.", 409);
-}
+function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
   const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (m.role === "family" && !!m.voip && pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, me: publicMember(me),
     invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
-    call: call && (call.from === me.id || call.to === me.id) ? { ...call, callerName: house.members.find(m => m.id === call.from)?.name ?? "Family" } : null,
+    call: call && (call.from === me.id || call.to === me.id) ? { ...publicCall(call), source: call.phone ? "phone" : "porch", callerName: call.phone ? call.phone.callerNumber ?? "Phone caller" : house.members.find(m => m.id === call.from)?.name ?? "Family" } : null,
     busy: !!call && call.state !== "ended", serverTime: now };
 }
-async function endRoom(callID: string, dependencies: FamilyDependencies) {
+async function endRoom(room: string, dependencies: FamilyDependencies) {
   const configuration = config();
-  const room = `porch-paired-${callID}`;
   if (dependencies.endRoom) { await dependencies.endRoom(room, configuration); return; }
   try { await new RoomServiceClient(configuration.serverUrl.replace(/^wss:/, "https:"), configuration.apiKey, configuration.apiSecret, { requestTimeout: 8 }).deleteRoom(room); }
   catch (error) { if (!(error && typeof error === "object" && "code" in error && error.code === "not_found")) throw error; }
@@ -199,12 +169,19 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       requireValue(raw && memberFor(JSON.parse(raw), auth).role === "bedside", "Only a bedside caregiver can change access.", 403);
       await checkCaregiverCode(request, store, now, auth.householdID);
     }
-    let cleanupID: string | undefined;
+    if (["poll", "acceptCall", "joinCall", "startCall"].includes(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      memberFor(JSON.parse(raw), auth);
+      await reconcileInboundCall(store, auth.householdID, now, dependencies, action === "acceptCall" || action === "joinCall");
+    }
+    let cleanupRoom: string | undefined;
     let issuedCode: string | undefined;
     if (action === "createInvite") issuedCode = randomBytes(32).toString("hex");
     const { house, result } = await mutate(store, auth.householdID, house => {
       const me = memberFor(house, auth);
       expire(house, now);
+      if (house.call?.phone && house.call.state === "ended" && !house.call.phone.cleanedUp) cleanupRoom = callRoom(house.call);
       if (action === "verifyPIN") { requireValue(me.role === "bedside", "Only a bedside caregiver can unlock settings.", 403); return undefined; }
       if (action === "setHouseholdName") { house.name = name(input.name); me.name = house.name; return undefined; }
       if (action === "registerVoIP") {
@@ -246,7 +223,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         const call = house.call;
         if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to].includes(m.id)) || (call.kind === "dropIn" && (!house.dropInEnabled || !house.members.find(m => m.id === call.from)?.permissions[call.mode === "voice" ? "audio" : "video"])))) {
-          call.state = "ended"; call.reason = "Drop-in access was changed."; cleanupID = call.id;
+          call.state = "ended"; call.reason = "Drop-in access was changed."; cleanupRoom = callRoom(call);
         }
         return undefined;
       }
@@ -275,9 +252,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           requireValue(me.role === "bedside" && call.from === me.id && call.kind === "call", "Phone fallback is only available to the bedside caller.", 403);
           if (call.state === "accepted") throw new FamilyError("They answered on Porch. Phone fallback was cancelled.", 409, "answered");
           requireValue(call.state === "pending", "This call already ended.", 410);
-          call.state = "ended"; call.reason = "Trying their regular phone."; cleanupID = call.id;
+          call.state = "ended"; call.reason = "Trying their regular phone."; cleanupRoom = callRoom(call);
         } else if (action === "endCall") {
-          call.state = "ended"; call.reason = "Call ended."; cleanupID = call.id;
+          call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call);
         } else {
           requireValue(call.state !== "ended" && call.expiresAt > now, "This call ended or expired.", 410);
           if (call.kind === "dropIn") {
@@ -323,21 +300,24 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           });
           Object.assign(house, updated.house);
           if (updated.result) {
-            try { await endRoom(call.id, dependencies); } catch { /* no recipient joined */ }
+            try { await endRoom(callRoom(call), dependencies); } catch { /* no recipient joined */ }
             throw new FamilyError("Couldn't reach their Porch app. Try their phone.", 409, "offline");
           }
         }
       }
     }
     if (issuedCode && result) await store.create(`invite:${hash(issuedCode)}`, JSON.stringify({ householdID: house.id, inviteID: result.inviteID }), 900);
-    if (cleanupID) {
-      try { await endRoom(cleanupID, dependencies); }
+    if (cleanupRoom) {
+      try {
+        if (house.call?.phone && callRoom(house.call) === cleanupRoom) await cleanupInboundCall(store, house.id, house.call, dependencies);
+        else await endRoom(cleanupRoom, dependencies);
+      }
       catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }
     }
     if (action === "joinCall") {
       const call = house.call!;
       const configuration = config();
-      const roomName = `porch-paired-${call.id}`;
+      const roomName = callRoom(call);
       const token = new AccessToken(configuration.apiKey, configuration.apiSecret, { identity: me.id, name: me.name, ttl: "1m" });
       token.roomConfig = new RoomConfiguration({ maxParticipants: 2, emptyTimeout: 60, departureTimeout: 5 });
       token.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true, canPublishData: false, canUpdateOwnMetadata: false,

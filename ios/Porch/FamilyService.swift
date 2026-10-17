@@ -111,6 +111,12 @@ struct FamilyCallSession {
     var peerContact: CallContact? = nil
     var service: FamilyService { FamilyService(credential) }
     func end() async { _ = try? await service.send("endCall", ["callID": call.id]) }
+    func endConfirmed() async throws {
+        do { _ = try await service.send("endCall", ["callID": call.id]) }
+        catch let error as FamilyServiceError where error.status == 404 {
+            // A newer call replaced this one; the server has already released it.
+        }
+    }
 }
 
 @MainActor final class FamilyCoordinator {
@@ -142,7 +148,7 @@ struct FamilyCallSession {
                     if Task.isCancelled { return }
                     self.error = error.localizedDescription; self.changed()
                 }
-                let seconds: UInt64 = self.state?.call.map { $0.state != "ended" } == true ? 1 : credential.role == .family ? 3 : 8
+                let seconds: UInt64 = self.state?.call.map { $0.state != "ended" } == true ? 1 : credential.role == .family ? 3 : 2
                 do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }
             }
         }

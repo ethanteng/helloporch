@@ -248,7 +248,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         let saved = original ?? session.peerContact ?? FamilyCoordinator.shared.state.flatMap { state in
             ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: session.call, in: state)
         }
-        let contact = try CallContact(name: session.peerName, nativeCall: call, phoneNumber: saved?.phoneNumber,
+        let contact = try CallContact(name: session.peerName, nativeCall: call, phoneNumber: session.call.source == "phone" ? nil : saved?.phoneNumber,
             buttonColorHex: saved?.buttonColorHex, photoData: saved?.photoData)
         let server = try NativeCallServer(url: session.credential.origin.absoluteString, accessCode: session.credential.credential)
         let controller = NativeCallViewController(contact: contact, call: call, server: server)
@@ -441,6 +441,15 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         defer { checkInactivity() }
         updateKeypadHint()
         let peers = Array(room.remoteParticipants.values)
+        if familySession?.call.source == "phone" {
+            let status = peers.first?.attributes["sip.callStatus"]
+            if status == "hangup" { finishPhoneCall(); return }
+            if status == "active" {
+                hasConnectedPeer = true; waitTask?.cancel(); ringback.stop(); playConnectionCue()
+                statusLabel.text = BedsideText.string("Phone call connected")
+            } else { statusLabel.text = BedsideText.string("Connecting audio…") }
+            return
+        }
         if isPhoneCall {
             let status = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
             if status == "hangup" { finishPhoneCall(); return }
@@ -525,10 +534,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     private func checkInactivity(speaking: Bool = false) {
         let peers = Array(room.remoteParticipants.values)
-        let phoneStatus = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
+        let inboundPhone = familySession?.call.source == "phone"
+        let phoneStatus = (inboundPhone ? peers.first : peers.first { $0.identity?.stringValue == "phone" })?.attributes["sip.callStatus"]
         let connected = mediaReady && !isEnding && !hasFailed && !isSwitchingToPhone
             && room.connectionState == .connected && !peers.isEmpty
-            && (!isPhoneCall || phoneStatus == "active" || phoneStatus == "automation")
+            && (!(isPhoneCall || inboundPhone) || phoneStatus == "active" || phoneStatus == "automation")
         let speech = speaking || room.localParticipant.isSpeaking || peers.contains { $0.isSpeaking }
         if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected, speaking: speech) {
             finish(message: "Call ended. Returning to the clock…")
@@ -565,7 +575,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         cameraButton.isEnabled = false
         endButton.isEnabled = false
         statusLabel.text = BedsideText.string(message ?? "Ending call…")
-        if isPhoneCall || fallbackTask != nil {
+        if isPhoneCall || familySession?.call.source == "phone" || fallbackTask != nil {
             cleanupBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "End Porch phone call") { [weak self] in
                 self?.endCleanupBackgroundTask()
             }
@@ -576,8 +586,18 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             await fallbackTask?.value
             await controlTask?.value
             await room.disconnect()
-            let family = familySession; familySession = nil
-            await family?.end()
+            if let family = familySession, family.call.source == "phone" {
+                do {
+                    do { try await family.endConfirmed() }
+                    catch { try await family.endConfirmed() }
+                } catch {
+                    hasFailed = true; isEnding = false; endButton.isEnabled = true
+                    endButton.configuration?.title = BedsideText.string("Retry ending phone call")
+                    statusLabel.text = BedsideText.string("Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.")
+                    return
+                }
+            } else { await familySession?.end() }
+            familySession = nil
             remoteVideo.track = nil
             localVideo.track = nil
             if let ticket = phoneControlToken {

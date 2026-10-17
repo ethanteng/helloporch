@@ -1,0 +1,10 @@
+# The calling server deploy does not need native apps, simulator builds, tests,
+# operator scripts, or local credentials. Vercel supplies runtime secrets.
+ios/
+tests/
+scripts/
+.env*
+node_modules/
+.next/
+.git/
+*.tsbuildinfo
