@@ -34,6 +34,18 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return "es-ES"
         }
     }
+    /// English/Spanish allow regional accents. Chinese choices retain their dialect/region.
+    public func supportsSpeechVoice(language tag: String) -> Bool {
+        let tag = tag.replacingOccurrences(of: "_", with: "-").lowercased()
+        let base = tag.split(separator: "-").first.map(String.init)
+        switch self {
+        case .english: return base == "en"
+        case .spanish: return base == "es"
+        case .traditionalChinese: return ["zh-tw", "zh-hant-tw", "cmn-tw", "cmn-hant-tw"].contains(tag)
+        case .simplifiedChinese: return ["zh-cn", "zh-hans-cn", "cmn-cn", "cmn-hans-cn"].contains(tag)
+        case .cantonese: return ["zh-hk", "zh-hant-hk", "yue-hk", "yue-hant-hk"].contains(tag)
+        }
+    }
     var translations: [String: String] {
         switch self {
         case .english: return [:]

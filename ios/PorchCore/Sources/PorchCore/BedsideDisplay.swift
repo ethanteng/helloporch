@@ -8,8 +8,16 @@ public struct BedsidePreferences: Codable, Equatable {
     public var dayStart: Int = 6
     public var nightStart: Int = 18
     public var language: BedsideLanguage = .english
+    /// Voice identifiers are local to this device and remembered separately per language.
+    public var announcementVoiceIdentifiers: [String: String] = [:]
+    public func announcementVoiceIdentifier(for language: BedsideLanguage) -> String? {
+        announcementVoiceIdentifiers[language.rawValue]
+    }
+    public mutating func setAnnouncementVoiceIdentifier(_ identifier: String?, for language: BedsideLanguage) {
+        announcementVoiceIdentifiers[language.rawValue] = identifier
+    }
     public init() {}
-    private enum CodingKeys: String, CodingKey { case appearance, hemisphere, dayStart, nightStart, language }
+    private enum CodingKeys: String, CodingKey { case appearance, hemisphere, dayStart, nightStart, language, announcementVoiceIdentifiers }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         appearance = try values.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .default
@@ -17,6 +25,7 @@ public struct BedsidePreferences: Codable, Equatable {
         dayStart = try values.decodeIfPresent(Int.self, forKey: .dayStart) ?? 6
         nightStart = try values.decodeIfPresent(Int.self, forKey: .nightStart) ?? 18
         language = (try values.decodeIfPresent(String.self, forKey: .language)).flatMap(BedsideLanguage.init(rawValue:)) ?? .english
+        announcementVoiceIdentifiers = try values.decodeIfPresent([String: String].self, forKey: .announcementVoiceIdentifiers) ?? [:]
     }
     private static let key = "porch.bedsideDisplay.v1"
     public static func load(from defaults: UserDefaults = .standard) -> Self {

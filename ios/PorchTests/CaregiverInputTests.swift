@@ -289,6 +289,82 @@ final class CaregiverInputTests: XCTestCase {
             XCTAssertTrue(buttons(in: reopened.view).first { $0.accessibilityIdentifier == language.accessibilityIdentifier }!.accessibilityTraits.contains(.selected))
         }
     }
+    @MainActor func testAnnouncementVoiceResolverUsesMatchingChoicesAndFallsBackForMissingOrWrongLanguage() {
+        for language in BedsideLanguage.allCases {
+            let fallback = PorchAnnouncementVoice.resolve(for: language, identifier: nil)
+            XCTAssertEqual(PorchAnnouncementVoice.resolve(for: language, identifier: "removed-voice")?.identifier, fallback?.identifier)
+            if let fallback { XCTAssertTrue(language.supportsSpeechVoice(language: fallback.language)) }
+            for voice in AVSpeechSynthesisVoice.speechVoices() {
+                let resolved = PorchAnnouncementVoice.resolve(for: language, identifier: voice.identifier)
+                if PorchAnnouncementVoice.isOffered(voice, for: language) {
+                    XCTAssertEqual(resolved?.identifier, voice.identifier)
+                } else {
+                    XCTAssertEqual(resolved?.identifier, fallback?.identifier, "A voice from another language or a hidden voice must never be used")
+                }
+            }
+        }
+    }
+    @MainActor func testAnnouncementVoicePickerHidesNoveltyAndPersonalVoices() throws {
+        guard #available(iOS 17.0, *) else { throw XCTSkip("Voice traits require iOS 17") }
+        let hidden: AVSpeechSynthesisVoice.Traits = [.isNoveltyVoice, .isPersonalVoice]
+        for language in BedsideLanguage.allCases {
+            let fallback = PorchAnnouncementVoice.resolve(for: language, identifier: nil)
+            XCTAssertTrue(PorchAnnouncementVoice.available(for: language).allSatisfy { $0.voiceTraits.isDisjoint(with: hidden) })
+            for voice in AVSpeechSynthesisVoice.speechVoices() where !voice.voiceTraits.isDisjoint(with: hidden) {
+                XCTAssertFalse(PorchAnnouncementVoice.isOffered(voice, for: language), voice.name)
+                XCTAssertEqual(PorchAnnouncementVoice.resolve(for: language, identifier: voice.identifier)?.identifier, fallback?.identifier,
+                               "A saved \(voice.name) voice must fall back to the default, matching the picker")
+            }
+            for voice in AVSpeechSynthesisVoice.speechVoices() where voice.voiceTraits.isDisjoint(with: hidden) && language.supportsSpeechVoice(language: voice.language) {
+                XCTAssertTrue(PorchAnnouncementVoice.isOffered(voice, for: language), voice.name)
+            }
+        }
+    }
+    @MainActor func testVoicePickerFiltersChoicesKeepsDraftsAndRestoresEachLanguage() throws {
+        let suite = "voice-picker-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var preferences = BedsidePreferences()
+        preferences.dayStart = 7; preferences.nightStart = 21
+        preferences.save(to: defaults)
+        let settings = BedsideDisplaySettingsViewController(defaults: defaults)
+        settings.loadViewIfNeeded()
+        let picker = try XCTUnwrap(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.announcementVoice" })
+        XCTAssertTrue(picker.showsMenuAsPrimaryAction)
+        XCTAssertNotNil(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.previewAnnouncement" })
+        for language in BedsideLanguage.allCases {
+            let choice = try XCTUnwrap(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.language.\(language.rawValue)" })
+            choice.sendActions(for: .touchUpInside)
+            let voices = PorchAnnouncementVoice.available(for: language)
+            let actions = try XCTUnwrap(picker.menu).children.compactMap { $0 as? UIAction }
+            XCTAssertEqual(actions.map(\.title), ["System default"] + voices.map(PorchAnnouncementVoice.label))
+            XCTAssertEqual(actions.filter { $0.state == .on }.count, 1)
+            let identifier = voices.first?.identifier ?? "unavailable-\(language.rawValue)"
+            settings.selectAnnouncementVoice(identifier)
+            preferences.setAnnouncementVoiceIdentifier(identifier, for: language)
+            XCTAssertEqual(picker.accessibilityValue, voices.first.map(PorchAnnouncementVoice.label) ?? "System default")
+            XCTAssertTrue(BedsidePreferences.load(from: defaults).announcementVoiceIdentifiers.isEmpty, "Draft choices must not be saved")
+        }
+        let save = try XCTUnwrap(settings.navigationItem.rightBarButtonItem)
+        UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
+        preferences.language = .spanish
+        XCTAssertEqual(BedsidePreferences.load(from: defaults), preferences)
+        let reopened = BedsideDisplaySettingsViewController(defaults: defaults)
+        reopened.loadViewIfNeeded()
+        let reopenedPicker = try XCTUnwrap(buttons(in: reopened.view).first { $0.accessibilityIdentifier == "bedside.announcementVoice" })
+        for language in BedsideLanguage.allCases {
+            buttons(in: reopened.view).first { $0.accessibilityIdentifier == "bedside.language.\(language.rawValue)" }!.sendActions(for: .touchUpInside)
+            XCTAssertEqual(reopenedPicker.accessibilityValue, PorchAnnouncementVoice.available(for: language).first.map(PorchAnnouncementVoice.label) ?? "System default")
+            for size in [CGSize(width: 320, height: 568), CGSize(width: 744, height: 1133)] {
+                reopened.view.frame = CGRect(origin: .zero, size: size); reopened.view.layoutIfNeeded()
+                XCTAssertGreaterThanOrEqual(reopenedPicker.bounds.height, 44)
+                XCTAssertLessThanOrEqual(reopenedPicker.bounds.width, size.width)
+            }
+        }
+        reopened.selectAnnouncementVoice(nil)
+        XCTAssertEqual(reopenedPicker.accessibilityValue, "System default")
+        XCTAssertEqual(BedsidePreferences.load(from: defaults), preferences, "Leaving a draft must preserve the saved choices")
+    }
     @MainActor func testNewLanguagesReachClockContactsIncomingCallsAndAnnouncements() throws {
         for language in [BedsideLanguage.simplifiedChinese, .cantonese, .spanish] {
             let restore = localizedBedside(language); defer { restore() }
