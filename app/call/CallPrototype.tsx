@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track, ConnectionState } from "livekit-client";
+import PorchLogo from "@/components/PorchLogo";
 import styles from "./call.module.css";
 
 type Phase = "idle" | "joining" | "waiting" | "connected" | "reconnecting";
@@ -210,7 +211,7 @@ export default function CallPrototype() {
 
   return (
     <main className={styles.page}>
-      <a className={styles.brand} href="/">Porch<span>.</span></a>
+      <a className="logo" href="/" aria-label="Porch home"><PorchLogo /></a>
       <p className={styles.eyebrow}>Calling prototype</p>
       <h1>A familiar voice.<br />A familiar face.</h1>
       <p className={styles.intro}>Join someone on Porch. Use the same room name and call mode on both devices.</p>
