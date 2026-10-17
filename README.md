@@ -6,6 +6,8 @@ Landing page for **Porch**, a tablet plus large-button keypad that lets individu
 
 The native iPhone/iPad calling prototype lives in [`ios/`](ios/README.md). Open `ios/Porch.xcodeproj` in Xcode. It supports in-app LiveKit voice/video calls as well as the existing FaceTime/Shortcut methods.
 
+See [server and TestFlight releases](RELEASING.md) for automatic calling-server deployment after relevant merges and the manual TestFlight release workflow.
+
 ```sh
 npm install
 npm run dev
