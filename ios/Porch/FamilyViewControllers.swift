@@ -218,7 +218,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
 
 final class FamilyAdminViewController: CaregiverFormViewController {
     /// Set when caregiver mode was opened from a family phone; nil on the bedside iPad.
-    private let remote: FamilyCredential?
+    fileprivate let remote: FamilyCredential?
     private var remoteState: FamilyAdminState?
     private let householdName = UITextField()
     private let details = UIStackView()
@@ -226,10 +226,12 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     private var appeared = false
     private var locked = false
     private var displayed: FamilyAdminState?
+    private weak var personScreen: FamilyPersonViewController?
     private var credential: FamilyCredential? { remote ?? PorchDevice.credential(for: .bedside) }
-    private var current: FamilyAdminState? {
+    fileprivate var myID: String? { credential?.credential.split(separator: ".").first.map { String($0) } }
+    fileprivate var current: FamilyAdminState? {
         if remote != nil { return remoteState }
-        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people, messagesEnabled: $0.messagesEnabled, messages: $0.messages, phoneDropIns: $0.phoneDropIns) }
+        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people, messagesEnabled: $0.messagesEnabled, messages: $0.messages, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations) }
     }
     init(remote: FamilyCredential? = nil, state: FamilyAdminState? = nil) {
         self.remote = remote; remoteState = state; super.init(nibName: nil, bundle: nil)
@@ -238,7 +240,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); title = remote == nil ? "Family & drop-in" : "Caregiver mode"
         if remote != nil { navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Family mode", style: .done, target: self, action: #selector(leaveCaregiverMode)) }
-        details.axis = .vertical; details.spacing = 20
+        details.axis = .vertical; details.spacing = 28
         form.addArrangedSubview(details)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(returnedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -287,23 +289,72 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     }
     private func refresh() {
         details.arrangedSubviews.forEach { details.removeArrangedSubview($0); $0.removeFromSuperview() }
-        guard let credential else {
+        guard credential != nil else {
             details.addArrangedSubview(PorchStyle.label("Return to the clock and open caregiver mode to finish setting up this bedside device.")); return
         }
         let state = current
         displayed = state
-        let myID = credential.credential.split(separator: ".").first.map { String($0) }
         householdName.text = state?.householdName ?? "Your loved one"
-        householdName.autocapitalizationType = .words
-        let saveName = PorchStyle.button("Save name", symbol: "checkmark")
+        let saveName = PorchStyle.button("Save", symbol: "checkmark")
+        saveName.accessibilityLabel = "Save name"
         saveName.addAction(UIAction { [weak self] _ in
             guard let self else { return }; self.view.endEditing(true)
             Task { await self.perform("setHouseholdName", ["name": self.householdName.text ?? ""]) }
         }, for: .touchUpInside)
-        details.addArrangedSubview(section("Who is this Porch for?", detail: "Family members will see this name when calling or dropping in.", views: [field(householdName, title: "Display name", placeholder: "Your loved one"), saveName]))
+        let nameRow = listRow(field(householdName, title: "Display name", placeholder: "Your loved one"), trailing: Self.singleLine(saveName), alignedToBottom: true)
         householdName.autocapitalizationType = .words
-        let master = UISwitch(); master.isOn = state?.dropInEnabled == true; master.onTintColor = PorchStyle.accent
-        let masterRow = UIStackView(arrangedSubviews: [PorchStyle.label("Allow approved drop-ins", size: 18, color: PorchStyle.ink), master]); masterRow.alignment = .center; masterRow.spacing = 16
+        details.addArrangedSubview(group("Who is this Porch for?", footer: "Family members see this name when calling or dropping in.", rows: [nameRow]))
+        details.addArrangedSubview(familyGroup(state))
+        details.addArrangedSubview(dropInGroup(state))
+        details.addArrangedSubview(messagesGroup(state))
+        details.addArrangedSubview(caregiverGroup(state))
+        personScreen?.render()
+    }
+    /// Everyone with access and everyone invited, so a pending invitation sits beside the people it will join.
+    private func familyGroup(_ state: FamilyAdminState?) -> UIView {
+        var rows: [UIView] = (state?.people ?? []).map { person in
+            let name = person.id == myID ? "\(person.name) (this phone)" : person.name
+            let access = person.access ?? "Calls only"
+            let text = UIStackView(arrangedSubviews: [
+                PorchStyle.label(name, size: 18, color: PorchStyle.ink, weight: .medium),
+                PorchStyle.label(person.shortStatus, size: 15),
+                PorchStyle.label(access, size: 15, color: person.access == nil ? PorchStyle.secondary : PorchStyle.accent, weight: .medium),
+            ])
+            text.axis = .vertical; text.spacing = 2
+            let row = PorchListRow([Self.avatar(person.name), text], label: "\(name). \(person.shortStatus). \(access).") { [weak self] in self?.showPerson(person.id) }
+            row.accessibilityIdentifier = "family.person.\(person.id)"
+            return row
+        }
+        let time = DateFormatter(); time.dateStyle = .none; time.timeStyle = .short
+        rows += (state?.invitations ?? []).map { invitation in
+            let name = invitation.name ?? "Invitation"
+            let clock = Self.circle(size: 44)
+            clock.backgroundColor = nil; clock.layer.borderWidth = 1.5; clock.layer.borderColor = PorchStyle.border.cgColor
+            let icon = UIImageView(image: UIImage(systemName: "clock")); icon.tintColor = PorchStyle.secondary
+            Self.center(icon, in: clock)
+            let text = UIStackView(arrangedSubviews: [
+                PorchStyle.label(name, size: 18, color: PorchStyle.ink, weight: .medium),
+                PorchStyle.label("Invite pending · expires at \(time.string(from: Date(timeIntervalSince1970: invitation.expiresAt)))", size: 15),
+            ])
+            text.axis = .vertical; text.spacing = 2
+            let cancel = PorchStyle.button("Cancel", filled: false)
+            cancel.configuration?.baseForegroundColor = .systemRed
+            cancel.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 4)
+            cancel.accessibilityLabel = "Cancel invitation for \(name)"
+            cancel.addAction(UIAction { [weak self] _ in Task { await self?.perform("cancelInvite", ["inviteID": invitation.id]) } }, for: .touchUpInside)
+            let invited = UIStackView(arrangedSubviews: [clock, text]); invited.alignment = .center; invited.spacing = 12
+            return listRow(invited, trailing: Self.singleLine(cancel))
+        }
+        rows.append(actionRow("Invite a family member", symbol: "person.badge.plus") { [weak self] in self?.showInvite() })
+        let footer = remote == nil
+            ? "Tap a person to change their drop-in and caregiver access. To put someone on a keypad number, edit that keypad contact and choose Link their Porch app."
+            : "Tap a person to change their drop-in and caregiver access."
+        return group("Family", footer: footer, rows: rows)
+    }
+    /// The master switch above everything it governs: family members' drop-in and approved phone numbers.
+    private func dropInGroup(_ state: FamilyAdminState?) -> UIView {
+        let enabled = state?.dropInEnabled == true
+        let master = UISwitch(); master.isOn = enabled
         master.addAction(UIAction { [weak self, weak master] _ in
             guard let self, let master else { return }
             Task {
@@ -313,105 +364,140 @@ final class FamilyAdminViewController: CaregiverFormViewController {
                 await self.perform("setDropIn", ["enabled": master.isOn])
             }
         }, for: .valueChanged)
-        details.addArrangedSubview(section("Automatic answering", detail: remote == nil ? nil : "Drop-ins connect only if the bedside iPad allows microphone and camera access.", views: [masterRow]))
-        var phoneViews: [UIView] = (state?.phoneDropIns ?? []).map { approval in
+        var rows = [toggleRow("Allow approved drop-ins", detail: enabled ? "On for everyone listed below." : "Paused for everyone. Approvals are kept.", master)]
+        let heading = PorchStyle.label("Who can drop in", size: 15, color: PorchStyle.secondary, weight: .semibold)
+        heading.accessibilityTraits = .header
+        let headingRow = UIStackView(arrangedSubviews: [heading])
+        headingRow.isLayoutMarginsRelativeArrangement = true
+        headingRow.directionalLayoutMargins = .init(top: 14, leading: 16, bottom: 6, trailing: 16)
+        rows.append(headingRow)
+        let ink = enabled ? PorchStyle.ink : PorchStyle.secondary
+        let approved = (state?.people ?? []).filter { $0.permissions.audio || $0.permissions.video }
+        let phones = state?.phoneDropIns ?? []
+        rows += approved.map { person in
+            let modes = person.dropInModes ?? ""
+            let text = UIStackView(arrangedSubviews: [PorchStyle.label(person.name, size: 18, color: ink), PorchStyle.label("Porch app · \(modes)", size: 15)])
+            text.axis = .vertical; text.spacing = 2
+            return PorchListRow([text], label: "\(person.name), Porch app, \(modes)") { [weak self] in self?.showPerson(person.id) }
+        }
+        rows += phones.map { approval in
             let remove = PorchStyle.button("Remove", symbol: "minus.circle", filled: false)
             remove.configuration?.baseForegroundColor = .systemRed
+            remove.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 4)
             remove.accessibilityLabel = "Remove phone drop-in for \(approval.name)"
             remove.addAction(UIAction { [weak self] _ in
                 Task { await self?.perform("setPhoneDropIn", ["number": approval.number, "enabled": false]) }
             }, for: .touchUpInside)
-            let row = UIStackView(arrangedSubviews: [PorchStyle.label("\(approval.name)\n\(approval.number)", size: 17, color: PorchStyle.ink), remove])
-            row.alignment = .center; row.spacing = 16
-            return row
+            let text = UIStackView(arrangedSubviews: [PorchStyle.label(approval.name, size: 18, color: ink), PorchStyle.label("\(approval.number) · Phone call, audio", size: 15)])
+            text.axis = .vertical; text.spacing = 2
+            return listRow(text, trailing: Self.singleLine(remove))
         }
-        let approvePhone = PorchStyle.button("Approve a phone number", symbol: "phone.badge.plus", filled: false)
-        approvePhone.addAction(UIAction { [weak self] _ in self?.showPhoneDropIn() }, for: .touchUpInside)
-        phoneViews.append(approvePhone)
-        details.addArrangedSubview(section("Audio drop-in by phone", detail: PhoneDropInViewController.explanation, views: phoneViews))
-        let messagesOn = UISwitch(); messagesOn.isOn = state?.messagesEnabled != false; messagesOn.onTintColor = PorchStyle.accent
+        if approved.isEmpty && phones.isEmpty {
+            rows.append(listRow([PorchStyle.label("No one yet. Turn on drop-in for a family member, or approve a phone number.", size: 16)]))
+        }
+        rows.append(actionRow("Approve a phone number", symbol: "phone.badge.plus") { [weak self] in self?.showPhoneDropIn() })
+        let footer = "Only the people and numbers listed here connect without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls always ring for Answer. Phone drop-ins work while Porch is open on the bedside iPad, for calls their phone company verifies."
+        return group("Drop-in", footer: remote == nil ? footer : footer + " Drop-ins connect only if the bedside iPad allows microphone and camera access.", rows: rows)
+    }
+    private func messagesGroup(_ state: FamilyAdminState?) -> UIView {
+        let messagesOn = UISwitch(); messagesOn.isOn = state?.messagesEnabled != false
         messagesOn.addAction(UIAction { [weak self, weak messagesOn] _ in
             guard let self, let messagesOn else { return }
             Task { await self.perform("setMessages", ["enabled": messagesOn.isOn]) }
         }, for: .valueChanged)
-        let messagesRow = UIStackView(arrangedSubviews: [PorchStyle.label("Allow family messages", size: 18, color: PorchStyle.ink), messagesOn]); messagesRow.alignment = .center; messagesRow.spacing = 16
         let waiting = state?.messages ?? []
         let held = waiting.filter { $0.held == true }.count
-        let review = PorchStyle.button(waiting.isEmpty ? "No messages waiting" : held > 0 ? "Review waiting messages (\(waiting.count), \(held) need your OK)" : "Review waiting messages (\(waiting.count))", symbol: "tray.full", filled: held > 0)
-        review.isEnabled = !waiting.isEmpty
-        review.addAction(UIAction { [weak self] _ in
+        let count = PorchStyle.label(waiting.isEmpty ? "None" : "\(waiting.count)", size: 18)
+        let reviewText = UIStackView(arrangedSubviews: [PorchStyle.label("Review waiting messages", size: 18, color: PorchStyle.ink)])
+        reviewText.axis = .vertical; reviewText.spacing = 2
+        // Phone voicemail from numbers that aren't on the keypad waits for a caregiver's OK.
+        if held > 0 { reviewText.addArrangedSubview(PorchStyle.label("\(held) need your OK", size: 15, color: PorchStyle.accent, weight: .semibold)) }
+        let review = PorchListRow([reviewText, Self.singleLine(count)],
+                                  label: waiting.isEmpty ? "No messages waiting" : held > 0 ? "Review waiting messages, \(waiting.count), \(held) need your OK" : "Review waiting messages, \(waiting.count)") { [weak self] in
             guard let self else { return }
             let queue = MessageQueueViewController(remote: self.remote, messages: waiting)
             queue.onChange = { [weak self] admin in if self?.remote != nil { self?.remoteState = admin }; self?.refresh() }
             self.navigationController?.pushViewController(queue, animated: true)
-        }, for: .touchUpInside)
-        details.addArrangedSubview(section("Messages", detail: "Family members can send audio and video messages, or leave one when a call isn't answered. Phone callers who aren't answered can leave voicemail; if their number isn't saved on the keypad, it waits for a caregiver's OK. Messages wait here until played, and unplayed ones are removed after a week.", views: [messagesRow, review]))
-        let invite = PorchStyle.button("Invite a family member", symbol: "person.badge.plus")
-        invite.addAction(UIAction { [weak self] _ in self?.showInvite() }, for: .touchUpInside)
-        details.addArrangedSubview(invite)
-        for person in state?.people ?? [] {
-            let isMe = person.id == myID
-            let audio = UISwitch(); audio.isOn = person.permissions.audio; audio.onTintColor = PorchStyle.accent
-            let video = UISwitch(); video.isOn = person.permissions.video; video.onTintColor = PorchStyle.accent
-            let caregiver = UISwitch(); caregiver.isOn = person.caregiver == true; caregiver.onTintColor = PorchStyle.accent
-            caregiver.isEnabled = !isMe
-            func row(_ title: String, _ toggle: UISwitch) -> UIView {
-                let row = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 17, color: PorchStyle.ink), toggle]); row.alignment = .center; row.spacing = 16; return row
-            }
-            for toggle in [audio, video] {
-                toggle.addAction(UIAction { [weak self, weak audio, weak video] _ in
-                    guard let self, let audio, let video else { return }
-                    Task {
-                        if self.remote == nil, audio.isOn || video.isOn { guard await self.requestMedia(video: video.isOn) else { self.refresh(); return } }
-                        await self.perform("setPermissions", ["memberID": person.id, "permissions": ["audio": audio.isOn, "video": video.isOn]])
-                    }
-                }, for: .valueChanged)
-            }
-            caregiver.addAction(UIAction { [weak self, weak caregiver] _ in
-                guard let self, let caregiver else { return }
-                Task { await self.perform("setCaregiver", ["memberID": person.id, "enabled": caregiver.isOn]) }
-            }, for: .valueChanged)
-            var views = [row("Audio drop-in", audio), row("Video drop-in", video), row("Caregiver mode", caregiver)]
-            if !isMe {
-                let remove = PorchStyle.button("Remove access", symbol: "person.crop.circle.badge.minus", filled: false)
-                remove.configuration?.baseForegroundColor = .systemRed
-                remove.addAction(UIAction { [weak self] _ in
-                    let alert = UIAlertController(title: "Remove \(person.name)'s access?", message: "Their device will need a new invitation to call this Porch again.", preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                    alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in Task { await self?.perform("revoke", ["memberID": person.id]) } })
-                    self?.present(alert, animated: true)
-                }, for: .touchUpInside)
-                views.append(remove)
-            }
-            let status = person.online ? "Porch is open on their device" : person.canReceiveCalls == true ? "Porch calls can ring while their device is locked" : "Their device is offline"
-            details.addArrangedSubview(section(isMe ? "\(person.name) (this phone)" : person.name, detail: isMe ? "\(status). Another caregiver can change your caregiver access." : status, views: views))
         }
-        let cancel = PorchStyle.button("Cancel unused invitations", filled: false)
-        cancel.addAction(UIAction { [weak self] _ in Task { await self?.perform("cancelInvites") } }, for: .touchUpInside)
-        details.addArrangedSubview(cancel)
-        if remote == nil {
-            let changePIN = PorchStyle.button("Change caregiver PIN", symbol: "lock.rotation", filled: false)
-            changePIN.addAction(UIAction { [weak self] _ in self?.navigationController?.pushViewController(ChangeCaregiverPINViewController(), animated: true) }, for: .touchUpInside)
-            details.addArrangedSubview(changePIN)
-            details.addArrangedSubview(PorchStyle.label("Caregiver mode lets a family member manage this page from their own phone with the PIN. To put a family member on a keypad number, edit that person and choose Link their Porch app. Ordinary incoming calls require Answer; only approved drop-ins answer automatically."))
-        } else {
-            details.addArrangedSubview(PorchStyle.label("Keypad numbers, contacts, photos, call preferences, the display and the caregiver PIN can only be changed on the bedside iPad."))
-        }
+        review.isEnabled = !waiting.isEmpty
+        return group("Messages", footer: "Family members can send audio and video messages, or leave one when a call isn't answered. Phone callers who aren't answered can leave voicemail; if their number isn't saved on the keypad, it waits for a caregiver's OK. Messages wait here until played, and unplayed ones are removed after a week.", rows: [toggleRow("Allow family messages", messagesOn), review])
     }
-    private func requestMedia(video: Bool) async -> Bool {
+    /// The caregiver PIN beside who can use it from their own phone.
+    private func caregiverGroup(_ state: FamilyAdminState?) -> UIView {
+        let caregivers = (state?.people ?? []).filter { $0.caregiver == true }.map(\.name)
+        let text = UIStackView(arrangedSubviews: [
+            PorchStyle.label("Family caregivers", size: 18, color: PorchStyle.ink),
+            PorchStyle.label(caregivers.isEmpty ? "None yet" : ListFormatter.localizedString(byJoining: caregivers), size: 15),
+        ])
+        text.axis = .vertical; text.spacing = 2
+        var rows: [UIView] = [listRow([text])]
+        if remote == nil {
+            let lock = UIImageView(image: UIImage(systemName: "lock.rotation")); lock.tintColor = PorchStyle.accent
+            lock.setContentHuggingPriority(.required, for: .horizontal)
+            rows.append(PorchListRow([lock, PorchStyle.label("Change caregiver PIN", size: 18, color: PorchStyle.ink)], label: "Change caregiver PIN") { [weak self] in
+                self?.navigationController?.pushViewController(ChangeCaregiverPINViewController(), animated: true)
+            })
+        }
+        let footer = remote == nil
+            ? "The PIN opens caregiver settings on this iPad. Family caregivers also use it to manage this page from their own phone. Turn on caregiver mode for a person in Family."
+            : "Keypad numbers, contacts, photos, call preferences, the display and the caregiver PIN can only be changed on the bedside iPad."
+        return group("Caregiver access", footer: footer, rows: rows)
+    }
+    private func actionRow(_ title: String, symbol: String, action: @escaping () -> Void) -> UIView {
+        let button = PorchStyle.button(title, symbol: symbol, filled: false)
+        button.contentHorizontalAlignment = .leading
+        button.configuration?.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+        button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        return button
+    }
+    /// Keeps a short trailing label or button on one line at its natural width.
+    static func singleLine<View: UIView>(_ view: View) -> View {
+        (view as? UILabel)?.numberOfLines = 1
+        (view as? UIButton)?.titleLabel?.numberOfLines = 1
+        view.setContentHuggingPriority(.required, for: .horizontal)
+        view.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return view
+    }
+    /// Initials in a fixed circle. It never stretches, so a row's text column takes the spare width.
+    static func avatar(_ name: String, size: CGFloat = 44) -> UIView {
+        let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+        let badge = circle(size: size)
+        let label = UILabel()
+        label.text = initials
+        label.font = .systemFont(ofSize: size * 0.36, weight: .semibold)
+        label.textColor = PorchStyle.accent
+        center(label, in: badge)
+        return badge
+    }
+    private static func circle(size: CGFloat) -> UIView {
+        let circle = UIView()
+        circle.backgroundColor = PorchStyle.accent.withAlphaComponent(0.12)
+        circle.layer.cornerRadius = size / 2
+        circle.isAccessibilityElement = false
+        NSLayoutConstraint.activate([circle.widthAnchor.constraint(equalToConstant: size), circle.heightAnchor.constraint(equalToConstant: size)])
+        circle.setContentHuggingPriority(.required, for: .horizontal)
+        return circle
+    }
+    private static func center(_ view: UIView, in circle: UIView) {
+        view.translatesAutoresizingMaskIntoConstraints = false
+        circle.addSubview(view)
+        NSLayoutConstraint.activate([view.centerXAnchor.constraint(equalTo: circle.centerXAnchor), view.centerYAnchor.constraint(equalTo: circle.centerYAnchor)])
+    }
+    fileprivate func requestMedia(video: Bool) async -> Bool {
         let microphone = await AVCaptureDevice.requestAccess(for: .audio)
         let camera = video ? await AVCaptureDevice.requestAccess(for: .video) : true
         guard microphone && camera else {
-            showPorchError(FamilyServiceError(message: "Allow microphone\(video ? " and camera" : "") access in iPad Settings before enabling drop-in.", status: 403), on: self)
+            showPorchError(FamilyServiceError(message: "Allow microphone\(video ? " and camera" : "") access in iPad Settings before enabling drop-in.", status: 403), on: navigationController?.topViewController ?? self)
             return false
         }
         return true
     }
-    private func perform(_ action: String, _ values: [String: Any] = [:]) async {
-        guard !busy, let credential else { return }
+    @discardableResult fileprivate func perform(_ action: String, _ values: [String: Any] = [:]) async -> Bool {
+        guard !busy, let credential else { return false }
         let pin: String
         if remote != nil {
-            guard let active = RemoteCaregiverSession.shared.activePIN else { lock(nil); return }
+            guard let active = RemoteCaregiverSession.shared.activePIN else { lock(nil); return false }
             pin = active
         } else { pin = NativeCallSettings.caregiverCode }
         busy = true; defer { busy = false }
@@ -420,10 +506,12 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             FamilyCoordinator.shared.update(response)
             if let admin = response.admin { remoteState = admin }
             refresh()
+            return true
         } catch {
             // A changed PIN, withdrawn approval or lockout ends a phone's caregiver session.
-            if remote != nil, let failure = error as? FamilyServiceError, [401, 403, 429].contains(failure.status) { lock(error); return }
-            if action != "setHouseholdName" { refresh() }; showPorchError(error, on: self)
+            if remote != nil, let failure = error as? FamilyServiceError, [401, 403, 429].contains(failure.status) { lock(error); return false }
+            if action != "setHouseholdName" { refresh() }; showPorchError(error, on: navigationController?.topViewController ?? self)
+            return false
         }
     }
     private func showInvite() {
@@ -435,6 +523,91 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let approve = PhoneDropInViewController(); approve.remote = remote
         approve.onSaved = { [weak self] admin in if self?.remote != nil, let admin { self?.remoteState = admin }; self?.refresh() }
         navigationController?.pushViewController(approve, animated: true)
+    }
+    private func showPerson(_ id: String) {
+        let screen = FamilyPersonViewController(personID: id, admin: self)
+        personScreen = screen
+        navigationController?.pushViewController(screen, animated: true)
+    }
+}
+
+fileprivate extension FamilyPerson {
+    var status: String { online ? "Porch is open on their device" : canReceiveCalls == true ? "Porch calls can ring while their device is locked" : "Their device is offline" }
+    var shortStatus: String { online ? "Porch is open" : canReceiveCalls == true ? "Can ring while locked" : "Offline" }
+    var dropInModes: String? {
+        permissions.audio && permissions.video ? "Audio and video" : permissions.audio ? "Audio" : permissions.video ? "Video" : nil
+    }
+    /// A one-line summary for the family list; nil when they can only make ordinary calls.
+    var access: String? {
+        let parts = [dropInModes.map { "\($0) drop-in" }, caregiver == true ? "Caregiver" : nil].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+/// One family member's drop-in and caregiver access, opened from Family & drop-in.
+final class FamilyPersonViewController: CaregiverFormViewController {
+    private let personID: String
+    private weak var admin: FamilyAdminViewController?
+    private let content = UIStackView()
+    init(personID: String, admin: FamilyAdminViewController) {
+        self.personID = personID; self.admin = admin; super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(personID:admin:)") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        content.axis = .vertical; content.spacing = 24
+        form.addArrangedSubview(content)
+        hideKeyboardControl(); render()
+    }
+    /// Redrawn after every change, including one another caregiver made.
+    func render() {
+        guard isViewLoaded else { return }
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        guard let admin, let state = admin.current, let person = state.people.first(where: { $0.id == personID }) else {
+            // Removed here or by another caregiver.
+            if navigationController?.topViewController === self { navigationController?.popViewController(animated: true) }
+            return
+        }
+        let isMe = person.id == admin.myID
+        title = person.name
+        let status = PorchStyle.label(isMe ? "\(person.status). You're using this phone." : person.status, size: 17)
+        status.textAlignment = .center
+        let header = UIStackView(arrangedSubviews: [FamilyAdminViewController.avatar(person.name, size: 72), status])
+        header.axis = .vertical; header.alignment = .center; header.spacing = 10
+        content.addArrangedSubview(header)
+        let audio = UISwitch(); audio.isOn = person.permissions.audio
+        let video = UISwitch(); video.isOn = person.permissions.video
+        for toggle in [audio, video] {
+            toggle.addAction(UIAction { [weak self, weak admin, weak audio, weak video] _ in
+                guard let self, let admin, let audio, let video else { return }
+                Task {
+                    if admin.remote == nil, audio.isOn || video.isOn { guard await admin.requestMedia(video: video.isOn) else { self.render(); return } }
+                    await admin.perform("setPermissions", ["memberID": person.id, "permissions": ["audio": audio.isOn, "video": video.isOn]])
+                }
+            }, for: .valueChanged)
+        }
+        let dropInFooter = state.dropInEnabled
+            ? "Connects without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls are always available."
+            : "Drop-ins are paused for everyone. Turn on Allow approved drop-ins in Family and drop-in."
+        content.addArrangedSubview(group("Drop-in", footer: dropInFooter, rows: [toggleRow("Audio drop-in", audio), toggleRow("Video drop-in", video)]))
+        let caregiver = UISwitch(); caregiver.isOn = person.caregiver == true
+        caregiver.isEnabled = !isMe
+        caregiver.addAction(UIAction { [weak admin, weak caregiver] _ in
+            guard let admin, let caregiver else { return }
+            Task { await admin.perform("setCaregiver", ["memberID": person.id, "enabled": caregiver.isOn]) }
+        }, for: .valueChanged)
+        let caregiverFooter = isMe ? "Another caregiver can change your caregiver access." : "Lets them manage Family and drop-in from their own phone with the caregiver PIN."
+        content.addArrangedSubview(group("Caregiver mode", footer: caregiverFooter, rows: [toggleRow("Caregiver mode", caregiver)]))
+        guard !isMe else { return }
+        let remove = PorchStyle.button("Remove access", symbol: "person.crop.circle.badge.minus", filled: false)
+        remove.configuration?.baseForegroundColor = .systemRed
+        remove.addAction(UIAction { [weak self, weak admin] _ in
+            let alert = UIAlertController(title: "Remove \(person.name)'s access?", message: "Their device will need a new invitation to call this Porch again.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in Task { await admin?.perform("revoke", ["memberID": person.id]) } })
+            self?.present(alert, animated: true)
+        }, for: .touchUpInside)
+        content.addArrangedSubview(remove)
     }
 }
 

@@ -83,6 +83,8 @@ public struct SentMessage: Codable, Equatable, Identifiable {
 }
 public struct PendingFamilyInvitation: Codable, Equatable {
     public let id: String
+    /// The name the caregiver gave the invitation. Older servers don't send it.
+    public let name: String?
     public let expiresAt: TimeInterval
 }
 public struct FamilySnapshot: Codable, Equatable {
@@ -112,9 +114,11 @@ public struct FamilyAdminState: Codable, Equatable {
     /// Messages waiting on the bedside device, for caregiver review.
     public let messages: [FamilyMessage]?
     public let phoneDropIns: [PhoneDropInApproval]?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil) {
+    /// Unclaimed invitations, so a caregiver can see who hasn't joined yet and cancel one.
+    public let invitations: [PendingFamilyInvitation]?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
-        self.messagesEnabled = messagesEnabled; self.messages = messages; self.phoneDropIns = phoneDropIns
+        self.messagesEnabled = messagesEnabled; self.messages = messages; self.phoneDropIns = phoneDropIns; self.invitations = invitations
     }
 }
 public struct FamilyCredential: Codable {

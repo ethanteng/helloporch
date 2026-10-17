@@ -194,6 +194,13 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             languages.addArrangedSubview(button)
         }
         form.addArrangedSubview(section("Clock view", detail: "Both views always show the current date and time in large, clear text. Default keeps the screen dark. Dynamic brightens with daylight, warms at sunset, and darkens at night, with a sun or moon and seasonal landscape.", views: [appearance]))
+        example.heightAnchor.constraint(equalToConstant: 210).isActive = true
+        example.layer.cornerRadius = 20; example.clipsToBounds = true
+        previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
+        previewClock.textAlignment = .center; previewClock.translatesAutoresizingMaskIntoConstraints = false
+        example.addSubview(previewClock)
+        NSLayoutConstraint.activate([previewClock.centerYAnchor.constraint(equalTo: example.centerYAnchor), previewClock.leadingAnchor.constraint(equalTo: example.leadingAnchor, constant: 20), previewClock.trailingAnchor.constraint(equalTo: example.trailingAnchor, constant: -20)])
+        form.addArrangedSubview(example)
         form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens and spoken drop-in announcements. Caregiver settings and family mode stay in English. 繁體中文 and 简体中文 use Mandarin; 廣東話 uses Cantonese.", views: [languages]))
         announcementVoice.accessibilityIdentifier = "bedside.announcementVoice"
         announcementVoice.accessibilityLabel = "Announcement voice"
@@ -203,13 +210,6 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         previewVoice.addTarget(self, action: #selector(previewAnnouncement), for: .touchUpInside)
         form.addArrangedSubview(section("Announcement voice", detail: "Choose a voice for the bedside language. Each language remembers its own choice on this iPad. English and Spanish include regional accents; Taiwan Mandarin, mainland Mandarin and Cantonese have separate choices. Download more voices in the iPad's Accessibility speech settings, then return here. Preview before saving; no call is placed.", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
         NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: UIApplication.didBecomeActiveNotification, object: nil)
-        example.heightAnchor.constraint(equalToConstant: 210).isActive = true
-        example.layer.cornerRadius = 20; example.clipsToBounds = true
-        previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
-        previewClock.textAlignment = .center; previewClock.translatesAutoresizingMaskIntoConstraints = false
-        example.addSubview(previewClock)
-        NSLayoutConstraint.activate([previewClock.centerYAnchor.constraint(equalTo: example.centerYAnchor), previewClock.leadingAnchor.constraint(equalTo: example.leadingAnchor, constant: 20), previewClock.trailingAnchor.constraint(equalTo: example.trailingAnchor, constant: -20)])
-        form.addArrangedSubview(example)
         day.minimumValue = 0; day.maximumValue = 11; day.value = Double(preferences.dayStart)
         night.minimumValue = 12; night.maximumValue = 23; night.value = Double(preferences.nightStart)
         day.accessibilityLabel = "Day begins"; night.accessibilityLabel = "Night begins"

@@ -168,6 +168,45 @@ final class CaregiverTouchKeyboard: UIView {
     }
 }
 
+/// A tappable row for a `group` card: highlights while pressed and reads as one button to VoiceOver.
+final class PorchListRow: UIControl {
+    init(_ views: [UIView], label: String, chevron: Bool = true, action: @escaping () -> Void) {
+        super.init(frame: .zero)
+        var arranged = views
+        if chevron {
+            let image = UIImageView(image: UIImage(systemName: "chevron.right"))
+            image.tintColor = PorchStyle.secondary
+            image.setContentHuggingPriority(.required, for: .horizontal)
+            image.setContentCompressionResistancePriority(.required, for: .horizontal)
+            arranged.append(image)
+        }
+        let stack = UIStackView(arrangedSubviews: arranged)
+        stack.alignment = .center
+        stack.spacing = 12
+        stack.isUserInteractionEnabled = false
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.directionalLayoutMargins = .init(top: 12, leading: 16, bottom: 12, trailing: 16)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 60)
+        ])
+        isAccessibilityElement = true
+        accessibilityLabel = label
+        accessibilityTraits = .button
+        addAction(UIAction { _ in action() }, for: .touchUpInside)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(_:label:chevron:action:)") }
+    override var isHighlighted: Bool { didSet { backgroundColor = isHighlighted ? PorchStyle.page : nil } }
+    override var isEnabled: Bool {
+        didSet { alpha = isEnabled ? 1 : 0.5; accessibilityTraits = isEnabled ? .button : [.button, .notEnabled] }
+    }
+}
+
 class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     let form = UIStackView()
     let scroll = UIScrollView()
@@ -315,6 +354,74 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
         ])
         return card
+    }
+
+    /// A heading over one card of compact rows, for screens where several settings belong together.
+    func group(_ title: String, footer: String? = nil, rows: [UIView]) -> UIView {
+        let heading = PorchStyle.label(title, size: 20, color: PorchStyle.ink, weight: .semibold)
+        heading.accessibilityTraits = .header
+        let card = UIStackView()
+        card.axis = .vertical
+        card.backgroundColor = PorchStyle.surface
+        card.layer.cornerRadius = 20
+        card.clipsToBounds = true
+        for (index, row) in rows.enumerated() {
+            if index > 0 {
+                let line = UIView(); line.backgroundColor = PorchStyle.border
+                line.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+                card.addArrangedSubview(line)
+            }
+            card.addArrangedSubview(row)
+        }
+        let stack = UIStackView(arrangedSubviews: [heading, card] + (footer.map { [PorchStyle.label($0, size: 15)] } ?? []))
+        stack.axis = .vertical
+        stack.spacing = 10
+        stack.setCustomSpacing(8, after: card)
+        return stack
+    }
+
+    /// One padded row for a `group` card.
+    func listRow(_ views: [UIView]) -> UIStackView {
+        let row = UIStackView(arrangedSubviews: views)
+        row.alignment = .center
+        row.spacing = 12
+        row.isLayoutMarginsRelativeArrangement = true
+        row.directionalLayoutMargins = .init(top: 12, leading: 16, bottom: 12, trailing: 16)
+        row.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+        return row
+    }
+
+    /// A `group` row whose content takes all the width its trailing control leaves. Plain constraints rather
+    /// than a stack, so the control always sits at its natural width against the trailing edge.
+    func listRow(_ content: UIView, trailing: UIView, alignedToBottom: Bool = false) -> UIView {
+        let row = UIView()
+        row.directionalLayoutMargins = .init(top: 12, leading: 16, bottom: 12, trailing: 16)
+        for view in [content, trailing] { view.translatesAutoresizingMaskIntoConstraints = false; row.addSubview(view) }
+        trailing.setContentHuggingPriority(.required, for: .horizontal)
+        trailing.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let margins = row.layoutMarginsGuide
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: margins.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: trailing.leadingAnchor, constant: -12),
+            trailing.trailingAnchor.constraint(equalTo: margins.trailingAnchor),
+            content.topAnchor.constraint(greaterThanOrEqualTo: margins.topAnchor),
+            content.bottomAnchor.constraint(lessThanOrEqualTo: margins.bottomAnchor),
+            trailing.topAnchor.constraint(greaterThanOrEqualTo: margins.topAnchor),
+            trailing.bottomAnchor.constraint(lessThanOrEqualTo: margins.bottomAnchor),
+            content.centerYAnchor.constraint(equalTo: margins.centerYAnchor),
+            alignedToBottom ? trailing.bottomAnchor.constraint(equalTo: content.bottomAnchor) : trailing.centerYAnchor.constraint(equalTo: margins.centerYAnchor),
+            row.heightAnchor.constraint(greaterThanOrEqualToConstant: 60),
+        ])
+        return row
+    }
+
+    func toggleRow(_ title: String, detail: String? = nil, _ toggle: UISwitch) -> UIView {
+        toggle.onTintColor = PorchStyle.accent
+        toggle.accessibilityLabel = title
+        toggle.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let text = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink)] + (detail.map { [PorchStyle.label($0, size: 15)] } ?? []))
+        text.axis = .vertical; text.spacing = 2
+        return listRow([text, toggle])
     }
 
     func textFieldDidBeginEditing(_ textField: UITextField) {
