@@ -284,3 +284,135 @@ test('failed pushes retain foreground telephone delivery and withheld caller ID 
   assert.equal(pushes[0].callerName, 'Phone caller'); assert.equal(f.house(bedside).call.state, 'pending');
   assert.equal(f.ended.length, 0);
 });
+
+const verified = { 'porch.callerVerification': 'TN-Validation-Passed-A' };
+const approve = (f, bedside, values = {}) => f.json('setPhoneDropIn', { number: '+14155550200', name: 'David', enabled: true, ...values }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+const allowDropIns = (f, bedside, enabled = true) => f.json('setDropIn', { enabled }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+
+test('a carrier-verified, caregiver-approved number drops in with audio after the announcement', async () => {
+  const f = fixture(), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  const event = f.call(undefined, verified); await f.webhook(event);
+  const call = (await f.poll(bedside)).state.call;
+  assert.equal(call.kind, 'dropIn'); assert.equal(call.mode, 'voice'); assert.equal(call.source, 'phone');
+  assert.equal(call.callerName, 'David'); assert.equal(call.callerNumber, '+14155550200');
+  assert.equal((await f.send('acceptCall', { callID: call.id, available: true }, bedside.credential)).status, 409);
+  f.advance(5);
+  await f.json('acceptCall', { callID: call.id, available: true }, bedside.credential);
+  const join = await f.json('joinCall', { callID: call.id }, bedside.credential);
+  const token = await new TokenVerifier(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET).verify(join.token);
+  assert.equal(join.room, event.room.name);
+  assert.deepEqual(token.video.canPublishSources, ['microphone']);
+});
+
+test('caller ID without full carrier attestation, an unapproved number, or paused drop-in rings normally', async () => {
+  const cases = [
+    { attributes: {} }, { attributes: { 'porch.callerVerification': 'TN-Validation-Passed-B' } },
+    { attributes: { 'porch.callerVerification': 'TN-Validation-Failed-A' } }, { attributes: { 'porch.callerVerification': 'TN-Validation-Passed-A-Diverted' } },
+    { attributes: verified, approved: false }, { attributes: verified, paused: true },
+    { attributes: { ...verified, 'sip.phoneNumber': 'anonymous' }, name: 'Phone caller' },
+  ];
+  for (const { attributes, approved = true, paused = false, name = '+14155550200' } of cases) {
+    const f = fixture(), { bedside } = await f.setup();
+    await allowDropIns(f, bedside, !paused);
+    if (approved) await approve(f, bedside);
+    await f.webhook(f.call(undefined, attributes));
+    const call = (await f.poll(bedside)).state.call;
+    assert.equal(call.kind, 'call', JSON.stringify(attributes));
+    // An unverified number is shown as a number, never as the approved person's name.
+    assert.equal(call.callerName, name);
+    f.advance(6);
+    assert.equal((await f.send('acceptCall', { callID: call.id, available: true }, bedside.credential)).status, 200);
+  }
+});
+
+test('carrier verification is read from LiveKit, not trusted from the webhook body', async () => {
+  const f = fixture(), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  const event = f.call();
+  event.participant.attributes['porch.callerVerification'] = 'TN-Validation-Passed-A';
+  await f.webhook(event);
+  assert.equal((await f.poll(bedside)).state.call.kind, 'call');
+});
+
+test('a locked bedside never auto-answers an approved phone caller; it rings through CallKit instead', async () => {
+  const pushes = [], f = fixture({ sendPush: async (_, call) => { pushes.push(call); return { delivered: true }; } }), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  await f.json('registerVoIP', { token: 'ab'.repeat(32), environment: 'production' }, bedside.credential);
+  await f.json('poll', { available: false }, bedside.credential); f.advance(90);
+  await f.webhook(f.call(undefined, verified));
+  assert.equal(f.house(bedside).call.kind, 'call'); assert.equal(pushes.length, 1);
+});
+
+test('foreground phone drop-ins never send a VoIP push', async () => {
+  const pushes = [], f = fixture({ sendPush: async (_, call) => { pushes.push(call); return { delivered: true }; } }), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  await f.json('registerVoIP', { token: 'ab'.repeat(32), environment: 'production' }, bedside.credential);
+  await f.webhook(f.call(undefined, verified));
+  assert.equal(f.house(bedside).call.kind, 'dropIn'); assert.equal(pushes.length, 0);
+});
+
+test('removing the number or pausing drop-in ends a phone drop-in and releases the telephone leg', async () => {
+  for (const change of ['remove', 'pause']) {
+    for (const answered of [false, true]) {
+      const f = fixture(), { bedside } = await f.setup();
+      await allowDropIns(f, bedside); await approve(f, bedside);
+      const event = f.call(undefined, verified); await f.webhook(event);
+      const callID = (await f.poll(bedside)).state.call.id;
+      if (answered) { f.advance(5); await f.json('acceptCall', { callID, available: true }, bedside.credential); }
+      if (change === 'remove') await approve(f, bedside, { enabled: false });
+      else await allowDropIns(f, bedside, false);
+      assert.equal(f.house(bedside).call.state, 'ended');
+      assert.ok(f.ended.includes(event.room.name));
+      assert.equal((await f.send('joinCall', { callID }, bedside.credential)).status, 410);
+    }
+  }
+});
+
+test('unrelated access changes keep a connected phone drop-in', async () => {
+  const f = fixture(), { bedside, family } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  await approve(f, bedside, { number: '+14155550300', name: 'Ana' });
+  await f.webhook(f.call(undefined, verified));
+  const callID = (await f.poll(bedside)).state.call.id;
+  f.advance(5); await f.json('acceptCall', { callID, available: true }, bedside.credential);
+  await f.json('setPermissions', { memberID: family.state.me.id, permissions: { audio: false, video: false } }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+  await approve(f, bedside, { number: '+14155550300', enabled: false });
+  await approve(f, bedside, { name: 'Dave' });
+  assert.equal(f.house(bedside).call.state, 'accepted'); assert.equal(f.ended.length, 0);
+});
+
+test('only PIN-checked caregivers manage approved numbers, and family devices never see them', async () => {
+  const f = fixture(), { bedside, family } = await f.setup();
+  const set = (values, credential = bedside.credential, pin = env.PORCH_CONTACT_SETUP_CODE) =>
+    f.send('setPhoneDropIn', { number: '+14155550200', name: 'David', enabled: true, ...values }, credential, pin);
+  assert.equal((await set({}, family.credential)).status, 403);
+  assert.equal((await set({}, bedside.credential, null)).status, 403);
+  assert.equal((await set({ number: '4155550200' })).status, 400);
+  assert.equal((await set({ name: '' })).status, 400);
+  assert.equal((await set({ enabled: 'yes' })).status, 400);
+  const saved = await approve(f, bedside);
+  assert.deepEqual(saved.admin.phoneDropIns, [{ number: '+14155550200', name: 'David' }]);
+  assert.deepEqual((await approve(f, bedside, { name: 'Dave' })).state.phoneDropIns, [{ number: '+14155550200', name: 'Dave' }]);
+  const seen = await f.json('poll', { available: true }, family.credential);
+  assert.equal(seen.state.phoneDropIns, undefined);
+  assert.ok(!JSON.stringify(seen).includes('+14155550200'));
+  for (let n = 1; n < 20; n++) await approve(f, bedside, { number: `+1415555${String(n).padStart(4, '0')}` });
+  assert.equal((await set({ number: '+14155559999' })).status, 400);
+  assert.equal((await set({ name: 'David' })).status, 200);
+  assert.equal((await approve(f, bedside, { number: '+14155559999', enabled: false })).state.phoneDropIns.length, 20);
+});
+
+test('changing an approved number swaps it in one update and ends a drop-in from the old number', async () => {
+  const f = fixture(), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  const event = f.call(undefined, verified); await f.webhook(event);
+  assert.equal((await f.poll(bedside)).state.call.kind, 'dropIn');
+  const swapped = await approve(f, bedside, { number: '+14155550300', replacing: '+14155550200' });
+  assert.deepEqual(swapped.state.phoneDropIns, [{ number: '+14155550300', name: 'David' }]);
+  assert.equal(f.house(bedside).call.state, 'ended'); assert.ok(f.ended.includes(event.room.name));
+  for (const values of [{ name: 'David', enabled: true, replacing: '4155550300' }, { enabled: false, replacing: '+14155550300' }]) {
+    assert.equal((await f.send('setPhoneDropIn', { number: '+14155550200', ...values }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE)).status, 400);
+  }
+  assert.deepEqual(f.house(bedside).phoneDropIns, [{ number: '+14155550300', name: 'David' }]);
+});

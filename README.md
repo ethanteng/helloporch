@@ -17,7 +17,7 @@ npm run dev
 
 The universal app now includes family pairing, ordinary incoming calls, approved audio/video drop-in while Mom’s iPad is open, and recorded family messages and voicemail that wait on the bedside iPad until played. Start with the [family setup guide](ios/FAMILY-SETUP.md) for invitations, the six-digit caregiver PIN, managed storage, permissions and beta limits. Ordinary calls to family iPhones support APNs VoIP delivery and CallKit ringing while locked or backgrounded once the server and Apple signing are configured; see [incoming-call setup](ios/INCOMING-CALLS.md). The existing regular-phone fallback remains in place. Existing manual rooms remain available for browser testing.
 
-Regular phones can also call a household's assigned Twilio number and ring its bedside iPad with a manual-answer, audio-only call. Each household uses its own number; routing never depends on recognizing the caller. See [inbound telephone setup](ios/INBOUND-PHONE-CALLS.md) for the LiveKit trunk, signed webhook, number assignment, and Twilio Origination configuration.
+Regular phones can also call a household's assigned Twilio number and ring its bedside iPad with a manual-answer, audio-only call. Numbers the caregiver approves can instead drop in with audio when their phone company verifies the caller ID. Each household uses its own number; routing never depends on recognizing the caller. See [inbound telephone setup](ios/INBOUND-PHONE-CALLS.md) for the LiveKit trunk, signed webhook, number assignment, and Twilio Origination configuration.
 
 ## Native voice and video calling prototype
 

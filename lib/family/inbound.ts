@@ -1,12 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
-import { callRoom, config, expire, mutate, type Call, type Household, type InboundPhone } from "./household.ts";
+import { callRoom, config, expire, mutate, phoneDropIn, type Call, type Household, type InboundPhone } from "./household.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
 export const inboundRoomPrefix = "porch-inbound-";
 export const inboundRingSeconds = 45;
+// The inbound trunk maps Twilio's STIR/SHAKEN result header to this attribute.
+// Only full ("A") attestation lets an approved number drop in; anything else rings.
+export const callerVerificationHeader = "X-Twilio-VerStat";
+export const callerVerificationAttribute = "porch.callerVerification";
+const verifiedCaller = "TN-Validation-Passed-A";
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 // ParticipantInfo.Kind.SIP in the LiveKit protocol (not exported by this SDK).
 const sipParticipantKind = 3;
@@ -109,10 +114,13 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   const rawRoute = await store.get(`phone-number:${phone.calledNumber}`);
   const route: InboundRoute | undefined = rawRoute ? JSON.parse(rawRoute) : undefined;
   if (!route || route.trunkID !== phone.trunkID) { await deleteRoom(room.name, dependencies); return; }
-  if (!matches(phone, await participant(phone, dependencies))) {
+  const actual = await participant(phone, dependencies);
+  if (!matches(phone, actual)) {
     await store.create(endedKey(room.sid), "1", 86400);
     await deleteRoom(room.name, dependencies); return;
   }
+  // Read from LiveKit's own participant record, never the webhook payload.
+  const verified = actual!.attributes[callerVerificationAttribute] === verifiedCaller;
   const proposed: Session = { householdID: route.householdID, callID: randomUUID(), phone };
   await store.create(sessionKey(room.sid), JSON.stringify(proposed), 86400);
   const session: Session = JSON.parse((await store.get(sessionKey(room.sid)))!);
@@ -126,8 +134,12 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     expire(house, now);
     if (house.call?.id === session.callID) return house.call.state !== "ended";
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
-    if (!bedside || (!(bedside.available && bedside.seenAt > now - 30) && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended")) return false;
-    house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: "call",
+    const ready = !!bedside?.available && bedside.seenAt > now - 30;
+    if (!bedside || (!ready && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended")) return false;
+    // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the
+    // master switch and a foreground bedside; otherwise the call rings normally.
+    const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
+    house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
       state: "pending", createdAt, expiresAt: createdAt + inboundRingSeconds, phone: session.phone };
     return true;
   });
@@ -137,8 +149,8 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   }
   const call = house.call!, bedside = house.members.find(m => m.id === call.to)!;
   // Webhook retries and simultaneous copies share one delivery claim. No VoIP
-  // push is used for cancellation, accepted calls, or an ended session.
-  if (call.state !== "pending" || !bedside.voip || !pushEnabled ||
+  // push is used for drop-ins, cancellation, accepted calls, or an ended session.
+  if (call.kind !== "call" || call.state !== "pending" || !bedside.voip || !pushEnabled ||
       !await store.create(`inbound-push:${room.sid}`, "1", 86400)) return;
   const registration = bedside.voip;
   let delivery: PushResult;

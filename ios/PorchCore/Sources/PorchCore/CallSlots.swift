@@ -70,6 +70,12 @@ public struct CallSlots: Equatable {
     }
     public func incomingContact(for call: FamilyCallRecord, in state: FamilySnapshot) -> CallContact? {
         guard state.me.role == .bedside, call.to == state.me.id else { return nil }
+        if call.source == "phone" {
+            // Only a server-verified telephone drop-in borrows a saved person's name and photo;
+            // an ordinary phone call keeps showing its number, which anyone can fake.
+            guard call.kind == "dropIn", let number = call.callerNumber else { return nil }
+            return contacts.compactMap { $0 }.first { $0.nativeCall != nil && $0.phoneNumber == number }
+        }
         return contacts.compactMap { $0 }.first {
             $0.nativeCall != nil && Self.member(for: $0, in: state)?.id == call.from
         }

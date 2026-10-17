@@ -378,6 +378,21 @@ final class IncomingCallerNameTests: XCTestCase {
         XCTAssertEqual(try slots.incomingCallerName(for: call(), in: snapshot(role: "family")), "Ethan")
         XCTAssertEqual(try slots.incomingCallerName(for: call(recipient: caller), in: snapshot()), "Ethan")
     }
+    func testOnlyTelephoneDropInsUseTheSavedPersonForTheirNumber() throws {
+        let state = try snapshot()
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .voice), phoneNumber: "+14155550200"), for: 1)
+        func phone(kind: String, number: String? = "+14155550200") throws -> FamilyCallRecord {
+            var object: [String: Any] = ["id": "phone-call", "from": "sip:PA_test", "to": bedside, "mode": "voice", "kind": kind, "state": "pending",
+                "createdAt": 1, "expiresAt": 46, "callerName": kind == "dropIn" ? "Dave" : "+14155550200", "source": "phone"]
+            if let number { object["callerNumber"] = number }
+            return try JSONDecoder().decode(FamilyCallRecord.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "dropIn"), in: state), "David")
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "call"), in: state), "+14155550200", "An unverified number must not borrow a saved name")
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "dropIn", number: "+14155550999"), in: state), "Dave")
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "dropIn", number: nil), in: state), "Dave")
+    }
 }
 
 final class BedsideInvitationTests: XCTestCase {

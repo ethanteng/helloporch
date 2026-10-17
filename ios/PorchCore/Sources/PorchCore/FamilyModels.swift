@@ -28,9 +28,19 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let acceptedAt: TimeInterval?
     public let expiresAt: TimeInterval
     public let callerName: String
-    /// Telephone calls always require an explicit answer and carry audio only.
+    /// "phone" for a call to the household's telephone number. Telephone calls carry audio
+    /// only and require an explicit answer, unless the server marks a carrier-verified,
+    /// caregiver-approved number as a drop-in.
     public let source: String?
+    /// The caller's telephone number, when caller ID is available. Display information only.
+    public let callerNumber: String?
     public let reason: String?
+}
+/// A telephone number the caregiver approved for audio drop-in by calling the household's number.
+public struct PhoneDropInApproval: Codable, Equatable {
+    public let number: String
+    public let name: String
+    public init(number: String, name: String) { self.number = number; self.name = name }
 }
 /// A message waiting on the bedside device (only the bedside's snapshot carries the queue).
 public struct FamilyMessage: Codable, Equatable, Identifiable {
@@ -76,6 +86,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let serverTime: TimeInterval
     public let messagesEnabled: Bool?
     public let messages: [FamilyMessage]?
+    /// Bedside only: numbers approved for telephone drop-in.
+    public let phoneDropIns: [PhoneDropInApproval]?
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
 /// family device's own snapshot doesn't include.
@@ -86,9 +98,10 @@ public struct FamilyAdminState: Codable, Equatable {
     public let messagesEnabled: Bool?
     /// Messages waiting on the bedside device, for caregiver review.
     public let messages: [FamilyMessage]?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil) {
+    public let phoneDropIns: [PhoneDropInApproval]?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
-        self.messagesEnabled = messagesEnabled; self.messages = messages
+        self.messagesEnabled = messagesEnabled; self.messages = messages; self.phoneDropIns = phoneDropIns
     }
 }
 public struct FamilyCredential: Codable {
