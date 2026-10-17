@@ -490,6 +490,10 @@ final class CaregiverInputTests: XCTestCase {
         (view as? UIButton).map { [$0] } ?? view.subviews.flatMap { buttons(in: $0) }
     }
 
+    @MainActor private func rows(in view: UIView) -> [PorchListRow] {
+        (view as? PorchListRow).map { [$0] } ?? view.subviews.flatMap { rows(in: $0) }
+    }
+
     @MainActor func testTouchKeyboardEditsSelectedTextAndDeletesCharacters() {
         let field = UITextField()
         let keyboard = CaregiverTouchKeyboard()
@@ -777,24 +781,43 @@ final class CaregiverInputTests: XCTestCase {
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
-        let titles = buttons(in: admin.view).compactMap { $0.configuration?.title }
-        XCTAssertFalse(titles.contains("Change caregiver PIN"), "The bedside iPad keeps the PIN it uses for renewals")
-        XCTAssertEqual(titles.filter { $0 == "Remove access" }.count, 1, "A caregiver can't remove their own phone here")
+        XCTAssertFalse(rows(in: admin.view).contains { $0.accessibilityLabel == "Change caregiver PIN" }, "The bedside iPad keeps the PIN it uses for renewals")
+        XCTAssertEqual(rows(in: admin.view).filter { $0.accessibilityIdentifier?.hasPrefix("family.person.") == true }.count, 2)
+        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Ethan (this phone). Porch is open. Audio drop-in · Caregiver." })
+        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Sam. Offline. Calls only." })
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        XCTAssertEqual(switches(admin.view).filter { !$0.isEnabled }.count, 1, "Another caregiver must change this phone's caregiver access")
+        let me = FamilyPersonViewController(personID: "me", admin: admin); me.loadViewIfNeeded()
+        XCTAssertFalse(buttons(in: me.view).contains { $0.configuration?.title == "Remove access" }, "A caregiver can't remove their own phone here")
+        XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")
+        let sam = FamilyPersonViewController(personID: "sam", admin: admin); sam.loadViewIfNeeded()
+        XCTAssertEqual(buttons(in: sam.view).filter { $0.configuration?.title == "Remove access" }.count, 1)
+        XCTAssertTrue(switches(sam.view).allSatisfy(\.isEnabled))
     }
 
     @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {
-        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [],
+        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
+            ["id": "mia", "name": "Mia", "role": "family", "permissions": ["audio": true, "video": true], "online": true, "caregiver": false]],
             "phoneDropIns": [["number": "+14155550200", "name": "David"]]])
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
         func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
-        XCTAssertTrue(labels(admin.view).contains("David\n+14155550200"))
+        XCTAssertTrue(labels(admin.view).contains("+14155550200 · Phone call, audio"))
+        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video" }, "Approved family members are listed beside approved numbers")
         let titles = buttons(in: admin.view).compactMap { $0.configuration?.title }
         XCTAssertTrue(titles.contains("Approve a phone number"))
         XCTAssertEqual(buttons(in: admin.view).filter { $0.accessibilityLabel == "Remove phone drop-in for David" }.count, 1)
+    }
+
+    @MainActor func testPendingInvitationsAreListedByNameAndCancelledOneAtATime() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": false, "people": [],
+            "invitations": [["id": "a", "name": "Ana", "expiresAt": 1_800_000_900], ["id": "b", "expiresAt": 1_800_000_900]]])
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        let cancels = buttons(in: admin.view).compactMap(\.accessibilityLabel).filter { $0.hasPrefix("Cancel invitation") }
+        XCTAssertEqual(cancels, ["Cancel invitation for Ana", "Cancel invitation for Invitation"])
+        XCTAssertFalse(buttons(in: admin.view).contains { $0.configuration?.title == "Cancel unused invitations" })
     }
 
     @MainActor func testFirstTapOnGearOpensCaregiverGate() async {

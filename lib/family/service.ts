@@ -50,16 +50,20 @@ function memberFor(house: Household, auth: Auth): Member {
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
 // The bedside device is always a caregiver; family devices need the caregiver's approval (and the PIN).
 function isCaregiver(member: Member) { return member.role === "bedside" || member.caregiver === true; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn"];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn"];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 function publicPerson(m: Member, now: number, pushEnabled: boolean) {
   return { id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled), ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}) };
+}
+// Unclaimed, unexpired invitations with the name the caregiver gave them, never their secret.
+function pendingInvites(house: Household, now: number) {
+  return house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, name: i.name, expiresAt: i.expiresAt }));
 }
 // Family devices only see the bedside in their snapshot, so caregiver screens get every
 // family device here. It is returned only after a PIN check.
 function adminState(house: Household, now: number, pushEnabled: boolean) {
   return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [],
-    people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled)) };
+    people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled)), invitations: pendingInvites(house, now) };
 }
 function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
   const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
@@ -73,7 +77,7 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [] } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
     ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}), me: publicMember(me),
-    invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
+    invitations: me.role === "bedside" ? pendingInvites(house, now) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     call: call && (call.from === me.id || call.to === me.id) ? { ...publicCall(call), source: call.phone ? "phone" : "porch", callerName: callerName(call),
       ...(call.phone?.callerNumber ? { callerNumber: call.phone.callerNumber } : {}) } : null,
@@ -252,7 +256,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
-      if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "revoke" || action === "cancelInvites" || action === "setCaregiver" || action === "setMessages" || action === "setPhoneDropIn") {
+      if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "revoke" || action === "cancelInvites" || action === "cancelInvite" || action === "setCaregiver" || action === "setMessages" || action === "setPhoneDropIn") {
         if (action === "createInvite") {
           house.invites = house.invites.filter(i => !i.claimedBy && i.expiresAt > now);
           requireValue(house.invites.length < 10, "Cancel an unused invitation before creating another.");
@@ -262,6 +266,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           return { inviteID: invite.id, expiresAt: invite.expiresAt };
         }
         if (action === "cancelInvites") { house.invites = []; return undefined; }
+        if (action === "cancelInvite") {
+          requireValue(typeof input.inviteID === "string", "Choose the invitation to cancel.");
+          // Already claimed or expired invitations are gone either way, so cancelling one is idempotent.
+          house.invites = house.invites.filter(i => i.id !== input.inviteID);
+          return undefined;
+        }
         if (action === "setMessages") {
           requireValue(typeof input.enabled === "boolean", "Choose whether messages are on.");
           house.messagesEnabled = input.enabled;
