@@ -394,7 +394,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                   key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
                   let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)) else { unhandled.insert(press); continue }
             let action = slots.action(for: digit)
-            guard action == .callControl || action == .cameraToggle else { unhandled.insert(press); continue }
+            guard action == .callControl || action == .toggleVideo else { unhandled.insert(press); continue }
             guard keypad.keyDown(Int(key.keyCode.rawValue)) else { continue }
             if action == .callControl { SystemIncomingCalls.shared.requestEnd() }
             else { camera.sendActions(for: .touchUpInside) }
