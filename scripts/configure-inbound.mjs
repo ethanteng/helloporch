@@ -12,8 +12,10 @@ const apply = args.includes('--apply');
 // --voicemail: Twilio's voice webhook dials LiveKit with a digest login, so callers who
 // aren't answered can leave a message. Once a trunk has the login, it stays in this mode.
 let voicemail = args.includes('--voicemail');
-if (!householdID || !/^[a-f0-9-]{36}$/.test(householdID) || args.some(arg => !['--apply', '--voicemail'].includes(arg) && !arg.startsWith('--household='))) {
-  console.error('Usage: node --env-file=.env.inbound-production.local --env-file=.env.local scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID [--voicemail] [--apply]');
+// --reassign: move a number that already rings another household (or a replaced bedside) to this one.
+const reassign = args.includes('--reassign');
+if (!householdID || !/^[a-f0-9-]{36}$/.test(householdID) || args.some(arg => !['--apply', '--voicemail', '--reassign'].includes(arg) && !arg.startsWith('--household='))) {
+  console.error('Usage: node --env-file=.env.inbound-production.local --env-file=.env.local scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID [--voicemail] [--reassign] [--apply]');
   process.exit(1);
 }
 // Twilio's published SIP signaling gateways, verified 2026-10-16:
@@ -40,10 +42,20 @@ try {
   const routeKey = `phone-number:${number}`;
   const previous = await store.get(routeKey);
   const route = previous ? JSON.parse(previous) : undefined;
-  if (route && (route.householdID !== house.id || route.bedsideID !== bedsides[0].id)) throw new SetupError('This number is assigned to another household; refusing to reassign it.');
+  // Bedside names, not IDs, so the operator can tell households apart before saving.
+  const bedsideName = `“${bedsides[0].name}”`;
+  const moving = !!route && (route.householdID !== house.id || route.bedsideID !== bedsides[0].id);
+  let movingFrom = 'another household';
+  if (moving) {
+    const old = JSON.parse(await store.get(`house:${route.householdID}`) ?? 'null');
+    const oldBedside = old?.members.find(member => member.id === route.bedsideID);
+    if (oldBedside) movingFrom = `“${oldBedside.name}”${old.id === house.id ? ' (a replaced bedside)' : ''}`;
+    if (!reassign) throw new SetupError(`This number rings ${movingFrom}. To move it to ${bedsideName}, run again with --reassign.`);
+  }
   const name = `Porch inbound ${house.id}`;
   const existing = (await sip.listSipInboundTrunk()).filter(trunk => trunk.numbers.includes(number));
-  if (existing.length > 1 || existing.some(trunk => trunk.name !== name)) throw new SetupError('This number already has a different inbound trunk; review it before changing routing.');
+  const oldName = moving ? `Porch inbound ${route.householdID}` : name;
+  if (existing.length > 1 || existing.some(trunk => trunk.name !== name && trunk.name !== oldName)) throw new SetupError('This number already has a different inbound trunk; review it before changing routing.');
   let trunk = existing[0];
   if (route && (!trunk || route.trunkID !== trunk.sipTrunkId)) throw new SetupError('The saved number route and inbound trunk disagree; review them before continuing.');
   const rules = await sip.listSipDispatchRule();
@@ -54,6 +66,9 @@ try {
   }
   voicemail ||= !!trunk?.authUsername;
   console.log('Existing Twilio number and destination household verified.');
+  console.log(moving
+    ? `Reassign: calls to this number will ring the bedside ${bedsideName} instead of ${movingFrom}. Messages already left stay where they are.`
+    : `Calls to this number will ring the bedside ${bedsideName}.`);
   console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; 45-second ringing; 30-minute call limit.');
   console.log('Carrier caller-ID verification is passed to Porch, so caregiver-approved numbers can drop in with audio while drop-in is on.');
   console.log(voicemail
@@ -75,20 +90,23 @@ try {
   // Voicemail routing reads the result from the server's forwarded header, never a header a SIP source chose.
   const { [callerVerificationHeader]: _twilio, [forwardedVerificationHeader]: _forwarded, ...otherHeaders } = trunk.headersToAttributes ?? {};
   trunk.headersToAttributes = { ...otherHeaders, [voicemail ? forwardedVerificationHeader : callerVerificationHeader]: callerVerificationAttribute };
+  // A reassigned trunk and rule take the new household's name, so later runs recognize them.
+  trunk.name = name;
   trunk = await sip.updateSipInboundTrunk(trunk.sipTrunkId, trunk);
   if (!dispatch) dispatch = await sip.createSipDispatchRule({ type: 'individual', roomPrefix: inboundRoomPrefix }, {
     name, trunkIds: [trunk.sipTrunkId], hidePhoneNumber: false,
     roomConfig: new RoomConfiguration({ maxParticipants: 2, emptyTimeout: 60, departureTimeout: 5 }),
   });
+  else if (dispatch.name !== name) dispatch = await sip.updateSipDispatchRuleFields(dispatch.sipDispatchRuleId, { name });
+  // Reassignment swaps the route only if nobody else changed it since the plan was read.
   const saved = JSON.stringify({ householdID: house.id, bedsideID: bedsides[0].id, trunkID: trunk.sipTrunkId });
-  if (previous ? previous !== saved : !await store.create(routeKey, saved)) {
-    if (await store.get(routeKey) !== saved) throw new SetupError('Number assignment changed concurrently; refusing to overwrite it.');
-  }
+  const stored = previous === saved || (previous ? moving && await store.compareAndSet(routeKey, previous, saved) : await store.create(routeKey, saved));
+  if (!stored && await store.get(routeKey) !== saved) throw new SetupError('Number assignment changed concurrently; refusing to overwrite it.');
   writeFileSync('.env.inbound-setup.local', [
     `PORCH_INBOUND_NUMBER=${number}`, `PORCH_INBOUND_HOUSEHOLD_ID=${house.id}`, `LIVEKIT_SIP_INBOUND_TRUNK_ID=${trunk.sipTrunkId}`,
     `LIVEKIT_SIP_DISPATCH_RULE_ID=${dispatch.sipDispatchRuleId}`, '',
   ].join('\n'), { mode: 0o600 });
-  console.log('LiveKit inbound trunk, dispatch rule, and household number assignment saved.');
+  console.log(`LiveKit inbound trunk, dispatch rule, and household number assignment saved. Calls now ring ${bedsideName}.`);
   console.log(voicemail
     ? 'Private configuration saved to .env.inbound-setup.local. Point the Twilio number\'s voice webhook at /api/calls/inbound/voice to finish activation.'
     : 'Private configuration saved to .env.inbound-setup.local. Configure Twilio Origination and the LiveKit webhook to finish activation.');
