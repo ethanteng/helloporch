@@ -16,7 +16,7 @@ export type MessageMode = "audio" | "video";
 export type InboxEntry = { id: string; from: string; fromName: string; kind: MessageKind; mode: MessageMode; contentType: string; pathname: string; durationSeconds: number; sentAt: number; deliveredAt?: number; callerNumber?: string; callerVerified?: boolean; held?: boolean };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
-export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[] };
+export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
@@ -45,6 +45,11 @@ export async function mutate<T>(store: FamilyStore, id: string, change: (house: 
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
 }
+
+/** How long a call to the bedside rings, from the family app or a regular phone, before the caller is
+ * offered voicemail (or, with messages off, the call ends). Caregivers choose it in Call preferences. */
+export const ringLimits = { minimum: 15, maximum: 120, standard: 45 };
+export function ringSeconds(house: Household): number { return house.ringSeconds ?? ringLimits.standard; }
 
 export function callRoom(call: Call): string { return call.phone?.room ?? `porch-paired-${call.id}`; }
 export function phoneDropIn(house: Household, number?: string): PhoneDropIn | undefined {

@@ -404,7 +404,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             cameraButton.isEnabled = true
             refresh()
             waitTask = Task { [weak self] in
-                let seconds: UInt64 = self?.familyAccepted == true ? 30 : self?.contact.phoneNumber == nil ? (self?.familySession == nil ? 90 : 45) : UInt64(self?.fallbackSeconds ?? CallPreferences.defaultFallbackSeconds)
+                let seconds: UInt64 = self?.familyAccepted == true ? 30 : self?.contact.phoneNumber == nil ? (self?.familySession.map { UInt64($0.waitSeconds) } ?? 90) : UInt64(self?.fallbackSeconds ?? CallPreferences.defaultFallbackSeconds)
                 do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }
                 guard let self, !self.hasConnectedPeer else { return }
                 if self.contact.phoneNumber != nil && !self.familyAccepted {

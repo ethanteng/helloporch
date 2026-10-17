@@ -5,6 +5,13 @@ import PorchCore
 final class CallPreferencesViewController: CaregiverFormViewController {
     private let secondsLabel = PorchStyle.label("", size: 28, color: PorchStyle.ink, weight: .semibold)
     private let stepper = UIStepper()
+    private let voicemailLabel = PorchStyle.label("", size: 28, color: PorchStyle.ink, weight: .semibold)
+    private let voicemailStepper = UIStepper()
+    private lazy var voicemailRow = UIStackView(arrangedSubviews: [voicemailLabel, UIView(), voicemailStepper])
+    private let voicemailStatus = PorchStyle.label("", size: 16)
+    /// The household's saved wait, once the server has sent it; the stepper follows it until changed here.
+    private var savedVoicemailSeconds: Int?
+    private var voicemailEdited = false
     private let testTone = PorchTonePlayer()
     private let testAnnouncement = PorchIncomingAudio()
     private let soundStatus = PorchStyle.label("", size: 16)
@@ -25,15 +32,28 @@ final class CallPreferencesViewController: CaregiverFormViewController {
         row.spacing = 20
         form.addArrangedSubview(section("Wait before phone fallback", detail: "How long to try Porch before calling their regular phone. Applies to all people with phone fallback enabled on this iPad.", views: [row, PorchStyle.label("Choose 5 seconds to 2 minutes. The default is 20 seconds. Phone fallback is always voice only.", size: 16)]))
         form.addArrangedSubview(section("While dialing", detail: "You'll hear a familiar ringing tone while waiting for an answer. It stops when the call connects or ends. Adjust the sound with the iPad's volume buttons.", views: []))
+        voicemailStepper.minimumValue = Double(CallPreferences.voicemailRange.lowerBound)
+        voicemailStepper.maximumValue = Double(CallPreferences.voicemailRange.upperBound)
+        voicemailStepper.stepValue = 5
+        voicemailStepper.value = Double(CallPreferences.defaultVoicemailSeconds)
+        voicemailStepper.accessibilityLabel = "Ring before voicemail"
+        voicemailStepper.accessibilityIdentifier = "calls.voicemailWait"
+        voicemailStepper.addTarget(self, action: #selector(voicemailStepped), for: .valueChanged)
+        voicemailRow.alignment = .center
+        voicemailRow.spacing = 20
+        form.addArrangedSubview(section("Ring before voicemail", detail: "How long calls to Porch ring, from the family app or a regular phone, before the caller can leave a message. If family messages are off, the call ends instead. Applies to everyone who calls this iPad.", views: [voicemailRow, voicemailStatus]))
         let ring = PorchStyle.button("Test ringing", symbol: "speaker.wave.2")
         let announcement = PorchStyle.button("Test video announcement", symbol: "person.wave.2", filled: false)
         ring.accessibilityIdentifier = "calls.testRinging"; announcement.accessibilityIdentifier = "calls.testAnnouncement"
         ring.addTarget(self, action: #selector(testRing), for: .touchUpInside)
         announcement.addTarget(self, action: #selector(testVoice), for: .touchUpInside)
-        form.addArrangedSubview(section("Incoming calls & drop-ins", detail: "Incoming calls ring until answered or declined. Approved drop-ins play a chime and announce the caller and call type before the five-second countdown. A short chime confirms connection and turning video on. Announcements use the bedside language. Use these tests without placing a call; adjust media volume with the iPad's volume buttons.", views: [ring, announcement, soundStatus]))
+        form.addArrangedSubview(section("Incoming calls & drop-ins", detail: "Incoming calls ring until answered, declined, or sent to voicemail. Approved drop-ins play a chime and announce the caller and call type before the five-second countdown. A short chime confirms connection and turning video on. Announcements use the bedside language. Use these tests without placing a call; adjust media volume with the iPad's volume buttons.", views: [ring, announcement, soundStatus]))
         hideKeyboardControl()
         updateValue()
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
+        familyChanged()
     }
+    deinit { NotificationCenter.default.removeObserver(self) }
 
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); stopSoundTests() }
     private func stopSoundTests() { soundTimer?.invalidate(); soundTimer = nil; testTone.stop(); testAnnouncement.stop() }
@@ -64,9 +84,44 @@ final class CallPreferencesViewController: CaregiverFormViewController {
         stepper.accessibilityValue = secondsLabel.text
     }
 
+    /// The voicemail wait lives with the household, so it needs the pairing and a connection to load.
+    @objc private func familyChanged() {
+        let paired = PorchDevice.credential(for: .bedside) != nil
+        savedVoicemailSeconds = FamilyCoordinator.shared.state.map { $0.ringSeconds ?? CallPreferences.defaultVoicemailSeconds }
+        if let saved = savedVoicemailSeconds, !voicemailEdited { voicemailStepper.value = Double(saved) }
+        voicemailStepper.isEnabled = savedVoicemailSeconds != nil
+        voicemailRow.isHidden = !paired
+        voicemailStatus.text = !paired ? "Set up Family & drop-in on this iPad first."
+            : savedVoicemailSeconds == nil ? "Connecting to Porch… Check the internet connection if this doesn't load."
+            : "Choose 15 seconds to 2 minutes. The default is 45 seconds."
+        showVoicemailValue()
+    }
+
+    @objc private func voicemailStepped() { voicemailEdited = true; showVoicemailValue() }
+
+    private func showVoicemailValue() {
+        voicemailLabel.text = "\(Int(voicemailStepper.value)) seconds"
+        voicemailStepper.accessibilityValue = voicemailLabel.text
+    }
+
     @objc private func save() {
         CallPreferences.saveFallbackSeconds(Int(stepper.value))
-        navigationController?.popViewController(animated: true)
+        let seconds = Int(voicemailStepper.value)
+        guard let saved = savedVoicemailSeconds, seconds != saved, let credential = PorchDevice.credential(for: .bedside) else {
+            navigationController?.popViewController(animated: true); return
+        }
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        Task { [weak self] in
+            do {
+                let response = try await FamilyService(credential).send("setRingSeconds", ["seconds": seconds], pin: NativeCallSettings.caregiverCode)
+                FamilyCoordinator.shared.update(response)
+                self?.navigationController?.popViewController(animated: true)
+            } catch {
+                guard let self else { return }
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
+                showPorchError(error, on: self)
+            }
+        }
     }
 }
 

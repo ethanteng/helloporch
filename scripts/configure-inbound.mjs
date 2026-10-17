@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { RoomConfiguration, SIPInboundTrunkInfo, SipClient } from 'livekit-server-sdk';
 import { familyStore } from '../lib/family/store.ts';
-import { callerVerificationAttribute, callerVerificationHeader, forwardedVerificationHeader, inboundRingSeconds, inboundRoomPrefix, sipInboundCredentials } from '../lib/family/inbound.ts';
+import { callerVerificationAttribute, callerVerificationHeader, forwardedVerificationHeader, inboundRingLimitSeconds, inboundRoomPrefix, sipInboundCredentials } from '../lib/family/inbound.ts';
 
 // No credentials or phone numbers in arguments/output. Load private env files
 // with Node's --env-file flags. The default is a read-only plan; --apply saves it.
@@ -54,14 +54,14 @@ try {
   }
   voicemail ||= !!trunk?.authUsername;
   console.log('Existing Twilio number and destination household verified.');
-  console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; 45-second ringing; 30-minute call limit.');
+  console.log(`Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; ringing for the caregiver's chosen time (at most ${inboundRingLimitSeconds} seconds); 30-minute call limit.`);
   console.log('Carrier caller-ID verification is passed to Porch, so caregiver-approved numbers can drop in with audio while drop-in is on.');
   console.log(voicemail
     ? 'Voicemail routing: inbound SIP requires the Porch digest login, which only the calling server sends from its Twilio voice webhook.'
     : 'Inbound SIP restricted to Twilio signaling gateways.');
   console.log('No phone numbers will be purchased and no calls will be placed.');
   if (!apply) { console.log('Read-only plan complete. Use --apply to save the LiveKit and household configuration.'); process.exit(0); }
-  if (!trunk) trunk = await sip.createSipInboundTrunk(name, [number], { allowedAddresses: twilioGateways, ringingTimeout: inboundRingSeconds });
+  if (!trunk) trunk = await sip.createSipInboundTrunk(name, [number], { allowedAddresses: twilioGateways, ringingTimeout: inboundRingLimitSeconds });
   // The current SDK exposes maxCallDuration on the protobuf but not its create
   // options. Update the full returned trunk, retaining its other fields.
   if (voicemail) {
@@ -69,7 +69,7 @@ try {
     const login = sipInboundCredentials(secret);
     trunk.authUsername = login.username; trunk.authPassword = login.password; trunk.allowedAddresses = [];
   } else trunk.allowedAddresses = twilioGateways;
-  trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingSeconds) } }).ringingTimeout;
+  trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingLimitSeconds) } }).ringingTimeout;
   trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
   // Twilio's STIR/SHAKEN result; phone drop-in requires it. Keep other mappings.
   // Voicemail routing reads the result from the server's forwarded header, never a header a SIP source chose.

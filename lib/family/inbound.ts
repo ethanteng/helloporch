@@ -1,12 +1,13 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
-import { callRoom, config, expire, mutate, phoneDropIn, type Call, type Household, type InboundPhone } from "./household.ts";
+import { callRoom, config, expire, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
 export const inboundRoomPrefix = "porch-inbound-";
-export const inboundRingSeconds = 45;
+/** The inbound trunk's ringing cap. Each household's own ring time ends calls sooner. */
+export const inboundRingLimitSeconds = ringLimits.maximum;
 /** The digest login Twilio's voice webhook uses to reach the LiveKit inbound trunk. It is
  * derived from the LiveKit API secret, so the server and the setup script agree without a new secret. */
 export function sipInboundCredentials(apiSecret: string) {
@@ -111,7 +112,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   const room = event.room!, caller = event.participant!;
   // Old events must not revive expired calls, even after deduplication keys expire.
   const createdAt = Number(event.createdAt);
-  if (!createdAt || createdAt > now + 30 || createdAt + inboundRingSeconds <= now) return;
+  if (!createdAt || createdAt > now + 30 || createdAt + inboundRingLimitSeconds <= now) return;
   const phone: InboundPhone = {
     room: room.name, roomSID: room.sid, participantIdentity: caller.identity, participantSID: caller.sid,
     trunkID: caller.attributes["sip.trunkID"], calledNumber: caller.attributes["sip.trunkPhoneNumber"], checkedAt: now,
@@ -143,12 +144,13 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     if (house.call?.id === session.callID) return house.call.state !== "ended";
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
     const ready = !!bedside?.available && bedside.seenAt > now - 30;
-    if (!bedside || (!ready && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended")) return false;
+    const expiresAt = createdAt + ringSeconds(house);
+    if (!bedside || (!ready && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended") || expiresAt <= now) return false;
     // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the
     // master switch and a foreground bedside; otherwise the call rings normally.
     const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
-      state: "pending", createdAt, expiresAt: createdAt + inboundRingSeconds, phone: session.phone };
+      state: "pending", createdAt, expiresAt, phone: session.phone };
     return true;
   });
   if (!result || await store.get(endedKey(room.sid))) {

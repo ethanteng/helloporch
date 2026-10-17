@@ -73,7 +73,8 @@ final class SlotsViewController: UITableViewController {
             content.image = UIImage(systemName: "person.2.fill")
         } else if indexPath.section == 1, indexPath.row == 1 {
             content.text = "Call preferences"
-            content.secondaryText = "Phone fallback after \(CallPreferences.fallbackSeconds()) seconds · Dialing sound"
+            let voicemail = FamilyCoordinator.shared.state.map { "Voicemail after \($0.ringSeconds ?? CallPreferences.defaultVoicemailSeconds) seconds · " } ?? ""
+            content.secondaryText = voicemail + "Phone fallback after \(CallPreferences.fallbackSeconds()) seconds · Dialing sound"
             content.image = UIImage(systemName: "phone.badge.waveform")
         } else if indexPath.section == 1, indexPath.row == 2 {
             content.text = "Bedside display"

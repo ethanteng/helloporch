@@ -103,6 +103,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let heldMessages: Int?
     /// Bedside only: numbers approved for telephone drop-in.
     public let phoneDropIns: [PhoneDropInApproval]?
+    /// How long calls to the bedside ring before the caller is offered voicemail. Older servers don't send it.
+    public let ringSeconds: Int?
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
 /// family device's own snapshot doesn't include.

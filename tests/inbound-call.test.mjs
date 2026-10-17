@@ -195,6 +195,25 @@ test('offline bedside devices and expired ringing calls release the SIP room', a
   }
 });
 
+test('phone calls ring for the household ring time before the SIP room is released', async () => {
+  for (const seconds of [15, 120]) {
+    const f = fixture(), { bedside } = await f.setup();
+    await f.json('setRingSeconds', { seconds }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+    const event = f.call(); await f.webhook(event);
+    assert.equal(f.house(bedside).call.expiresAt, event.createdAt + seconds);
+    f.advance(seconds - 1); assert.equal((await f.poll(bedside)).state.call.state, 'pending');
+    assert.ok(!f.ended.includes(event.room.name));
+    f.advance(1); assert.equal((await f.poll(bedside)).state.call.state, 'ended');
+    assert.ok(f.ended.includes(event.room.name));
+  }
+  // A join event older than the ring time never starts ringing.
+  const f = fixture(), { bedside } = await f.setup();
+  await f.json('setRingSeconds', { seconds: 15 }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+  const stale = f.call(); f.advance(15); await f.webhook(stale);
+  assert.equal(f.house(bedside).call, undefined);
+  assert.ok(f.ended.includes(stale.room.name));
+});
+
 test('cleanup failure can be retried after state becomes ended', async () => {
   const f = fixture(), { bedside } = await f.setup(), event = f.call();
   await f.webhook(event); const callID = f.house(bedside).call.id;

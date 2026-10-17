@@ -84,6 +84,9 @@ test('Twilio rings the bedside through LiveKit, and only signed requests are acc
   assert.equal((await f.twilio('incoming', { From: caller, To: porchNumber }, { accountSid: 'AC' + 'b'.repeat(32) })).status, 403, 'another Twilio account');
   assert.match((await f.twilio('incoming', { From: caller, To: '+15550009999' })).body, /<Reject\/>/, 'a number with no household');
   assert.match((await f.twilio('dialed', { CallSid: sid('CA', 98), From: caller, To: porchNumber, DialCallStatus: 'completed' })).body, /^<\?xml[^>]*><Response><Hangup\/><\/Response>$/, 'answered calls just end');
+  // The backstop follows the caregiver's ring time.
+  await f.json('setRingSeconds', { seconds: 90 }, f.bedside.credential, '123456');
+  assert.match((await f.twilio('incoming', { CallSid: sid('CA', 95), From: caller, To: porchNumber })).body, /<Dial answerOnBridge="true" timeout="100" /);
   delete process.env.TWILIO_AUTH_TOKEN;
   assert.equal((await f.twilio('incoming', { From: caller, To: porchNumber })).status, 503);
 });
