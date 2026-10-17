@@ -84,7 +84,7 @@ node --env-file=.env.inbound-production.local --env-file=.env.local \
   scripts/configure-inbound.mjs --household=NEW_HOUSEHOLD_UUID --reassign
 ```
 
-The plan names both bedsides, for example: calls to this number will ring the bedside “Grandma” instead of “Grandpa”. Repeat with `--apply` to rename the LiveKit trunk and dispatch rule and swap the number's route in one atomic update. Twilio and the trunk's login stay the same, so there's nothing to change in the Twilio Console. Voicemail and messages already left stay with the old household. Call the number afterwards and check that the new bedside rings.
+The plan names both bedsides, for example: calls to this number will ring the bedside “Grandma” instead of “Grandpa”. Repeat with `--apply`. It first moves the number's route with an atomic compare-and-set, so a concurrent run stops before changing anything, then renames the LiveKit trunk and dispatch rule. If it's interrupted or reports a concurrent change, run it again for the household that should get the calls. Twilio and the trunk's login stay the same, so there's nothing to change in the Twilio Console. Voicemail and messages already left stay with the old household. Call the number afterwards and check that the new bedside rings.
 
 ## Voicemail
 

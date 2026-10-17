@@ -54,8 +54,10 @@ try {
   }
   const name = `Porch inbound ${house.id}`;
   const existing = (await sip.listSipInboundTrunk()).filter(trunk => trunk.numbers.includes(number));
-  const oldName = moving ? `Porch inbound ${route.householdID}` : name;
-  if (existing.length > 1 || existing.some(trunk => trunk.name !== name && trunk.name !== oldName)) throw new SetupError('This number already has a different inbound trunk; review it before changing routing.');
+  // The saved route says which Porch trunk serves the number, even while a reassignment
+  // (or an interrupted one) still has it named for the previous household.
+  const ours = trunk => trunk.name === name || (trunk.sipTrunkId === route?.trunkID && trunk.name.startsWith('Porch inbound '));
+  if (existing.length > 1 || existing.some(trunk => !ours(trunk))) throw new SetupError('This number already has a different inbound trunk; review it before changing routing.');
   let trunk = existing[0];
   if (route && (!trunk || route.trunkID !== trunk.sipTrunkId)) throw new SetupError('The saved number route and inbound trunk disagree; review them before continuing.');
   const rules = await sip.listSipDispatchRule();
@@ -76,6 +78,10 @@ try {
     : 'Inbound SIP restricted to Twilio signaling gateways.');
   console.log('No phone numbers will be purchased and no calls will be placed.');
   if (!apply) { console.log('Read-only plan complete. Use --apply to save the LiveKit and household configuration.'); process.exit(0); }
+  // A reassignment claims the number before changing LiveKit, so a concurrent run
+  // that loses the compare-and-set stops without touching the shared trunk or rule.
+  const claim = moving ? JSON.stringify({ householdID: house.id, bedsideID: bedsides[0].id, trunkID: route.trunkID }) : undefined;
+  if (claim && !await store.compareAndSet(routeKey, previous, claim)) throw new SetupError('Number assignment changed concurrently; refusing to overwrite it.');
   if (!trunk) trunk = await sip.createSipInboundTrunk(name, [number], { allowedAddresses: twilioGateways, ringingTimeout: inboundRingSeconds });
   // The current SDK exposes maxCallDuration on the protobuf but not its create
   // options. Update the full returned trunk, retaining its other fields.
@@ -98,10 +104,10 @@ try {
     roomConfig: new RoomConfiguration({ maxParticipants: 2, emptyTimeout: 60, departureTimeout: 5 }),
   });
   else if (dispatch.name !== name) dispatch = await sip.updateSipDispatchRuleFields(dispatch.sipDispatchRuleId, { name });
-  // Reassignment swaps the route only if nobody else changed it since the plan was read.
   const saved = JSON.stringify({ householdID: house.id, bedsideID: bedsides[0].id, trunkID: trunk.sipTrunkId });
-  const stored = previous === saved || (previous ? moving && await store.compareAndSet(routeKey, previous, saved) : await store.create(routeKey, saved));
-  if (!stored && await store.get(routeKey) !== saved) throw new SetupError('Number assignment changed concurrently; refusing to overwrite it.');
+  if (!previous) await store.create(routeKey, saved);
+  // Revalidate: another reassignment may have taken the number while LiveKit was updating.
+  if (await store.get(routeKey) !== saved) throw new SetupError('Number assignment changed concurrently. Run the setup again for the household that should get the calls.');
   writeFileSync('.env.inbound-setup.local', [
     `PORCH_INBOUND_NUMBER=${number}`, `PORCH_INBOUND_HOUSEHOLD_ID=${house.id}`, `LIVEKIT_SIP_INBOUND_TRUNK_ID=${trunk.sipTrunkId}`,
     `LIVEKIT_SIP_DISPATCH_RULE_ID=${dispatch.sipDispatchRuleId}`, '',
