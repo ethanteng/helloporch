@@ -156,6 +156,18 @@ final class CaregiverPINViewController: CaregiverFormViewController {
         fields.append(submit)
         bedsideName.autocapitalizationType = .words
         content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", detail: creating ? "Choose a PIN you will remember. You'll use it to manage contacts and settings on this bedside device." : "Enter your PIN to manage this bedside device.", views: fields))
+        // Until this device is enrolled, caregiver mode (and its device-mode switch) can't open,
+        // so offer the way back here.
+        if creating && profile == nil {
+            let family = PorchStyle.button("Use this device as a family member", symbol: "iphone", filled: false)
+            family.addAction(UIAction { [weak self] _ in self?.useAsFamily() }, for: .touchUpInside)
+            let detail = PorchDevice.credential(for: .family) != nil ? "Switch back to family mode. Your family pairing is still saved." : "Family members call and drop in from their own device."
+            content.addArrangedSubview(section("Not the bedside device?", detail: detail, views: [family]))
+        }
+    }
+    private func useAsFamily() {
+        task?.cancel(); try? PorchDevice.saveActivation(nil)
+        dismiss(animated: true) { PorchDevice.experience = .family }
     }
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)

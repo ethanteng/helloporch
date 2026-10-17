@@ -757,6 +757,25 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(confirm?.isSecureTextEntry == true)
     }
 
+    @MainActor func testUnenrolledBedsideSetupOffersTheWayBackToFamilyMode() {
+        let setup = CaregiverPINViewController(profile: nil); setup.loadViewIfNeeded()
+        XCTAssertTrue(buttons(in: setup.view).contains { $0.configuration?.title == "Use this device as a family member" })
+    }
+
+    @MainActor func testRemoteCaregiverModeShowsOnlyServerSettingsAndProtectsThisPhone() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
+            ["id": "me", "name": "Ethan", "role": "family", "permissions": ["audio": true, "video": false], "online": true, "caregiver": true],
+            ["id": "sam", "name": "Sam", "role": "family", "permissions": ["audio": false, "video": false], "online": false, "caregiver": false]]])
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        let titles = buttons(in: admin.view).compactMap { $0.configuration?.title }
+        XCTAssertFalse(titles.contains("Change caregiver PIN"), "The bedside iPad keeps the PIN it uses for renewals")
+        XCTAssertEqual(titles.filter { $0 == "Remove access" }.count, 1, "A caregiver can't remove their own phone here")
+        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
+        XCTAssertEqual(switches(admin.view).filter { !$0.isEnabled }.count, 1, "Another caregiver must change this phone's caregiver access")
+    }
+
     @MainActor func testFirstTapOnGearOpensCaregiverGate() async {
         let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
         let window = UIWindow(windowScene: original.windowScene!)

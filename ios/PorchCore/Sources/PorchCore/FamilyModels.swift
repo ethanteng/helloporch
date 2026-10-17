@@ -13,6 +13,8 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let canReceiveCalls: Bool?
     public let online: Bool
     public let invitationID: String?
+    /// Family devices only: approved to open caregiver mode with the PIN.
+    public let caregiver: Bool?
 }
 public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let id: String
@@ -44,6 +46,16 @@ public struct FamilySnapshot: Codable, Equatable {
     public let call: FamilyCallRecord?
     public let busy: Bool
     public let serverTime: TimeInterval
+}
+/// Returned with caregiver actions after a PIN check. Lists every family device, which a
+/// family device's own snapshot doesn't include.
+public struct FamilyAdminState: Codable, Equatable {
+    public let householdName: String
+    public let dropInEnabled: Bool
+    public let people: [FamilyPerson]
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson]) {
+        self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
+    }
 }
 public struct FamilyCredential: Codable {
     public let origin: URL

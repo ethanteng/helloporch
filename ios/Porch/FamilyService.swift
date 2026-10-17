@@ -74,6 +74,7 @@ struct FamilyResponse: Decodable {
     let expiresAt: TimeInterval?
     let token: String?
     let serverUrl: String?
+    let admin: FamilyAdminState?
 }
 struct FamilyServiceError: LocalizedError { let message: String; let status: Int; var code: String? = nil; var errorDescription: String? { message } }
 struct FamilyService {
@@ -101,6 +102,24 @@ struct FamilyService {
             throw FamilyServiceError(message: (try? JSONDecoder().decode(Failure.self, from: data).error) ?? "Couldn't reach Porch. Check the connection and try again.", status: status, code: failure?.errorCode)
         }
         return try JSONDecoder().decode(FamilyResponse.self, from: data)
+    }
+}
+
+/// Caregiver mode opened from a family phone. The PIN is kept in memory only and is
+/// forgotten after ten idle minutes or when the app leaves the foreground.
+@MainActor final class RemoteCaregiverSession {
+    static let shared = RemoteCaregiverSession()
+    private var pin: String?
+    private var expiresAt = Date.distantPast
+    private static let idleSeconds: TimeInterval = 600
+    func begin(pin: String) { self.pin = pin; expiresAt = Date().addingTimeInterval(Self.idleSeconds) }
+    func end() { pin = nil; expiresAt = .distantPast }
+    var isActive: Bool { pin != nil && expiresAt > Date() }
+    /// The PIN for the next request; using it counts as activity.
+    var activePIN: String? {
+        guard isActive, let pin else { end(); return nil }
+        expiresAt = Date().addingTimeInterval(Self.idleSeconds)
+        return pin
     }
 }
 

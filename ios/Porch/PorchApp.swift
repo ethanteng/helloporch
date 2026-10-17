@@ -41,7 +41,10 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
     }
 
-    func sceneDidEnterBackground(_ scene: UIScene) { SystemIncomingCalls.shared.enterBackground() }
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        SystemIncomingCalls.shared.enterBackground()
+        RemoteCaregiverSession.shared.end()
+    }
 
     func sceneWillResignActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.pause()

@@ -1,6 +1,6 @@
 # Bedside and family beta
 
-One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. iPhones start in family mode; iPads keep the bedside clock. Change modes from caregiver settings or the family screen. Each mode keeps its own device pairing.
+One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. iPhones start in family mode; iPads keep the bedside clock. Change modes from caregiver settings, the family screen's **gear → Use as the bedside Porch**, or (on a device that isn't set up as a bedside yet) **Use this device as a family member** on the bedside setup screen. Each mode keeps its own device pairing, so switching never removes your family pairing.
 
 ## Pair your family
 
@@ -11,7 +11,17 @@ One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. 
 5. On the iPad, turn on **Allow approved drop-ins**. Return to the clock. The family member can now make audio/video calls or use the drop-in types you approved.
 6. After sharing, tap **Done**, then **Save** the person. The editor shows **Waiting to accept invite**. Acceptance links that exact invitation to the saved person automatically; there is no additional linking step. Expired/cancelled invitations can be sent again. For a device already in your Porch, use **Choose from your Porch**. Optionally add a fallback phone number. Contacts imports and typed numbers are normalized to E.164 (for example, `(415) 867-6937` in the US becomes `+14158676937`). National numbers use the device's region; include `+country code` for overseas contacts. Extensions aren't supported.
 
-Paired calls use the bundled server address and private device credentials. Family members never enter a server address, shared calling code, or caregiver PIN. Contacts have one combined details section with their name, Contacts import, audio/video preference and paired app. The app no longer offers calling-method, room, advanced-connection or daily-use settings. The browser prototype remains available for legacy manual-room testing.
+Paired calls use the bundled server address and private device credentials. Family members never enter a server address or shared calling code; only family members approved for caregiver mode enter the caregiver PIN. Contacts have one combined details section with their name, Contacts import, audio/video preference and paired app. The app no longer offers calling-method, room, advanced-connection or daily-use settings. The browser prototype remains available for legacy manual-room testing.
+
+## Caregiver mode from a family phone
+
+The caregiver can approve family members to manage access from their own phone. Turn on **Caregiver mode** when creating their invitation, or later for an existing device in **Family & drop-in**. An approved family member opens **gear → Caregiver mode** on their phone and enters the household's six-digit caregiver PIN. Tap **Family mode** to return.
+
+From a phone, caregiver mode covers the settings the server holds: the display name, drop-in on/off, each device's audio/video drop-in and caregiver access, invitations, and removing devices. Keypad numbers, contacts, photos, call preferences, the bedside display and the caregiver PIN can only be changed on the bedside iPad, which keeps its own copy of the PIN to renew phone-fallback approvals. Drop-ins enabled from a phone connect only if the bedside iPad already allows microphone and camera access.
+
+The PIN is kept in the phone's memory only. Caregiver mode locks after ten idle minutes, when Porch leaves the foreground, or when the PIN or approval changes. Wrong PINs from a phone count against that phone alone (five per 15 minutes), so they can't lock out the bedside iPad. A caregiver can't remove their own phone or change their own caregiver access; another caregiver or the bedside iPad can.
+
+To move a phone to a different family, open **gear → Join a different family** and use the new family's invitation. The phone stays in its current family until the new invitation is accepted, then leaves the old one automatically.
 
 ## How calls behave
 
