@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import ContactsUI
 import PorchCore
 
 func showPorchError(_ error: Error, on controller: UIViewController) {
@@ -220,7 +221,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     private var credential: FamilyCredential? { remote ?? PorchDevice.credential(for: .bedside) }
     private var current: FamilyAdminState? {
         if remote != nil { return remoteState }
-        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people, messagesEnabled: $0.messagesEnabled, messages: $0.messages) }
+        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people, messagesEnabled: $0.messagesEnabled, messages: $0.messages, phoneDropIns: $0.phoneDropIns) }
     }
     init(remote: FamilyCredential? = nil, state: FamilyAdminState? = nil) {
         self.remote = remote; remoteState = state; super.init(nibName: nil, bundle: nil)
@@ -305,6 +306,21 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             }
         }, for: .valueChanged)
         details.addArrangedSubview(section("Automatic answering", detail: remote == nil ? nil : "Drop-ins connect only if the bedside iPad allows microphone and camera access.", views: [masterRow]))
+        var phoneViews: [UIView] = (state?.phoneDropIns ?? []).map { approval in
+            let remove = PorchStyle.button("Remove", symbol: "minus.circle", filled: false)
+            remove.configuration?.baseForegroundColor = .systemRed
+            remove.accessibilityLabel = "Remove phone drop-in for \(approval.name)"
+            remove.addAction(UIAction { [weak self] _ in
+                Task { await self?.perform("setPhoneDropIn", ["number": approval.number, "enabled": false]) }
+            }, for: .touchUpInside)
+            let row = UIStackView(arrangedSubviews: [PorchStyle.label("\(approval.name)\n\(approval.number)", size: 17, color: PorchStyle.ink), remove])
+            row.alignment = .center; row.spacing = 16
+            return row
+        }
+        let approvePhone = PorchStyle.button("Approve a phone number", symbol: "phone.badge.plus", filled: false)
+        approvePhone.addAction(UIAction { [weak self] _ in self?.showPhoneDropIn() }, for: .touchUpInside)
+        phoneViews.append(approvePhone)
+        details.addArrangedSubview(section("Audio drop-in by phone", detail: PhoneDropInViewController.explanation, views: phoneViews))
         let messagesOn = UISwitch(); messagesOn.isOn = state?.messagesEnabled != false; messagesOn.onTintColor = PorchStyle.accent
         messagesOn.addAction(UIAction { [weak self, weak messagesOn] _ in
             guard let self, let messagesOn else { return }
@@ -405,6 +421,76 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let invite = FamilyInviteViewController(); invite.remote = remote
         invite.onCreated = { [weak self] _, _ in self?.refresh() }
         navigationController?.pushViewController(invite, animated: true)
+    }
+    private func showPhoneDropIn() {
+        let approve = PhoneDropInViewController(); approve.remote = remote
+        approve.onSaved = { [weak self] admin in if self?.remote != nil, let admin { self?.remoteState = admin }; self?.refresh() }
+        navigationController?.pushViewController(approve, animated: true)
+    }
+}
+
+/// Approves one telephone number for audio drop-in when it calls the household's Porch number.
+final class PhoneDropInViewController: CaregiverFormViewController, CNContactPickerDelegate {
+    static let explanation = "While approved drop-ins are on and Porch is open on the bedside iPad, these numbers can call this Porch's phone number and connect with audio after the spoken announcement and five-second countdown, without anyone answering. Only calls their phone company verifies drop in, which covers most US mobile numbers; other calls, including withheld numbers, ring for a normal answer."
+    /// Set when approving from caregiver mode on a family phone.
+    var remote: FamilyCredential?
+    var onSaved: ((FamilyAdminState?) -> Void)?
+    private let personName = UITextField(), phone = UITextField()
+    private let save = PorchStyle.button("Approve audio drop-in", symbol: "phone.badge.plus")
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Phone drop-in"
+        personName.autocapitalizationType = .words
+        phone.keyboardType = .phonePad; phone.textContentType = .telephoneNumber
+        let contacts = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
+        contacts.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
+        form.addArrangedSubview(section("Who can drop in by phone?", detail: Self.explanation, views: [
+            field(personName, title: "Their name", placeholder: "For example, David"),
+            field(phone, title: "Their phone number", placeholder: "+14158676937", helper: "Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). The name is spoken in the announcement."),
+            contacts, save,
+        ]))
+        save.addTarget(self, action: #selector(approve), for: .touchUpInside)
+    }
+    @objc private func pickContact() {
+        view.endEditing(true)
+        let picker = CNContactPickerViewController()
+        picker.overrideUserInterfaceStyle = .light
+        picker.delegate = self
+        picker.displayedPropertyKeys = [CNContactPhoneNumbersKey]
+        picker.predicateForEnablingContact = NSPredicate(format: "phoneNumbers.@count > 0")
+        picker.predicateForSelectionOfContact = NSPredicate(value: false)
+        picker.predicateForSelectionOfProperty = NSPredicate(format: "key == 'phoneNumbers'")
+        present(picker, animated: true)
+    }
+    func contactPicker(_ picker: CNContactPickerViewController, didSelect property: CNContactProperty) {
+        personName.text = CNContactFormatter.string(from: property.contact, style: .fullName)
+        guard let number = property.value as? CNPhoneNumber else { return }
+        do { phone.text = try PhoneNumberNormalization.e164(number.stringValue) }
+        catch { picker.dismiss(animated: true) { [weak self] in if let self { showPorchError(error, on: self) } } }
+    }
+    @objc private func approve() {
+        view.endEditing(true)
+        guard let credential = remote ?? PorchDevice.credential(for: .bedside) else { return }
+        let pin: String
+        if remote != nil {
+            guard let active = RemoteCaregiverSession.shared.activePIN else { navigationController?.popToRootViewController(animated: true); return }
+            pin = active
+        } else { pin = NativeCallSettings.caregiverCode }
+        save.isEnabled = false
+        Task { [weak self] in
+            guard let self else { return }; defer { self.save.isEnabled = true }
+            do {
+                let number = try PhoneNumberNormalization.e164(self.phone.text ?? "")
+                // A drop-in answers on the bedside iPad, so only it can grant its own microphone.
+                if self.remote == nil {
+                    let microphone = await AVCaptureDevice.requestAccess(for: .audio)
+                    guard microphone else { throw FamilyServiceError(message: "Allow microphone access in iPad Settings before approving drop-in.", status: 403) }
+                }
+                let response = try await FamilyService(credential).send("setPhoneDropIn", ["number": number, "name": self.personName.text ?? "", "enabled": true], pin: pin)
+                FamilyCoordinator.shared.update(response)
+                self.onSaved?(response.admin)
+                self.navigationController?.popViewController(animated: true)
+            } catch { showPorchError(error, on: self) }
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 import ContactsUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -54,7 +55,8 @@ final class SlotsViewController: UITableViewController {
             }
             content.secondaryText = person.map { contact in
                 if let call = contact.nativeCall {
-                    return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on")
+                    let dropIn = contact.phoneNumber.map { number in FamilyCoordinator.shared.state?.phoneDropIns?.contains { $0.number == number } == true } == true
+                    return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on") + (dropIn ? " · Phone drop-in on" : "")
                 }
                 return "Finish Porch setup"
             } ?? "Assign keypad number \(number)"
@@ -134,6 +136,11 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     private let actionDetail = PorchStyle.label("", size: 16)
     private var personGroup = UIView()
     private var fallbackGroup = UIView()
+    private var phoneDropInGroup = UIView()
+    private let phoneDropInSwitch = UISwitch()
+    /// The saved number the server currently approves for drop-in, if any.
+    private var approvedNumber: String?
+    private var phoneDropInTouched = false
     private var removeButton: UIButton?
     private let initialAction: KeypadAction
     private let nameField = UITextField()
@@ -220,6 +227,14 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneGroup = field(phoneField, title: "Phone number", placeholder: "+14158676937", helper: "Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). Internet is needed to save a phone number.")
         fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their phone. If their app is unavailable, try their phone right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply.", views: [phoneToggle, phoneGroup])
         form.addArrangedSubview(fallbackGroup)
+        refreshPhoneDropIn()
+        phoneDropInSwitch.addAction(UIAction { [weak self] _ in self?.phoneDropInTouched = true }, for: .valueChanged)
+        phoneDropInSwitch.onTintColor = PorchStyle.accent
+        phoneDropInSwitch.accessibilityLabel = "Audio drop-in when they call this Porch"
+        let dropInToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Audio drop-in when they call", size: 18, color: PorchStyle.ink, weight: .medium), phoneDropInSwitch])
+        dropInToggle.alignment = .center; dropInToggle.spacing = 16
+        phoneDropInGroup = section("Drop-in by phone", detail: "Calls from this number to this Porch's phone number connect with audio after the announcement, once Allow approved drop-ins is on in Family & drop-in. Only calls their phone company verifies drop in; others ring for a normal answer.", views: [dropInToggle])
+        form.addArrangedSubview(phoneDropInGroup)
         if initialContact != nil {
             let remove = PorchStyle.button("Remove person", symbol: "person.crop.circle.badge.minus", filled: false)
             remove.configuration?.baseForegroundColor = .systemRed
@@ -228,6 +243,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         }
         updateMethod(); updateAction()
         NotificationCenter.default.addObserver(self, selector: #selector(configureFamilyLinks), name: .porchFamilyChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshPhoneDropIn), name: .porchFamilyChanged, object: nil)
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     override func viewDidAppear(_ animated: Bool) {
@@ -245,6 +261,17 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     @objc private func updateMethod() {
         view.endEditing(true)
         phoneGroup.isHidden = !phoneFallbackSwitch.isOn
+        updatePhoneDropIn()
+    }
+    /// Follows the server's approvals (which may load or change while editing) until the caregiver flips the switch.
+    @objc private func refreshPhoneDropIn() {
+        guard !phoneDropInTouched, saveTask == nil, let approvals = FamilyCoordinator.shared.state?.phoneDropIns else { return }
+        approvedNumber = initialContact?.phoneNumber.flatMap { number in approvals.contains { $0.number == number } ? number : nil }
+        phoneDropInSwitch.isOn = approvedNumber != nil
+    }
+    private func updatePhoneDropIn() {
+        // Approvals live on the server, so a bedside that isn't paired yet can't offer them.
+        phoneDropInGroup.isHidden = chosenAction != .person || !phoneFallbackSwitch.isOn || PorchDevice.credential(for: .bedside) == nil
     }
     @objc private func pickContact() {
         view.endEditing(true)
@@ -323,6 +350,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         view.endEditing(true)
         let person = chosenAction == .person
         personGroup.isHidden = !person; fallbackGroup.isHidden = !person; appearanceGroup.isHidden = !person; removeButton?.isHidden = !person
+        updatePhoneDropIn()
         setKeyboardControlVisible(person)
         switch chosenAction {
         case .person: actionDetail.text = "Call the person below using their default calling mode."
@@ -389,6 +417,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
                         let server = try NativeCallSettings.loadForPhone()
                         _ = try await NativeCallSettings.authorizePhone(number, server: server, refresh: true)
                     }
+                    try await self.syncPhoneDropIn(number: contact.phoneNumber, name: contact.name)
                     try Task.checkCancellation()
                     try self.onSave?(contact)
                     try self.onSaveSlot?(.person, contact)
@@ -400,6 +429,26 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         } catch {
             showContactError(error)
         }
+    }
+
+    /// The server's approval follows this person's saved number: a changed or removed number loses drop-in.
+    private func syncPhoneDropIn(number: String?, name: String) async throws {
+        let wanted = phoneDropInSwitch.isOn && PorchDevice.credential(for: .bedside) != nil ? number : nil
+        guard wanted != nil || approvedNumber != nil else { return }
+        guard let credential = PorchDevice.credential(for: .bedside) else { throw FamilyServiceError(message: "Finish bedside setup before changing phone drop-in.", status: 409) }
+        let service = FamilyService(credential), pin = NativeCallSettings.caregiverCode
+        if let wanted {
+            // A drop-in answers on this iPad, so only it can grant its own microphone.
+            let microphone = await AVCaptureDevice.requestAccess(for: .audio)
+            guard microphone else { throw FamilyServiceError(message: "Allow microphone access in iPad Settings before approving drop-in.", status: 403) }
+            let response = try await service.send("setPhoneDropIn", ["number": wanted, "name": name, "enabled": true], pin: pin)
+            FamilyCoordinator.shared.update(response)
+        }
+        if let previous = approvedNumber, previous != wanted {
+            let response = try await service.send("setPhoneDropIn", ["number": previous, "enabled": false], pin: pin)
+            FamilyCoordinator.shared.update(response)
+        }
+        approvedNumber = wanted
     }
 
     private func showContactError(_ error: Error) {
@@ -418,14 +467,19 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
             guard let self else { return }
-            do {
-                try self.onSave?(nil)
-                try self.onSaveSlot?(.person, nil)
-                self.navigationController?.popViewController(animated: true)
-            } catch {
-                let errorAlert = UIAlertController(title: "Couldn't save", message: error.localizedDescription, preferredStyle: .alert)
-                errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(errorAlert, animated: true)
+            Task { @MainActor in
+                do {
+                    // Removing a person also withdraws their phone drop-in.
+                    self.phoneDropInTouched = true; self.phoneDropInSwitch.isOn = false
+                    try await self.syncPhoneDropIn(number: nil, name: "")
+                    try self.onSave?(nil)
+                    try self.onSaveSlot?(.person, nil)
+                    self.navigationController?.popViewController(animated: true)
+                } catch {
+                    let errorAlert = UIAlertController(title: "Couldn't save", message: error.localizedDescription, preferredStyle: .alert)
+                    errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(errorAlert, animated: true)
+                }
             }
         })
         present(alert, animated: true)

@@ -784,6 +784,19 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(switches(admin.view).filter { !$0.isEnabled }.count, 1, "Another caregiver must change this phone's caregiver access")
     }
 
+    @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [],
+            "phoneDropIns": [["number": "+14155550200", "name": "David"]]])
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
+        XCTAssertTrue(labels(admin.view).contains("David\n+14155550200"))
+        let titles = buttons(in: admin.view).compactMap { $0.configuration?.title }
+        XCTAssertTrue(titles.contains("Approve a phone number"))
+        XCTAssertEqual(buttons(in: admin.view).filter { $0.accessibilityLabel == "Remove phone drop-in for David" }.count, 1)
+    }
+
     @MainActor func testFirstTapOnGearOpensCaregiverGate() async {
         let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
         let window = UIWindow(windowScene: original.windowScene!)
