@@ -142,6 +142,8 @@ struct FamilyCallSession {
     static let shared = FamilyCoordinator()
     private(set) var state: FamilySnapshot?
     private(set) var error: String?
+    /// The server no longer recognizes this device (a caregiver removed it, or it left).
+    private(set) var accessRemoved = false
     private(set) var credential: FamilyCredential?
     var canReceive: () -> Bool = { false }
     private var task: Task<Void, Never>?
@@ -152,7 +154,7 @@ struct FamilyCallSession {
         pause()
         isActive = true
         credential = PorchDevice.credential(for: PorchDevice.experience)
-        state = nil; error = nil
+        state = nil; error = nil; accessRemoved = false
         guard let credential else { changed(); return }
         SystemIncomingCalls.shared.registerDevice()
         let generation = UUID(); self.generation = generation
@@ -162,10 +164,12 @@ struct FamilyCallSession {
                 do {
                     let result = try await FamilyService(credential).send("poll", ["available": self.canReceive()])
                     guard !Task.isCancelled, self.generation == generation else { return }
-                    self.state = result.state; self.error = nil; self.changed()
+                    self.state = result.state; self.error = nil; self.accessRemoved = false; self.changed()
                 } catch {
                     if Task.isCancelled { return }
-                    self.error = error.localizedDescription; self.changed()
+                    self.error = error.localizedDescription
+                    self.accessRemoved = (error as? FamilyServiceError)?.status == 401
+                    self.changed()
                 }
                 let seconds: UInt64 = self.state?.call.map { $0.state != "ended" } == true ? 1 : credential.role == .family ? 3 : 2
                 do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }

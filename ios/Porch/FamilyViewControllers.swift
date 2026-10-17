@@ -165,7 +165,11 @@ final class FamilyPairingViewController: CaregiverFormViewController {
                     // Leave the previous family only once the new one has accepted this phone. Reopening
                     // an invitation this phone already used returns the same identity, which must stay.
                     if let previous = PorchDevice.credential(for: .family), previous.credential != token {
-                        _ = try? await FamilyService(previous).send("leaveHousehold")
+                        do { _ = try await FamilyService(previous).send("leaveHousehold") }
+                        // Already removed, or its household is gone: nothing is left to leave.
+                        catch let failure as FamilyServiceError where [401, 404].contains(failure.status) {}
+                        // Keep the old pairing so Join can retry; reclaiming this invitation returns the same identity.
+                        catch { throw FamilyServiceError(message: "Couldn't leave your current family, so you haven't switched yet. Check the connection and tap Join family again.", status: 503) }
                     }
                     try PorchDevice.save(FamilyCredential(origin: invite.origin, credential: token, role: .family))
                     FamilyCoordinator.shared.start()
@@ -184,6 +188,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     private let details = UIStackView()
     private var busy = false
     private var appeared = false
+    private var locked = false
     private var displayed: FamilyAdminState?
     private var credential: FamilyCredential? { remote ?? PorchDevice.credential(for: .bedside) }
     private var current: FamilyAdminState? {
@@ -205,7 +210,15 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func familyChanged() {
-        guard remote == nil, !busy, !householdName.isFirstResponder, displayed == nil || householdName.text == displayed?.householdName else { return }
+        if remote != nil {
+            // Polls every few seconds: withdrawn approval, a removed device or the idle timeout locks right away.
+            let coordinator = FamilyCoordinator.shared
+            if coordinator.accessRemoved || coordinator.state?.me.caregiver == false {
+                lock(FamilyServiceError(message: "Caregiver mode is no longer available on this phone.", status: 403))
+            } else if !RemoteCaregiverSession.shared.isActive { lock(nil) }
+            return
+        }
+        guard !busy, !householdName.isFirstResponder, displayed == nil || householdName.text == displayed?.householdName else { return }
         if displayed != current { refresh() }
     }
     @objc private func returnedToForeground() { if remote != nil && !RemoteCaregiverSession.shared.isActive { lock(nil) } }
@@ -229,7 +242,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     /// Ends a phone's caregiver session and returns to family mode.
     private func lock(_ error: Error?) {
         RemoteCaregiverSession.shared.end()
-        guard let navigation = navigationController, let home = navigation.viewControllers.first else { return }
+        guard !locked, let navigation = navigationController, let home = navigation.viewControllers.first else { return }
+        locked = true
         CATransaction.begin()
         CATransaction.setCompletionBlock { if let error { showPorchError(error, on: home) } }
         navigation.popToRootViewController(animated: true)
