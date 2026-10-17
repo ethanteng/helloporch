@@ -7,7 +7,7 @@ import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, care
 import { callRoom, config, expire, FamilyError, mutate, requireValue, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
-import { handleMessageAction, maintainMessages, messageActions, publicInbox, removeMessagesFrom } from "./messages.ts";
+import { handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom } from "./messages.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore };
 
@@ -49,7 +49,7 @@ function memberFor(house: Household, auth: Auth): Member {
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
 // The bedside device is always a caregiver; family devices need the caregiver's approval (and the PIN).
 function isCaregiver(member: Member) { return member.role === "bedside" || member.caregiver === true; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage"];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage"];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 function publicPerson(m: Member, now: number, pushEnabled: boolean) {
   return { id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled), ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}) };
@@ -64,7 +64,9 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
   const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false,
-    ...(me.role === "bedside" ? { messages: publicInbox(house, now) } : {}), me: publicMember(me),
+    ...(me.role === "bedside" ? { messages: publicInbox(house, now) } : {}),
+    // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
+    ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}), me: publicMember(me),
     invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     call: call && (call.from === me.id || call.to === me.id) ? { ...publicCall(call), source: call.phone ? "phone" : "porch", callerName: call.phone ? call.phone.callerNumber ?? "Phone caller" : house.members.find(m => m.id === call.from)?.name ?? "Family" } : null,

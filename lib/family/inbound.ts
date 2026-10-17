@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callRoom, config, expire, mutate, type Call, type Household, type InboundPhone } from "./household.ts";
@@ -7,6 +7,11 @@ import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallP
 
 export const inboundRoomPrefix = "porch-inbound-";
 export const inboundRingSeconds = 45;
+/** The digest login Twilio's voice webhook uses to reach the LiveKit inbound trunk. It is
+ * derived from the LiveKit API secret, so the server and the setup script agree without a new secret. */
+export function sipInboundCredentials(apiSecret: string) {
+  return { username: "porch", password: createHmac("sha256", apiSecret).update("porch-sip-inbound-v1").digest("base64url") };
+}
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 // ParticipantInfo.Kind.SIP in the LiveKit protocol (not exported by this SDK).
 const sipParticipantKind = 3;

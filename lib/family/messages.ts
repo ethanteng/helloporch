@@ -8,28 +8,34 @@ export type MessageState = "uploading" | "queued" | "played" | "expired" | "remo
 export type MessageRecord = { id: string; kind: MessageKind; mode: MessageMode; contentType: string; pathname: string; durationSeconds: number; sizeBytes: number; createdAt: number; state: MessageState; sentAt?: number; deliveredAt?: number; playedAt?: number; endedAt?: number };
 type Ended = { id: string; from: string; pathname: string };
 
-export const messageLimits = { durationSeconds: 125, audioBytes: 10 * 1024 * 1024, videoBytes: 100 * 1024 * 1024, pendingPerSender: 10, inbox: 30, unplayedSeconds: 7 * 86400, keepMediaSeconds: 90 * 86400, uploadSeconds: 1800, downloadSeconds: 3600, listed: 50 };
+export const messageLimits = { durationSeconds: 125, audioBytes: 10 * 1024 * 1024, videoBytes: 100 * 1024 * 1024, pendingPerSender: 10, inbox: 30, unplayedSeconds: 7 * 86400, keepMediaSeconds: 90 * 86400, uploadSeconds: 1800, downloadSeconds: 3600, listed: 50, voicemailsPerCaller: 3, heldVoicemails: 10 };
 const contentTypes: Record<MessageMode, string[]> = { audio: ["audio/mp4"], video: ["video/mp4", "video/quicktime"] };
-const extensions: Record<string, string> = { "audio/mp4": "m4a", "video/mp4": "mp4", "video/quicktime": "mov" };
+const extensions: Record<string, string> = { "audio/mp4": "m4a", "video/mp4": "mp4", "video/quicktime": "mov", "audio/mpeg": "mp3" };
+/** The sender of voicemails left by regular phone callers; their records share one document. */
+export const phoneSender = "phone";
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const sentKey = (householdID: string, memberID: string) => `messages:${householdID}:${memberID}`;
 const purgeKey = (householdID: string) => `message-purge:${householdID}`;
 const live = (entry: InboxEntry, now: number) => entry.sentAt + messageLimits.unplayedSeconds > now;
 // An upload that never completed: its URL has long expired.
 const stale = (record: MessageRecord, now: number) => record.state === "uploading" && record.createdAt + 2 * messageLimits.uploadSeconds <= now;
+// Unsent, removed and expired media is deleted at once; played media is kept for 90 days.
+const replayable = (record: MessageRecord, now: number) => record.state === "queued" || (record.state === "played" && (record.playedAt ?? 0) + messageLimits.keepMediaSeconds > now);
 
-export const messageActions = new Set(["createMessage", "completeMessage", "unsendMessage", "listMessages", "messageMedia", "messageDelivered", "messagePlayed", "caregiverMessageMedia", "removeMessage"]);
+export const messageActions = new Set(["createMessage", "completeMessage", "unsendMessage", "listMessages", "sentMessageMedia", "messageMedia", "messageDelivered", "messagePlayed", "caregiverMessageMedia", "removeMessage", "releaseMessage", "releaseKnownCaller"]);
 export type MessageContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; me: Member; input: Record<string, unknown> };
 
 export function publicRecord(record: MessageRecord, now: number) {
   const { pathname: _pathname, ...rest } = record;
-  return stale(record, now) ? { ...rest, state: "failed" as const } : rest;
+  return stale(record, now) ? { ...rest, state: "failed" as const, replayable: false } : { ...rest, replayable: replayable(record, now) };
 }
 export function publicInbox(house: Household, now: number) {
-  return (house.inbox ?? []).filter(entry => live(entry, now)).map(({ pathname: _pathname, deliveredAt, ...entry }) => ({
-    ...entry, fromName: house.members.find(m => m.id === entry.from && !m.revoked)?.name ?? entry.fromName, delivered: deliveredAt !== undefined,
+  return (house.inbox ?? []).filter(entry => live(entry, now)).map(({ pathname: _pathname, deliveredAt, held, ...entry }) => ({
+    ...entry, fromName: house.members.find(m => m.id === entry.from && !m.revoked)?.name ?? entry.fromName, delivered: deliveredAt !== undefined, held: held === true,
   }));
 }
+/** Phone voicemails waiting for a caregiver; approved caregivers see the count on their phones. */
+export const heldCount = (house: Household, now: number) => (house.inbox ?? []).filter(entry => entry.held && live(entry, now)).length;
 
 async function update<D, T>(store: FamilyStore, key: string, empty: () => D, change: (doc: D) => T): Promise<T> {
   for (let attempt = 0; attempt < 12; attempt++) {
@@ -112,6 +118,41 @@ export async function removeMessagesFrom(store: FamilyStore, media: () => MediaS
   if (theirs.length) await endMessages(store, media, house.id, theirs, "removed", now);
 }
 
+/** Whether a regular phone caller can leave a voicemail now; spam callers can't fill the queue. */
+export function voicemailOpen(house: Household, callerNumber: string | undefined, now: number) {
+  const inbox = (house.inbox ?? []).filter(entry => live(entry, now));
+  const held = inbox.filter(entry => entry.held);
+  return house.messagesEnabled !== false && house.members.some(m => m.role === "bedside" && !m.revoked) && inbox.length < messageLimits.inbox &&
+    held.length < messageLimits.heldVoicemails &&
+    inbox.filter(entry => entry.from === phoneSender && entry.callerNumber === callerNumber).length < messageLimits.voicemailsPerCaller;
+}
+
+/** Stores a phone caller's recording and holds it for review. Safe to repeat for the same recording. */
+export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStore, householdID: string, recording: { id: string; callerNumber?: string; audio: Uint8Array; durationSeconds: number }, now: number) {
+  const { id, callerNumber, audio } = recording;
+  const existing = (await sentRecords(store, householdID, phoneSender)).find(r => r.id === id);
+  if (existing && existing.state !== "uploading") return existing.state === "queued";
+  requireValue(audio.byteLength > 0 && audio.byteLength <= messageLimits.audioBytes, "This recording is too large.", 413);
+  const durationSeconds = Math.max(1, Math.min(messageLimits.durationSeconds, Math.round(recording.durationSeconds)));
+  const record: MessageRecord = { id, kind: "voicemail", mode: "audio", contentType: "audio/mpeg", pathname: `messages/${householdID}/${id}.mp3`, durationSeconds, sizeBytes: audio.byteLength, createdAt: now, state: "uploading" };
+  await updateSent(store, householdID, phoneSender, records => { if (!records.some(r => r.id === id)) records.push(record); });
+  await media.put(record.pathname, audio, record.contentType);
+  const { result: queued } = await mutate(store, householdID, house => {
+    house.inbox ??= [];
+    if (house.inbox.some(entry => entry.id === id)) return true;
+    if (!voicemailOpen(house, callerNumber, now)) return false;
+    house.inbox.push({ id, from: phoneSender, fromName: callerNumber ?? "Phone caller", kind: "voicemail", mode: "audio", contentType: record.contentType, pathname: record.pathname, durationSeconds, sentAt: now, held: true, ...(callerNumber ? { callerNumber } : {}) });
+    return true;
+  });
+  await updateSent(store, householdID, phoneSender, records => {
+    const r = records.find(r => r.id === id);
+    if (r?.state === "uploading") { r.state = queued ? "queued" : "failed"; if (queued) r.sentAt = now; else r.endedAt = now; }
+  });
+  if (!queued) await media.remove([record.pathname]);
+  try { await archive(store, householdID, phoneSender); } catch { /* housekeeping only */ }
+  return queued;
+}
+
 function messageID(input: Record<string, unknown>) {
   requireValue(typeof input.messageID === "string" && uuid.test(input.messageID), "This message was not found.", 404);
   return input.messageID;
@@ -181,6 +222,15 @@ export async function handleMessageAction(action: string, { store, media, now, h
     const records = await sentRecords(store, house.id, me.id);
     return { messages: records.slice(-messageLimits.listed).reverse().map(r => publicRecord(r, now)) };
   }
+  if (action === "sentMessageMedia") {
+    // Senders replay their own messages while the media is kept.
+    requireValue(me.role === "family", "Only the sender can replay this message.", 403);
+    const id = messageID(input);
+    const record = (await sentRecords(store, house.id, me.id)).find(r => r.id === id);
+    requireValue(record && replayable(record, now), "This recording is no longer available.", 404);
+    const expiresAt = now + messageLimits.downloadSeconds;
+    return { media: { url: await media().downloadURL(record.pathname, expiresAt), expiresAt, contentType: record.contentType } };
+  }
   // Every remaining action concerns a queued message.
   const id = messageID(input);
   const entry = (house.inbox ?? []).find(e => e.id === id);
@@ -188,6 +238,7 @@ export async function handleMessageAction(action: string, { store, media, now, h
     // Caregiver previews are PIN-checked before this point; the bedside plays its own queue.
     if (action === "messageMedia") requireValue(me.role === "bedside", "Only the bedside device plays messages.", 403);
     requireValue(entry && live(entry, now), "This message is no longer available.", 404);
+    requireValue(action === "caregiverMessageMedia" || !entry.held, "A caregiver needs to review this voicemail first.", 403);
     const expiresAt = now + messageLimits.downloadSeconds;
     return { media: { url: await media().downloadURL(entry.pathname, expiresAt), expiresAt, contentType: entry.contentType } };
   }
@@ -195,6 +246,14 @@ export async function handleMessageAction(action: string, { store, media, now, h
     requireValue(entry, "This message was already played or removed.", 404);
     await endMessages(store, media, house.id, [entry], "removed", now);
     return { removed: true };
+  }
+  if (action === "releaseMessage" || action === "releaseKnownCaller") {
+    // A caregiver approves with the PIN; the bedside releases callers saved on its keypad.
+    if (action === "releaseKnownCaller") requireValue(me.role === "bedside", "Only the bedside device can do this.", 403);
+    requireValue(entry, "This message was already played or removed.", 404);
+    if (action === "releaseKnownCaller") requireValue(entry.from === phoneSender && entry.callerNumber, "This caller isn't saved on the keypad.", 403);
+    await mutate(store, house.id, current => { const e = current.inbox?.find(e => e.id === id); if (e) delete e.held; });
+    return { released: true };
   }
   requireValue(me.role === "bedside", "Only the bedside device plays messages.", 403);
   // Already played or removed: nothing left to record.

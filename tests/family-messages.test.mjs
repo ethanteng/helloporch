@@ -57,7 +57,7 @@ test('a family message is uploaded, queued, delivered and played, then kept as a
   assert.equal((await f.json('completeMessage',{messageID:created.message.id},f.ethan.credential)).message.state,'queued');
   await f.json('completeMessage',{messageID:created.message.id},f.ethan.credential);
   const [queued]=await f.queue();
-  assert.deepEqual({...queued,sentAt:undefined},{id:created.message.id,from:f.ethan.state.me.id,fromName:'Ethan',kind:'message',mode:'video',contentType:'video/quicktime',durationSeconds:61,sentAt:undefined,delivered:false});
+  assert.deepEqual({...queued,sentAt:undefined},{id:created.message.id,from:f.ethan.state.me.id,fromName:'Ethan',kind:'message',mode:'video',contentType:'video/quicktime',durationSeconds:61,sentAt:undefined,delivered:false,held:false});
   assert.ok(!JSON.stringify(await f.json('poll',{available:true},f.ethan.credential)).includes(created.message.id),'family snapshots carry no queue');
   assert.equal((await f.send('messageMedia',{messageID:queued.id},f.ethan.credential)).status,403);
   assert.match((await f.json('messageMedia',{messageID:queued.id},f.bedside.credential)).media.url,/^https:\/\/blob\.test\/get\//);
