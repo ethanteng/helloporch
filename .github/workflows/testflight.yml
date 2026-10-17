@@ -13,6 +13,9 @@ concurrency:
 jobs:
   calling-server:
     uses: ./.github/workflows/calling-server-deploy.yml
+    secrets:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
   upload:
     needs: calling-server

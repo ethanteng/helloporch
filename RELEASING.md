@@ -10,6 +10,8 @@ For a deliberate test of unmerged work, manually select its reviewed branch in t
 
 In this repository's **Settings → Environments**, create **calling-server-production** and add the environment secret **VERCEL_TOKEN**. Create the token in Vercel's account token settings with access to **ethan-teng-consulting-llc**. Enter its value directly in GitHub; never put it in chat, a workflow file, or Git.
 
+An existing repository Actions secret named `VERCEL_TOKEN` also works: the TestFlight caller passes only the two Vercel secrets explicitly to the reusable workflow. A secret in `calling-server-production` takes precedence. Secrets in a different environment, including `testflight`, are unavailable to the server job; GitHub Actions variables are not secrets.
+
 The workflow already pins the existing calling target:
 
 - Team: `team_xLXDpIOs1pK3jkr6PExoAET8` (`ethan-teng-consulting-llc`).

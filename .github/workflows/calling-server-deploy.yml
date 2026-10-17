@@ -6,6 +6,11 @@ on:
     paths: ['app/api/**', 'lib/**', 'scripts/verify-calling-deployment.mjs', 'package*.json', 'next.config.ts', 'tsconfig.json', '.vercelignore', '.github/workflows/calling-server-deploy.yml']
   workflow_dispatch:
   workflow_call:
+    secrets:
+      VERCEL_TOKEN:
+        required: false
+      VERCEL_AUTOMATION_BYPASS_SECRET:
+        required: false
 
 permissions:
   contents: read
