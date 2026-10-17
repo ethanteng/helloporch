@@ -159,6 +159,7 @@ final class CallViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: NSLocale.currentLocaleDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(updateDisplay), name: .porchBedsideDisplayChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(reloadSlots), name: .porchFamilyChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(restyleDisplay), name: UIAccessibility.reduceTransparencyStatusDidChangeNotification, object: nil)
         updateDisplay(); resetClock()
     }
 
@@ -289,8 +290,10 @@ final class CallViewController: UIViewController {
             if appliedDisplayStyle != style {
                 for label in [contextLabel, weekdayLabel, dateLabel] { label.textColor = palette.foreground }
                 caregiver.tintColor = palette.controlForeground; caregiver.backgroundColor = palette.controlBackground
+                // Let the hills and tree show through; Reduce Transparency keeps it solid.
                 var config = callButton.configuration!
-                config.baseBackgroundColor = palette.controlBackground; config.baseForegroundColor = palette.controlForeground
+                config.baseBackgroundColor = palette.controlBackground.withAlphaComponent(UIAccessibility.isReduceTransparencyEnabled ? 1 : 0.6)
+                config.baseForegroundColor = palette.controlForeground
                 callButton.configuration = config
                 statusLabel.textColor = palette.controlForeground; statusLabel.backgroundColor = palette.controlBackground
                 statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
@@ -337,6 +340,7 @@ final class CallViewController: UIViewController {
         BedsideText.applyAccessibilityLanguage(to: view)
         resetClock()
     }
+    @objc private func restyleDisplay() { appliedDisplayStyle = nil; updateClock() }
     @objc private func reloadSlots() {
         do { slots = try CallSlots.load() } catch { statusLabel.text = error.localizedDescription }
     }
