@@ -103,7 +103,8 @@ test('an unanswered phone call leaves a voicemail that is held until it is relea
   // A repeated callback doesn't add it twice.
   await f.twilio('recording', { CallSid: sid('CA', 1), RecordingSid: recordingSid, RecordingStatus: 'completed', RecordingDuration: '12' });
   assert.equal((await f.queue()).length, 1);
-  assert.match((await f.twilio('recorded', { CallSid: sid('CA', 1) })).body, /Thank you/);
+  assert.match((await f.twilio('recorded', { CallSid: sid('CA', 1), RecordingDuration: '12' })).body, /Thank you/);
+  assert.match((await f.twilio('recorded', { CallSid: sid('CA', 1), RecordingDuration: '0' })).body, /No message was recorded/);
   // The bedside can't play it until it's released.
   assert.equal((await f.send('messageMedia', { messageID: id }, f.bedside.credential)).status, 403);
   // Approved caregivers see that something is waiting; other family members don't.
@@ -155,6 +156,13 @@ test('callers get an apology instead of a recording when voicemail is off, full 
   const empty = await f.voicemail('+15558887777', { status: 'absent', duration: '0' });
   assert.ok(f.recordings.removed.includes(empty.recordingSid));
   assert.ok(!(await f.queue()).some(m => m.id === empty.id));
+  // Callers invited to record keep their message even if others filled the queue meanwhile.
+  const invite = async n => { const CallSid = sid('CA', 900 + n); await f.twilio('dialed', { CallSid, From: '+15554443333', To: porchNumber, DialCallStatus: 'busy' }); return CallSid; };
+  const [first, second, third, fourth] = [await invite(1), await invite(2), await invite(3), await invite(4)];
+  for (const [n, CallSid] of [first, second, third, fourth].entries()) {
+    await f.twilio('recording', { CallSid, RecordingSid: sid('RE', 900 + n), RecordingStatus: 'completed', RecordingDuration: '5' });
+  }
+  assert.equal((await f.queue()).filter(m => m.callerNumber === '+15554443333').length, 4);
   await f.json('setMessages', { enabled: false }, f.sam.credential, '123456');
   assert.match((await f.voicemail('+15556665555')).dialed.body, /please try again later/i);
 });

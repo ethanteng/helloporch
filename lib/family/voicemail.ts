@@ -122,7 +122,10 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
         ` recordingStatusCallback="${escape(`${origin}/api/calls/inbound/voice/recording`)}" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed absent"/>` +
         `${say("No message was recorded. Goodbye.")}<Hangup/>`);
     }
-    if (step === "recorded") return twiml(`${say("Thank you. Goodbye.")}<Hangup/>`);
+    if (step === "recorded") {
+      // Twilio reports how much was recorded; silence trims down to nothing.
+      return twiml(`${say(Number(params.get("RecordingDuration")) >= 1 ? "Thank you. Goodbye." : "No message was recorded. Goodbye.")}<Hangup/>`);
+    }
     // step === "recording": Twilio's recording status callback.
     const recordingSID = params.get("RecordingSid") ?? "";
     if (!recordingSIDPattern.test(recordingSID) || !callSIDPattern.test(callSID)) return twiml("", 400);

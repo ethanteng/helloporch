@@ -140,7 +140,10 @@ export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStor
   const { result: queued } = await mutate(store, householdID, house => {
     house.inbox ??= [];
     if (house.inbox.some(entry => entry.id === id)) return true;
-    if (!voicemailOpen(house, callerNumber, now)) return false;
+    // The caller was only invited to record while voicemailOpen allowed it, so keep the message even if
+    // the queue filled up meanwhile, unless messages were turned off. A ceiling bounds simultaneous callers.
+    if (house.messagesEnabled === false || !house.members.some(m => m.role === "bedside" && !m.revoked) ||
+        house.inbox.length >= messageLimits.inbox + messageLimits.heldVoicemails) return false;
     house.inbox.push({ id, from: phoneSender, fromName: callerNumber ?? "Phone caller", kind: "voicemail", mode: "audio", contentType: record.contentType, pathname: record.pathname, durationSeconds, sentAt: now, held: true, ...(callerNumber ? { callerNumber } : {}), ...(callerNumber && callerVerified ? { callerVerified: true } : {}) });
     return true;
   });
