@@ -516,7 +516,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     }
     private func showInvite() {
         let invite = FamilyInviteViewController(); invite.remote = remote
-        invite.onCreated = { [weak self] _, _ in self?.refresh() }
+        invite.onAdminChanged = { [weak self] admin in if self?.remote != nil, let admin { self?.remoteState = admin }; self?.refresh() }
         navigationController?.pushViewController(invite, animated: true)
     }
     private func showPhoneDropIn() {
@@ -718,6 +718,8 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     /// Set when inviting from caregiver mode on a family phone.
     var remote: FamilyCredential?
     var onCreated: ((String, String) -> Void)?
+    /// The caregiver state returned with the new invitation; caregiver mode on a phone shows its own copy.
+    var onAdminChanged: ((FamilyAdminState?) -> Void)?
     private let personName = UITextField()
     private let audio = UISwitch()
     private let video = UISwitch()
@@ -769,6 +771,7 @@ final class FamilyInviteViewController: CaregiverFormViewController {
                 let response = try await FamilyService(credential).send("createInvite", ["name": self.personName.text ?? "", "permissions": ["audio": self.audio.isOn, "video": self.video.isOn], "caregiver": self.caregiver.isOn], pin: pin)
                 guard let code = response.code, let invitationID = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
                 FamilyCoordinator.shared.update(response); self.onCreated?(invitationID, self.personName.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+                self.onAdminChanged?(response.admin)
                 let link = FamilyInvitation.url(origin: credential.origin, code: code)
                 self.invitationLink = link; self.invitationExpiry = response.expiresAt ?? 0
                 self.personName.isEnabled = false; self.audio.isEnabled = false; self.video.isEnabled = false; self.caregiver.isEnabled = false
