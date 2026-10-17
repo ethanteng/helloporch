@@ -381,6 +381,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
     private let camera = PorchStyle.button("Camera on", symbol: "video")
     private var cameraEnabled = false
+    private weak var observedRoom: Room?
     private var keypad = CallTrigger()
     override var canBecomeFirstResponder: Bool { true }
     override func viewDidAppear(_ animated: Bool) {
@@ -437,7 +438,6 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         placeholder.font = PorchStyle.font(28)
         CallScreenLayout.install(in: view, video: video, placeholder: placeholder, title: title, status: status,
                                  photo: personPhoto.image == nil ? nil : personPhoto, buttons: [microphone, camera, end])
-        SystemIncomingCalls.shared.room?.add(delegate: self)
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
     }
@@ -445,6 +445,9 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
         guard calls.hasCall else { video.track = nil; dismiss(animated: true); return }
+        if let room = calls.room, room !== observedRoom {
+            room.add(delegate: self); observedRoom = room
+        }
         status.text = calls.status
         cameraEnabled = calls.room?.localParticipant.isCameraEnabled() == true
         camera.configuration?.title = cameraEnabled ? "Camera off" : "Camera on"
