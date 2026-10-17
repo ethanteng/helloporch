@@ -1,4 +1,4 @@
-import { BlobNotFoundError, del, head, issueSignedToken, parseStoreIdFromDelegationToken, presignUrl } from "@vercel/blob";
+import { BlobNotFoundError, del, head, issueSignedToken, parseStoreIdFromDelegationToken, presignUrl, put } from "@vercel/blob";
 import { FamilyError } from "./household.ts";
 
 // Message audio/video lives in a private Vercel Blob store. Devices never hold a store
@@ -9,6 +9,8 @@ export interface MediaStore {
   downloadURL(pathname: string, validUntil: number): Promise<string>;
   stat(pathname: string): Promise<{ size: number; contentType: string } | null>;
   remove(pathnames: string[]): Promise<void>;
+  /** Server-side upload, for recordings the server fetches itself (phone voicemail). */
+  put(pathname: string, body: Uint8Array, contentType: string): Promise<void>;
 }
 
 // The Blob SDK sends these headers with a presigned PUT (API version 12 in @vercel/blob 2.8);
@@ -36,5 +38,8 @@ export function blobMediaStore(): MediaStore {
       catch (error) { if (error instanceof BlobNotFoundError) return null; throw error; }
     },
     async remove(pathnames) { if (pathnames.length) await del(pathnames, { token }); },
+    async put(pathname, body, contentType) {
+      await put(pathname, Buffer.from(body), { token, access: "private", contentType, addRandomSuffix: false, allowOverwrite: true });
+    },
   };
 }

@@ -440,6 +440,18 @@ final class BedsideAndKeypadTests: XCTestCase {
         let state = try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
         XCTAssertEqual(state.messages?.first?.fileExtension, "mov"); XCTAssertEqual(state.messagesEnabled, true)
     }
+    func testPhoneVoicemailNamesTheKeypadContactAndFormatsUnknownNumbers() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "Aunt May", nativeCall: NativeCall(room: "family-may", mode: .voice), phoneNumber: "+14158676937"), for: 2)
+        XCTAssertEqual(slots.contact(forPhoneNumber: "+14158676937")?.name, "Aunt May")
+        XCTAssertNil(slots.contact(forPhoneNumber: "+14155550100")); XCTAssertNil(slots.contact(forPhoneNumber: nil))
+        XCTAssertEqual(PhoneNumberNormalization.display("+14158676937", region: "US"), "(415) 867-6937")
+        XCTAssertEqual(PhoneNumberNormalization.display("+442070313000", region: "US"), "+44 20 7031 3000")
+        let object: [String: Any] = ["id": "v1", "from": "phone", "fromName": "+14158676937", "kind": "voicemail", "mode": "audio", "contentType": "audio/mpeg",
+            "durationSeconds": 12, "sentAt": 1_800_000_000, "delivered": false, "callerNumber": "+14158676937", "callerVerified": true, "held": true]
+        let message = try JSONDecoder().decode(FamilyMessage.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertTrue(message.fromPhone); XCTAssertEqual(message.held, true); XCTAssertEqual(message.callerVerified, true); XCTAssertEqual(message.fileExtension, "mp3")
+    }
     func testCallControlDistinguishesTapHoldDropInAndCancellation() {
         var input = IncomingCallKey()
         XCTAssertNil(input.begin(0x62, dropIn: false)); XCTAssertNil(input.begin(0x62, dropIn: false))

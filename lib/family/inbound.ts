@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callRoom, config, expire, mutate, phoneDropIn, type Call, type Household, type InboundPhone } from "./household.ts";
@@ -7,11 +7,19 @@ import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallP
 
 export const inboundRoomPrefix = "porch-inbound-";
 export const inboundRingSeconds = 45;
+/** The digest login Twilio's voice webhook uses to reach the LiveKit inbound trunk. It is
+ * derived from the LiveKit API secret, so the server and the setup script agree without a new secret. */
+export function sipInboundCredentials(apiSecret: string) {
+  return { username: "porch", password: createHmac("sha256", apiSecret).update("porch-sip-inbound-v1").digest("base64url") };
+}
 // The inbound trunk maps Twilio's STIR/SHAKEN result header to this attribute.
 // Only full ("A") attestation lets an approved number drop in; anything else rings.
 export const callerVerificationHeader = "X-Twilio-VerStat";
 export const callerVerificationAttribute = "porch.callerVerification";
-const verifiedCaller = "TN-Validation-Passed-A";
+// With voicemail routing, the voice webhook copies Twilio's signed StirVerstat result into
+// this header instead; the trunk then requires the digest login, so only the server can set it.
+export const forwardedVerificationHeader = "X-Porch-VerStat";
+export const verifiedCaller = "TN-Validation-Passed-A";
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 // ParticipantInfo.Kind.SIP in the LiveKit protocol (not exported by this SDK).
 const sipParticipantKind = 3;

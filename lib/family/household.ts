@@ -10,8 +10,10 @@ export type Invite = { id: string; secretHash: string; name: string; permissions
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone };
 export type MessageKind = "message" | "voicemail";
 export type MessageMode = "audio" | "video";
-/** A queued message. Kept in the household so the bedside's existing poll carries the queue. */
-export type InboxEntry = { id: string; from: string; fromName: string; kind: MessageKind; mode: MessageMode; contentType: string; pathname: string; durationSeconds: number; sentAt: number; deliveredAt?: number };
+/** A queued message. Kept in the household so the bedside's existing poll carries the queue.
+ * Phone voicemails come from "phone" and are held until a caregiver releases them, or the bedside does for a
+ * carrier-verified caller saved on its keypad. */
+export type InboxEntry = { id: string; from: string; fromName: string; kind: MessageKind; mode: MessageMode; contentType: string; pathname: string; durationSeconds: number; sentAt: number; deliveredAt?: number; callerNumber?: string; callerVerified?: boolean; held?: boolean };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
 export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[] };

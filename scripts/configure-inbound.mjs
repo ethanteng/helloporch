@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { RoomConfiguration, SIPInboundTrunkInfo, SipClient } from 'livekit-server-sdk';
 import { familyStore } from '../lib/family/store.ts';
-import { callerVerificationAttribute, callerVerificationHeader, inboundRingSeconds, inboundRoomPrefix } from '../lib/family/inbound.ts';
+import { callerVerificationAttribute, callerVerificationHeader, forwardedVerificationHeader, inboundRingSeconds, inboundRoomPrefix, sipInboundCredentials } from '../lib/family/inbound.ts';
 
 // No credentials or phone numbers in arguments/output. Load private env files
 // with Node's --env-file flags. The default is a read-only plan; --apply saves it.
@@ -9,8 +9,11 @@ class SetupError extends Error {}
 const args = process.argv.slice(2);
 const householdID = args.find(arg => arg.startsWith('--household='))?.slice('--household='.length);
 const apply = args.includes('--apply');
-if (!householdID || !/^[a-f0-9-]{36}$/.test(householdID) || args.some(arg => arg !== '--apply' && !arg.startsWith('--household='))) {
-  console.error('Usage: node --env-file=.env.inbound-production.local --env-file=.env.local scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID [--apply]');
+// --voicemail: Twilio's voice webhook dials LiveKit with a digest login, so callers who
+// aren't answered can leave a message. Once a trunk has the login, it stays in this mode.
+let voicemail = args.includes('--voicemail');
+if (!householdID || !/^[a-f0-9-]{36}$/.test(householdID) || args.some(arg => !['--apply', '--voicemail'].includes(arg) && !arg.startsWith('--household='))) {
+  console.error('Usage: node --env-file=.env.inbound-production.local --env-file=.env.local scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID [--voicemail] [--apply]');
   process.exit(1);
 }
 // Twilio's published SIP signaling gateways, verified 2026-10-16:
@@ -49,19 +52,29 @@ try {
   if (dispatch && (dispatch.trunkIds.length !== 1 || dispatch.rule?.rule.case !== 'dispatchRuleIndividual' || dispatch.rule.rule.value.roomPrefix !== inboundRoomPrefix)) {
     throw new SetupError('An incompatible dispatch rule already uses this trunk.');
   }
+  voicemail ||= !!trunk?.authUsername;
   console.log('Existing Twilio number and destination household verified.');
   console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; 45-second ringing; 30-minute call limit.');
   console.log('Carrier caller-ID verification is passed to Porch, so caregiver-approved numbers can drop in with audio while drop-in is on.');
-  console.log('Inbound SIP restricted to Twilio signaling gateways. No phone numbers will be purchased and no calls will be placed.');
+  console.log(voicemail
+    ? 'Voicemail routing: inbound SIP requires the Porch digest login, which only the calling server sends from its Twilio voice webhook.'
+    : 'Inbound SIP restricted to Twilio signaling gateways.');
+  console.log('No phone numbers will be purchased and no calls will be placed.');
   if (!apply) { console.log('Read-only plan complete. Use --apply to save the LiveKit and household configuration.'); process.exit(0); }
   if (!trunk) trunk = await sip.createSipInboundTrunk(name, [number], { allowedAddresses: twilioGateways, ringingTimeout: inboundRingSeconds });
   // The current SDK exposes maxCallDuration on the protobuf but not its create
   // options. Update the full returned trunk, retaining its other fields.
-  trunk.allowedAddresses = twilioGateways;
+  if (voicemail) {
+    // Twilio doesn't publish the voice webhook's SIP source addresses; the login protects the trunk instead.
+    const login = sipInboundCredentials(secret);
+    trunk.authUsername = login.username; trunk.authPassword = login.password; trunk.allowedAddresses = [];
+  } else trunk.allowedAddresses = twilioGateways;
   trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingSeconds) } }).ringingTimeout;
   trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
   // Twilio's STIR/SHAKEN result; phone drop-in requires it. Keep other mappings.
-  trunk.headersToAttributes = { ...trunk.headersToAttributes, [callerVerificationHeader]: callerVerificationAttribute };
+  // Voicemail routing reads the result from the server's forwarded header, never a header a SIP source chose.
+  const { [callerVerificationHeader]: _twilio, [forwardedVerificationHeader]: _forwarded, ...otherHeaders } = trunk.headersToAttributes ?? {};
+  trunk.headersToAttributes = { ...otherHeaders, [voicemail ? forwardedVerificationHeader : callerVerificationHeader]: callerVerificationAttribute };
   trunk = await sip.updateSipInboundTrunk(trunk.sipTrunkId, trunk);
   if (!dispatch) dispatch = await sip.createSipDispatchRule({ type: 'individual', roomPrefix: inboundRoomPrefix }, {
     name, trunkIds: [trunk.sipTrunkId], hidePhoneNumber: false,
@@ -76,7 +89,9 @@ try {
     `LIVEKIT_SIP_DISPATCH_RULE_ID=${dispatch.sipDispatchRuleId}`, '',
   ].join('\n'), { mode: 0o600 });
   console.log('LiveKit inbound trunk, dispatch rule, and household number assignment saved.');
-  console.log('Private configuration saved to .env.inbound-setup.local. Configure Twilio Origination and the LiveKit webhook to finish activation.');
+  console.log(voicemail
+    ? 'Private configuration saved to .env.inbound-setup.local. Point the Twilio number\'s voice webhook at /api/calls/inbound/voice to finish activation.'
+    : 'Private configuration saved to .env.inbound-setup.local. Configure Twilio Origination and the LiveKit webhook to finish activation.');
 } catch (error) {
   // Provider exceptions may contain phone numbers or credentials; keep those out.
   console.error(error instanceof SetupError ? error.message : 'Provider setup failed. Check account access and retry the same command.');

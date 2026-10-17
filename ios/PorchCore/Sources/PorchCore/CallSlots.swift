@@ -68,6 +68,11 @@ public struct CallSlots: Equatable {
     public func incomingCallerName(for call: FamilyCallRecord, in state: FamilySnapshot) -> String {
         incomingContact(for: call, in: state)?.name ?? call.callerName
     }
+    /// The keypad contact saved with this phone number, which names (and releases) a phone voicemail.
+    public func contact(forPhoneNumber number: String?) -> CallContact? {
+        guard let number, !number.isEmpty else { return nil }
+        return contacts.compactMap { $0 }.first { $0.phoneNumber == number }
+    }
     public func incomingContact(for call: FamilyCallRecord, in state: FamilySnapshot) -> CallContact? {
         guard state.me.role == .bedside, call.to == state.me.id else { return nil }
         if call.source == "phone" {
