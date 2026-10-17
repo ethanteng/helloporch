@@ -10,7 +10,7 @@ For a deliberate test of unmerged work, manually select its reviewed branch in t
 
 In this repository's **Settings → Environments**, create **calling-server-production** and add the environment secret **VERCEL_TOKEN**. Create the token in Vercel's account token settings with access to **ethan-teng-consulting-llc**. Enter its value directly in GitHub; never put it in chat, a workflow file, or Git.
 
-An existing repository Actions secret named `VERCEL_TOKEN` also works: the TestFlight caller passes only the two Vercel secrets explicitly to the reusable workflow. A secret in `calling-server-production` takes precedence. Secrets in a different environment, including `testflight`, are unavailable to the server job; GitHub Actions variables are not secrets.
+An existing repository Actions secret named `VERCEL_TOKEN` also works: the TestFlight caller passes this one secret explicitly to the reusable workflow. A secret in `calling-server-production` takes precedence. Secrets in a different environment, including `testflight`, are unavailable to the server job; GitHub Actions variables are not secrets.
 
 The workflow already pins the existing calling target:
 
@@ -20,7 +20,7 @@ The workflow already pins the existing calling target:
 
 It verifies the linked project's name and IDs before building. This target is separate from the `helloporch` website project. Keep Redis, LiveKit, APNs, and telephone credentials in the existing calling project's Vercel production environment; they do not need to be copied into GitHub.
 
-If Vercel protects the staged deployment address, add the calling project's **VERCEL_AUTOMATION_BYPASS_SECRET** to the same GitHub environment. The verification script sends it only to a Vercel deployment host, refuses redirects, and does not print it. The live calling address must remain reachable by the native app without a Vercel login.
+Staged health checks use authenticated `vercel curl` with the same CI token, so Vercel Deployment Protection can stay enabled without a second bypass secret. The script restricts authenticated requests to a Vercel health endpoint and does not pass tokens as command arguments or follow redirects. After promotion it checks the live address without Vercel authentication, just as the native app uses it.
 
 Vercel credentials are exposed only to the CLI steps that need them. The workflow pins its CLI and action versions, does not upload pulled environment files or build output as artifacts, and deletes `.vercel` on completion. Use GitHub's existing repository and environment controls to limit who can run production releases.
 

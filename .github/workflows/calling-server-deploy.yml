@@ -9,8 +9,6 @@ on:
     secrets:
       VERCEL_TOKEN:
         required: false
-      VERCEL_AUTOMATION_BYPASS_SECRET:
-        required: false
 
 permissions:
   contents: read
@@ -91,7 +89,8 @@ jobs:
         env:
           CALLING_DEPLOYMENT_URL: ${{ steps.stage.outputs.url }}
           CALLING_DEPLOYMENT_COMMIT: ${{ github.sha }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          CALLING_VERIFY_WITH_VERCEL_CLI: '1'
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node scripts/verify-calling-deployment.mjs
       - name: Promote the verified production deployment
         env:

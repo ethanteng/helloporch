@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { callingHealth } from '../lib/calls/health.ts';
-import { verifyCallingDeployment } from '../scripts/verify-calling-deployment.mjs';
+import { verifyCallingDeployment, vercelHealthFetcher } from '../scripts/verify-calling-deployment.mjs';
 
 const commit = 'a'.repeat(40);
 const healthy = { ok: true, commit, callingConfigured: true, storageReachable: true, pushConfigured: true };
@@ -46,11 +46,14 @@ test('a stale deployment, a login page, and a redirect cannot pass the release g
   }
 });
 
-test('protection bypass is sent only to a validated Vercel host without redirects', async () => {
-  let called = false;
-  const fetcher = async (_, options) => { called = true; assert.equal(options.headers['x-vercel-protection-bypass'], 'test-bypass'); assert.equal(options.redirect, 'error'); return Response.json(healthy); };
-  await assert.rejects(verifyCallingDeployment({ origin: 'https://unrelated.example', commit, bypass: 'test-bypass', fetcher }), /restricted/);
-  assert.equal(called, false);
-  await verifyCallingDeployment({ origin: 'https://calling.vercel.app', commit, bypass: 'test-bypass', fetcher });
+test('authenticated CLI checks use only the Vercel health endpoint without token arguments or redirects', async () => {
+  const calls = [];
+  const fetcher = vercelHealthFetcher(async (...args) => { calls.push(args); return { stdout: JSON.stringify(healthy) }; });
+  await assert.rejects(fetcher(new URL('https://unrelated.example/api/calls/health')), /restricted/);
+  await assert.rejects(fetcher(new URL('https://calling.vercel.app/api/other')), /restricted/);
+  assert.equal(calls.length, 0);
+  await verifyCallingDeployment({ origin: 'https://calling.vercel.app', commit, fetcher });
+  assert.deepEqual(calls[0][0], 'vercel');
+  assert.deepEqual(calls[0][1], ['curl', 'https://calling.vercel.app/api/calls/health', '--silent', '--show-error', '--fail', '--max-time', '15']);
   await assert.rejects(verifyCallingDeployment({ origin: 'http://calling.vercel.app', commit, fetcher }), /HTTPS/);
 });
