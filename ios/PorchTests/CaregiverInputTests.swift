@@ -757,6 +757,14 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(confirm?.isSecureTextEntry == true)
     }
 
+    @MainActor func testEveryKeypadActionHasAnEditorChoice() {
+        let editor = SetupViewController(slot: 8, contact: nil, action: .messages); editor.loadViewIfNeeded()
+        func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
+        let control = segments(editor.view).first { $0.accessibilityLabel == "Keypad action" }
+        XCTAssertEqual(control?.numberOfSegments, KeypadAction.allCases.count)
+        XCTAssertEqual(control?.selectedSegmentIndex, KeypadAction.allCases.firstIndex(of: .messages))
+    }
+
     @MainActor func testUnenrolledBedsideSetupOffersTheWayBackToFamilyMode() {
         let setup = CaregiverPINViewController(profile: nil); setup.loadViewIfNeeded()
         XCTAssertTrue(buttons(in: setup.view).contains { $0.configuration?.title == "Use this device as a family member" })

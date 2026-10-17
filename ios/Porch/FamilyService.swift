@@ -75,7 +75,16 @@ struct FamilyResponse: Decodable {
     let token: String?
     let serverUrl: String?
     let admin: FamilyAdminState?
+    /// Family devices only: this device's sent messages (`listMessages`).
+    let messages: [SentMessage]?
+    let message: SentMessage?
+    let upload: MessageUploadTarget?
+    let media: MessageMediaURL?
 }
+/// A presigned upload: send the file as the body with exactly these headers.
+struct MessageUploadTarget: Decodable { let url: String; let method: String; let headers: [String: String]; let expiresAt: TimeInterval }
+/// A short-lived link to one message's audio or video.
+struct MessageMediaURL: Decodable { let url: String; let expiresAt: TimeInterval; let contentType: String }
 struct FamilyServiceError: LocalizedError { let message: String; let status: Int; var code: String? = nil; var errorDescription: String? { message } }
 struct FamilyService {
     let origin: URL

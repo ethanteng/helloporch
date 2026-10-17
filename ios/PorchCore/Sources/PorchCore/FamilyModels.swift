@@ -32,6 +32,34 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let source: String?
     public let reason: String?
 }
+/// A message waiting on the bedside device (only the bedside's snapshot carries the queue).
+public struct FamilyMessage: Codable, Equatable, Identifiable {
+    public let id: String
+    public let from: String
+    public let fromName: String
+    /// "message" or "voicemail".
+    public let kind: String
+    /// "audio" or "video".
+    public let mode: String
+    public let contentType: String
+    public let durationSeconds: Int
+    public let sentAt: TimeInterval
+    public let delivered: Bool
+    public var fileExtension: String { contentType == "video/quicktime" ? "mov" : contentType == "video/mp4" ? "mp4" : "m4a" }
+}
+/// A message this device sent. States: uploading, queued, played, expired, removed, unsent, failed.
+public struct SentMessage: Codable, Equatable, Identifiable {
+    public let id: String
+    public let kind: String
+    public let mode: String
+    public let durationSeconds: Int
+    public let createdAt: TimeInterval
+    public let state: String
+    public let sentAt: TimeInterval?
+    public let deliveredAt: TimeInterval?
+    public let playedAt: TimeInterval?
+    public let endedAt: TimeInterval?
+}
 public struct PendingFamilyInvitation: Codable, Equatable {
     public let id: String
     public let expiresAt: TimeInterval
@@ -46,6 +74,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let call: FamilyCallRecord?
     public let busy: Bool
     public let serverTime: TimeInterval
+    public let messagesEnabled: Bool?
+    public let messages: [FamilyMessage]?
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
 /// family device's own snapshot doesn't include.
@@ -53,8 +83,12 @@ public struct FamilyAdminState: Codable, Equatable {
     public let householdName: String
     public let dropInEnabled: Bool
     public let people: [FamilyPerson]
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson]) {
+    public let messagesEnabled: Bool?
+    /// Messages waiting on the bedside device, for caregiver review.
+    public let messages: [FamilyMessage]?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
+        self.messagesEnabled = messagesEnabled; self.messages = messages
     }
 }
 public struct FamilyCredential: Codable {

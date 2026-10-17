@@ -58,7 +58,12 @@ final class SlotsViewController: UITableViewController {
                 }
                 return "Finish Porch setup"
             } ?? "Assign keypad number \(number)"
-            if action != .person { content.secondaryText = action == .callControl ? "Tap to answer or hang up. Hold to decline a ringing call." : "Toggle your camera during a video call." }
+            switch action {
+            case .person: break
+            case .callControl: content.secondaryText = "Tap to answer or hang up. Hold to decline a ringing call."
+            case .toggleVideo: content.secondaryText = "Toggle your camera during a video call."
+            case .messages: content.secondaryText = "Play or stop family messages."
+            }
             cell.accessibilityLabel = "Key \(number), \(content.text ?? "")"
         } else if indexPath.section == 1, indexPath.row == 0 {
             content.text = "Family & drop-in"
@@ -125,7 +130,7 @@ final class SlotsViewController: UITableViewController {
 final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate, PHPickerViewControllerDelegate, UIColorPickerViewControllerDelegate {
     var onSave: ((CallContact?) throws -> Void)?
     var onSaveSlot: ((KeypadAction, CallContact?) throws -> Void)?
-    private let actionControl = UISegmentedControl(items: ["Person", "Call control", "Video toggle"])
+    private let actionControl = UISegmentedControl(items: ["Person", "Call control", "Video toggle", "Messages"])
     private let actionDetail = PorchStyle.label("", size: 16)
     private var personGroup = UIView()
     private var fallbackGroup = UIView()
@@ -319,7 +324,12 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         let person = chosenAction == .person
         personGroup.isHidden = !person; fallbackGroup.isHidden = !person; appearanceGroup.isHidden = !person; removeButton?.isHidden = !person
         setKeyboardControlVisible(person)
-        actionDetail.text = person ? "Call the person below using their default calling mode." : chosenAction == .callControl ? "Tap to answer an incoming call or hang up. Hold for one second to decline a ringing call. Tap during a drop-in countdown to stop it. This replaces any person assigned to this key." : "Turn your camera off or on during a video call. Voice-only and regular phone calls keep the camera off. This replaces any person assigned to this key."
+        switch chosenAction {
+        case .person: actionDetail.text = "Call the person below using their default calling mode."
+        case .callControl: actionDetail.text = "Tap to answer an incoming call or hang up. Hold for one second to decline a ringing call. Tap during a drop-in countdown to stop it. This replaces any person assigned to this key."
+        case .toggleVideo: actionDetail.text = "Turn your camera off or on during a video call. Voice-only and regular phone calls keep the camera off. This replaces any person assigned to this key."
+        case .messages: actionDetail.text = "Play waiting family messages, or stop them while they play. This replaces any person assigned to this key."
+        }
     }
     @objc private func configureFamilyLinks() {
         let state = FamilyCoordinator.shared.state

@@ -18,6 +18,9 @@ final class CallViewController: UIViewController {
     private let statusLabel = UILabel()
     private let caregiver = UIButton(type: .system)
     private let callButton = PorchStyle.button("Call someone", symbol: "phone.fill")
+    /// A quiet notice when family messages are waiting; tapping it plays them.
+    private let messagesButton = PorchStyle.button("", symbol: "envelope.fill")
+    private var clockTop: NSLayoutConstraint!
     private var clockTimer: Timer?
     private var timeFormatter = DateFormatter()
     private var weekdayFormatter = DateFormatter()
@@ -123,15 +126,30 @@ final class CallViewController: UIViewController {
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.adjustsFontForContentSizeCategory = true
-        [callButton, caregiver, statusLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
+        var messageConfig = messagesButton.configuration!
+        messageConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(26, weight: .semibold); return attributes
+        }
+        messageConfig.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
+        messageConfig.cornerStyle = .capsule
+        messagesButton.configuration = messageConfig
+        messagesButton.accessibilityIdentifier = "clock.messages"
+        messagesButton.isHidden = true
+        messagesButton.addTarget(self, action: #selector(playMessages), for: .touchUpInside)
+        [callButton, caregiver, statusLabel, messagesButton].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
         let guide = view.safeAreaLayoutGuide
         view.addLayoutGuide(clockArea)
+        clockTop = clockArea.topAnchor.constraint(equalTo: guide.topAnchor, constant: 16)
         callHeight = callButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 124)
         callHeight.isActive = true
         NSLayoutConstraint.activate([
             clockArea.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
             clockArea.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
-            clockArea.topAnchor.constraint(equalTo: guide.topAnchor, constant: 16),
+            clockTop,
+            messagesButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
+            messagesButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
+            messagesButton.trailingAnchor.constraint(lessThanOrEqualTo: caregiver.leadingAnchor, constant: -16),
+            messagesButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 64),
             clockArea.bottomAnchor.constraint(equalTo: callButton.topAnchor, constant: -48),
             clock.centerYAnchor.constraint(equalTo: clockArea.centerYAnchor),
             clock.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
@@ -160,6 +178,8 @@ final class CallViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(updateDisplay), name: .porchBedsideDisplayChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(reloadSlots), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(restyleDisplay), name: UIAccessibility.reduceTransparencyStatusDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateMessages), name: .porchMessagesReady, object: nil)
+        BedsideMessages.shared.start()
         updateDisplay(); resetClock()
     }
 
@@ -225,7 +245,7 @@ final class CallViewController: UIViewController {
         // Fit the clock to the iPad, rather than capping it at phone-sized text.
         // Reserve the bottom area for calling and allow long localized dates to fit.
         let width = max(200, size.width - 64)
-        let height = max(80, size.height - callHeight.constant - 132)
+        let height = max(80, size.height - callHeight.constant - 132 - clockTop.constant + 16)
         clock.spacing = min(24, height * 0.025)
         contextLabel.font = PorchStyle.font(max(18, min(32, height * 0.07)), weight: .semibold)
         weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
@@ -295,6 +315,8 @@ final class CallViewController: UIViewController {
                 config.baseBackgroundColor = palette.controlBackground.withAlphaComponent(UIAccessibility.isReduceTransparencyEnabled ? 1 : 0.6)
                 config.baseForegroundColor = palette.controlForeground
                 callButton.configuration = config
+                messagesButton.configuration?.baseBackgroundColor = config.baseBackgroundColor
+                messagesButton.configuration?.baseForegroundColor = config.baseForegroundColor
                 statusLabel.textColor = palette.controlForeground; statusLabel.backgroundColor = palette.controlBackground
                 statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
                 appliedDisplayStyle = style
@@ -313,6 +335,8 @@ final class CallViewController: UIViewController {
             var config = callButton.configuration!
             config.baseBackgroundColor = PorchStyle.nightSurface; config.baseForegroundColor = PorchStyle.nightText
             callButton.configuration = config
+            messagesButton.configuration?.baseBackgroundColor = PorchStyle.nightSurface
+            messagesButton.configuration?.baseForegroundColor = PorchStyle.nightText
             statusLabel.textColor = PorchStyle.nightSecondary; statusLabel.backgroundColor = .clear
         }
         let time = timeFormatter.string(from: now).replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
@@ -337,8 +361,29 @@ final class CallViewController: UIViewController {
         callButton.configuration?.title = BedsideText.string("Call someone")
         caregiver.accessibilityLabel = BedsideText.string("Caregiver mode")
         caregiver.accessibilityHint = BedsideText.string("Tap or hold to manage contacts and settings.")
+        updateMessages()
         BedsideText.applyAccessibilityLanguage(to: view)
         resetClock()
+    }
+    @objc private func updateMessages() {
+        guard isViewLoaded else { return }
+        let count = BedsideMessages.shared.ready.count
+        messagesButton.configuration?.title = count == 1 ? BedsideText.string("Play 1 message") : BedsideText.string("Play %d messages", count)
+        messagesButton.accessibilityLanguage = BedsideText.language.speechLanguage
+        guard messagesButton.isHidden != (count == 0) else { return }
+        messagesButton.isHidden = count == 0
+        // Keep the clock clear of the notice; the typography refits on the next layout.
+        clockTop.constant = count == 0 ? 16 : 92
+        typographySize = .zero; view.setNeedsLayout()
+    }
+    @objc private func playMessages() {
+        guard presentedViewController == nil, !opening, view.window?.windowScene?.activationState == .foregroundActive else { return }
+        let ready = BedsideMessages.shared.ready
+        guard !ready.isEmpty else { statusLabel.text = BedsideText.string("No new messages."); return }
+        statusLabel.text = nil
+        let player = MessagePlayerViewController(messages: ready, slots: slots)
+        player.onFinish = { [weak self] in self?.resume() }
+        present(player, animated: true)
     }
     @objc private func restyleDisplay() { appliedDisplayStyle = nil; updateClock() }
     @objc private func reloadSlots() {
@@ -378,6 +423,7 @@ final class CallViewController: UIViewController {
     private func call(slot: Int) {
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
+        if slots.action(for: slot) == .messages { playMessages(); return }
         guard slots.action(for: slot) == .person else {
             statusLabel.text = BedsideText.string(slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call.")
             return

@@ -199,6 +199,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let fallbackSeconds = CallPreferences.fallbackSeconds()
     private var familySession: FamilyCallSession?
     private var familyAccepted = false
+    /// Runs after the screen closes when the other person never answered (declined, timed out
+    /// or unreachable) and the caller didn't hang up first. Family phones offer voicemail here.
+    var onUnanswered: (() -> Void)?
+    private var endedByCaller = false
     private var beginWithPhoneFallback = false
     private var keypad = CallTrigger()
     override var canBecomeFirstResponder: Bool { true }
@@ -217,7 +221,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         case .callControl: endCall()
         case .toggleVideo:
             if call.mode == .video && !isPhoneCall && cameraButton.isEnabled { toggleCamera() }
-        case .person: break
+        case .person, .messages: break
         }
     }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
@@ -559,11 +563,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         finish(message: hasConnectedPeer ? "Call ended. Returning to the clock…" : "The phone call ended before it was answered.")
     }
 
-    @objc private func endCall() { finish() }
+    @objc private func endCall() { endedByCaller = true; finish() }
 
     private func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
+        let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted ? onUnanswered : nil
         ringback.stop()
         connectionCue.stop()
         connectionTask?.cancel()
@@ -616,7 +621,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 }
             }
             if message != nil { try? await Task.sleep(nanoseconds: 1_500_000_000) }
-            dismiss(animated: true)
+            dismiss(animated: true) { unanswered?() }
         }
     }
 

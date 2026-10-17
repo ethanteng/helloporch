@@ -415,6 +415,16 @@ final class BedsideAndKeypadTests: XCTestCase {
         XCTAssertEqual(loaded.digit(for: .callControl), 4); XCTAssertNil(loaded.contact(for: 4))
         XCTAssertEqual(loaded.action(for: 7), .toggleVideo); XCTAssertEqual(loaded.contact(for: 0), person)
     }
+    func testMessagesKeySurvivesRelaunchAndBedsideQueueDecodes() throws {
+        let prefs = defaults(); var slots = CallSlots()
+        try slots.setAction(.messages, for: 8); try slots.save(to: prefs)
+        XCTAssertEqual(try CallSlots.load(from: prefs).digit(for: .messages), 8)
+        let object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": false, "messagesEnabled": true,
+            "me": ["id": "bed", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true], "people": [], "busy": false, "serverTime": 1,
+            "messages": [["id": "m1", "from": "f1", "fromName": "Ethan", "kind": "voicemail", "mode": "video", "contentType": "video/quicktime", "durationSeconds": 42, "sentAt": 1_800_000_000, "delivered": false]]]
+        let state = try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(state.messages?.first?.fileExtension, "mov"); XCTAssertEqual(state.messagesEnabled, true)
+    }
     func testCallControlDistinguishesTapHoldDropInAndCancellation() {
         var input = IncomingCallKey()
         XCTAssertNil(input.begin(0x62, dropIn: false)); XCTAssertNil(input.begin(0x62, dropIn: false))

@@ -132,7 +132,7 @@ test('caregivers review and remove queued messages with the PIN, and can turn me
   assert.deepEqual(unlocked.admin.messages.map(m=>[m.id,m.fromName]),[[message.id,'Ethan']]);
   assert.equal(unlocked.admin.messagesEnabled,true);
   assert.ok((await f.json('caregiverMessageMedia',{messageID:message.id},f.sam.credential,'123456')).media.url);
-  await f.json('removeMessage',{messageID:message.id},f.sam.credential,'123456');
+  assert.deepEqual((await f.json('removeMessage',{messageID:message.id},f.sam.credential,'123456')).admin.messages,[]);
   assert.deepEqual(await f.queue(),[]);
   assert.equal((await f.sent(f.ethan))[0].state,'removed');
   const off=await f.json('setMessages',{enabled:false},f.sam.credential,'123456');

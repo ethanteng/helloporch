@@ -59,6 +59,10 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     public func format(_ english: String, arguments: [CVarArg]) -> String { String(format: text(english), locale: locale, arguments: arguments) }
 
     private static let simplifiedStrings: [String: String] = [
+        "Play 1 message": "播放 1 则留言", "Play %d messages": "播放 %d 则留言",
+        "Message from %@": "%@的留言", "Voicemail from %@": "%@的语音留言",
+        "Message from %@. Sent %@.": "%@的留言，发送于%@。", "Voicemail from %@. Sent %@.": "%@的语音留言，发送于%@。",
+        "Sent %@": "发送于%@", "Stop": "停止", "No new messages.": "没有新留言。",
         "Morning": "早上", "Afternoon": "下午", "Evening": "傍晚", "Night": "夜晚",
         "Spring": "春天", "Summer": "夏天", "Fall": "秋天", "Winter": "冬天",
         "Call someone": "打电话", "Caregiver mode": "照护者设置",
@@ -117,6 +121,10 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     ]
 
     private static let cantoneseStrings: [String: String] = [
+        "Play 1 message": "播放 1 個留言", "Play %d messages": "播放 %d 個留言",
+        "Message from %@": "%@嘅留言", "Voicemail from %@": "%@嘅語音留言",
+        "Message from %@. Sent %@.": "%@嘅留言，喺%@傳送。", "Voicemail from %@. Sent %@.": "%@嘅語音留言，喺%@傳送。",
+        "Sent %@": "喺%@傳送", "Stop": "停止", "No new messages.": "冇新留言。",
         "Morning": "朝早", "Afternoon": "下晝", "Evening": "黃昏", "Night": "夜晚",
         "Spring": "春天", "Summer": "夏天", "Fall": "秋天", "Winter": "冬天",
         "Call someone": "打電話", "Caregiver mode": "照顧者設定",
@@ -175,6 +183,10 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     ]
 
     private static let spanishStrings: [String: String] = [
+        "Play 1 message": "Reproducir 1 mensaje", "Play %d messages": "Reproducir %d mensajes",
+        "Message from %@": "Mensaje de %@", "Voicemail from %@": "Mensaje de voz de %@",
+        "Message from %@. Sent %@.": "Mensaje de %@. Enviado %@.", "Voicemail from %@. Sent %@.": "Mensaje de voz de %@. Enviado %@.",
+        "Sent %@": "Enviado %@", "Stop": "Detener", "No new messages.": "No hay mensajes nuevos.",
         "Morning": "Mañana", "Afternoon": "Tarde", "Evening": "Atardecer", "Night": "Noche",
         "Spring": "Primavera", "Summer": "Verano", "Fall": "Otoño", "Winter": "Invierno",
         "Call someone": "Llamar a alguien", "Caregiver mode": "Ajustes del cuidador",
@@ -233,6 +245,10 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     ]
 
     private static let traditionalStrings: [String: String] = [
+        "Play 1 message": "播放 1 則留言", "Play %d messages": "播放 %d 則留言",
+        "Message from %@": "%@的留言", "Voicemail from %@": "%@的語音留言",
+        "Message from %@. Sent %@.": "%@的留言，傳送於%@。", "Voicemail from %@. Sent %@.": "%@的語音留言，傳送於%@。",
+        "Sent %@": "傳送於%@", "Stop": "停止", "No new messages.": "沒有新留言。",
         "A family member": "家人",
         "Morning": "早上", "Afternoon": "下午", "Evening": "傍晚", "Night": "夜晚",
         "Spring": "春天", "Summer": "夏天", "Fall": "秋天", "Winter": "冬天",
