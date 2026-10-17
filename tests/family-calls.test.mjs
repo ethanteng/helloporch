@@ -53,6 +53,23 @@ test('expired and cancelled invitations cannot pair',async()=>{
  await f.json('cancelInvites',{},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.equal((await f.send('claimInvite',{code:next.code})).status,410);
 });
+test('caregivers see pending invitations by name and can cancel one without the others',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup({audio:false,video:false});
+ await f.json('setCaregiver',{memberID:family.state.me.id,enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const first=await f.json('createInvite',{name:'Ana',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const second=await f.json('createInvite',{name:'Ben',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const admin=await f.json('verifyPIN',{},family.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.deepEqual(admin.admin.invitations.map(i=>i.name),['Ana','Ben']);
+ assert.ok(!JSON.stringify(admin.admin.invitations).includes(first.code));
+ assert.equal((await f.send('cancelInvite',{inviteID:first.invitationID},family.credential)).status,403,'cancelling needs the PIN');
+ const cancelled=await f.json('cancelInvite',{inviteID:first.invitationID},family.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.deepEqual(cancelled.admin.invitations.map(i=>i.id),[second.invitationID]);
+ assert.equal((await f.send('claimInvite',{code:first.code})).status,410);
+ await f.json('cancelInvite',{inviteID:first.invitationID},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await f.send('cancelInvite',{},bedside.credential,env.PORCH_CONTACT_SETUP_CODE)).status,400);
+ f.advance(901);
+ assert.deepEqual((await f.json('poll',{available:true},bedside.credential)).state.invitations,[]);
+});
 test('drop-in is opt-in by mode and requires a bedside device that is ready',async()=>{
  const f=fixture(),{bedside,family}=await f.setup({audio:true,video:false});
  const start=(mode='voice')=>f.send('startCall',{targetID:bedside.state.me.id,mode,kind:'dropIn'},family.credential);
@@ -254,7 +271,7 @@ test('contact invitations expose pending status and a durable accepted identity 
  const f=fixture(); const bedside=await f.json('createHousehold',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
  const invite=await f.json('createInvite',{name:'Same name',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.match(invite.invitationID,/^[a-f0-9-]{36}$/);
- assert.deepEqual(invite.state.invitations,[{id:invite.invitationID,expiresAt:invite.expiresAt}]);
+ assert.deepEqual(invite.state.invitations,[{id:invite.invitationID,name:'Same name',expiresAt:invite.expiresAt}]);
  assert.ok(!JSON.stringify(invite.state).includes(invite.code));
  const family=await f.json('claimInvite',{code:invite.code});
  assert.deepEqual(family.state.invitations,[]); assert.equal(family.state.me.invitationID,undefined);
