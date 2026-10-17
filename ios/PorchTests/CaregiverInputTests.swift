@@ -727,3 +727,64 @@ final class PhoneFallbackHangupTests: XCTestCase {
 private final class HangupTestParticipant: Participant, @unchecked Sendable {
     override func unpublishAll(notify: Bool = true) async {}
 }
+
+final class CallScreenLayoutTests: XCTestCase {
+    @MainActor func testRemoteVideoFillsPhoneAndTabletInBothOrientations() throws {
+        // Both call controllers use this layout. Include the smallest supported
+        // phone, landscape safe areas, and iPad split-view widths.
+        for hasPreview in [true, false] {
+            let screen = UIViewController()
+            let remote = VideoView(), preview = VideoView()
+            remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
+            preview.backgroundColor = UIColor(white: 0.35, alpha: 1)
+            let title = PorchStyle.label("Family", size: 26, color: .white)
+            let status = PorchStyle.label("Video call connected", size: 17, color: .white)
+            let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
+            for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video", "phone.down.fill"]) {
+                CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
+            }
+            let hint = PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16, color: .white)
+            CallScreenLayout.install(in: screen.view, video: remote, preview: hasPreview ? preview : nil,
+                                     title: title, status: status, hint: hasPreview ? hint : nil, buttons: buttons)
+            for size in [CGSize(width: 320, height: 568), CGSize(width: 393, height: 852),
+                         CGSize(width: 568, height: 320), CGSize(width: 852, height: 393), CGSize(width: 768, height: 1024),
+                         CGSize(width: 1024, height: 768), CGSize(width: 375, height: 1024)] {
+                screen.view.frame = CGRect(origin: .zero, size: size)
+                screen.additionalSafeAreaInsets = size.width > size.height && size.height < 500
+                    ? UIEdgeInsets(top: 0, left: 59, bottom: 21, right: 59)
+                    : UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0)
+                screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+                XCTAssertEqual(remote.frame, screen.view.bounds)
+                XCTAssertEqual(remote.layoutMode, .fill)
+                let controls = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.controls" })
+                XCTAssertGreaterThan(controls.frame.minY, title.convert(title.bounds, to: screen.view).maxY)
+                XCTAssertLessThanOrEqual(controls.frame.maxY, screen.view.safeAreaLayoutGuide.layoutFrame.maxY)
+                for button in buttons {
+                    let rect = button.convert(button.bounds, to: screen.view)
+                    XCTAssertGreaterThanOrEqual(rect.width, 44)
+                    XCTAssertGreaterThanOrEqual(rect.height, 64)
+                    XCTAssertTrue(screen.view.bounds.contains(rect))
+                    XCTAssertFalse(button.hasAmbiguousLayout)
+                }
+                if hasPreview {
+                    XCTAssertLessThanOrEqual(preview.bounds.width, 112)
+                    XCTAssertLessThan(preview.bounds.width * preview.bounds.height, size.width * size.height * 0.04)
+                    XCTAssertLessThan(preview.frame.maxY, controls.frame.minY)
+                    XCTAssertTrue(screen.view.safeAreaLayoutGuide.layoutFrame.contains(preview.frame))
+                }
+                XCTAssertFalse(remote.hasAmbiguousLayout)
+                if size == CGSize(width: 393, height: 852) || size == CGSize(width: 1024, height: 768) {
+                    let image = UIGraphicsImageRenderer(size: size).image { screen.view.layer.render(in: $0.cgContext) }
+                    let attachment = XCTAttachment(image: image)
+                    attachment.name = "Call layout \(Int(size.width))x\(Int(size.height)) preview-\(hasPreview)"
+                    attachment.lifetime = .keepAlways
+                    add(attachment)
+                }
+            }
+            // Audio-only calls hide the camera control without wasting its slot.
+            buttons[1].isHidden = true
+            screen.view.layoutIfNeeded()
+            XCTAssertGreaterThan(buttons[0].bounds.width, 100)
+        }
+    }
+}

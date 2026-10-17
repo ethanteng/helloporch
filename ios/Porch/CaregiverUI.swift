@@ -17,6 +17,14 @@ enum PorchStyle {
         UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: size, weight: weight))
     }
 
+    static func centeredTextAttributes(_ attributes: AttributeContainer) -> AttributeContainer {
+        var attributes = attributes
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        attributes.paragraphStyle = paragraph
+        return attributes
+    }
+
     static func label(_ text: String, size: CGFloat = 17, color: UIColor = secondary, weight: UIFont.Weight = .regular) -> UILabel {
         let label = UILabel()
         label.text = text
@@ -31,6 +39,9 @@ enum PorchStyle {
         let button = UIButton(type: .system)
         var config = filled ? UIButton.Configuration.filled() : .plain()
         config.title = title
+        config.titleAlignment = .center
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { centeredTextAttributes($0) }
+        config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { centeredTextAttributes($0) }
         if let symbol { config.image = UIImage(systemName: symbol); config.imagePadding = 10 }
         config.baseForegroundColor = filled ? .white : accent
         config.baseBackgroundColor = accent
@@ -40,6 +51,7 @@ enum PorchStyle {
         button.titleLabel?.font = font(18, weight: .semibold)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.textAlignment = .center
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
         return button
     }
@@ -195,7 +207,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
             button.configuration?.contentInsets = .init(top: 12, leading: 10, bottom: 12, trailing: 10)
             button.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 16)
             button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                var attributes = attributes; attributes.font = PorchStyle.font(15, weight: .medium); return attributes
+                var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(15, weight: .medium); return attributes
             }
         }
         let options = UIStackView(arrangedSubviews: [nativeKeyboardButton, keyboardButton])
@@ -283,7 +295,10 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
 
     func section(_ title: String, detail: String? = nil, views: [UIView]) -> UIView {
         let heading = PorchStyle.label(title, size: 22, color: PorchStyle.ink, weight: .semibold)
-        let stack = UIStackView(arrangedSubviews: [heading] + (detail.map { [PorchStyle.label($0)] } ?? []) + views)
+        heading.textAlignment = .center
+        let detailLabel = detail.map { PorchStyle.label($0) }
+        detailLabel?.textAlignment = .center
+        let stack = UIStackView(arrangedSubviews: [heading] + (detailLabel.map { [$0] } ?? []) + views)
         stack.axis = .vertical
         stack.spacing = 18
         let card = UIView()

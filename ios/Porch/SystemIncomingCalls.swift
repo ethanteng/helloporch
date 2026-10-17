@@ -327,16 +327,21 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private let status = UILabel()
     private let video = VideoView()
     private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
-    private let camera = PorchStyle.button("Turn camera on", symbol: "video")
+    private let camera = PorchStyle.button("Camera on", symbol: "video")
     private var cameraEnabled = false
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = PorchStyle.night
+        overrideUserInterfaceStyle = .dark
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
-        let title = PorchStyle.label(SystemIncomingCalls.shared.callerName, size: 32, color: .white)
+        let title = PorchStyle.label(SystemIncomingCalls.shared.callerName, size: 26, color: .white, weight: .semibold)
+        status.font = PorchStyle.font(17); status.adjustsFontForContentSizeCategory = true
         status.textColor = .white; status.textAlignment = .center; status.numberOfLines = 0
         microphone.addAction(UIAction { _ in SystemIncomingCalls.shared.requestMute() }, for: .touchUpInside)
         let end = PorchStyle.button("End call", symbol: "phone.down.fill")
         end.addAction(UIAction { _ in SystemIncomingCalls.shared.requestEnd() }, for: .touchUpInside)
+        CallScreenLayout.configure(microphone, title: "Mute", symbol: "mic.slash")
+        CallScreenLayout.configure(camera, title: "Camera on", symbol: "video")
+        CallScreenLayout.configure(end, title: "End call", symbol: "phone.down.fill", isEnd: true)
         camera.isHidden = !SystemIncomingCalls.shared.isVideo
         camera.addAction(UIAction { [weak self] _ in
             guard let self else { return }
@@ -345,20 +350,12 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                     let enabled = !self.cameraEnabled
                     try await SystemIncomingCalls.shared.setCamera(enabled: enabled)
                     self.cameraEnabled = SystemIncomingCalls.shared.room?.localParticipant.isCameraEnabled() == true
-                    self.camera.configuration?.title = self.cameraEnabled ? "Turn camera off" : "Turn camera on"
+                    self.camera.configuration?.title = self.cameraEnabled ? "Camera off" : "Camera on"
                 } catch { showPorchError(error, on: self) }
             }
         }, for: .touchUpInside)
-        let stack = UIStackView(arrangedSubviews: [title, status, video, camera, microphone, end])
-        stack.axis = .vertical; stack.spacing = 20; stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            video.heightAnchor.constraint(greaterThanOrEqualToConstant: 80),
-        ])
+        CallScreenLayout.install(in: view, video: video, title: title, status: status,
+                                 buttons: [microphone, camera, end])
         SystemIncomingCalls.shared.room?.add(delegate: self)
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
@@ -369,7 +366,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         guard calls.hasCall else { video.track = nil; dismiss(animated: true); return }
         status.text = calls.status
         cameraEnabled = calls.room?.localParticipant.isCameraEnabled() == true
-        camera.configuration?.title = cameraEnabled ? "Turn camera off" : "Turn camera on"
+        camera.configuration?.title = cameraEnabled ? "Camera off" : "Camera on"
         microphone.configuration?.title = calls.room?.localParticipant.isMicrophoneEnabled() == true ? "Mute" : "Unmute"
         video.track = calls.room?.remoteParticipants.values.first?.videoTracks.first?.track as? VideoTrack
     }

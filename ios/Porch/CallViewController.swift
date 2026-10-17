@@ -86,7 +86,7 @@ final class CallViewController: UIViewController {
         callConfig.baseBackgroundColor = PorchStyle.nightSurface
         callConfig.baseForegroundColor = PorchStyle.nightText
         callConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes; attributes.font = PorchStyle.font(19, weight: .medium); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(19, weight: .medium); return attributes
         }
         callButton.configuration = callConfig
         callButton.accessibilityIdentifier = "clock.call"
@@ -425,7 +425,7 @@ final class PeoplePickerViewController: UIViewController {
         let back = PorchStyle.button(BedsideText.string("Back to clock"), symbol: "clock", filled: false)
         back.configuration?.baseForegroundColor = PorchStyle.nightText
         back.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes; attributes.font = PorchStyle.font(28, weight: .medium); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(28, weight: .medium); return attributes
         }
         back.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
         back.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
@@ -479,10 +479,10 @@ final class PeoplePickerViewController: UIViewController {
                 button.configuration?.baseBackgroundColor = PorchStyle.nightSurface
                 button.configuration?.baseForegroundColor = PorchStyle.nightText
                 button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = attributes; attributes.font = PorchStyle.font(nameSize, weight: .semibold); return attributes
+                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(nameSize, weight: .semibold); return attributes
                 }
                 button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = attributes; attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = PorchStyle.nightText; return attributes
+                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = PorchStyle.nightText; return attributes
                 }
                 button.accessibilityIdentifier = "people.person.\(number)"
                 button.accessibilityLanguage = BedsideText.language.speechLanguage
