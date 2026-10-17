@@ -128,11 +128,14 @@ import PorchCore
                 identity.topAnchor.constraint(greaterThanOrEqualTo: space.topAnchor),
                 identity.bottomAnchor.constraint(lessThanOrEqualTo: space.bottomAnchor),
                 placeholder.widthAnchor.constraint(equalTo: identity.widthAnchor),
-
             ])
             if let photo {
                 let width = photo.widthAnchor.constraint(equalTo: identity.widthAnchor, multiplier: 0.85)
-                width.priority = .defaultLow
+                // Fit ordinary calls on screen before growing the scrollable
+                // overlays; the image's intrinsic size must not force overflow.
+                width.priority = UILayoutPriority(249)
+                photo.setContentCompressionResistancePriority(.fittingSizeLevel, for: .horizontal)
+                photo.setContentCompressionResistancePriority(.fittingSizeLevel, for: .vertical)
                 NSLayoutConstraint.activate([
                     photo.widthAnchor.constraint(lessThanOrEqualTo: identity.widthAnchor),
                     photo.widthAnchor.constraint(lessThanOrEqualToConstant: 520),

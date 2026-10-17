@@ -814,7 +814,7 @@ final class CallScreenLayoutTests: XCTestCase {
             screen.view.frame = CGRect(origin: .zero, size: size); screen.view.layoutIfNeeded()
             let rect = photo.convert(photo.bounds, to: screen.view)
             XCTAssertGreaterThan(rect.height, 20)
-            XCTAssertTrue(screen.view.bounds.contains(rect))
+            XCTAssertTrue(screen.view.bounds.contains(rect), "Photo must fit in \(size): \(rect)")
             XCTAssertLessThan(title.convert(title.bounds, to: screen.view).maxY, rect.minY)
             XCTAssertLessThan(rect.maxY, end.convert(end.bounds, to: screen.view).minY)
             XCTAssertFalse(photo.hasAmbiguousLayout)

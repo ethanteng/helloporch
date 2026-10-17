@@ -9,11 +9,20 @@ public struct CallContact: Codable, Equatable {
     public let familyMemberID: String?
     public let invitationID: String?
     public let buttonColorHex: String?
-    public let photoData: Data?
+    private var photo: ContactPhoto?
+    public var photoID: String? { photo?.id }
+    public var photoData: Data? { photo?.data }
+    var hasInlinePhoto: Bool { photo?.inlineData != nil }
+
+    // Metadata validation and pairing must preserve the reference without
+    // reading the image file on the main actor.
+    func preservingPhoto(from original: Self) -> Self {
+        var result = self; result.photo = original.photo; return result
+    }
 
     public init(name: String, address: String = "", shortcutName: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
         self.buttonColorHex = try Self.validatedColor(buttonColorHex)
-        self.photoData = try Self.validatedPhoto(photoData)
+        self.photo = try photoData.map { try ContactPhoto(data: $0) }
         self.familyMemberID = nil
         self.invitationID = nil
         self.nativeCall = nil
@@ -57,7 +66,7 @@ public struct CallContact: Codable, Equatable {
 
     public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
         self.buttonColorHex = try Self.validatedColor(buttonColorHex)
-        self.photoData = try Self.validatedPhoto(photoData)
+        self.photo = try photoData.map { try ContactPhoto(data: $0) }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
         guard name.count <= 80 else { throw ValidationError.nameTooLong }
@@ -78,10 +87,40 @@ public struct CallContact: Codable, Equatable {
         return value.uppercased()
     }
 
-    private static func validatedPhoto(_ data: Data?) throws -> Data? {
-        guard let data else { return nil }
-        guard !data.isEmpty, data.count <= 1_000_000 else { throw ValidationError.invalidAppearance }
-        return data
+    private enum CodingKeys: String, CodingKey {
+        case name, address, shortcutName, nativeCall, phoneNumber, familyMemberID, invitationID, buttonColorHex, photoID, photoData
+    }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        address = try values.decode(String.self, forKey: .address)
+        shortcutName = try values.decodeIfPresent(String.self, forKey: .shortcutName)
+        nativeCall = try values.decodeIfPresent(NativeCall.self, forKey: .nativeCall)
+        phoneNumber = try values.decodeIfPresent(String.self, forKey: .phoneNumber)
+        familyMemberID = try values.decodeIfPresent(String.self, forKey: .familyMemberID)
+        invitationID = try values.decodeIfPresent(String.self, forKey: .invitationID)
+        buttonColorHex = try values.decodeIfPresent(String.self, forKey: .buttonColorHex)
+        let store = decoder.userInfo[ContactPhotoStore.codingKey] as? ContactPhotoStore ?? .standard
+        if let data = try values.decodeIfPresent(Data.self, forKey: .photoData) {
+            // The first load migrates earlier inline-photo records to files.
+            photo = try ContactPhoto(data: data, store: store)
+        } else if let id = try values.decodeIfPresent(String.self, forKey: .photoID) {
+            photo = try ContactPhoto(id: id, store: store)
+        }
+    }
+    public func encode(to encoder: Encoder) throws {
+        let store = encoder.userInfo[ContactPhotoStore.codingKey] as? ContactPhotoStore ?? photo?.store ?? .standard
+        try photo?.persist(to: store)
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(name, forKey: .name)
+        try values.encode(address, forKey: .address)
+        try values.encodeIfPresent(shortcutName, forKey: .shortcutName)
+        try values.encodeIfPresent(nativeCall, forKey: .nativeCall)
+        try values.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
+        try values.encodeIfPresent(familyMemberID, forKey: .familyMemberID)
+        try values.encodeIfPresent(invitationID, forKey: .invitationID)
+        try values.encodeIfPresent(buttonColorHex, forKey: .buttonColorHex)
+        try values.encodeIfPresent(photo?.id, forKey: .photoID)
     }
 
     public static func normalizedPhoneNumber(_ value: String) throws -> String {

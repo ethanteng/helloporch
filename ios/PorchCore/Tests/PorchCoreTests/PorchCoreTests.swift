@@ -488,21 +488,23 @@ final class RecipientAppearancePersistenceTests: XCTestCase {
     func testPhotoAndColorSurviveSavingAndAcceptedInvitation() throws {
         let suite = "appearance.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        let photoStore = ContactPhotoStore(directoryURL: directory)
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
         let invitation = UUID().uuidString, member = UUID().uuidString
         let photo = Data([1, 2, 3, 4])
         var slots = CallSlots()
         try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "david", mode: .video),
             phoneNumber: "+14155550123", invitationID: invitation, buttonColorHex: "fFcC00", photoData: photo), for: 3)
-        try slots.save(to: defaults)
-        slots = try CallSlots.load(from: defaults)
+        try slots.save(to: defaults, photoStore: photoStore)
+        slots = try CallSlots.load(from: defaults, photoStore: photoStore)
         let object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": true,
             "me": ["id": "bedside", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true],
             "people": [["id": member, "invitationID": invitation, "name": "Original name", "role": "family", "permissions": ["audio": true, "video": true], "online": true]], "busy": false, "serverTime": 1]
         let state = try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
         try slots.reconcile(with: state)
-        try slots.save(to: defaults)
-        let loaded = try CallSlots.load(from: defaults)
+        try slots.save(to: defaults, photoStore: photoStore)
+        let loaded = try CallSlots.load(from: defaults, photoStore: photoStore)
         let saved = try XCTUnwrap(loaded.contact(for: 3))
         XCTAssertEqual(saved.buttonColorHex, "FFCC00"); XCTAssertEqual(saved.photoData, photo)
         XCTAssertEqual(saved.familyMemberID, member); XCTAssertEqual(saved.phoneNumber, "+14155550123")
