@@ -51,8 +51,13 @@ import PorchCore
 @MainActor enum PorchAnnouncementVoice {
     static func available(for language: BedsideLanguage) -> [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices()
-            .filter { language.supportsSpeechVoice(language: $0.language) }
+            .filter { isOffered($0, for: language) }
             .sorted { label($0).localizedStandardCompare(label($1)) == .orderedAscending }
+    }
+    /// Novelty voices (Bubbles, Zarvox…) don't suit a bedside warning; personal voices need separate authorization.
+    static func isOffered(_ voice: AVSpeechSynthesisVoice, for language: BedsideLanguage) -> Bool {
+        if #available(iOS 17.0, *), !voice.voiceTraits.isDisjoint(with: [.isNoveltyVoice, .isPersonalVoice]) { return false }
+        return language.supportsSpeechVoice(language: voice.language)
     }
     static func label(_ voice: AVSpeechSynthesisVoice) -> String {
         let region = Locale(identifier: "en").localizedString(forIdentifier: voice.language) ?? voice.language
@@ -63,7 +68,7 @@ import PorchCore
     }
     static func resolve(for language: BedsideLanguage, identifier: String?) -> AVSpeechSynthesisVoice? {
         if let identifier, let voice = AVSpeechSynthesisVoice(identifier: identifier),
-           language.supportsSpeechVoice(language: voice.language) { return voice }
+           isOffered(voice, for: language) { return voice }
         guard let fallback = AVSpeechSynthesisVoice(language: language.speechLanguage),
               language.supportsSpeechVoice(language: fallback.language) else { return nil }
         return fallback

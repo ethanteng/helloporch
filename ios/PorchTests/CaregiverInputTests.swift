@@ -296,11 +296,27 @@ final class CaregiverInputTests: XCTestCase {
             if let fallback { XCTAssertTrue(language.supportsSpeechVoice(language: fallback.language)) }
             for voice in AVSpeechSynthesisVoice.speechVoices() {
                 let resolved = PorchAnnouncementVoice.resolve(for: language, identifier: voice.identifier)
-                if language.supportsSpeechVoice(language: voice.language) {
+                if PorchAnnouncementVoice.isOffered(voice, for: language) {
                     XCTAssertEqual(resolved?.identifier, voice.identifier)
                 } else {
-                    XCTAssertEqual(resolved?.identifier, fallback?.identifier, "A voice from another language must never be used")
+                    XCTAssertEqual(resolved?.identifier, fallback?.identifier, "A voice from another language or a hidden voice must never be used")
                 }
+            }
+        }
+    }
+    @MainActor func testAnnouncementVoicePickerHidesNoveltyAndPersonalVoices() throws {
+        guard #available(iOS 17.0, *) else { throw XCTSkip("Voice traits require iOS 17") }
+        let hidden: AVSpeechSynthesisVoice.Traits = [.isNoveltyVoice, .isPersonalVoice]
+        for language in BedsideLanguage.allCases {
+            let fallback = PorchAnnouncementVoice.resolve(for: language, identifier: nil)
+            XCTAssertTrue(PorchAnnouncementVoice.available(for: language).allSatisfy { $0.voiceTraits.isDisjoint(with: hidden) })
+            for voice in AVSpeechSynthesisVoice.speechVoices() where !voice.voiceTraits.isDisjoint(with: hidden) {
+                XCTAssertFalse(PorchAnnouncementVoice.isOffered(voice, for: language), voice.name)
+                XCTAssertEqual(PorchAnnouncementVoice.resolve(for: language, identifier: voice.identifier)?.identifier, fallback?.identifier,
+                               "A saved \(voice.name) voice must fall back to the default, matching the picker")
+            }
+            for voice in AVSpeechSynthesisVoice.speechVoices() where voice.voiceTraits.isDisjoint(with: hidden) && language.supportsSpeechVoice(language: voice.language) {
+                XCTAssertTrue(PorchAnnouncementVoice.isOffered(voice, for: language), voice.name)
             }
         }
     }
