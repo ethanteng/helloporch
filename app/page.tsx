@@ -1,6 +1,7 @@
 import DemoVideo from "@/components/DemoVideo";
 import PorchFace from "@/components/PorchFace";
 import PorchKeypad, { ScreenKey } from "@/components/PorchKeypad";
+import PorchLogo from "@/components/PorchLogo";
 import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 
 const PHONE_STEPS = ["Unlock the phone", "Find the video app", "Scroll to Sarah", "Tap the tiny camera icon"];
@@ -11,7 +12,7 @@ export default function Home() {
       <div className="page">
         <nav className="nav">
           <a href="#" className="logo" aria-label="Porch home">
-            porch<span>.</span>
+            <PorchLogo />
           </a>
           <a href="#join" className="nav__cta">
             Join the waitlist
@@ -229,7 +230,7 @@ function KeysCloseUp() {
         <div style={abs({ left: 136, top: 30 })}>
           <ScreenKey who="mike" name="Mike" />
         </div>
-        <div style={abs({ left: 26, top: 32, width: 96, height: 96, borderRadius: "50%", border: "3px solid oklch(0.52 0.13 40 / .5)", boxSizing: "border-box", transform: "translateZ(34px)" })} />
+        <div style={abs({ left: 26, top: 32, width: 96, height: 96, borderRadius: "50%", border: "3px solid oklch(0.64 0.17 35 / .5)", boxSizing: "border-box", transform: "translateZ(34px)" })} />
         <div style={abs({ left: 40, top: 46, width: 68, height: 68, borderRadius: "50%", background: "oklch(0.82 0.06 55 / .6)", border: "2px solid oklch(0.97 0.02 60 / .9)", boxSizing: "border-box", transform: "translateZ(36px)" })} />
       </div>
     </div>
