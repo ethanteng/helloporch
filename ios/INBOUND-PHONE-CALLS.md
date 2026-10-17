@@ -54,7 +54,7 @@ Deploy the server containing `POST /api/calls/inbound/webhook` before enabling p
      scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID
    ```
 
-   With a single number on the existing Twilio outbound trunk, the script selects it automatically. Otherwise set `PORCH_INBOUND_NUMBER` privately to the intended number on that trunk. The plan verifies household ownership, existing trunks and dispatch rules, and refuses to reassign a number from another household.
+   With a single number on the existing Twilio outbound trunk, the script selects it automatically. Otherwise set `PORCH_INBOUND_NUMBER` privately to the intended number on that trunk. The plan names the bedside the number will ring, for example: Calls to this number will ring the bedside “Grandma”. Check that name before `--apply`, because household IDs are hard to tell apart. It also verifies existing trunks and dispatch rules, and refuses to take a number from another household unless you [reassign it](#move-a-number-to-another-household).
 
 4. Repeat with `--apply` to create the inbound trunk, configure Twilio SIP signaling source ranges, set 45-second ringing and a 30-minute SIP limit, map Twilio's `X-Twilio-VerStat` verification header to the `porch.callerVerification` participant attribute, create an individual dispatch rule with at most two participants, and persist the number assignment. A household configured before phone drop-in needs this `--apply` run once more for the header mapping; until then, every phone call rings for a normal answer. The script is safe to repeat for the same assignment; it does not overwrite unrelated trunks or routes. IDs and the selected number are saved privately in `.env.inbound-setup.local`.
 5. In LiveKit Cloud → project Settings → Webhooks, add the calling server's public HTTPS endpoint:
@@ -74,6 +74,17 @@ Deploy the server containing `POST /api/calls/inbound/webhook` before enabling p
 7. Install the updated app, open the bedside clock, and place a real test call from another phone. Twilio account/trial restrictions and provider charges still apply.
 
 The Twilio SIP signaling CIDRs in the script come from [Twilio's official gateway list](https://www.twilio.com/docs/sip-trunking/ip-addresses); review them if the provider changes its network. Twilio Elastic SIP Trunking origination does not support the outbound trunk's username/password authentication, so this trunk restricts SIP sources by IP instead. See [LiveKit's Twilio setup](https://docs.livekit.io/telephony/start/providers/twilio/) and [inbound authentication](https://docs.livekit.io/telephony/accepting-calls/inbound-trunk/).
+
+### Move a number to another household
+
+Each number rings exactly one bedside. To move it, for example after setting up a second iPad, run the script for the household that should get the calls and add `--reassign`. Without that flag the plan stops and says which bedside the number rings now.
+
+```sh
+node --env-file=.env.inbound-production.local --env-file=.env.local \
+  scripts/configure-inbound.mjs --household=NEW_HOUSEHOLD_UUID --reassign
+```
+
+The plan names both bedsides, for example: calls to this number will ring the bedside “Grandma” instead of “Grandpa”. Repeat with `--apply`. It first moves the number's route with an atomic compare-and-set, so a concurrent run stops before changing anything, then renames the LiveKit trunk and dispatch rule. If it's interrupted or reports a concurrent change, run it again for the household that should get the calls. Twilio and the trunk's login stay the same, so there's nothing to change in the Twilio Console. Voicemail and messages already left stay with the old household. Call the number afterwards and check that the new bedside rings.
 
 ## Voicemail
 
