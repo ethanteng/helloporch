@@ -11,7 +11,7 @@ Each household has its own number. Managed Redis stores `phone-number:<E.164 num
 - All callers reaching the assigned number can ring it; this first version does not require callers to be paired app members. Every call requires a manual answer, even if Porch drop-in is enabled.
 - Answer connects two-way audio. The camera stays off. Mute, keypad hangup, either person's hangup, and automatic silence hangup work with the existing call controls.
 - A call reserves the same household slot as ordinary Porch calls and drop-ins. A second caller cannot interrupt or join the first call. There is no call waiting. With [voicemail](#voicemail) set up, callers who aren't answered, are declined, or find Porch busy or offline can leave a message. Without it they are disconnected, and the provider decides which tone or message they hear.
-- LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing is limited to 45 seconds and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
+- LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing is limited to 20 seconds (about four rings, like ordinary voicemail), so the bedside has that long to answer. The SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
 - Paired app calls and outbound phone fallback continue to use their existing flows. Existing family builds can decode the incoming audio call; the updated build adds faster ringing, telephone connection status, and confirmed phone hangup retries.
 
 ## Configure the existing number
@@ -36,7 +36,7 @@ Deploy the server containing `POST /api/calls/inbound/webhook` before enabling p
 
    With a single number on the existing Twilio outbound trunk, the script selects it automatically. Otherwise set `PORCH_INBOUND_NUMBER` privately to the intended number on that trunk. The plan verifies household ownership, existing trunks and dispatch rules, and refuses to reassign a number from another household.
 
-4. Repeat with `--apply` to create the inbound trunk, configure Twilio SIP signaling source ranges, set 45-second ringing and a 30-minute SIP limit, create an individual dispatch rule with at most two participants, and persist the number assignment. The script is safe to repeat for the same assignment; it does not overwrite unrelated trunks or routes. IDs and the selected number are saved privately in `.env.inbound-setup.local`.
+4. Repeat with `--apply` to create the inbound trunk, configure Twilio SIP signaling source ranges, set 20-second ringing and a 30-minute SIP limit, create an individual dispatch rule with at most two participants, and persist the number assignment. The script is safe to repeat for the same assignment; it does not overwrite unrelated trunks or routes. IDs and the selected number are saved privately in `.env.inbound-setup.local`.
 5. In LiveKit Cloud → project Settings → Webhooks, add the calling server's public HTTPS endpoint:
 
    ```text
@@ -60,7 +60,7 @@ The Twilio SIP signaling CIDRs in the script come from [Twilio's official gatewa
 Voicemail uses a Twilio **voice webhook** for the number instead of Elastic SIP Trunking origination. Twilio runs Porch's instructions for each call:
 
 1. `POST /api/calls/inbound/voice` dials LiveKit (`<Dial><Sip>`) with a digest login. LiveKit rings the bedside exactly as before, and the caller hears ringing until Porch answers.
-2. If the call isn't answered within 45 seconds, is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
+2. If the call isn't answered within 20 seconds, is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
 3. When the recording is ready, Twilio calls `/api/calls/inbound/voice/recording`. The server downloads the MP3 and stores it in the private Blob store. It then **deletes Twilio's copy**, so the recording isn't kept at the phone provider.
 
 The voicemail then waits for review:
@@ -76,7 +76,7 @@ The voicemail then waits for review:
    - `LIVEKIT_SIP_URI`, the project's SIP URI from LiveKit Cloud → Settings, for example `sip:abc123.sip.livekit.cloud`.
 
    Messages must already be set up (`BLOB_READ_WRITE_TOKEN`). Redeploy.
-2. Switch the LiveKit inbound trunk to the digest login:
+2. Switch the LiveKit inbound trunk to the digest login (this also shortens an existing trunk's ringing to 20 seconds):
 
    ```sh
    node --env-file=.env.inbound-production.local --env-file=.env.local \
@@ -116,7 +116,7 @@ xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
 Before relying on the feature, test with the bedside iPad and a real phone:
 
 - Dial the assigned number, hear ringing, answer by touch and by the keypad, and verify two-way audio with the camera off.
-- Hang up from each end, decline, ignore for 45 seconds, cancel before the iPad answers, and retry immediately afterward.
+- Hang up from each end, decline, ignore for 20 seconds, cancel before the iPad answers, and retry immediately afterward.
 - Call during an existing Porch call, during outbound phone fallback, and from two phones at once. Only one conversation may reach the bedside device, with no audio shared across calls.
 - Open the updated app once, allow microphone access, then background Porch and dial the number. Repeat with the iPad locked; answer without unlocking and verify two-way audio, system mute/hangup, foreground keypad controls, and audio continuing after another lock.
 - Cancel before answer, ignore the call, decline from the lock screen, disconnect Wi-Fi, restore it, and call again. Test Focus/Do Not Disturb, a cold launch after unlocking once since reboot, and production TestFlight push delivery. Record deliberate force-quit behavior on hardware; simulator tests cannot prove APNs wakeup or ringing.
