@@ -1,6 +1,4 @@
 .page { max-width: 1160px; margin: 0 auto; padding: 32px 24px 64px; }
-.brand { display: inline-block; font: 500 34px var(--serif); text-decoration: none; color: var(--ink); }
-.brand span { color: var(--terracotta); }
 .eyebrow { margin-top: 44px; color: var(--terracotta); font-size: 13px; text-transform: uppercase; letter-spacing: .16em; font-weight: 700; }
 .page h1 { font: 500 clamp(40px, 6vw, 66px)/1.06 var(--serif); letter-spacing: -.035em; margin: 14px 0 20px; }
 .intro { max-width: 560px; color: var(--muted); font-size: 18px; line-height: 1.6; }

@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Newsreader } from "next/font/google";
+import { Bricolage_Grotesque, DM_Sans, Newsreader } from "next/font/google";
 import "./globals.css";
 
 const serif = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], axes: ["opsz"], variable: "--font-serif" });
 const sans = DM_Sans({ subsets: ["latin"], axes: ["opsz"], variable: "--font-sans" });
+const brand = Bricolage_Grotesque({ subsets: ["latin"], axes: ["opsz"], variable: "--font-brand" });
 
 export const metadata: Metadata = {
   title: "Porch — Press a face. See a face.",
@@ -17,7 +18,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="en" className={`${serif.variable} ${sans.variable} ${brand.variable}`}>
       <body>{children}</body>
     </html>
   );

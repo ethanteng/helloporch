@@ -1,5 +1,6 @@
 import { useId, type CSSProperties } from "react";
 import PorchFace, { type Who } from "@/components/PorchFace";
+import PorchLogo from "@/components/PorchLogo";
 
 const FAMILY: { who: Who; name: string }[] = [
   { who: "sarah", name: "Sarah" },
@@ -67,7 +68,7 @@ export default function PorchKeypad({ style }: { style?: CSSProperties }) {
           </svg>
           <div className="keypad__top">
             <div className="keypad__logo">
-              porch<span>.</span>
+              <PorchLogo />
             </div>
             <div className="keypad__keys">
               {FAMILY.map((f) => (

@@ -1,6 +1,7 @@
 import DemoVideo from "@/components/DemoVideo";
 import PorchFace from "@/components/PorchFace";
 import PorchKeypad, { ScreenKey } from "@/components/PorchKeypad";
+import PorchLogo from "@/components/PorchLogo";
 import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 
 const PHONE_STEPS = ["Unlock the phone", "Find the video app", "Scroll to Sarah", "Tap the tiny camera icon"];
@@ -11,7 +12,7 @@ export default function Home() {
       <div className="page">
         <nav className="nav">
           <a href="#" className="logo" aria-label="Porch home">
-            porch<span>.</span>
+            <PorchLogo />
           </a>
           <a href="#join" className="nav__cta">
             Join the waitlist

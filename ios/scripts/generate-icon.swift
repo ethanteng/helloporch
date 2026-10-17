@@ -6,32 +6,27 @@ let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingL
 let assets = root.appendingPathComponent("Porch/Assets.xcassets")
 let icons = assets.appendingPathComponent("AppIcon.appiconset")
 try FileManager.default.createDirectory(at: icons, withIntermediateDirectories: true)
-let cream = CGColor(red: 0.97, green: 0.94, blue: 0.87, alpha: 1)
-let clay = CGColor(red: 0.60, green: 0.26, blue: 0.16, alpha: 1)
+let butter = CGColor(red: 0.974, green: 0.910, blue: 0.670, alpha: 1)   // #f8e8ab
+let tomato = CGColor(red: 0.877, green: 0.366, blue: 0.240, alpha: 1)   // #e05d3d
 
 func icon(size: Int) throws {
     let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
                             bytesPerRow: size * 4, space: CGColorSpaceCreateDeviceRGB(),
                             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
-    context.scaleBy(x: CGFloat(size) / 1024, y: CGFloat(size) / 1024)
-    context.setFillColor(clay)
-    context.fill(CGRect(x: 0, y: 0, width: 1024, height: 1024))
-    // A porch arch around a video camera, drawn as opaque vector shapes.
-    context.setFillColor(cream)
-    context.fill(CGRect(x: 224, y: 160, width: 576, height: 400))
-    context.fillEllipse(in: CGRect(x: 224, y: 272, width: 576, height: 576))
-    context.setFillColor(clay)
-    context.fill(CGRect(x: 286, y: 160, width: 452, height: 400))
-    context.fillEllipse(in: CGRect(x: 286, y: 334, width: 452, height: 452))
-    context.setFillColor(cream)
-    context.addPath(CGPath(roundedRect: CGRect(x: 354, y: 380, width: 216, height: 170), cornerWidth: 28, cornerHeight: 28, transform: nil))
-    context.fillPath()
-    context.move(to: CGPoint(x: 586, y: 436))
-    context.addLine(to: CGPoint(x: 674, y: 384))
-    context.addLine(to: CGPoint(x: 674, y: 546))
-    context.addLine(to: CGPoint(x: 586, y: 494))
-    context.closePath()
-    context.fillPath()
+    context.setFillColor(butter)
+    context.fill(CGRect(x: 0, y: 0, width: size, height: size))
+    // Flip to y-down and map the 140-unit design grid (origin at -20,-20) onto the icon.
+    let k = CGFloat(size) / 140
+    context.translateBy(x: 0, y: CGFloat(size))
+    context.scaleBy(x: k, y: -k)
+    context.translateBy(x: 20, y: 20)
+    // A ring with a smile, and a short stem hanging from its left side.
+    context.setStrokeColor(tomato)
+    context.setLineWidth(9)
+    context.setLineCap(.round)
+    context.move(to: CGPoint(x: 20, y: 44)); context.addLine(to: CGPoint(x: 20, y: 91)); context.strokePath()
+    context.strokeEllipse(in: CGRect(x: 20, y: 12, width: 64, height: 64))
+    context.move(to: CGPoint(x: 36, y: 42)); context.addQuadCurve(to: CGPoint(x: 68, y: 42), control: CGPoint(x: 52, y: 60)); context.strokePath()
     let bitmap = NSBitmapImageRep(cgImage: context.makeImage()!)
     try bitmap.representation(using: .png, properties: [:])!.write(to: icons.appendingPathComponent("icon-\(size).png"))
 }
