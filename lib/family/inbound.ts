@@ -144,11 +144,12 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     if (house.call?.id === session.callID) return house.call.state !== "ended";
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
     const ready = !!bedside?.available && bedside.seenAt > now - 30;
-    const expiresAt = createdAt + ringSeconds(house);
-    if (!bedside || (!ready && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended") || expiresAt <= now) return false;
+    if (!bedside || (!ready && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended")) return false;
     // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the
     // master switch and a foreground bedside; otherwise the call rings normally.
     const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
+    const expiresAt = createdAt + ringSeconds(house, dropIn ? "dropIn" : "call");
+    if (expiresAt <= now) return false;
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
       state: "pending", createdAt, expiresAt, phone: session.phone };
     return true;

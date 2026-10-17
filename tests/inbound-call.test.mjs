@@ -324,6 +324,17 @@ test('a carrier-verified, caregiver-approved number drops in with audio after th
   assert.deepEqual(token.video.canPublishSources, ['microphone']);
 });
 
+test('approved phone drop-ins keep the standard deadline when the ring time is short', async () => {
+  const f = fixture(), { bedside } = await f.setup();
+  await allowDropIns(f, bedside); await approve(f, bedside);
+  await f.json('setRingSeconds', { seconds: 15 }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+  const event = f.call(undefined, verified); await f.webhook(event);
+  const call = f.house(bedside).call;
+  assert.equal(call.kind, 'dropIn'); assert.equal(call.expiresAt, event.createdAt + 45);
+  f.advance(20); assert.equal((await f.poll(bedside)).state.call.state, 'pending');
+  assert.ok(!f.ended.includes(event.room.name));
+});
+
 test('caller ID without full carrier attestation, an unapproved number, or paused drop-in rings normally', async () => {
   const cases = [
     { attributes: {} }, { attributes: { 'porch.callerVerification': 'TN-Validation-Passed-B' } },

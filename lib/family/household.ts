@@ -47,9 +47,12 @@ export async function mutate<T>(store: FamilyStore, id: string, change: (house: 
 }
 
 /** How long a call to the bedside rings, from the family app or a regular phone, before the caller is
- * offered voicemail (or, with messages off, the call ends). Caregivers choose it in Call preferences. */
+ * offered voicemail (or, with messages off, the call ends). Caregivers choose it in Call preferences.
+ * Drop-ins keep the standard time so the announcement and countdown, or a manual answer, still fit. */
 export const ringLimits = { minimum: 15, maximum: 120, standard: 45 };
-export function ringSeconds(house: Household): number { return house.ringSeconds ?? ringLimits.standard; }
+export function ringSeconds(house: Household, kind: Call["kind"] = "call"): number {
+  return kind === "dropIn" ? ringLimits.standard : house.ringSeconds ?? ringLimits.standard;
+}
 
 export function callRoom(call: Call): string { return call.phone?.room ?? `porch-paired-${call.id}`; }
 export function phoneDropIn(house: Household, number?: string): PhoneDropIn | undefined {

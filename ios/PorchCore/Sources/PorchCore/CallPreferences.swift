@@ -7,6 +7,8 @@ public enum CallPreferences {
     /// How long calls to the bedside ring before voicemail. The household keeps it on the server.
     public static let voicemailRange = 15...120
     public static let defaultVoicemailSeconds = 45
+    /// Drop-ins don't follow it: the announcement and countdown, or a manual answer, need this long.
+    public static let dropInWaitSeconds = 45
     public static let silenceRange = 15...1800
     public static let defaultSilenceSeconds = 120
     private static let silenceEnabledKey = "porch.disconnectAfterSilence"

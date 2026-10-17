@@ -188,6 +188,12 @@ test('caregivers choose how long calls to the bedside ring before voicemail',asy
  await f.json('setRingSeconds',{seconds:120},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.call.expiresAt,created.state.call.expiresAt);
  await f.json('endCall',{callID:created.state.call.id},family.credential);
+ // Drop-ins keep the standard time for their announcement and countdown, even with a short ring time.
+ await f.json('setRingSeconds',{seconds:15},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ await f.json('setDropIn',{enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const dropIn=await f.json('startCall',{targetID:bedside.state.me.id,mode:'voice',kind:'dropIn'},family.credential);
+ assert.equal(dropIn.state.call.expiresAt-dropIn.state.call.createdAt,75);
+ await f.json('endCall',{callID:dropIn.state.call.id},family.credential);
  // The bedside's own calls still use the waiting time it sends.
  const outgoing=await f.json('startCall',{targetID:family.state.me.id,mode:'video',kind:'call',waitSeconds:20},bedside.credential);
  assert.equal(outgoing.state.call.expiresAt-outgoing.state.call.createdAt,50);

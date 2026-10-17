@@ -333,7 +333,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (!online(target, now) && !(input.kind === "call" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
         // Family phones call only the bedside, which rings for the caregiver's chosen time.
-        const wait = me.role === "family" ? ringSeconds(house) : input.waitSeconds !== undefined ? input.waitSeconds : 45;
+        const wait = me.role === "family" ? ringSeconds(house, input.kind) : input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
         me.seenAt = now;
         house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind: input.kind, state: "pending", createdAt: now, expiresAt: now + wait + 30 };

@@ -11,7 +11,7 @@ Each household has its own number. Managed Redis stores `phone-number:<E.164 num
 - All callers reaching the assigned number can ring it; callers don't need to be paired app members. Calls require a manual answer, except [approved, verified drop-ins](#audio-drop-in-by-phone).
 - Answer connects two-way audio. The camera stays off. Mute, keypad hangup, either person's hangup, and automatic silence hangup work with the existing call controls.
 - A call reserves the same household slot as ordinary Porch calls and drop-ins. A second caller cannot interrupt or join the first call. There is no call waiting. With [voicemail](#voicemail) set up, callers who aren't answered, are declined, or find Porch busy or offline can leave a message. Without it they are disconnected, and the provider decides which tone or message they hear.
-- LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing stops after the caregiver's **Call preferences → Ring before voicemail** time (15 seconds to 2 minutes, 45 by default) and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
+- LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing stops after the caregiver's **Call preferences → Ring before voicemail** time (15 seconds to 2 minutes, 45 by default; approved drop-ins always get 45) and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
 - Paired app calls and outbound phone fallback continue to use their existing flows. Existing family builds can decode the incoming audio call; the updated build adds faster ringing, telephone connection status, and confirmed phone hangup retries.
 
 ## Audio drop-in by phone
@@ -80,7 +80,7 @@ The Twilio SIP signaling CIDRs in the script come from [Twilio's official gatewa
 Voicemail uses a Twilio **voice webhook** for the number instead of Elastic SIP Trunking origination. Twilio runs Porch's instructions for each call:
 
 1. `POST /api/calls/inbound/voice` dials LiveKit (`<Dial><Sip>`) with a digest login. LiveKit rings the bedside exactly as before, and the caller hears ringing until Porch answers.
-2. If the call isn't answered within the household's ring time (Twilio's own dial timeout is 10 seconds longer, as a backstop), is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
+2. If the call isn't answered within the household's ring time (Twilio's own dial timeout is 10 seconds longer than that or a drop-in's 45 seconds, whichever is more, as a backstop), is declined, or Porch is busy or offline, Twilio asks `/api/calls/inbound/voice/dialed` what to do next. If messages are on and the queue has room, Porch plays a short English greeting and a beep, then records for up to two minutes. Silence for 5 seconds or `#` ends the recording.
 3. When the recording is ready, Twilio calls `/api/calls/inbound/voice/recording`. The server downloads the MP3 and stores it in the private Blob store. It then **deletes Twilio's copy**, so the recording isn't kept at the phone provider.
 
 The voicemail then waits for review:

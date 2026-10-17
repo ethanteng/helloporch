@@ -41,7 +41,7 @@ final class CallPreferencesViewController: CaregiverFormViewController {
         voicemailStepper.addTarget(self, action: #selector(voicemailStepped), for: .valueChanged)
         voicemailRow.alignment = .center
         voicemailRow.spacing = 20
-        form.addArrangedSubview(section("Ring before voicemail", detail: "How long calls to Porch ring, from the family app or a regular phone, before the caller can leave a message. If family messages are off, the call ends instead. Applies to everyone who calls this iPad.", views: [voicemailRow, voicemailStatus]))
+        form.addArrangedSubview(section("Ring before voicemail", detail: "How long calls to Porch ring, from the family app or a regular phone, before the caller can leave a message. If family messages are off, the call ends instead. Approved drop-ins always get 45 seconds for their announcement and countdown.", views: [voicemailRow, voicemailStatus]))
         let ring = PorchStyle.button("Test ringing", symbol: "speaker.wave.2")
         let announcement = PorchStyle.button("Test video announcement", symbol: "person.wave.2", filled: false)
         ring.accessibilityIdentifier = "calls.testRinging"; announcement.accessibilityIdentifier = "calls.testAnnouncement"
