@@ -233,10 +233,10 @@ final class SentMessagesViewController: CaregiverFormViewController {
         list.axis = .vertical; list.spacing = 20
         form.addArrangedSubview(list)
         hideKeyboardControl()
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(load))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadMessages))
     }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); load() }
-    @objc private func load() {
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
+    @objc private func reloadMessages() {
         guard !loading, let credential = PorchDevice.credential(for: .family) else { return }
         loading = true
         Task { [weak self] in
@@ -288,7 +288,7 @@ final class SentMessagesViewController: CaregiverFormViewController {
             Task { [weak self] in
                 do { _ = try await FamilyService(credential).send("unsendMessage", ["messageID": message.id]) }
                 catch { if let self { showPorchError(error, on: self) } }
-                self?.load()
+                self?.reloadMessages()
             }
         })
         present(alert, animated: true)

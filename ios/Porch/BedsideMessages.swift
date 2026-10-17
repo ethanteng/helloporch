@@ -284,7 +284,7 @@ final class MessagePlayerViewController: UIViewController {
     /// Stopping early leaves the current message queued to play another time.
     @objc func stop() { close() }
     /// Closes at once for something more important, such as an incoming call.
-    func stop(then next: @escaping () -> Void) { close(animated: false, then: next) }
+    func interrupt(then next: @escaping () -> Void) { close(animated: false, then: next) }
     private func close(animated: Bool = true, then next: (() -> Void)? = nil) {
         guard !ended else { next?(); return }
         ended = true; tearDown()

@@ -66,7 +66,7 @@ final class PorchContainerViewController: UIViewController {
         }
         // Calls take over from the people picker and from message playback (an unfinished message stays queued).
         if let picker = content?.presentedViewController as? PeoplePickerViewController { picker.dismiss(animated: false, completion: show) }
-        else if let messages = content?.presentedViewController as? MessagePlayerViewController { messages.stop(then: show) }
+        else if let messages = content?.presentedViewController as? MessagePlayerViewController { messages.interrupt(then: show) }
         else { show() }
     }
     @objc private func systemCallChanged() {
