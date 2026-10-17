@@ -42,10 +42,10 @@ public struct CallSlots: Equatable {
             if let native = contact.nativeCall {
                 guard contact.shortcutName == nil, contact.address.isEmpty else { throw ValidationError.invalidSavedSlots }
                 return try CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
-                    familyMemberID: contact.familyMemberID, invitationID: contact.invitationID)
+                    familyMemberID: contact.familyMemberID, invitationID: contact.invitationID, buttonColorHex: contact.buttonColorHex, photoData: contact.photoData)
             }
             guard contact.phoneNumber == nil, contact.familyMemberID == nil, contact.invitationID == nil else { throw ValidationError.invalidSavedSlots }
-            return try CallContact(name: contact.name, address: contact.address, shortcutName: contact.shortcutName)
+            return try CallContact(name: contact.name, address: contact.address, shortcutName: contact.shortcutName, buttonColorHex: contact.buttonColorHex, photoData: contact.photoData)
         }
         slots[index] = Slot(action: .person, contact: validated)
     }
@@ -58,17 +58,20 @@ public struct CallSlots: Equatable {
             let linked = Self.member(for: contact, in: state)?.id
             if linked != contact.familyMemberID {
                 try setContact(CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
-                    familyMemberID: linked, invitationID: contact.invitationID), for: digit)
+                    familyMemberID: linked, invitationID: contact.invitationID, buttonColorHex: contact.buttonColorHex, photoData: contact.photoData), for: digit)
             }
         }
     }
     /// The caregiver's saved name also labels incoming calls and announcements.
     /// Resolve through the same identities as pairing, including newly accepted invites.
     public func incomingCallerName(for call: FamilyCallRecord, in state: FamilySnapshot) -> String {
-        guard state.me.role == .bedside, call.to == state.me.id else { return call.callerName }
+        incomingContact(for: call, in: state)?.name ?? call.callerName
+    }
+    public func incomingContact(for call: FamilyCallRecord, in state: FamilySnapshot) -> CallContact? {
+        guard state.me.role == .bedside, call.to == state.me.id else { return nil }
         return contacts.compactMap { $0 }.first {
             $0.nativeCall != nil && Self.member(for: $0, in: state)?.id == call.from
-        }?.name ?? call.callerName
+        }
     }
     private static func member(for contact: CallContact, in state: FamilySnapshot) -> FamilyPerson? {
         contact.invitationID.flatMap { id in state.people.first { $0.invitationID == id } }

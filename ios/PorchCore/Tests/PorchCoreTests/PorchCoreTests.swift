@@ -483,3 +483,46 @@ final class BedsideAndKeypadTests: XCTestCase {
         XCTAssertTrue(BedsideScene(date: date(hour: 19), preferences: prefs, calendar: calendar).isDay)
     }
 }
+
+final class RecipientAppearancePersistenceTests: XCTestCase {
+    func testPhotoAndColorSurviveSavingAndAcceptedInvitation() throws {
+        let suite = "appearance.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let invitation = UUID().uuidString, member = UUID().uuidString
+        let photo = Data([1, 2, 3, 4])
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "david", mode: .video),
+            phoneNumber: "+14155550123", invitationID: invitation, buttonColorHex: "fFcC00", photoData: photo), for: 3)
+        try slots.save(to: defaults)
+        slots = try CallSlots.load(from: defaults)
+        let object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": true,
+            "me": ["id": "bedside", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true],
+            "people": [["id": member, "invitationID": invitation, "name": "Original name", "role": "family", "permissions": ["audio": true, "video": true], "online": true]], "busy": false, "serverTime": 1]
+        let state = try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        try slots.reconcile(with: state)
+        try slots.save(to: defaults)
+        let loaded = try CallSlots.load(from: defaults)
+        let saved = try XCTUnwrap(loaded.contact(for: 3))
+        XCTAssertEqual(saved.buttonColorHex, "FFCC00"); XCTAssertEqual(saved.photoData, photo)
+        XCTAssertEqual(saved.familyMemberID, member); XCTAssertEqual(saved.phoneNumber, "+14155550123")
+        for kind in ["call", "dropIn"] {
+            let call: [String: Any] = ["id": "call", "from": member, "to": "bedside", "mode": "video", "kind": kind, "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": "Original name"]
+            let incoming = try JSONDecoder().decode(FamilyCallRecord.self, from: JSONSerialization.data(withJSONObject: call))
+            XCTAssertEqual(loaded.incomingContact(for: incoming, in: state), saved)
+        }
+    }
+
+    func testOldContactsRemainReadableAndAppearanceValidationIsBounded() throws {
+        let legacy = Data(#"{"name":"David","address":"david@example.com"}"#.utf8)
+        let contact = try JSONDecoder().decode(CallContact.self, from: legacy)
+        XCTAssertNil(contact.photoData); XCTAssertNil(contact.buttonColorHex)
+        var slots = CallSlots(); try slots.setContact(contact, for: 1)
+        let call = try NativeCall(room: "test", mode: .voice)
+        for color in ["#FFFFFF", "FFF", "ZZZZZZ", "12345678"] {
+            XCTAssertThrowsError(try CallContact(name: "David", nativeCall: call, buttonColorHex: color))
+        }
+        XCTAssertThrowsError(try CallContact(name: "David", nativeCall: call, photoData: Data()))
+        XCTAssertThrowsError(try CallContact(name: "David", nativeCall: call, photoData: Data(repeating: 0, count: 1_000_001)))
+    }
+}

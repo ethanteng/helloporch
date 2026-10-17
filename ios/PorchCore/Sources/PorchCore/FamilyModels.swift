@@ -26,6 +26,8 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let acceptedAt: TimeInterval?
     public let expiresAt: TimeInterval
     public let callerName: String
+    /// Telephone calls always require an explicit answer and carry audio only.
+    public let source: String?
     public let reason: String?
 }
 public struct PendingFamilyInvitation: Codable, Equatable {

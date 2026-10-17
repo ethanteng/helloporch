@@ -1,0 +1,81 @@
+import { writeFileSync } from 'node:fs';
+import { RoomConfiguration, SIPInboundTrunkInfo, SipClient } from 'livekit-server-sdk';
+import { familyStore } from '../lib/family/store.ts';
+import { inboundRingSeconds, inboundRoomPrefix } from '../lib/family/inbound.ts';
+
+// No credentials or phone numbers in arguments/output. Load private env files
+// with Node's --env-file flags. The default is a read-only plan; --apply saves it.
+class SetupError extends Error {}
+const args = process.argv.slice(2);
+const householdID = args.find(arg => arg.startsWith('--household='))?.slice('--household='.length);
+const apply = args.includes('--apply');
+if (!householdID || !/^[a-f0-9-]{36}$/.test(householdID) || args.some(arg => arg !== '--apply' && !arg.startsWith('--household='))) {
+  console.error('Usage: node --env-file=.env.inbound-production.local --env-file=.env.local scripts/configure-inbound.mjs --household=HOUSEHOLD_UUID [--apply]');
+  process.exit(1);
+}
+// Twilio's published SIP signaling gateways, verified 2026-10-16:
+// https://www.twilio.com/docs/sip-trunking/ip-addresses
+// These are SIP signaling ranges, not the separate RTP media ranges.
+const twilioGateways = ['54.172.60.0/30', '54.244.51.0/30', '54.171.127.192/30', '35.156.191.128/30',
+  '54.65.63.192/30', '54.169.127.128/30', '54.252.254.64/30', '177.71.206.192/30'];
+
+try {
+  const { LIVEKIT_URL: url, LIVEKIT_API_KEY: key, LIVEKIT_API_SECRET: secret, LIVEKIT_SIP_OUTBOUND_TRUNK_ID: outboundID } = process.env;
+  if (!url?.startsWith('wss://') || !key || !secret || !outboundID) throw new SetupError('LiveKit calling configuration is missing.');
+  const store = familyStore();
+  const raw = await store.get(`house:${householdID}`);
+  if (!raw) throw new SetupError('The requested household does not exist in this storage namespace.');
+  const house = JSON.parse(raw);
+  const bedsides = house.members.filter(member => member.role === 'bedside' && !member.revoked);
+  if (bedsides.length !== 1) throw new SetupError('This setup requires exactly one active bedside device in the household.');
+  const sip = new SipClient(url.replace('wss:', 'https:'), key, secret, { requestTimeout: 10, failover: false });
+  const [outbound] = await sip.listSipOutboundTrunk({ trunkIds: [outboundID] });
+  const number = process.env.PORCH_INBOUND_NUMBER || (outbound?.numbers.length === 1 ? outbound.numbers[0] : undefined);
+  if (!number || !/^\+[1-9][0-9]{6,14}$/.test(number) || !outbound?.numbers.includes(number) || !outbound.address.endsWith('.pstn.twilio.com')) {
+    throw new SetupError('Set PORCH_INBOUND_NUMBER privately to a number on the existing Twilio outbound trunk.');
+  }
+  const routeKey = `phone-number:${number}`;
+  const previous = await store.get(routeKey);
+  const route = previous ? JSON.parse(previous) : undefined;
+  if (route && (route.householdID !== house.id || route.bedsideID !== bedsides[0].id)) throw new SetupError('This number is assigned to another household; refusing to reassign it.');
+  const name = `Porch inbound ${house.id}`;
+  const existing = (await sip.listSipInboundTrunk()).filter(trunk => trunk.numbers.includes(number));
+  if (existing.length > 1 || existing.some(trunk => trunk.name !== name)) throw new SetupError('This number already has a different inbound trunk; review it before changing routing.');
+  let trunk = existing[0];
+  if (route && (!trunk || route.trunkID !== trunk.sipTrunkId)) throw new SetupError('The saved number route and inbound trunk disagree; review them before continuing.');
+  const rules = await sip.listSipDispatchRule();
+  if (rules.some(rule => rule.trunkIds.length === 0)) throw new SetupError('A wildcard SIP dispatch rule already exists; scope it to its own trunks first.');
+  let dispatch = trunk ? rules.find(rule => rule.trunkIds.includes(trunk.sipTrunkId)) : undefined;
+  if (dispatch && (dispatch.trunkIds.length !== 1 || dispatch.rule?.rule.case !== 'dispatchRuleIndividual' || dispatch.rule.rule.value.roomPrefix !== inboundRoomPrefix)) {
+    throw new SetupError('An incompatible dispatch rule already uses this trunk.');
+  }
+  console.log('Existing Twilio number and destination household verified.');
+  console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer; 45-second ringing; 30-minute call limit.');
+  console.log('Inbound SIP restricted to Twilio signaling gateways. No phone numbers will be purchased and no calls will be placed.');
+  if (!apply) { console.log('Read-only plan complete. Use --apply to save the LiveKit and household configuration.'); process.exit(0); }
+  if (!trunk) trunk = await sip.createSipInboundTrunk(name, [number], { allowedAddresses: twilioGateways, ringingTimeout: inboundRingSeconds });
+  // The current SDK exposes maxCallDuration on the protobuf but not its create
+  // options. Update the full returned trunk, retaining its other fields.
+  trunk.allowedAddresses = twilioGateways;
+  trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingSeconds) } }).ringingTimeout;
+  trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
+  trunk = await sip.updateSipInboundTrunk(trunk.sipTrunkId, trunk);
+  if (!dispatch) dispatch = await sip.createSipDispatchRule({ type: 'individual', roomPrefix: inboundRoomPrefix }, {
+    name, trunkIds: [trunk.sipTrunkId], hidePhoneNumber: false,
+    roomConfig: new RoomConfiguration({ maxParticipants: 2, emptyTimeout: 60, departureTimeout: 5 }),
+  });
+  const saved = JSON.stringify({ householdID: house.id, bedsideID: bedsides[0].id, trunkID: trunk.sipTrunkId });
+  if (previous ? previous !== saved : !await store.create(routeKey, saved)) {
+    if (await store.get(routeKey) !== saved) throw new SetupError('Number assignment changed concurrently; refusing to overwrite it.');
+  }
+  writeFileSync('.env.inbound-setup.local', [
+    `PORCH_INBOUND_NUMBER=${number}`, `PORCH_INBOUND_HOUSEHOLD_ID=${house.id}`, `LIVEKIT_SIP_INBOUND_TRUNK_ID=${trunk.sipTrunkId}`,
+    `LIVEKIT_SIP_DISPATCH_RULE_ID=${dispatch.sipDispatchRuleId}`, '',
+  ].join('\n'), { mode: 0o600 });
+  console.log('LiveKit inbound trunk, dispatch rule, and household number assignment saved.');
+  console.log('Private configuration saved to .env.inbound-setup.local. Configure Twilio Origination and the LiveKit webhook to finish activation.');
+} catch (error) {
+  // Provider exceptions may contain phone numbers or credentials; keep those out.
+  console.error(error instanceof SetupError ? error.message : 'Provider setup failed. Check account access and retry the same command.');
+  process.exitCode = 1;
+}

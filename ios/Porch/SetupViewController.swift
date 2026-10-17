@@ -1,5 +1,7 @@
 import UIKit
 import ContactsUI
+import PhotosUI
+import UniformTypeIdentifiers
 import PorchCore
 
 final class SlotsViewController: UITableViewController {
@@ -44,6 +46,12 @@ final class SlotsViewController: UITableViewController {
             let action = slots.action(for: number) ?? .person
             content.text = action == .person ? (person?.name ?? "Add a person") : action.title
             content.image = UIImage(systemName: "\(number).circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 32))
+            if let photo = RecipientAppearance.photo(person?.photoData) {
+                content.image = photo
+                content.imageProperties.maximumSize = CGSize(width: 64, height: 64)
+                content.imageProperties.cornerRadius = 12
+                content.text = "\(number) · \(person?.name ?? "")"
+            }
             content.secondaryText = person.map { contact in
                 if let call = contact.nativeCall {
                     return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on")
@@ -114,7 +122,7 @@ final class SlotsViewController: UITableViewController {
     @objc private func done() { view.endEditing(true); dismiss(animated: true) }
 }
 
-final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate {
+final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate, PHPickerViewControllerDelegate, UIColorPickerViewControllerDelegate {
     var onSave: ((CallContact?) throws -> Void)?
     var onSaveSlot: ((KeypadAction, CallContact?) throws -> Void)?
     private let actionControl = UISegmentedControl(items: ["Person", "Call control", "Video toggle"])
@@ -134,6 +142,14 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     private let existingPerson = PorchStyle.button("Choose from your Porch", symbol: "person.2", filled: false)
     private let chooseContactButton = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
     private var phoneGroup = UIView()
+    private var appearanceGroup = UIView()
+    private var buttonColorHex: String?
+    private var photoData: Data?
+    private let photoPreview = RecipientAppearance.photoView(nil)
+    private let colorButton = PorchStyle.button("Choose button color", symbol: "paintpalette", filled: false)
+    private let photoButton = PorchStyle.button("Add photo", symbol: "photo", filled: false)
+    private let removePhotoButton = PorchStyle.button("Remove photo", filled: false)
+    private let resetColorButton = PorchStyle.button("Use default color", filled: false)
     private let initialContact: CallContact?
     private let slot: Int
     private var saveTask: Task<Void, Never>?
@@ -175,6 +191,20 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         familyLink.addTarget(self, action: #selector(invitePerson), for: .touchUpInside)
         personGroup = section("Their details", views: [personName, chooseContactButton, PorchStyle.label("Default calling mode", size: 18, color: PorchStyle.ink, weight: .semibold), modeControl, invitationStatus, familyLink, existingPerson])
         form.addArrangedSubview(personGroup)
+        buttonColorHex = initialContact?.buttonColorHex
+        photoData = initialContact?.photoData
+        photoPreview.contentMode = .scaleAspectFit
+        photoPreview.heightAnchor.constraint(equalToConstant: 240).isActive = true
+        colorButton.accessibilityIdentifier = "recipient.chooseColor"
+        photoButton.accessibilityIdentifier = "recipient.choosePhoto"
+        removePhotoButton.accessibilityIdentifier = "recipient.removePhoto"
+        colorButton.addTarget(self, action: #selector(pickColor), for: .touchUpInside)
+        photoButton.addTarget(self, action: #selector(pickPhoto), for: .touchUpInside)
+        removePhotoButton.addAction(UIAction { [weak self] _ in self?.photoData = nil; self?.updateAppearance() }, for: .touchUpInside)
+        resetColorButton.addAction(UIAction { [weak self] _ in self?.buttonColorHex = nil; self?.updateAppearance() }, for: .touchUpInside)
+        appearanceGroup = section("Photo & button color", detail: "Help them recognize this person. Their photo appears on the call button and call screens. Saved on this device only.", views: [photoPreview, photoButton, removePhotoButton, colorButton, resetColorButton])
+        form.addArrangedSubview(appearanceGroup)
+        updateAppearance()
         nameField.autocapitalizationType = .words
         phoneFallbackSwitch.isOn = !(phoneField.text ?? "").isEmpty
         phoneFallbackSwitch.onTintColor = PorchStyle.accent
@@ -198,6 +228,12 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-recipient-appearance") {
+            view.layoutIfNeeded()
+            let section = appearanceGroup.convert(appearanceGroup.bounds, to: scroll)
+            let offset = min(max(0, section.minY - 24), max(0, scroll.contentSize.height - scroll.bounds.height))
+            scroll.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
+        }
         if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") || ProcessInfo.processInfo.arguments.contains("--preview-system-keyboard") { nameField.becomeFirstResponder() }
         #endif
     }
@@ -225,11 +261,63 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         } catch { picker.dismiss(animated: true) { [weak self] in self?.showContactError(error) } }
     }
 
+    private func updateAppearance() {
+        photoPreview.image = RecipientAppearance.photo(photoData)
+        photoPreview.isHidden = photoPreview.image == nil
+        removePhotoButton.isHidden = photoData == nil
+        photoButton.configuration?.title = photoData == nil ? "Add photo" : "Change photo"
+        let color = RecipientAppearance.color(hex: buttonColorHex)
+        colorButton.configuration?.baseBackgroundColor = color
+        colorButton.configuration?.baseForegroundColor = RecipientAppearance.foreground(on: color)
+        colorButton.configuration?.background.backgroundColor = color
+        colorButton.accessibilityValue = buttonColorHex.map { "Color #\($0)" } ?? "Default color"
+        resetColorButton.isHidden = buttonColorHex == nil
+    }
+
+    @objc private func pickColor() {
+        view.endEditing(true)
+        let picker = UIColorPickerViewController()
+        picker.selectedColor = RecipientAppearance.color(hex: buttonColorHex)
+        picker.supportsAlpha = false
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+    func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController) {
+        buttonColorHex = RecipientAppearance.hex(color: viewController.selectedColor)
+        updateAppearance()
+    }
+
+    @objc private func pickPhoto() {
+        view.endEditing(true)
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider else { return }
+        photoButton.isEnabled = false
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, _ in
+            let data = url.flatMap { RecipientAppearance.preparedPhoto(at: $0) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.photoButton.isEnabled = true
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
+                if let data { self.photoData = data; self.updateAppearance() }
+                else { self.showContactError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400)) }
+            }
+        }
+    }
+
     private var chosenAction: KeypadAction { KeypadAction.allCases[actionControl.selectedSegmentIndex] }
     @objc private func updateAction() {
         view.endEditing(true)
         let person = chosenAction == .person
-        personGroup.isHidden = !person; fallbackGroup.isHidden = !person; removeButton?.isHidden = !person
+        personGroup.isHidden = !person; fallbackGroup.isHidden = !person; appearanceGroup.isHidden = !person; removeButton?.isHidden = !person
         setKeyboardControlVisible(person)
         actionDetail.text = person ? "Call the person below using their default calling mode." : chosenAction == .callControl ? "Tap to answer an incoming call or hang up. Hold for one second to decline a ringing call. Tap during a drop-in countdown to stop it. This replaces any person assigned to this key." : "Turn your camera off or on during a video call. Voice-only and regular phone calls keep the camera off. This replaces any person assigned to this key."
     }
@@ -273,7 +361,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
             }
             let call = try NativeCall(room: initialContact?.nativeCall?.room ?? "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
             let contact = try CallContact(name: nameField.text ?? "", nativeCall: call,
-                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID, invitationID: invitationID)
+                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID, invitationID: invitationID, buttonColorHex: buttonColorHex, photoData: photoData)
             phoneField.text = contact.phoneNumber
             view.isUserInteractionEnabled = false
             navigationItem.rightBarButtonItem?.isEnabled = false

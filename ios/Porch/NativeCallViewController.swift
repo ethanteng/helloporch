@@ -3,6 +3,140 @@ import AVFoundation
 import LiveKit
 import PorchCore
 
+/// One video-first layout for foreground calls and CallKit-owned sessions.
+@MainActor enum CallScreenLayout {
+    static func configure(_ button: UIButton, title: String, symbol: String, isEnd: Bool = false) {
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = title
+        configuration.image = UIImage(systemName: symbol)
+        configuration.imagePlacement = .top
+        configuration.imagePadding = 6
+        configuration.titleAlignment = .center
+        configuration.baseBackgroundColor = isEnd
+            ? UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1) : PorchStyle.nightSurface
+        configuration.baseForegroundColor = .white
+        configuration.cornerStyle = .large
+        configuration.contentInsets = .init(top: 12, leading: 8, bottom: 12, trailing: 8)
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes)
+            attributes.font = PorchStyle.font(16, weight: .semibold)
+            return attributes
+        }
+        configuration.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { PorchStyle.centeredTextAttributes($0) }
+        button.configuration = configuration
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.textAlignment = .center
+        button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
+    }
+
+    static func install(in view: UIView, video: VideoView, preview: VideoView? = nil,
+                        placeholder: UILabel? = nil, title: UILabel, status: UILabel,
+                        hint: UILabel? = nil, photo: UIImageView? = nil, buttons: [UIButton]) {
+        view.backgroundColor = .black
+        video.layoutMode = .fill
+        video.clipsToBounds = true
+        video.accessibilityIdentifier = "call.remoteVideo"
+        video.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(video)
+        // The video extends behind the safe areas; only the overlays are inset.
+        NSLayoutConstraint.activate([
+            video.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            video.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            video.topAnchor.constraint(equalTo: view.topAnchor),
+            video.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        title.textAlignment = .center
+        status.textAlignment = .center
+        hint?.textAlignment = .center
+        placeholder?.textAlignment = .center
+        var headingViews: [UIView] = [title, status]
+        if let photo, let image = photo.image {
+            let avatar = RecipientAppearance.photoView(nil)
+            avatar.image = image; avatar.layer.cornerRadius = 12
+            NSLayoutConstraint.activate([avatar.widthAnchor.constraint(equalToConstant: 64), avatar.heightAnchor.constraint(equalToConstant: 64)])
+            let identity = UIStackView(arrangedSubviews: [avatar, title])
+            identity.spacing = 16; identity.alignment = .center
+            headingViews = [identity, status]
+        }
+        let heading = UIStackView(arrangedSubviews: headingViews)
+        heading.axis = .vertical
+        heading.spacing = 4
+        let row = UIStackView(arrangedSubviews: buttons)
+        row.distribution = .fillEqually
+        row.spacing = 8
+        let controls = UIStackView(arrangedSubviews: (hint.map { [$0 as UIView] } ?? []) + [row])
+        controls.axis = .vertical
+        controls.spacing = 8
+        controls.accessibilityIdentifier = "call.controls"
+        for overlay in [heading, controls] {
+            overlay.backgroundColor = UIColor.black.withAlphaComponent(0.65)
+            overlay.layer.cornerRadius = 16
+            overlay.isLayoutMarginsRelativeArrangement = true
+            overlay.directionalLayoutMargins = .init(top: 10, leading: 10, bottom: 10, trailing: 10)
+            overlay.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(overlay)
+            let width = overlay.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -24)
+            width.priority = .defaultHigh
+            NSLayoutConstraint.activate([
+                overlay.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+                overlay.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
+                overlay.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+                overlay.widthAnchor.constraint(lessThanOrEqualToConstant: 560), width,
+            ])
+        }
+        NSLayoutConstraint.activate([
+            heading.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            controls.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
+        ])
+        if let placeholder {
+            let space = UILayoutGuide()
+            view.addLayoutGuide(space)
+            let identity = UIStackView(arrangedSubviews: (photo.map { [$0 as UIView] } ?? []) + [placeholder])
+            identity.axis = .vertical; identity.alignment = .center; identity.spacing = 16
+            identity.translatesAutoresizingMaskIntoConstraints = false
+            view.insertSubview(identity, aboveSubview: video)
+            NSLayoutConstraint.activate([
+                space.topAnchor.constraint(equalTo: heading.bottomAnchor),
+                space.bottomAnchor.constraint(equalTo: controls.topAnchor),
+                identity.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+                identity.centerYAnchor.constraint(equalTo: space.centerYAnchor),
+                identity.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -48),
+                identity.topAnchor.constraint(greaterThanOrEqualTo: space.topAnchor, constant: 12),
+                identity.bottomAnchor.constraint(lessThanOrEqualTo: space.bottomAnchor, constant: -12),
+                placeholder.widthAnchor.constraint(equalTo: identity.widthAnchor),
+            ])
+            if let photo {
+                let width = photo.widthAnchor.constraint(equalTo: identity.widthAnchor, multiplier: 0.85)
+                width.priority = .defaultLow
+                NSLayoutConstraint.activate([
+                    photo.widthAnchor.constraint(lessThanOrEqualTo: identity.widthAnchor),
+                    photo.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+                    photo.heightAnchor.constraint(equalTo: photo.widthAnchor), width,
+                ])
+            }
+        }
+        if let preview {
+            preview.layoutMode = .fill
+            preview.clipsToBounds = true
+            preview.layer.cornerRadius = 12
+            preview.accessibilityIdentifier = "call.localPreview"
+            preview.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(preview)
+            let width = preview.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, multiplier: 0.12)
+            width.priority = .defaultHigh
+            NSLayoutConstraint.activate([
+                preview.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+                preview.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
+                preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
+                preview.widthAnchor.constraint(lessThanOrEqualToConstant: 112), width,
+                preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 0.75),
+            ])
+        }
+    }
+}
+
 /// Foreground LiveKit media for paired calls, legacy rooms and phone fallback.
 final class NativeCallViewController: UIViewController, RoomDelegate {
     private let contact: CallContact
@@ -14,6 +148,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let remoteVideo = VideoView()
     private let localVideo = VideoView()
     private let placeholder = UILabel()
+    private lazy var personPhoto = RecipientAppearance.photoView(contact.photoData)
     private let microphoneButton = UIButton(type: .system)
     private let cameraButton = UIButton(type: .system)
     private let endButton = UIButton(type: .system)
@@ -42,6 +177,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     override var canBecomeFirstResponder: Bool { true }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-outgoing-call") { return }
+        #endif
         if !familyAccepted && !hasConnectedPeer && !isEnding && !hasFailed { ringback.start() }
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); keypad.resetKeys(); resignFirstResponder() }
@@ -80,7 +218,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     static func paired(_ session: FamilyCallSession, contact original: CallContact? = nil) throws -> NativeCallViewController {
         let call = try NativeCall(room: "paired-\(session.call.id.prefix(8))", mode: session.call.mode)
-        let contact = try CallContact(name: session.peerName, nativeCall: call, phoneNumber: original?.phoneNumber)
+        let saved = original ?? session.peerContact ?? FamilyCoordinator.shared.state.flatMap { state in
+            ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: session.call, in: state)
+        }
+        let contact = try CallContact(name: session.peerName, nativeCall: call, phoneNumber: session.call.source == "phone" ? nil : saved?.phoneNumber,
+            buttonColorHex: saved?.buttonColorHex, photoData: saved?.photoData)
         let server = try NativeCallServer(url: session.credential.origin.absoluteString, accessCode: session.credential.credential)
         let controller = NativeCallViewController(contact: contact, call: call, server: server)
         controller.familySession = session
@@ -106,25 +248,19 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         room.add(delegate: self)
         let title = UILabel()
         title.text = contact.name
-        title.font = PorchStyle.font(36, weight: .semibold)
+        title.font = PorchStyle.font(40, weight: .semibold)
         title.textColor = PorchStyle.nightText
         title.textAlignment = .center
         title.numberOfLines = 0
         title.adjustsFontForContentSizeCategory = true
         statusLabel.text = BedsideText.string("Connecting…")
-        statusLabel.font = PorchStyle.font(22)
+        statusLabel.font = PorchStyle.font(17)
         statusLabel.textColor = PorchStyle.nightText
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.adjustsFontForContentSizeCategory = true
         statusLabel.accessibilityTraits.insert(.updatesFrequently)
 
-        let stage = UIView()
-        stage.backgroundColor = UIColor(white: 0.15, alpha: 1)
-        stage.layer.cornerRadius = 24
-        stage.clipsToBounds = true
-        remoteVideo.layoutMode = .fit
-        localVideo.layoutMode = .fill
         localVideo.isHidden = true
         localVideo.accessibilityLabel = BedsideText.string("Your camera preview")
         placeholder.text = BedsideText.string(call.mode == .voice ? "Voice call\nCamera is off" : "Waiting for video")
@@ -133,60 +269,24 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         placeholder.textAlignment = .center
         placeholder.numberOfLines = 0
         placeholder.adjustsFontForContentSizeCategory = true
-        [remoteVideo, placeholder, localVideo].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            stage.addSubview($0)
-        }
-        NSLayoutConstraint.activate([
-            remoteVideo.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
-            remoteVideo.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
-            remoteVideo.topAnchor.constraint(equalTo: stage.topAnchor),
-            remoteVideo.bottomAnchor.constraint(equalTo: stage.bottomAnchor),
-            placeholder.centerXAnchor.constraint(equalTo: stage.centerXAnchor),
-            placeholder.centerYAnchor.constraint(equalTo: stage.centerYAnchor),
-            placeholder.leadingAnchor.constraint(greaterThanOrEqualTo: stage.leadingAnchor, constant: 16),
-            placeholder.trailingAnchor.constraint(lessThanOrEqualTo: stage.trailingAnchor, constant: -16),
-            localVideo.trailingAnchor.constraint(equalTo: stage.trailingAnchor, constant: -16),
-            localVideo.bottomAnchor.constraint(equalTo: stage.bottomAnchor, constant: -16),
-            localVideo.widthAnchor.constraint(equalTo: stage.widthAnchor, multiplier: 0.22),
-            localVideo.heightAnchor.constraint(equalTo: localVideo.widthAnchor, multiplier: 0.75),
-        ])
-        configure(microphoneButton, title: "Mute", action: #selector(toggleMicrophone))
-        configure(cameraButton, title: "Camera off", action: #selector(toggleCamera))
-        configure(endButton, title: "End call", action: #selector(endCall))
-        endButton.configuration?.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
+        configure(microphoneButton, title: "Mute", symbol: "mic.slash", action: #selector(toggleMicrophone))
+        configure(cameraButton, title: "Camera off", symbol: "video.slash", action: #selector(toggleCamera))
+        configure(endButton, title: "End call", symbol: "phone.down.fill", action: #selector(endCall))
         cameraButton.isHidden = call.mode == .voice
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
 
         keypadHint.textAlignment = .center
         updateKeypadHint()
-        let controls = UIStackView(arrangedSubviews: [keypadHint, microphoneButton, cameraButton, endButton])
-        controls.axis = .vertical
-        controls.spacing = 12
-        let scroll = UIScrollView()
-        let stack = UIStackView(arrangedSubviews: [title, statusLabel, stage])
-        stack.axis = .vertical
-        stack.spacing = 16
-        [scroll, stack, controls].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
-        view.addSubview(scroll)
-        view.addSubview(controls)
-        scroll.addSubview(stack)
-        NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -16),
-            controls.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
-            controls.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
-            controls.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 16),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -16),
-            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48),
-            stage.heightAnchor.constraint(equalTo: stack.widthAnchor, multiplier: 0.5),
-        ])
+        CallScreenLayout.install(in: view, video: remoteVideo, preview: localVideo,
+                                 placeholder: placeholder, title: title, status: statusLabel,
+                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, buttons: [microphoneButton, cameraButton, endButton])
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-outgoing-call") {
+            statusLabel.text = BedsideText.string("Calling %@ on Porch…", contact.name)
+            return // Static preview: never request media access or connect a call.
+        }
+        #endif
         // This first version intentionally ends when leaving the foreground.
         NotificationCenter.default.addObserver(self, selector: #selector(endCall), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
@@ -205,21 +305,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     deinit { NotificationCenter.default.removeObserver(self) }
 
-    private func configure(_ button: UIButton, title: String, action: Selector) {
-        var configuration = UIButton.Configuration.filled()
-        configuration.title = BedsideText.string(title)
-        configuration.baseBackgroundColor = PorchStyle.nightSurface
-        configuration.baseForegroundColor = .white
-        configuration.cornerStyle = .large
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 18, leading: 24, bottom: 18, trailing: 24)
-        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = PorchStyle.font(24, weight: .semibold)
-            return attributes
-        }
-        button.configuration = configuration
-        button.titleLabel?.numberOfLines = 0
-        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
+    private func configure(_ button: UIButton, title: String, symbol: String, action: Selector) {
+        CallScreenLayout.configure(button, title: BedsideText.string(title), symbol: symbol, isEnd: button === endButton)
         button.addTarget(self, action: action, for: .touchUpInside)
     }
 
@@ -309,6 +396,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             localVideo.isHidden = true
             statusLabel.text = BedsideText.string("Couldn't start the call.")
             placeholder.isHidden = false
+            personPhoto.isHidden = false
             placeholder.text = BedsideText.error(error.localizedDescription)
             microphoneButton.isEnabled = false
             cameraButton.isEnabled = false
@@ -326,6 +414,15 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         defer { checkInactivity() }
         updateKeypadHint()
         let peers = Array(room.remoteParticipants.values)
+        if familySession?.call.source == "phone" {
+            let status = peers.first?.attributes["sip.callStatus"]
+            if status == "hangup" { finishPhoneCall(); return }
+            if status == "active" {
+                hasConnectedPeer = true; waitTask?.cancel(); ringback.stop(); playConnectionCue()
+                statusLabel.text = BedsideText.string("Phone call connected")
+            } else { statusLabel.text = BedsideText.string("Connecting audio…") }
+            return
+        }
         if isPhoneCall {
             let status = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
             if status == "hangup" { finishPhoneCall(); return }
@@ -354,6 +451,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             let remoteTrack = peers.flatMap(\.videoTracks).first { !$0.isMuted && $0.track is VideoTrack }?.track as? VideoTrack
             remoteVideo.track = remoteTrack
             placeholder.isHidden = remoteTrack != nil
+            personPhoto.isHidden = remoteTrack != nil
             localVideo.track = room.localParticipant.videoTracks.first { !$0.isMuted }?.track as? VideoTrack
             localVideo.isHidden = localVideo.track == nil
         }
@@ -409,10 +507,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     private func checkInactivity(speaking: Bool = false) {
         let peers = Array(room.remoteParticipants.values)
-        let phoneStatus = peers.first { $0.identity?.stringValue == "phone" }?.attributes["sip.callStatus"]
+        let inboundPhone = familySession?.call.source == "phone"
+        let phoneStatus = (inboundPhone ? peers.first : peers.first { $0.identity?.stringValue == "phone" })?.attributes["sip.callStatus"]
         let connected = mediaReady && !isEnding && !hasFailed && !isSwitchingToPhone
             && room.connectionState == .connected && !peers.isEmpty
-            && (!isPhoneCall || phoneStatus == "active" || phoneStatus == "automation")
+            && (!(isPhoneCall || inboundPhone) || phoneStatus == "active" || phoneStatus == "automation")
         let speech = speaking || room.localParticipant.isSpeaking || peers.contains { $0.isSpeaking }
         if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected, speaking: speech) {
             finish(message: "Call ended. Returning to the clock…")
@@ -449,7 +548,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         cameraButton.isEnabled = false
         endButton.isEnabled = false
         statusLabel.text = BedsideText.string(message ?? "Ending call…")
-        if isPhoneCall || fallbackTask != nil {
+        if isPhoneCall || familySession?.call.source == "phone" || fallbackTask != nil {
             cleanupBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "End Porch phone call") { [weak self] in
                 self?.endCleanupBackgroundTask()
             }
@@ -460,8 +559,18 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             await fallbackTask?.value
             await controlTask?.value
             await room.disconnect()
-            let family = familySession; familySession = nil
-            await family?.end()
+            if let family = familySession, family.call.source == "phone" {
+                do {
+                    do { try await family.endConfirmed() }
+                    catch { try await family.endConfirmed() }
+                } catch {
+                    hasFailed = true; isEnding = false; endButton.isEnabled = true
+                    endButton.configuration?.title = BedsideText.string("Retry ending phone call")
+                    statusLabel.text = BedsideText.string("Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.")
+                    return
+                }
+            } else { await familySession?.end() }
+            familySession = nil
             remoteVideo.track = nil
             localVideo.track = nil
             if let ticket = phoneControlToken {
@@ -651,6 +760,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         localVideo.track = nil
         localVideo.isHidden = true
         placeholder.isHidden = false
+        personPhoto.isHidden = false
         placeholder.text = BedsideText.string("Phone call\nCamera is off")
         isPhoneCall = true
         updateKeypadHint()
