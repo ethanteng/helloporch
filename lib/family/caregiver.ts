@@ -23,14 +23,15 @@ function pinRecord(pin: unknown) {
 export async function initializeCaregiverPIN(pin: unknown, store: FamilyStore, householdID: string) {
   return store.create(caregiverPINKey(householdID), pinRecord(pin));
 }
-export async function checkCaregiverCode(request: Request, store?: FamilyStore, now = Math.floor(Date.now() / 1000), householdID?: string) {
+export async function checkCaregiverCode(request: Request, store?: FamilyStore, now = Math.floor(Date.now() / 1000), householdID?: string, deviceID?: string) {
   const code = request.headers.get("X-Porch-Setup-Code") ?? "";
   // Existing long secrets remain valid for migration and recovery, never for family invitations.
   if (legacy(code)) return;
   if (!/^\d{6}$/.test(code)) throw new CaregiverAuthError("Enter your six-digit caregiver PIN.", 403);
   store ??= familyStore();
   // Five guesses per household per 15 minutes, reserved atomically across instances/IPs.
-  const attempts = `security:pin-attempts${householdID ? `:${householdID}` : ""}`;
+  // Remote caregiver phones get their own allowance so one of them can't lock out the bedside iPad.
+  const attempts = `security:pin-attempts${householdID ? `:${householdID}` : ""}${deviceID ? `:device:${deviceID}` : ""}`;
   await save(store, attempts, raw => {
     const current = raw ? JSON.parse(raw) : { attempts: 0, resetAt: now + 900 };
     if (current.resetAt <= now) { current.attempts = 0; current.resetAt = now + 900; }

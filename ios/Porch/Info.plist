@@ -45,9 +45,9 @@
 		</dict>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Porch uses the camera for video calls with your people. Voice calls keep the camera off.</string>
+	<string>Porch uses the camera for video calls and video messages with your people. Voice calls keep the camera off.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Porch uses the microphone so you can talk with your people.</string>
+	<string>Porch uses the microphone so you can talk with your people and record messages for them.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

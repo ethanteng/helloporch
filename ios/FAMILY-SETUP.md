@@ -1,6 +1,6 @@
 # Bedside and family beta
 
-One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. iPhones start in family mode; iPads keep the bedside clock. Change modes from caregiver settings or the family screen. Each mode keeps its own device pairing.
+One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. iPhones start in family mode; iPads keep the bedside clock. Change modes from caregiver settings, the family screen's **gear → Use as the bedside Porch**, or (on a device that isn't set up as a bedside yet) **Use this device as a family member** on the bedside setup screen. Each mode keeps its own device pairing, so switching never removes your family pairing.
 
 ## Pair your family
 
@@ -11,7 +11,27 @@ One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. 
 5. On the iPad, turn on **Allow approved drop-ins**. Return to the clock. The family member can now make audio/video calls or use the drop-in types you approved.
 6. After sharing, tap **Done**, then **Save** the person. The editor shows **Waiting to accept invite**. Acceptance links that exact invitation to the saved person automatically; there is no additional linking step. Expired/cancelled invitations can be sent again. For a device already in your Porch, use **Choose from your Porch**. Optionally add a fallback phone number. Contacts imports and typed numbers are normalized to E.164 (for example, `(415) 867-6937` in the US becomes `+14158676937`). National numbers use the device's region; include `+country code` for overseas contacts. Extensions aren't supported.
 
-Paired calls use the bundled server address and private device credentials. Family members never enter a server address, shared calling code, or caregiver PIN. Contacts have one combined details section with their name, Contacts import, audio/video preference and paired app. The app no longer offers calling-method, room, advanced-connection or daily-use settings. The browser prototype remains available for legacy manual-room testing.
+Paired calls use the bundled server address and private device credentials. Family members never enter a server address or shared calling code; only family members approved for caregiver mode enter the caregiver PIN. Contacts have one combined details section with their name, Contacts import, audio/video preference and paired app. The app no longer offers calling-method, room, advanced-connection or daily-use settings. The browser prototype remains available for legacy manual-room testing.
+
+## Caregiver mode from a family phone
+
+The caregiver can approve family members to manage access from their own phone. Turn on **Caregiver mode** when creating their invitation, or later for an existing device in **Family & drop-in**. An approved family member opens **gear → Caregiver mode** on their phone and enters the household's six-digit caregiver PIN. Tap **Family mode** to return.
+
+From a phone, caregiver mode covers the settings the server holds: the display name, drop-in on/off, each device's audio/video drop-in and caregiver access, invitations, and removing devices. Keypad numbers, contacts, photos, call preferences, the bedside display and the caregiver PIN can only be changed on the bedside iPad, which keeps its own copy of the PIN to renew phone-fallback approvals. Drop-ins enabled from a phone connect only if the bedside iPad already allows microphone and camera access.
+
+The PIN is kept in the phone's memory only. Caregiver mode locks after ten idle minutes, when Porch leaves the foreground, or when the PIN or approval changes. Wrong PINs from a phone count against that phone alone (five per 15 minutes), so they can't lock out the bedside iPad. A caregiver can't remove their own phone or change their own caregiver access; another caregiver or the bedside iPad can.
+
+To move a phone to a different family, open **gear → Join a different family** and use the new family's invitation. The phone stays in its current family until the new invitation is accepted, then leaves the old one automatically.
+
+## Messages and voicemail
+
+Family members can send an audio or video message (up to two minutes) from **Send a message** on their Porch screen. When a call isn't answered, or the bedside Porch isn't available, the family app offers **Leave a message**: it beeps and records audio, like voicemail. Messages don't need the bedside iPad to be open; they wait until played.
+
+On the bedside clock, a **Play 2 messages** notice appears at the top left once messages have downloaded. Tapping it plays them oldest first: a chime, then "Message from Ethan. Sent today at 2:14 PM" in the bedside language and voice, then the message. Playback continues until none are left. **Stop**, the keypad's messages key or the hang-up key stops it, and an incoming call or drop-in takes over. A message stopped partway stays in the queue; one played to the end is removed and won't play again. To give the messages notice a key, edit any keypad number in caregiver mode and choose **Messages**.
+
+Senders see only their own messages, under **Your messages**: waiting to download, on their Porch (not played yet), played (with the time), expired (not played within a week), removed by a caregiver, or unsent. They can unsend a message before it plays.
+
+In **Family & drop-in → Messages**, caregivers (on the iPad, or from an approved phone with the PIN) can turn messages off, and preview or remove any waiting message. Removing a family member's access also removes their unplayed messages.
 
 ## How calls behave
 
@@ -80,11 +100,11 @@ Existing paired devices choose a PIN once without a new activation link. After t
 
 ## Server and privacy
 
-Keep the LiveKit/SIP settings and long signing/recovery secret from the root setup guide. For incoming iPhone calls, configure the APNs signing key and app ID as described in [incoming-call setup](INCOMING-CALLS.md). Connect Upstash Redis and provide either `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL`/`KV_REST_API_TOKEN` aliases. The free database was provisioned with automatic paid upgrades disabled. Deploy the new server before using the new app; older manual-room builds remain compatible.
+Keep the LiveKit/SIP settings and long signing/recovery secret from the root setup guide. For messages, create a **private** Vercel Blob store and connect it to the calling server project, which adds `BLOB_READ_WRITE_TOKEN`; then redeploy. Without it, sending a message reports that messages aren't set up. For incoming iPhone calls, configure the APNs signing key and app ID as described in [incoming-call setup](INCOMING-CALLS.md). Connect Upstash Redis and provide either `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL`/`KV_REST_API_TOKEN` aliases. The free database was provisioned with automatic paid upgrades disabled. Deploy the new server before using the new app; older manual-room builds remain compatible.
 
 The default data namespace is `porch:family:v1:`. Local verification must set an isolated `PORCH_FAMILY_STORE_PREFIX=porch:family:preview:v1:`. Redis CAS operations coordinate shared state across server instances. Storage outages fail closed; there is no process-memory fallback. Use TLS and keep write credentials server-side.
 
-Redis stores household/display names, hashed device/invitation secrets, permissions, presence, the current call and hashed PIN/lockout state. It doesn't store media, full contact books or fallback numbers. Local slots remain on the device. Keychain stores private device credentials, caregiver credentials and scoped phone approvals. LiveKit handles media/connection metadata; SIP fallback sends its destination to LiveKit and the telephone provider. No recording is configured. Transport encryption is used; application-level end-to-end encryption isn't configured. Update App Store privacy disclosures for this data handling before distributing the beta.
+Redis stores household/display names, hashed device/invitation secrets, permissions, presence, the current call and hashed PIN/lockout state. It also keeps message records: each sender's history (type, length, sent/delivered/played times) and the bedside queue. Message audio and video are stored in the private Blob store; devices only receive signed upload/download links that expire within an hour. Unplayed messages are deleted after seven days; played messages' media is deleted after 90 days, while the record stays. The bedside iPad keeps downloaded messages until they're played or removed. Redis doesn't store full contact books or fallback numbers. Local slots remain on the device. Keychain stores private device credentials, caregiver credentials and scoped phone approvals. LiveKit handles media/connection metadata; SIP fallback sends its destination to LiveKit and the telephone provider. Calls aren't recorded; only messages people choose to record are stored. Transport encryption is used; application-level end-to-end encryption isn't configured. Update App Store privacy disclosures for this data handling before distributing the beta.
 
 This is device pairing, without email accounts or account recovery UI. Legacy shared-code rooms retain their older trust model. Public release still needs push delivery, recovery/deletion flows, abuse controls and distributed SIP dialing limits. Revocation deletes the active media room; issued media join tokens last up to one minute, so token replay/rejoin remains a prototype limitation.
 

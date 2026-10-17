@@ -1,12 +1,13 @@
 import Foundation
 
 public enum KeypadAction: String, Codable, CaseIterable {
-    case person, callControl, toggleVideo
+    case person, callControl, toggleVideo, messages
     public var title: String {
         switch self {
         case .person: return "Call a person"
         case .callControl: return "Answer / decline / hang up"
         case .toggleVideo: return "Turn video off / on"
+        case .messages: return "Play / stop messages"
         }
     }
 }

@@ -6,8 +6,10 @@ import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, care
 
 import { callRoom, config, expire, FamilyError, mutate, requireValue, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
+import { blobMediaStore, type MediaStore } from "./media.ts";
+import { handleMessageAction, maintainMessages, messageActions, publicInbox, removeMessagesFrom } from "./messages.ts";
 
-export type FamilyDependencies = InboundDependencies;
+export type FamilyDependencies = InboundDependencies & { media?: MediaStore };
 
 import { sendVoIPPush, voipConfigured, type PushResult } from "./push.ts";
 
@@ -45,11 +47,24 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
+// The bedside device is always a caregiver; family devices need the caregiver's approval (and the PIN).
+function isCaregiver(member: Member) { return member.role === "bedside" || member.caregiver === true; }
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage"];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
+function publicPerson(m: Member, now: number, pushEnabled: boolean) {
+  return { id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled), ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}) };
+}
+// Family devices only see the bedside in their snapshot, so caregiver screens get every
+// family device here. It is returned only after a PIN check.
+function adminState(house: Household, now: number, pushEnabled: boolean) {
+  return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now),
+    people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled)) };
+}
 function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
-  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
+  const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
-  return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, me: publicMember(me),
+  return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false,
+    ...(me.role === "bedside" ? { messages: publicInbox(house, now) } : {}), me: publicMember(me),
     invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     call: call && (call.from === me.id || call.to === me.id) ? { ...publicCall(call), source: call.phone ? "phone" : "porch", callerName: call.phone ? call.phone.callerNumber ?? "Phone caller" : house.members.find(m => m.id === call.from)?.name ?? "Family" } : null,
@@ -70,6 +85,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (input instanceof Response) return input;
     const store = dependencies.store ?? familyStore();
     const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
+    let mediaStore = dependencies.media;
+    const media = () => mediaStore ??= blobMediaStore();
     const action = input.action;
     const pushEnabled = !!dependencies.sendPush || voipConfigured();
     if (action === "createBedsideInvite") {
@@ -150,7 +167,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         requireValue(!house.members.some(m => m.id === deviceID), "This device identity is already in use.", 409);
         requireValue(house.members.filter(m => !m.revoked).length < 20, "This household has reached its device limit.");
-        const me: Member = { invitationID: invite.id, id: deviceID, name: invite.name, role: "family", secretHash: hash(secret), permissions: invite.permissions, revoked: false, seenAt: now, available: false };
+        const me: Member = { invitationID: invite.id, id: deviceID, name: invite.name, role: "family", secretHash: hash(secret), permissions: invite.permissions, ...(invite.caregiver ? { caregiver: true } : {}), revoked: false, seenAt: now, available: false };
         house.members.push(me); invite.claimedBy = deviceID;
       });
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID }));
@@ -164,10 +181,21 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       requireValue(await initializeCaregiverPIN(input.pin, store, auth.householdID), "A PIN is already set. Enter your current PIN to change it.", 409);
       return callJSON({ saved: true });
     }
-    if (["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "verifyPIN", "setHouseholdName"].includes(String(action))) {
+    const caregiverAction = caregiverActions.includes(String(action));
+    if (caregiverAction) {
       const raw = await store.get(`house:${auth.householdID}`);
-      requireValue(raw && memberFor(JSON.parse(raw), auth).role === "bedside", "Only a bedside caregiver can change access.", 403);
-      await checkCaregiverCode(request, store, now, auth.householdID);
+      const member = raw ? memberFor(JSON.parse(raw), auth) : undefined;
+      requireValue(member && isCaregiver(member), "Only an approved caregiver can change access.", 403);
+      await checkCaregiverCode(request, store, now, auth.householdID, member.role === "bedside" ? undefined : member.id);
+    }
+    if (messageActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handleMessageAction(String(action), { store, media, now, house, me: memberFor(house, auth), input });
+      if (!caregiverAction) return callJSON(result);
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });
     }
     if (["poll", "acceptCall", "joinCall", "startCall"].includes(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -182,8 +210,22 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const me = memberFor(house, auth);
       expire(house, now);
       if (house.call?.phone && house.call.state === "ended" && !house.call.phone.cleanedUp) cleanupRoom = callRoom(house.call);
-      if (action === "verifyPIN") { requireValue(me.role === "bedside", "Only a bedside caregiver can unlock settings.", 403); return undefined; }
-      if (action === "setHouseholdName") { house.name = name(input.name); me.name = house.name; return undefined; }
+      // Rechecked inside the update: approval may have been withdrawn since the PIN check.
+      if (caregiverAction) requireValue(isCaregiver(me), "Only an approved caregiver can change access.", 403);
+      if (action === "verifyPIN") return undefined;
+      if (action === "setHouseholdName") {
+        house.name = name(input.name);
+        const bedside = house.members.find(m => m.role === "bedside");
+        if (bedside) bedside.name = house.name;
+        return undefined;
+      }
+      if (action === "leaveHousehold") {
+        requireValue(me.role === "family", "A bedside device can't leave its household.", 403);
+        me.revoked = true; delete me.voip; delete me.caregiver;
+        const call = house.call;
+        if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+        return undefined;
+      }
       if (action === "registerVoIP") {
         if (input.token === null) { delete me.voip; return undefined; }
         requireValue(typeof input.token === "string" && /^[a-f0-9]{32,512}$/.test(input.token) && input.token.length % 2 === 0, "Invalid VoIP token.");
@@ -201,24 +243,35 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
-      if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "revoke" || action === "cancelInvites") {
-        requireValue(me.role === "bedside", "Only the bedside caregiver can change access.", 403);
+      if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "revoke" || action === "cancelInvites" || action === "setCaregiver" || action === "setMessages") {
         if (action === "createInvite") {
           house.invites = house.invites.filter(i => !i.claimedBy && i.expiresAt > now);
           requireValue(house.invites.length < 10, "Cancel an unused invitation before creating another.");
-          const invite: Invite = { id: randomUUID(), secretHash: hash(issuedCode!), name: name(input.name), permissions: permissions(input.permissions), expiresAt: now + 900 };
+          requireValue(input.caregiver === undefined || typeof input.caregiver === "boolean", "Choose whether they can use caregiver mode.");
+          const invite: Invite = { id: randomUUID(), secretHash: hash(issuedCode!), name: name(input.name), permissions: permissions(input.permissions), ...(input.caregiver ? { caregiver: true } : {}), expiresAt: now + 900 };
           house.invites.push(invite);
           return { inviteID: invite.id, expiresAt: invite.expiresAt };
         }
         if (action === "cancelInvites") { house.invites = []; return undefined; }
+        if (action === "setMessages") {
+          requireValue(typeof input.enabled === "boolean", "Choose whether messages are on.");
+          house.messagesEnabled = input.enabled;
+          return undefined;
+        }
         if (action === "setDropIn") {
           requireValue(typeof input.enabled === "boolean", "Choose whether drop-in is enabled.");
           house.dropInEnabled = input.enabled;
         } else {
           const target = house.members.find(m => m.id === input.memberID && m.role === "family" && !m.revoked);
           requireValue(target, "This family member was not found.", 404);
-          if (action === "revoke") { target.revoked = true; delete target.voip; }
-          else target.permissions = permissions(input.permissions);
+          if (action === "revoke") {
+            requireValue(target.id !== me.id, "To remove this device, choose Join a different family.", 403);
+            target.revoked = true; delete target.voip; delete target.caregiver;
+          } else if (action === "setCaregiver") {
+            requireValue(target.id !== me.id, "Another caregiver must change your caregiver access.", 403);
+            requireValue(typeof input.enabled === "boolean", "Choose whether they can use caregiver mode.");
+            if (input.enabled) target.caregiver = true; else delete target.caregiver;
+          } else target.permissions = permissions(input.permissions);
         }
         const call = house.call;
         if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to].includes(m.id)) || (call.kind === "dropIn" && (!house.dropInEnabled || !house.members.find(m => m.id === call.from)?.permissions[call.mode === "voice" ? "audio" : "video"])))) {
@@ -272,6 +325,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       throw new FamilyError("Unknown family action.");
     });
+    const releaseRoom = async (room: string) => {
+      if (house.call?.phone && callRoom(house.call) === room) await cleanupInboundCall(store, house.id, house.call, dependencies);
+      else await endRoom(room, dependencies);
+    };
+    if (action === "leaveHousehold") {
+      // The call already ended in storage; LiveKit's empty-room timeout covers a failed delete.
+      if (cleanupRoom) { try { await releaseRoom(cleanupRoom); } catch { /* see above */ } }
+      return callJSON({ left: true });
+    }
     const me = memberFor(house, auth);
     if (action === "startCall" && house.call?.kind === "call") {
       const call = house.call;
@@ -306,11 +368,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
     }
     if (issuedCode && result) await store.create(`invite:${hash(issuedCode)}`, JSON.stringify({ householdID: house.id, inviteID: result.inviteID }), 900);
+    // Message housekeeping never fails the request it rides on; the next poll retries it.
+    if (action === "revoke" && typeof input.memberID === "string") { try { await removeMessagesFrom(store, media, house, input.memberID, now); } catch { /* retried by caregivers */ } }
+    if (action === "poll" && me.role === "bedside") { try { await maintainMessages(store, media, house, now); } catch { /* next poll */ } }
     if (cleanupRoom) {
-      try {
-        if (house.call?.phone && callRoom(house.call) === cleanupRoom) await cleanupInboundCall(store, house.id, house.call, dependencies);
-        else await endRoom(cleanupRoom, dependencies);
-      }
+      try { await releaseRoom(cleanupRoom); }
       catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }
     }
     if (action === "joinCall") {
@@ -323,7 +385,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         canPublishSources: call.mode === "voice" ? [TrackSource.MICROPHONE] : [TrackSource.MICROPHONE, TrackSource.CAMERA] });
       return callJSON({ token: await token.toJwt(), serverUrl: configuration.serverUrl, room: roomName });
     }
-    return callJSON({ state: snapshot(house, me, now, pushEnabled), ...(action === "registerVoIP" ? { pushReady: !!me.voip && pushEnabled } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
+    return callJSON({ state: snapshot(house, me, now, pushEnabled), ...(caregiverAction ? { admin: adminState(house, now, pushEnabled) } : {}), ...(action === "registerVoIP" ? { pushReady: !!me.voip && pushEnabled } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
   } catch (error) {
     if (error instanceof FamilyError || error instanceof CaregiverAuthError) return callJSON({ error: error.message, ...(error instanceof FamilyError && error.code ? { errorCode: error.code } : {}) }, error.status);
     return callJSON({ error: "Family calling is unavailable. Check the connection and shared storage setup." }, 503);
