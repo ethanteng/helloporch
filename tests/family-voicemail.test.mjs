@@ -55,8 +55,9 @@ async function fixture() {
   };
   // An unanswered call: Twilio asks what to do after the dial, then reports the recording.
   let calls = 0;
-  const voicemail = async (from = caller, { status = 'completed', duration = '12' } = {}) => {
+  const voicemail = async (from = caller, { status = 'completed', duration = '12', verified = false } = {}) => {
     const callSid = sid('CA', ++calls), recordingSid = sid('RE', calls);
+    await twilio('incoming', { CallSid: callSid, From: from, To: porchNumber, ...(verified ? { StirVerstat: 'TN-Validation-Passed-A' } : {}) });
     const dialed = await twilio('dialed', { CallSid: callSid, From: from, To: porchNumber, DialCallStatus: 'no-answer' });
     if (!dialed.body.includes('<Record')) return { dialed };
     const recorded = await twilio('recording', { CallSid: callSid, RecordingSid: recordingSid, RecordingStatus: status, RecordingDuration: duration, RecordingUrl: `https://api.twilio.com/2010-04-01/Accounts/${account}/Recordings/${recordingSid}` });
@@ -74,6 +75,11 @@ test('Twilio rings the bedside through LiveKit, and only signed requests are acc
   // The SIP login is derived from the LiveKit secret, matching what the setup script sets on the trunk.
   const password = createHmac('sha256', env.LIVEKIT_API_SECRET).update('porch-sip-inbound-v1').digest('base64url');
   assert.ok(incoming.body.includes(`<Sip username="porch" password="${password}">sip:+15550001111@test-project.sip.livekit.cloud;transport=tcp</Sip>`));
+  // Carrier verification is forwarded for phone drop-in; anything that isn't a plain token is dropped.
+  const verified = await f.twilio('incoming', { CallSid: sid('CA', 97), From: caller, To: porchNumber, StirVerstat: 'TN-Validation-Passed-A' });
+  assert.ok(verified.body.includes(';transport=tcp?X-Porch-VerStat=TN-Validation-Passed-A</Sip>'));
+  const injected = await f.twilio('incoming', { CallSid: sid('CA', 96), From: caller, To: porchNumber, StirVerstat: 'TN-Validation-Passed-A&X-Other=1' });
+  assert.ok(injected.body.includes(';transport=tcp</Sip>'));
   assert.equal((await f.twilio('incoming', { From: caller, To: porchNumber }, { signature: 'bm90LXJpZ2h0' })).status, 403);
   assert.equal((await f.twilio('incoming', { From: caller, To: porchNumber }, { accountSid: 'AC' + 'b'.repeat(32) })).status, 403, 'another Twilio account');
   assert.match((await f.twilio('incoming', { From: caller, To: '+15550009999' })).body, /<Reject\/>/, 'a number with no household');
@@ -114,11 +120,17 @@ test('an unanswered phone call leaves a voicemail that is held until it is relea
   assert.deepEqual(await f.queue(), []);
 });
 
-test('the bedside releases voicemail from callers saved on its keypad; withheld numbers need a caregiver', async () => {
+test('the bedside releases voicemail only from verified callers saved on its keypad', async () => {
   const f = await fixture();
-  const known = await f.voicemail(caller);
-  const anonymous = await f.voicemail('+266696687');
+  const known = await f.voicemail(caller, { verified: true });
+  const anonymous = await f.voicemail('+266696687', { verified: true });
+  // The same number without carrier verification could be a faked caller ID.
+  const spoofed = await f.voicemail(caller);
+  assert.equal((await f.send('releaseKnownCaller', { messageID: spoofed.id }, f.bedside.credential)).status, 403);
+  await f.json('removeMessage', { messageID: spoofed.id }, f.sam.credential, '123456');
   const queued = await f.queue();
+  assert.equal(queued.find(m => m.id === known.id).callerVerified, true);
+  assert.equal(queued.find(m => m.id === anonymous.id).callerVerified, undefined);
   assert.equal(queued.find(m => m.id === anonymous.id).callerNumber, undefined);
   assert.equal(queued.find(m => m.id === anonymous.id).fromName, 'Phone caller');
   assert.equal((await f.send('releaseKnownCaller', { messageID: known.id }, f.sam.credential)).status, 403, 'only the bedside');

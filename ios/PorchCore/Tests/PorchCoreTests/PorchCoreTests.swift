@@ -378,6 +378,21 @@ final class IncomingCallerNameTests: XCTestCase {
         XCTAssertEqual(try slots.incomingCallerName(for: call(), in: snapshot(role: "family")), "Ethan")
         XCTAssertEqual(try slots.incomingCallerName(for: call(recipient: caller), in: snapshot()), "Ethan")
     }
+    func testOnlyTelephoneDropInsUseTheSavedPersonForTheirNumber() throws {
+        let state = try snapshot()
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "paired", mode: .voice), phoneNumber: "+14155550200"), for: 1)
+        func phone(kind: String, number: String? = "+14155550200") throws -> FamilyCallRecord {
+            var object: [String: Any] = ["id": "phone-call", "from": "sip:PA_test", "to": bedside, "mode": "voice", "kind": kind, "state": "pending",
+                "createdAt": 1, "expiresAt": 46, "callerName": kind == "dropIn" ? "Dave" : "+14155550200", "source": "phone"]
+            if let number { object["callerNumber"] = number }
+            return try JSONDecoder().decode(FamilyCallRecord.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "dropIn"), in: state), "David")
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "call"), in: state), "+14155550200", "An unverified number must not borrow a saved name")
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "dropIn", number: "+14155550999"), in: state), "Dave")
+        XCTAssertEqual(try slots.incomingCallerName(for: phone(kind: "dropIn", number: nil), in: state), "Dave")
+    }
 }
 
 final class BedsideInvitationTests: XCTestCase {
@@ -433,9 +448,9 @@ final class BedsideAndKeypadTests: XCTestCase {
         XCTAssertEqual(PhoneNumberNormalization.display("+14158676937", region: "US"), "(415) 867-6937")
         XCTAssertEqual(PhoneNumberNormalization.display("+442070313000", region: "US"), "+44 20 7031 3000")
         let object: [String: Any] = ["id": "v1", "from": "phone", "fromName": "+14158676937", "kind": "voicemail", "mode": "audio", "contentType": "audio/mpeg",
-            "durationSeconds": 12, "sentAt": 1_800_000_000, "delivered": false, "callerNumber": "+14158676937", "held": true]
+            "durationSeconds": 12, "sentAt": 1_800_000_000, "delivered": false, "callerNumber": "+14158676937", "callerVerified": true, "held": true]
         let message = try JSONDecoder().decode(FamilyMessage.self, from: JSONSerialization.data(withJSONObject: object))
-        XCTAssertTrue(message.fromPhone); XCTAssertEqual(message.held, true); XCTAssertEqual(message.fileExtension, "mp3")
+        XCTAssertTrue(message.fromPhone); XCTAssertEqual(message.held, true); XCTAssertEqual(message.callerVerified, true); XCTAssertEqual(message.fileExtension, "mp3")
     }
     func testCallControlDistinguishesTapHoldDropInAndCancellation() {
         var input = IncomingCallKey()

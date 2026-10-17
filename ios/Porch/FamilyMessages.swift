@@ -461,7 +461,10 @@ final class MessageQueueViewController: CaregiverFormViewController {
             remove.addAction(UIAction { [weak self] _ in self?.confirmRemove(message) }, for: .touchUpInside)
             views.append(remove)
             let type = message.fromPhone ? "Phone voicemail" : message.kind == "voicemail" ? "Voicemail" : message.mode == "video" ? "Video message" : "Audio message"
-            let state = message.held == true ? "Waiting for your OK: this number isn't saved on the Porch keypad" : message.delivered ? "Downloaded to the iPad" : "Not downloaded yet"
+            let state = message.held != true ? (message.delivered ? "Downloaded to the iPad" : "Not downloaded yet")
+                : message.callerNumber == nil ? "Waiting for your OK: caller ID was withheld"
+                : message.callerVerified == true ? "Waiting for your OK: this number isn't saved on the Porch keypad"
+                : "Waiting for your OK: the phone company didn't verify this caller ID"
             list.addArrangedSubview(section("\(type) from \(Self.senderName(message))", detail: "\(MessageText.length(message.durationSeconds)) · Sent \(MessageText.when(message.sentAt)) · \(state)", views: views))
         }
         loadPosters(missing)

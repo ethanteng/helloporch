@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { RoomConfiguration, SIPInboundTrunkInfo, SipClient } from 'livekit-server-sdk';
 import { familyStore } from '../lib/family/store.ts';
-import { inboundRingSeconds, inboundRoomPrefix, sipInboundCredentials } from '../lib/family/inbound.ts';
+import { callerVerificationAttribute, callerVerificationHeader, forwardedVerificationHeader, inboundRingSeconds, inboundRoomPrefix, sipInboundCredentials } from '../lib/family/inbound.ts';
 
 // No credentials or phone numbers in arguments/output. Load private env files
 // with Node's --env-file flags. The default is a read-only plan; --apply saves it.
@@ -54,7 +54,8 @@ try {
   }
   voicemail ||= !!trunk?.authUsername;
   console.log('Existing Twilio number and destination household verified.');
-  console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer; 45-second ringing; 30-minute call limit.');
+  console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; 45-second ringing; 30-minute call limit.');
+  console.log('Carrier caller-ID verification is passed to Porch, so caregiver-approved numbers can drop in with audio while drop-in is on.');
   console.log(voicemail
     ? 'Voicemail routing: inbound SIP requires the Porch digest login, which only the calling server sends from its Twilio voice webhook.'
     : 'Inbound SIP restricted to Twilio signaling gateways.');
@@ -70,6 +71,10 @@ try {
   } else trunk.allowedAddresses = twilioGateways;
   trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingSeconds) } }).ringingTimeout;
   trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
+  // Twilio's STIR/SHAKEN result; phone drop-in requires it. Keep other mappings.
+  // Voicemail routing reads the result from the server's forwarded header, never a header a SIP source chose.
+  const { [callerVerificationHeader]: _twilio, [forwardedVerificationHeader]: _forwarded, ...otherHeaders } = trunk.headersToAttributes ?? {};
+  trunk.headersToAttributes = { ...otherHeaders, [voicemail ? forwardedVerificationHeader : callerVerificationHeader]: callerVerificationAttribute };
   trunk = await sip.updateSipInboundTrunk(trunk.sipTrunkId, trunk);
   if (!dispatch) dispatch = await sip.createSipDispatchRule({ type: 'individual', roomPrefix: inboundRoomPrefix }, {
     name, trunkIds: [trunk.sipTrunkId], hidePhoneNumber: false,

@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { inboundRingSeconds, sipInboundCredentials, type InboundRoute } from "./inbound.ts";
+import { forwardedVerificationHeader, inboundRingSeconds, sipInboundCredentials, verifiedCaller, type InboundRoute } from "./inbound.ts";
 import type { Household } from "./household.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { messageLimits, receivePhoneVoicemail, voicemailOpen } from "./messages.ts";
@@ -18,7 +18,8 @@ const recordingSIDPattern = /^RE[0-9a-f]{32}$/;
 // Twilio's stand-ins for withheld, restricted and unavailable caller ID.
 const withheld = new Set(["+266696687", "+7378742833", "+2562533", "+8656696", "+86282452253"]);
 const sessionKey = (callSID: string) => `voicemail-call:${callSID}`;
-type Session = { householdID: string; callerNumber?: string };
+const verifiedKey = (callSID: string) => `voicemail-verified:${callSID}`;
+type Session = { householdID: string; callerNumber?: string; callerVerified?: boolean };
 
 const escape = (value: string) => value.replace(/[<>&"']/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c]!);
 const twiml = (body: string, status = 200) =>
@@ -98,8 +99,13 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const calledNumber = params.get("To");
       if (!configured.sipHost || !configured.sip || !await household(store, calledNumber)) return twiml("<Reject/>");
       // LiveKit keeps this leg ringing until the bedside answers; answerOnBridge lets the caller hear it.
+      // Twilio's signed STIR/SHAKEN result travels on as a SIP header, so phone drop-in still works.
+      const verification = params.get("StirVerstat");
+      // Remembered for voicemail: only a verified caller on the keypad skips caregiver review.
+      if (verification === verifiedCaller && callSIDPattern.test(callSID)) await store.create(verifiedKey(callSID), "1", 3600);
+      const headers = verification && /^[A-Za-z0-9-]{1,64}$/.test(verification) ? `?${forwardedVerificationHeader}=${verification}` : "";
       return twiml(`<Dial answerOnBridge="true" timeout="${inboundRingSeconds + 10}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
-        `<Sip username="${escape(configured.sip.username)}" password="${escape(configured.sip.password)}">${escape(`sip:${calledNumber}@${configured.sipHost};transport=tcp`)}</Sip></Dial>`);
+        `<Sip username="${escape(configured.sip.username)}" password="${escape(configured.sip.password)}">${escape(`sip:${calledNumber}@${configured.sipHost};transport=tcp${headers}`)}</Sip></Dial>`);
     }
     if (step === "dialed") {
       const status = params.get("DialCallStatus");
@@ -107,7 +113,8 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const house = await household(store, params.get("To"));
       const storage = !!dependencies.media || !!process.env.BLOB_READ_WRITE_TOKEN;
       if (!house || !storage || !callSIDPattern.test(callSID) || !voicemailOpen(house, callerNumber, now)) return twiml(`${say("Sorry, no one can answer right now. Please try again later. Goodbye.")}<Hangup/>`);
-      const session: Session = { householdID: house.id, ...(callerNumber ? { callerNumber } : {}) };
+      const verified = params.get("StirVerstat") === verifiedCaller || !!await store.get(verifiedKey(callSID));
+      const session: Session = { householdID: house.id, ...(callerNumber ? { callerNumber } : {}), ...(callerNumber && verified ? { callerVerified: true } : {}) };
       await store.create(sessionKey(callSID), JSON.stringify(session), 3600);
       return twiml(`${say("Sorry, no one can come to the phone right now. Please leave a message after the tone, then hang up.")}` +
         `<Record maxLength="120" timeout="5" playBeep="true" trim="trim-silence" finishOnKey="#" method="POST"` +
@@ -126,7 +133,7 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const session: Session = JSON.parse(raw);
       const audio = await recordings.download(recordingSID);
       await receivePhoneVoicemail(store, dependencies.media ?? blobMediaStore(), session.householdID,
-        { id: voicemailMessageID(recordingSID), callerNumber: session.callerNumber, audio, durationSeconds: duration }, now);
+        { id: voicemailMessageID(recordingSID), callerNumber: session.callerNumber, callerVerified: session.callerVerified, audio, durationSeconds: duration }, now);
     }
     // Porch keeps its own copy; nothing stays with the phone provider.
     await recordings.remove(recordingSID);

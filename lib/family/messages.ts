@@ -128,8 +128,8 @@ export function voicemailOpen(house: Household, callerNumber: string | undefined
 }
 
 /** Stores a phone caller's recording and holds it for review. Safe to repeat for the same recording. */
-export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStore, householdID: string, recording: { id: string; callerNumber?: string; audio: Uint8Array; durationSeconds: number }, now: number) {
-  const { id, callerNumber, audio } = recording;
+export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStore, householdID: string, recording: { id: string; callerNumber?: string; callerVerified?: boolean; audio: Uint8Array; durationSeconds: number }, now: number) {
+  const { id, callerNumber, callerVerified, audio } = recording;
   const existing = (await sentRecords(store, householdID, phoneSender)).find(r => r.id === id);
   if (existing && existing.state !== "uploading") return existing.state === "queued";
   requireValue(audio.byteLength > 0 && audio.byteLength <= messageLimits.audioBytes, "This recording is too large.", 413);
@@ -141,7 +141,7 @@ export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStor
     house.inbox ??= [];
     if (house.inbox.some(entry => entry.id === id)) return true;
     if (!voicemailOpen(house, callerNumber, now)) return false;
-    house.inbox.push({ id, from: phoneSender, fromName: callerNumber ?? "Phone caller", kind: "voicemail", mode: "audio", contentType: record.contentType, pathname: record.pathname, durationSeconds, sentAt: now, held: true, ...(callerNumber ? { callerNumber } : {}) });
+    house.inbox.push({ id, from: phoneSender, fromName: callerNumber ?? "Phone caller", kind: "voicemail", mode: "audio", contentType: record.contentType, pathname: record.pathname, durationSeconds, sentAt: now, held: true, ...(callerNumber ? { callerNumber } : {}), ...(callerNumber && callerVerified ? { callerVerified: true } : {}) });
     return true;
   });
   await updateSent(store, householdID, phoneSender, records => {
@@ -248,10 +248,11 @@ export async function handleMessageAction(action: string, { store, media, now, h
     return { removed: true };
   }
   if (action === "releaseMessage" || action === "releaseKnownCaller") {
-    // A caregiver approves with the PIN; the bedside releases callers saved on its keypad.
+    // A caregiver approves with the PIN; the bedside releases callers saved on its keypad, but only
+    // when the phone company verified the caller ID, since caller ID alone is easy to fake.
     if (action === "releaseKnownCaller") requireValue(me.role === "bedside", "Only the bedside device can do this.", 403);
     requireValue(entry, "This message was already played or removed.", 404);
-    if (action === "releaseKnownCaller") requireValue(entry.from === phoneSender && entry.callerNumber, "This caller isn't saved on the keypad.", 403);
+    if (action === "releaseKnownCaller") requireValue(entry.from === phoneSender && entry.callerNumber && entry.callerVerified, "A caregiver needs to review this voicemail.", 403);
     await mutate(store, house.id, current => { const e = current.inbox?.find(e => e.id === id); if (e) delete e.held; });
     return { released: true };
   }

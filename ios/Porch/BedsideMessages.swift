@@ -36,10 +36,11 @@ extension Notification.Name {
               let state = FamilyCoordinator.shared.state, state.me.role == .bedside else { return }
         let all = state.messages ?? []
         played.formIntersection(Set(all.map(\.id))); unreported.formIntersection(Set(all.map(\.id))); releasing.formIntersection(Set(all.map(\.id)))
-        // Phone voicemail plays only once it's released: by a caregiver, or here when the
-        // caller's number is saved on the keypad. Unknown callers wait for a caregiver.
+        // Phone voicemail plays only once it's released: by a caregiver, or here when the phone
+        // company verified the caller and the number is saved on the keypad. Others wait for a caregiver.
         let slots: CallSlots? = all.contains(where: { $0.held == true }) ? (try? CallSlots.load()) : nil
-        for message in all where message.held == true && !releasing.contains(message.id) && slots?.contact(forPhoneNumber: message.callerNumber) != nil {
+        for message in all where message.held == true && message.callerVerified == true && !releasing.contains(message.id)
+            && slots?.contact(forPhoneNumber: message.callerNumber) != nil {
             releaseKnownCaller(message, credential: credential)
         }
         let waiting = all.filter { $0.held != true }
@@ -95,9 +96,10 @@ extension Notification.Name {
     }
 
     /// Who a message is from, as the bedside shows and speaks it: the keypad contact's name
-    /// first, then the family member's name, or the caller's number for phone voicemail.
+    /// first, then the family member's name, or the caller's number for phone voicemail. A phone
+    /// caller borrows a contact's name and photo only when the caller ID was verified.
     static func sender(of message: FamilyMessage, slots: CallSlots) -> (name: String, contact: CallContact?) {
-        let contact = message.fromPhone ? slots.contact(forPhoneNumber: message.callerNumber)
+        let contact = message.fromPhone ? (message.callerVerified == true ? slots.contact(forPhoneNumber: message.callerNumber) : nil)
             : slots.contacts.compactMap { $0 }.first { $0.familyMemberID == message.from }
         if let contact { return (contact.name, contact) }
         guard message.fromPhone else { return (message.fromName, nil) }
