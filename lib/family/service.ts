@@ -7,9 +7,9 @@ import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, care
 import { callRoom, config, expire, FamilyError, mutate, requireValue, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 
-export type FamilyDependencies = InboundDependencies & { sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult> };
+export type FamilyDependencies = InboundDependencies;
 
-import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
+import { sendVoIPPush, voipConfigured, type PushResult } from "./push.ts";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -47,7 +47,7 @@ function memberFor(house: Household, auth: Auth): Member {
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
-  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (m.role === "family" && !!m.voip && pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
+  const publicMember = (m: Member) => ({ id: m.id, name: m.name, role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, me: publicMember(me),
     invitations: me.role === "bedside" ? house.invites.filter(i => !i.claimedBy && i.expiresAt > now).map(i => ({ id: i.id, expiresAt: i.expiresAt })) : [],
@@ -185,7 +185,6 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "verifyPIN") { requireValue(me.role === "bedside", "Only a bedside caregiver can unlock settings.", 403); return undefined; }
       if (action === "setHouseholdName") { house.name = name(input.name); me.name = house.name; return undefined; }
       if (action === "registerVoIP") {
-        requireValue(me.role === "family", "Only family devices register for incoming call pushes.", 403);
         if (input.token === null) { delete me.voip; return undefined; }
         requireValue(typeof input.token === "string" && /^[a-f0-9]{32,512}$/.test(input.token) && input.token.length % 2 === 0, "Invalid VoIP token.");
         requireValue(input.environment === "sandbox" || input.environment === "production", "Invalid push environment.");
@@ -237,7 +236,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const target = house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
-        if (!online(target, now) && !(input.kind === "call" && target.role === "family" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        if (!online(target, now) && !(input.kind === "call" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
         const wait = me.role === "bedside" && input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
@@ -277,7 +276,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "startCall" && house.call?.kind === "call") {
       const call = house.call;
       const target = house.members.find(m => m.id === call.to)!;
-      if (target.role === "family" && target.voip && pushEnabled) {
+      if (target.voip && pushEnabled) {
         // Outside the CAS mutation: concurrent callers/retries cannot send pushes
         // for a call that never won the household reservation.
         const registration = target.voip;

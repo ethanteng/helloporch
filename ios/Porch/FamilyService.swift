@@ -59,7 +59,7 @@ enum PorchDevice {
     }
     #endif
     static func save(_ credential: FamilyCredential) throws {
-        try NativeCallSettings.writeSecret(try JSONEncoder().encode(credential), account: "porch.family.\(credential.role.rawValue)", accessibleAfterFirstUnlock: credential.role == .family)
+        try NativeCallSettings.writeSecret(try JSONEncoder().encode(credential), account: "porch.family.\(credential.role.rawValue)", accessibleAfterFirstUnlock: true)
     }
 }
 

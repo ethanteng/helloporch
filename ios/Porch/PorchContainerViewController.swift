@@ -47,9 +47,9 @@ final class PorchContainerViewController: UIViewController {
         let coordinator = FamilyCoordinator.shared
         guard let credential = coordinator.credential, let state = coordinator.state else { return }
         guard let call = state.call, call.state == "pending", call.to == state.me.id else { if state.call?.state == "ended" || state.call == nil { incomingID = nil }; return }
-        if credential.role == .family && call.kind == "call" {
+        if call.kind == "call" {
             SystemIncomingCalls.shared.receive(call, credential: credential)
-            return
+            if credential.role == .family { return }
         }
         guard incomingID != call.id, readyForIncoming else { return }
         incomingID = call.id

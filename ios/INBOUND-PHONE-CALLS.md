@@ -6,7 +6,7 @@ Each household has its own number. Managed Redis stores `phone-number:<E.164 num
 
 ## Call behavior
 
-- Keep Porch open and unlocked on the bedside iPad. Settings screens and backgrounded devices do not accept calls. Current iPads poll every two seconds while idle and every second while ringing or in a call.
+- With the updated app, microphone permission, and APNs configured, incoming calls can ring a backgrounded or locked bedside iPad through PushKit and Apple's CallKit screen. Open Porch once after installing the update to migrate its saved credential and register the bedside push token. Without push registration, keep Porch open and unlocked on the bedside clock. Foreground iPads poll every two seconds while idle and every second while ringing.
 - The screen shows the caller's telephone number, or “Phone caller” when caller ID is unavailable. The number is display information, not authentication. There is no shared-number menu or caller recognition for routing.
 - All callers reaching the assigned number can ring it; this first version does not require callers to be paired app members. Every call requires a manual answer, even if Porch drop-in is enabled.
 - Answer connects two-way audio. The camera stays off. Mute, keypad hangup, either person's hangup, and automatic silence hangup work with the existing call controls.
@@ -57,7 +57,9 @@ The Twilio SIP signaling CIDRs in the script come from [Twilio's official gatewa
 
 ## Delivery and cleanup
 
-The dispatch rule creates a unique `porch-inbound-…` room for each call. LiveKit's signed `participant_joined` webhook identifies the SIP caller and dialed number. Porch verifies the participant against LiveKit, looks up the number assignment, and atomically reserves the household if its bedside device is ready. The iPad's existing authenticated family polling delivers the call.
+The dispatch rule creates a unique `porch-inbound-…` room for each call. LiveKit's signed `participant_joined` webhook identifies the SIP caller and dialed number. Porch verifies the participant against LiveKit, looks up the number assignment, and atomically reserves the household if its bedside device is foreground-ready or has a registered VoIP token with APNs configured. One atomic delivery claim per SIP room prevents duplicate webhooks from sending repeated pushes. A failed push releases an unreachable telephone leg, while an authenticated receipt or answer preserves the call. Invalid-token removal preserves a newer registration.
+
+CallKit owns ordinary incoming calls in both device modes. Its application-level session answers while locked, keeps audio connected in the background, and polls for caller hangup. The foreground bedside screen retains touch and keypad Answer/Decline; active calls retain keypad hangup/camera controls and configured silence disconnection. Telephone calls always require explicit acceptance and never enable the camera. Backgrounding an ordinary incoming call leaves CallKit ringing. Drop-in continues to require a foreground bedside announcement and consent window; it never sends a push or auto-answers while locked. See [APNs setup](INCOMING-CALLS.md).
 
 The telephone leg never becomes a fake paired device or needs a device heartbeat. Only the actual bedside member can accept and obtain a room-scoped, microphone-only token. SIP connection details remain server-side. Phone calls cannot use the outbound fallback action or inherit a paired member's drop-in permissions.
 
@@ -82,7 +84,8 @@ Before relying on the feature, test with the bedside iPad and a real phone:
 - Dial the assigned number, hear ringing, answer by touch and by the keypad, and verify two-way audio with the camera off.
 - Hang up from each end, decline, ignore for 45 seconds, cancel before the iPad answers, and retry immediately afterward.
 - Call during an existing Porch call, during outbound phone fallback, and from two phones at once. Only one conversation may reach the bedside device, with no audio shared across calls.
-- Close Porch, lock the iPad, open caregiver settings, disconnect Wi-Fi, and restore it. Unavailable calls must end and later calls must work again.
+- Open the updated app once, allow microphone access, then background Porch and dial the number. Repeat with the iPad locked; answer without unlocking and verify two-way audio, system mute/hangup, foreground keypad controls, and audio continuing after another lock.
+- Cancel before answer, ignore the call, decline from the lock screen, disconnect Wi-Fi, restore it, and call again. Test Focus/Do Not Disturb, a cold launch after unlocking once since reboot, and production TestFlight push delivery. Record deliberate force-quit behavior on hardware; simulator tests cannot prove APNs wakeup or ringing.
 - Verify caller ID withheld, microphone permission denied, mute, speaker/Bluetooth output, and automatic silence hangup.
 - Test the configured 30-minute SIP limit. Inspect LiveKit and Twilio logs for failed provider routing; never paste credentials or private call payloads into public logs.
 

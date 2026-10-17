@@ -15,10 +15,11 @@ class MemoryStore {
   async create(key, value) { if (this.values.has(key)) return false; this.values.set(key, value); return true; }
   async compareAndSet(key, before, after) { if (this.values.get(key) !== before) return false; this.values.set(key, after); return true; }
 }
-function fixture() {
+function fixture(overrides = {}) {
   const store = new MemoryStore(), ended = [], participants = new Map();
   let now = Math.floor(Date.now() / 1000), lookupFailure = false, cleanupFailure = false;
   const dependencies = { store, now: () => now,
+    ...overrides,
     endRoom: async room => { if (cleanupFailure) throw Error('unavailable'); ended.push(room); participants.delete(room); },
     getPhoneParticipant: async (room, identity) => {
       if (lookupFailure) throw Error('unavailable');
@@ -225,4 +226,61 @@ test('a delayed hangup for a previous room cannot end a newer call', async () =>
   const second = f.call(); await f.webhook(second); const id = f.house(bedside).call.id;
   await f.webhook({ ...first, event: 'room_finished' });
   assert.equal(f.house(bedside).call.id, id); assert.equal(f.house(bedside).call.state, 'pending');
+});
+
+test('a locked bedside receives one telephone push despite simultaneous and retried webhooks', async () => {
+  const pushes = [], f = fixture({ sendPush: async (device, call) => { pushes.push({ device, call }); return { delivered: true }; } });
+  const { bedside } = await f.setup(), registration = { token: 'ab'.repeat(32), environment: 'production' };
+  await f.json('registerVoIP', registration, bedside.credential);
+  await f.json('poll', { available: false }, bedside.credential); f.advance(90);
+  const event = f.call();
+  await Promise.all([f.webhook(event), f.webhook(event)]);
+  await f.webhook(event);
+  const call = f.house(bedside).call;
+  assert.equal(call.state, 'pending'); assert.equal(pushes.length, 1);
+  assert.deepEqual(pushes[0], { device: registration, call: { callID: call.id, recipientID: bedside.state.me.id, callerName: '+14155550200', mode: 'voice', expiresAt: call.expiresAt } });
+  assert.equal(f.ended.length, 0);
+  await f.json('poll', { available: false, receivedCallID: call.id }, bedside.credential);
+  await f.json('acceptCall', { callID: call.id, available: true }, bedside.credential);
+  for (let n = 0; n < 8; n++) { f.advance(10); assert.equal((await f.json('poll', { available: false }, bedside.credential)).state.call.state, 'accepted'); }
+  await f.json('endCall', { callID: call.id }, bedside.credential);
+  await f.webhook(event);
+  assert.equal(pushes.length, 1); assert.ok(f.ended.includes(event.room.name));
+});
+
+test('failed bedside push cleans up an unreachable telephone leg and removes only the invalid token', async () => {
+  const f = fixture({ sendPush: async () => ({ delivered: false, invalidToken: true }) }), { bedside } = await f.setup();
+  await f.json('registerVoIP', { token: 'ab'.repeat(32), environment: 'production' }, bedside.credential);
+  await f.json('poll', { available: false }, bedside.credential);
+  const event = f.call(); await f.webhook(event);
+  assert.equal(f.house(bedside).call.state, 'ended'); assert.equal(f.house(bedside).members[0].voip, undefined);
+  assert.ok(f.ended.includes(event.room.name));
+});
+
+test('lost APNs acknowledgment preserves bedside receipt and answer, including rotated registrations', async () => {
+  for (const answer of [false, true]) {
+    let deliver, arrived;
+    const sent = new Promise(resolve => arrived = resolve);
+    const f = fixture({ sendPush: async () => { arrived(); return new Promise(resolve => deliver = resolve); } }), { bedside } = await f.setup();
+    await f.json('registerVoIP', { token: 'ab'.repeat(32), environment: 'production' }, bedside.credential);
+    await f.json('poll', { available: false }, bedside.credential);
+    const event = f.call(), pending = f.webhook(event); await sent;
+    const callID = f.house(bedside).call.id;
+    await f.json('poll', { available: false, receivedCallID: callID }, bedside.credential);
+    await f.json('registerVoIP', { token: 'cd'.repeat(32), environment: 'production' }, bedside.credential);
+    if (answer) await f.json('acceptCall', { callID, available: true }, bedside.credential);
+    deliver({ delivered: false, invalidToken: true });
+    assert.equal((await pending).status, 200);
+    assert.equal(f.house(bedside).call.state, answer ? 'accepted' : 'pending');
+    assert.equal(f.house(bedside).members[0].voip.token, 'cd'.repeat(32));
+    assert.equal(f.ended.length, 0);
+  }
+});
+
+test('failed pushes retain foreground telephone delivery and withheld caller ID uses a generic name', async () => {
+  const pushes = [], f = fixture({ sendPush: async (_, call) => { pushes.push(call); return { delivered: false }; } }), { bedside } = await f.setup();
+  await f.json('registerVoIP', { token: 'ab'.repeat(32), environment: 'production' }, bedside.credential);
+  const event = f.call(undefined, { 'sip.phoneNumber': 'anonymous' }); await f.webhook(event);
+  assert.equal(pushes[0].callerName, 'Phone caller'); assert.equal(f.house(bedside).call.state, 'pending');
+  assert.equal(f.ended.length, 0);
 });
