@@ -820,6 +820,17 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertFalse(buttons(in: admin.view).contains { $0.configuration?.title == "Cancel unused invitations" })
     }
 
+    @MainActor func testInvitationCreatedFromAPhoneAppearsInTheList() throws {
+        let decode = { (json: [String: Any]) in try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: json)) }
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: try decode(["householdName": "Pat", "dropInEnabled": false, "people": []]))
+        let navigation = UINavigationController(rootViewController: admin); admin.loadViewIfNeeded()
+        buttons(in: admin.view).first { $0.configuration?.title == "Invite a family member" }!.sendActions(for: .touchUpInside)
+        let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
+        invite.onAdminChanged?(try decode(["householdName": "Pat", "dropInEnabled": false, "people": [], "invitations": [["id": "a", "name": "Ana", "expiresAt": 1_800_000_900]]]))
+        XCTAssertTrue(buttons(in: admin.view).contains { $0.accessibilityLabel == "Cancel invitation for Ana" }, "Caregiver mode on a phone keeps its own state, so it must take the one createInvite returns")
+    }
+
     @MainActor func testFirstTapOnGearOpensCaregiverGate() async {
         let original = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }!
         let window = UIWindow(windowScene: original.windowScene!)
