@@ -36,7 +36,11 @@ extension Notification.Name {
     private(set) var pushReady = false
     private(set) var status = "Incoming Porch call"
     var hasCall: Bool { uuid != nil }
-    var callerName: String { call?.callerName ?? incomingName }
+    var callerContact: CallContact? {
+        guard let call, let state = FamilyCoordinator.shared.state else { return nil }
+        return ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: call, in: state)
+    }
+    var callerName: String { callerContact?.name ?? call?.callerName ?? incomingName }
     private var incomingName = "Family"
     private var mode: NativeCall.Mode = .voice
     var isVideo: Bool { mode == .video }
@@ -326,6 +330,8 @@ extension Notification.Name {
 final class SystemCallViewController: UIViewController, RoomDelegate {
     private let status = UILabel()
     private let video = VideoView()
+    private let placeholder = UILabel()
+    private lazy var personPhoto = RecipientAppearance.photoView(SystemIncomingCalls.shared.callerContact?.photoData)
     private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
     private let camera = PorchStyle.button("Camera on", symbol: "video")
     private var cameraEnabled = false
@@ -333,7 +339,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         super.viewDidLoad(); view.backgroundColor = PorchStyle.night
         overrideUserInterfaceStyle = .dark
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
-        let title = PorchStyle.label(SystemIncomingCalls.shared.callerName, size: 26, color: .white, weight: .semibold)
+        let title = PorchStyle.label(SystemIncomingCalls.shared.callerName, size: 40, color: .white, weight: .semibold)
         status.font = PorchStyle.font(17); status.adjustsFontForContentSizeCategory = true
         status.textColor = .white; status.textAlignment = .center; status.numberOfLines = 0
         microphone.addAction(UIAction { _ in SystemIncomingCalls.shared.requestMute() }, for: .touchUpInside)
@@ -354,8 +360,10 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                 } catch { showPorchError(error, on: self) }
             }
         }, for: .touchUpInside)
-        CallScreenLayout.install(in: view, video: video, title: title, status: status,
-                                 buttons: [microphone, camera, end])
+        placeholder.text = "Voice call"; placeholder.textColor = .white; placeholder.textAlignment = .center
+        placeholder.font = PorchStyle.font(28)
+        CallScreenLayout.install(in: view, video: video, placeholder: placeholder, title: title, status: status,
+                                 photo: personPhoto.image == nil ? nil : personPhoto, buttons: [microphone, camera, end])
         SystemIncomingCalls.shared.room?.add(delegate: self)
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
@@ -369,6 +377,9 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         camera.configuration?.title = cameraEnabled ? "Camera off" : "Camera on"
         microphone.configuration?.title = calls.room?.localParticipant.isMicrophoneEnabled() == true ? "Mute" : "Unmute"
         video.track = calls.room?.remoteParticipants.values.first?.videoTracks.first?.track as? VideoTrack
+        personPhoto.isHidden = video.track != nil
+        placeholder.isHidden = video.track != nil
+        placeholder.text = calls.isVideo ? "Waiting for video" : "Voice call"
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor [weak self] in self?.refresh() }

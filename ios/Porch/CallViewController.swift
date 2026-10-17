@@ -8,6 +8,8 @@ final class CallViewController: UIViewController {
     private var loadError: String?
     private let sceneView = BedsideSceneView()
     private let clock = UIStackView()
+    private let clockArea = UILayoutGuide()
+    private var callHeight: NSLayoutConstraint!
     private let contextLabel = UILabel()
     private let weekdayLabel = UILabel()
     private let timeLabel = UILabel()
@@ -45,7 +47,15 @@ final class CallViewController: UIViewController {
             case .english: names = ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
             }
             for (index, name) in names.enumerated() {
-                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "preview-person-\(index + 1)", mode: .video)), for: index + 1)
+                let colors = ["D8AD58", "8ABBC8", "B8A0CE", "91B49C", "D49C87", "9FAEC6"]
+                var photo: Data?
+                if ProcessInfo.processInfo.arguments.contains("--preview-photos") {
+                    photo = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).image { context in
+                        RecipientAppearance.color(hex: colors[index]).setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+                        UIImage(systemName: "person.crop.square.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 450))?.withTintColor(PorchStyle.ink, renderingMode: .alwaysOriginal).draw(in: CGRect(x: 50, y: 50, width: 500, height: 500))
+                    }.jpegData(compressionQuality: 0.8)
+                }
+                try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "preview-person-\(index + 1)", mode: .video), familyMemberID: String(format: "00000000-0000-4000-8000-%012d", index + 1), buttonColorHex: photo == nil ? nil : colors[index], photoData: photo), for: index + 1)
             }
         }
         #endif
@@ -86,8 +96,13 @@ final class CallViewController: UIViewController {
         callConfig.baseBackgroundColor = PorchStyle.nightSurface
         callConfig.baseForegroundColor = PorchStyle.nightText
         callConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(19, weight: .medium); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(UIDevice.current.userInterfaceIdiom == .pad ? 48 : 32, weight: .semibold); return attributes
         }
+        callConfig.contentInsets = .init(top: 24, leading: 24, bottom: 24, trailing: 24)
+        callConfig.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: UIDevice.current.userInterfaceIdiom == .pad ? 40 : 28, weight: .semibold)
+        callConfig.imagePadding = 20
+        callConfig.titleAlignment = .center
+        callConfig.titleLineBreakMode = .byWordWrapping
         callButton.configuration = callConfig
         callButton.accessibilityIdentifier = "clock.call"
         callButton.addTarget(self, action: #selector(showPeople), for: .touchUpInside)
@@ -110,8 +125,15 @@ final class CallViewController: UIViewController {
         statusLabel.adjustsFontForContentSizeCategory = true
         [callButton, caregiver, statusLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
         let guide = view.safeAreaLayoutGuide
+        view.addLayoutGuide(clockArea)
+        callHeight = callButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 124)
+        callHeight.isActive = true
         NSLayoutConstraint.activate([
-            clock.centerYAnchor.constraint(equalTo: guide.centerYAnchor, constant: -32),
+            clockArea.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
+            clockArea.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
+            clockArea.topAnchor.constraint(equalTo: guide.topAnchor, constant: 16),
+            clockArea.bottomAnchor.constraint(equalTo: callButton.topAnchor, constant: -48),
+            clock.centerYAnchor.constraint(equalTo: clockArea.centerYAnchor),
             clock.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             clock.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 32),
             clock.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -32),
@@ -121,12 +143,16 @@ final class CallViewController: UIViewController {
             caregiver.heightAnchor.constraint(equalToConstant: 64),
             callButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             callButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -36),
-            callButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 210),
+            callButton.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
+            callButton.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
+            callButton.widthAnchor.constraint(lessThanOrEqualToConstant: 760),
             statusLabel.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
             statusLabel.bottomAnchor.constraint(equalTo: callButton.topAnchor, constant: -16)
         ])
+        let callWidth = callButton.widthAnchor.constraint(equalTo: guide.widthAnchor, constant: -48)
+        callWidth.priority = .defaultHigh; callWidth.isActive = true
         let width = clock.widthAnchor.constraint(equalTo: guide.widthAnchor, constant: -64)
         width.priority = .defaultHigh; width.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(resetClock), name: UIApplication.significantTimeChangeNotification, object: nil)
@@ -146,10 +172,21 @@ final class CallViewController: UIViewController {
         let args = ProcessInfo.processInfo.arguments
         guard !previewShown, presentedViewController == nil else { return }
         previewShown = true
-        if args.contains("--preview-phone-setup") {
-            let person = try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
+        if args.contains("--preview-phone-setup") || args.contains("--preview-recipient-appearance") {
+            let person = args.contains("--preview-recipient-appearance") ? slots.contact(for: 1) : try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
             present(PorchStyle.navigation(SetupViewController(slot: 1, contact: person)), animated: false)
 
+        } else if args.contains("--preview-outgoing-call"), let person = slots.contact(for: 1), let call = person.nativeCall {
+            let server = try! NativeCallServer(url: "https://example.invalid", accessCode: "static-preview-only")
+            present(NativeCallViewController(contact: person, call: call, server: server), animated: false)
+        } else if args.contains("--preview-incoming-call"), let person = slots.contact(for: 1), let caller = person.familyMemberID {
+            let data = try! JSONSerialization.data(withJSONObject: ["id": UUID().uuidString, "from": caller, "to": "preview-bedside", "mode": "video", "kind": "call", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": person.name])
+            let call = try! JSONDecoder().decode(FamilyCallRecord.self, from: data)
+            let snapshotData = try! JSONSerialization.data(withJSONObject: ["householdID": "preview", "householdName": "Preview", "dropInEnabled": false,
+                "me": ["id": "preview-bedside", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true],
+                "people": [["id": caller, "name": person.name, "role": "family", "permissions": ["audio": false, "video": false], "online": true]], "busy": false, "serverTime": 1])
+            let snapshot = try! JSONDecoder().decode(FamilySnapshot.self, from: snapshotData)
+            present(IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "preview", role: .bedside), snapshot: snapshot, slots: slots), animated: false)
         } else if args.contains("--preview-incoming-video") {
             let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
             let data = try! JSONSerialization.data(withJSONObject: ["id": id, "from": id, "to": id, "mode": "video", "kind": "dropIn", "state": "pending", "createdAt": 1, "expiresAt": 90, "callerName": BedsideText.string("A family member")])
@@ -175,11 +212,20 @@ final class CallViewController: UIViewController {
         let size = view.safeAreaLayoutGuide.layoutFrame.size
         guard size != typographySize, size.width > 0, size.height > 0 else { return }
         typographySize = size
+        let large = size.width >= 600 && size.height >= 500
+        let fontSize: CGFloat = large ? 48 : size.width < 400 ? 28 : 32
+        callHeight.constant = large ? 124 : size.height < 500 ? 80 : 96
+        callButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(fontSize, weight: .semibold); return attributes
+        }
+        callButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: large ? 40 : 24, weight: .semibold)
+        callButton.configuration?.contentInsets = .init(top: 20, leading: 16, bottom: 20, trailing: 16)
+        callButton.configuration?.imagePadding = large ? 20 : 12
         // Fit the clock to the iPad, rather than capping it at phone-sized text.
         // Reserve the bottom area for calling and allow long localized dates to fit.
         let width = max(200, size.width - 64)
-        let height = max(120, size.height - 200)
-        clock.spacing = min(24, size.height * 0.025)
+        let height = max(80, size.height - callHeight.constant - 132)
+        clock.spacing = min(24, height * 0.025)
         contextLabel.font = PorchStyle.font(max(18, min(32, height * 0.07)), weight: .semibold)
         weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
         dateLabel.font = .systemFont(ofSize: min(width * 0.061, height * 0.11))
@@ -419,15 +465,20 @@ final class PeoplePickerViewController: UIViewController {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .dark
         view.backgroundColor = PorchStyle.night
-        let heading = PorchStyle.label(BedsideText.string("Who would you like to call?"), size: 36, color: PorchStyle.nightText, weight: .semibold)
-        let hint = PorchStyle.label(BedsideText.string("Tap a name or press their number on the keypad."), size: 20, color: PorchStyle.nightSecondary)
+        let heading = PorchStyle.label(BedsideText.string("Who would you like to call?"), size: UIDevice.current.userInterfaceIdiom == .pad ? 60 : 40, color: PorchStyle.nightText, weight: .semibold)
+        let hint = PorchStyle.label(BedsideText.string("Tap a name or press their number on the keypad."), size: UIDevice.current.userInterfaceIdiom == .pad ? 34 : 28, color: PorchStyle.nightText)
         heading.textAlignment = .center; hint.textAlignment = .center
         let back = PorchStyle.button(BedsideText.string("Back to clock"), symbol: "clock", filled: false)
         back.configuration?.baseForegroundColor = PorchStyle.nightText
         back.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(28, weight: .medium); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(UIDevice.current.userInterfaceIdiom == .pad ? 40 : 30, weight: .semibold); return attributes
         }
-        back.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
+        back.configuration?.baseBackgroundColor = PorchStyle.nightSurface
+        back.configuration?.background.backgroundColor = PorchStyle.nightSurface
+        back.configuration?.contentInsets = .init(top: 20, leading: 24, bottom: 20, trailing: 24)
+        back.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 32)
+        back.accessibilityIdentifier = "people.back"
+        back.heightAnchor.constraint(greaterThanOrEqualToConstant: 96).isActive = true
         back.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
         grid.axis = .vertical; grid.spacing = 16
         let scroll = UIScrollView()
@@ -440,7 +491,8 @@ final class PeoplePickerViewController: UIViewController {
             scroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scroll.bottomAnchor.constraint(equalTo: back.topAnchor, constant: -16),
-            back.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            back.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            back.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
             back.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
             stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 48),
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
@@ -453,12 +505,12 @@ final class PeoplePickerViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); becomeFirstResponder() }
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        let count = traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 ? 1 : view.bounds.width > view.bounds.height ? 3 : 2
+        let count = traitCollection.preferredContentSizeCategory.isAccessibilityCategory || view.bounds.width < 600 ? 1 : 2
         guard columns != count || abs(gridWidth - view.bounds.width) > 1 else { return }
         columns = count; gridWidth = view.bounds.width
         let cardWidth = (view.bounds.width - 64 - CGFloat(count - 1) * 16) / CGFloat(count)
-        let nameSize = max(44, min(76, cardWidth * 0.15))
-        let numberSize = max(28, min(38, cardWidth * 0.075))
+        let nameSize = max(54, min(88, cardWidth * 0.18))
+        let numberSize = max(36, min(48, cardWidth * 0.10))
         grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
         let people = CallSlots.digits.compactMap { index in slots.contact(for: index).map { (index, $0) } }
         if people.isEmpty {
@@ -470,19 +522,25 @@ final class PeoplePickerViewController: UIViewController {
                 let (number, person) = people[index]
                 let button = PorchStyle.button(person.name)
                 button.configuration?.subtitle = BedsideText.string("Press %d", number)
-                button.configuration?.image = nil
+                button.configuration?.image = RecipientAppearance.cardPhoto(person.photoData, width: cardWidth - 40)
+                button.configuration?.imagePlacement = .top
+                button.configuration?.imagePadding = 20
                 button.configuration?.titleAlignment = .center
                 button.configuration?.titleLineBreakMode = .byWordWrapping
                 button.configuration?.subtitleLineBreakMode = .byWordWrapping
                 button.configuration?.titlePadding = 12
                 button.configuration?.contentInsets = .init(top: 28, leading: 20, bottom: 28, trailing: 20)
-                button.configuration?.baseBackgroundColor = PorchStyle.nightSurface
-                button.configuration?.baseForegroundColor = PorchStyle.nightText
+                let color = RecipientAppearance.color(hex: person.buttonColorHex)
+                let foreground = RecipientAppearance.foreground(on: color)
+                button.configuration?.cornerStyle = .fixed
+                button.configuration?.background.cornerRadius = 24
+                button.configuration?.baseBackgroundColor = color
+                button.configuration?.baseForegroundColor = foreground
                 button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
                     var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(nameSize, weight: .semibold); return attributes
                 }
                 button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = PorchStyle.nightText; return attributes
+                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = foreground; return attributes
                 }
                 button.accessibilityIdentifier = "people.person.\(number)"
                 button.accessibilityLanguage = BedsideText.language.speechLanguage

@@ -1,5 +1,7 @@
 import UIKit
 import GameController
+import PorchCore
+import ImageIO
 
 enum PorchStyle {
     static let page = UIColor(red: 0.95, green: 0.96, blue: 0.94, alpha: 1)
@@ -422,5 +424,67 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     @objc private func scrollToField() {
         guard let activeField else { return }
         scroll.scrollRectToVisible(activeField.convert(activeField.bounds, to: scroll).insetBy(dx: 0, dy: -20), animated: true)
+    }
+}
+
+/// Shared identity rendering for contact cards, incoming calls and active calls.
+enum RecipientAppearance {
+    static func color(hex: String?) -> UIColor {
+        guard let hex, let value = UInt32(hex, radix: 16), hex.count == 6 else { return PorchStyle.nightSurface }
+        return UIColor(red: CGFloat((value >> 16) & 255) / 255, green: CGFloat((value >> 8) & 255) / 255, blue: CGFloat(value & 255) / 255, alpha: 1)
+    }
+
+    static func hex(color: UIColor) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        func channel(_ value: CGFloat) -> Int { Int((min(1, max(0, value)) * 255).rounded()) }
+        return String(format: "%02X%02X%02X", channel(r), channel(g), channel(b))
+    }
+
+    static func foreground(on color: UIColor) -> UIColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        func linear(_ c: CGFloat) -> CGFloat { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? .black : .white
+    }
+
+    static func photo(_ data: Data?) -> UIImage? { data.flatMap { UIImage(data: $0) } }
+
+    static func cardPhoto(_ data: Data?, width: CGFloat) -> UIImage? {
+        guard let photo = photo(data) else { return nil }
+        let size = CGSize(width: max(1, width), height: max(1, width))
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 16).addClip()
+            let scale = max(size.width / photo.size.width, size.height / photo.size.height)
+            let scaled = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
+            photo.draw(in: CGRect(x: (size.width - scaled.width) / 2, y: (size.height - scaled.height) / 2, width: scaled.width, height: scaled.height))
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    static func photoView(_ data: Data?) -> UIImageView {
+        let view = UIImageView(image: photo(data))
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
+        view.layer.cornerRadius = 20
+        view.isAccessibilityElement = false // The adjacent name supplies the accessible identity.
+        view.accessibilityIdentifier = "recipient.photo"
+        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.setContentHuggingPriority(.defaultLow, for: .vertical)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        return view
+    }
+
+    /// Decode a bounded, upright thumbnail instead of loading a full-resolution library image.
+    static func preparedPhoto(at url: URL) -> Data? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 768
+              ] as CFDictionary),
+              let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.82), data.count <= 1_000_000 else { return nil }
+        return data
     }
 }

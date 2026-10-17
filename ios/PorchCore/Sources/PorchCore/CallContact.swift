@@ -8,8 +8,12 @@ public struct CallContact: Codable, Equatable {
     public let phoneNumber: String?
     public let familyMemberID: String?
     public let invitationID: String?
+    public let buttonColorHex: String?
+    public let photoData: Data?
 
-    public init(name: String, address: String = "", shortcutName: String? = nil) throws {
+    public init(name: String, address: String = "", shortcutName: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
+        self.buttonColorHex = try Self.validatedColor(buttonColorHex)
+        self.photoData = try Self.validatedPhoto(photoData)
         self.familyMemberID = nil
         self.invitationID = nil
         self.nativeCall = nil
@@ -51,7 +55,9 @@ public struct CallContact: Codable, Equatable {
         self.shortcutName = nil
     }
 
-    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil) throws {
+    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
+        self.buttonColorHex = try Self.validatedColor(buttonColorHex)
+        self.photoData = try Self.validatedPhoto(photoData)
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
         guard name.count <= 80 else { throw ValidationError.nameTooLong }
@@ -64,6 +70,18 @@ public struct CallContact: Codable, Equatable {
         self.shortcutName = nil
         self.nativeCall = try NativeCall(room: nativeCall.room, mode: nativeCall.mode)
         self.phoneNumber = try phoneNumber.map(Self.normalizedPhoneNumber)
+    }
+
+    private static func validatedColor(_ value: String?) throws -> String? {
+        guard let value else { return nil }
+        guard value.range(of: "^[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { throw ValidationError.invalidAppearance }
+        return value.uppercased()
+    }
+
+    private static func validatedPhoto(_ data: Data?) throws -> Data? {
+        guard let data else { return nil }
+        guard !data.isEmpty, data.count <= 1_000_000 else { throw ValidationError.invalidAppearance }
+        return data
     }
 
     public static func normalizedPhoneNumber(_ value: String) throws -> String {
@@ -94,10 +112,11 @@ public struct CallContact: Codable, Equatable {
     }
 
     public enum ValidationError: LocalizedError {
-        case missingName, missingShortcutName, invalidAddress, nameTooLong, invalidPhoneNumber, invalidFamilyMember
+        case missingName, missingShortcutName, invalidAddress, nameTooLong, invalidPhoneNumber, invalidFamilyMember, invalidAppearance
 
         public var errorDescription: String? {
             switch self {
+            case .invalidAppearance: return "Choose a button color and a photo smaller than 1 MB."
             case .invalidFamilyMember: return "Choose a paired family member."
             case .missingName: return "Enter the person's name."
             case .nameTooLong: return "Use a name with 80 characters or fewer."

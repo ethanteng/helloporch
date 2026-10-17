@@ -307,6 +307,7 @@ final class IncomingFamilyCallViewController: UIViewController {
     var onAnswer: ((FamilyCallSession) -> Void)?
     var onDismiss: (() -> Void)?
     private let countdown = UILabel()
+    private let callerContact: CallContact?
     private let answer = PorchStyle.button("Answer", symbol: "phone.fill")
     private let keypadHint = PorchStyle.label("", size: 18, color: PorchStyle.nightSecondary)
     private let audio: IncomingCallAudioPlaying
@@ -358,12 +359,12 @@ final class IncomingFamilyCallViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated); audio.stop(); timer?.invalidate(); holdTimer?.invalidate(); callKey.cancel(); keypad.resetKeys(); resignFirstResponder()
     }
-    init(call: FamilyCallRecord, credential: FamilyCredential, snapshot: FamilySnapshot? = nil, audio: IncomingCallAudioPlaying? = nil) {
-        let slots = (try? CallSlots.load()) ?? CallSlots()
-        let name: String
-        if credential.role == .bedside, let snapshot { name = slots.incomingCallerName(for: call, in: snapshot) }
-        else { name = call.callerName }
-        session = FamilyCallSession(credential: credential, call: call, peerName: name)
+    init(call: FamilyCallRecord, credential: FamilyCredential, snapshot: FamilySnapshot? = nil, slots savedSlots: CallSlots? = nil, audio: IncomingCallAudioPlaying? = nil) {
+        let slots = savedSlots ?? (try? CallSlots.load()) ?? CallSlots()
+        let state = snapshot ?? FamilyCoordinator.shared.state
+        callerContact = credential.role == .bedside ? state.flatMap { slots.incomingContact(for: call, in: $0) } : nil
+        let name = callerContact?.name ?? call.callerName
+        session = FamilyCallSession(credential: credential, call: call, peerName: name, peerContact: callerContact)
         self.audio = audio ?? PorchIncomingAudio(); super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
     }
@@ -382,7 +383,25 @@ final class IncomingFamilyCallViewController: UIViewController {
         updateKeypadHint()
         let hint = keypadHint
         hint.textAlignment = .center
-        let stack = UIStackView(arrangedSubviews: [name, countdown, hint]); stack.axis = .vertical; stack.spacing = 28
+        var identity: [UIView] = [name, countdown, hint]
+        if RecipientAppearance.photo(callerContact?.photoData) != nil {
+            let photo = RecipientAppearance.photoView(callerContact?.photoData)
+            let container = UIView()
+            photo.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(photo)
+            let width = photo.widthAnchor.constraint(equalTo: container.widthAnchor)
+            width.priority = .defaultHigh
+            NSLayoutConstraint.activate([
+                photo.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                photo.topAnchor.constraint(equalTo: container.topAnchor),
+                photo.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                photo.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor),
+                photo.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+                photo.heightAnchor.constraint(equalTo: photo.widthAnchor), width,
+            ])
+            identity.insert(container, at: 0)
+        }
+        let stack = UIStackView(arrangedSubviews: identity); stack.axis = .vertical; stack.spacing = 28
         let controls = UIStackView(arrangedSubviews: [answer, decline]); controls.axis = .vertical; controls.spacing = 16
         let scroll = UIScrollView()
         [stack, controls, scroll].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
@@ -406,7 +425,7 @@ final class IncomingFamilyCallViewController: UIViewController {
         keypad.resetKeys(); becomeFirstResponder()
         guard !alertStarted else { return }; alertStarted = true
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--preview-incoming-video") { announcementFinished = true; updateCountdown(); return }
+        if ProcessInfo.processInfo.arguments.contains("--preview-incoming-video") || ProcessInfo.processInfo.arguments.contains("--preview-incoming-call") { announcementFinished = true; updateCountdown(); return }
         #endif
         if call.kind == "dropIn" {
             updateCountdown()
@@ -440,7 +459,7 @@ final class IncomingFamilyCallViewController: UIViewController {
     }
     @objc private func checkCall() {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--preview-incoming-video") { return }
+        if ProcessInfo.processInfo.arguments.contains("--preview-incoming-video") || ProcessInfo.processInfo.arguments.contains("--preview-incoming-call") { return }
         #endif
         guard !answering else { return }
         if let current = FamilyCoordinator.shared.state?.call, current.id == call.id && current.state != "ended" { return }
@@ -456,7 +475,7 @@ final class IncomingFamilyCallViewController: UIViewController {
                 let result = try await FamilyService(self.credential).send("acceptCall", ["callID": self.call.id, "available": true])
                 guard UIApplication.shared.applicationState == .active, self.view.window != nil else { await self.session.end(); return }
                 FamilyCoordinator.shared.update(result)
-                let session = FamilyCallSession(credential: self.credential, call: result.state?.call ?? self.call, peerName: self.session.peerName)
+                let session = FamilyCallSession(credential: self.credential, call: result.state?.call ?? self.call, peerName: self.session.peerName, peerContact: self.session.peerContact)
                 self.dismiss(animated: false) { self.onAnswer?(session) }
             } catch { self.answering = false; self.answer.isEnabled = true; await self.session.end(); self.dismiss(animated: true, completion: self.onDismiss) }
         }

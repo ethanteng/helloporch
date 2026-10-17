@@ -108,6 +108,7 @@ struct FamilyCallSession {
     let credential: FamilyCredential
     let call: FamilyCallRecord
     let peerName: String
+    var peerContact: CallContact? = nil
     var service: FamilyService { FamilyService(credential) }
     func end() async { _ = try? await service.send("endCall", ["callID": call.id]) }
 }
