@@ -6,8 +6,7 @@ import { familyStore, type FamilyStore } from "./store.ts";
 import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
 export const inboundRoomPrefix = "porch-inbound-";
-// About four rings, like ordinary voicemail. It is also how long the bedside has to answer.
-export const inboundRingSeconds = 20;
+export const inboundRingSeconds = 45;
 /** The digest login Twilio's voice webhook uses to reach the LiveKit inbound trunk. It is
  * derived from the LiveKit API secret, so the server and the setup script agree without a new secret. */
 export function sipInboundCredentials(apiSecret: string) {

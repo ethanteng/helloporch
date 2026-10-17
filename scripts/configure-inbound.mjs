@@ -54,7 +54,7 @@ try {
   }
   voicemail ||= !!trunk?.authUsername;
   console.log('Existing Twilio number and destination household verified.');
-  console.log(`Plan: one number → this household; isolated two-person audio rooms; manual answer; ${inboundRingSeconds}-second ringing; 30-minute call limit.`);
+  console.log('Plan: one number → this household; isolated two-person audio rooms; manual answer; 45-second ringing; 30-minute call limit.');
   console.log(voicemail
     ? 'Voicemail routing: inbound SIP requires the Porch digest login, which only the calling server sends from its Twilio voice webhook.'
     : 'Inbound SIP restricted to Twilio signaling gateways.');

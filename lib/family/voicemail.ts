@@ -98,8 +98,7 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const calledNumber = params.get("To");
       if (!configured.sipHost || !configured.sip || !await household(store, calledNumber)) return twiml("<Reject/>");
       // LiveKit keeps this leg ringing until the bedside answers; answerOnBridge lets the caller hear it.
-      // LiveKit and the household call give up after inboundRingSeconds; Twilio's timeout is only a backstop.
-      return twiml(`<Dial answerOnBridge="true" timeout="${inboundRingSeconds + 5}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
+      return twiml(`<Dial answerOnBridge="true" timeout="${inboundRingSeconds + 10}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
         `<Sip username="${escape(configured.sip.username)}" password="${escape(configured.sip.password)}">${escape(`sip:${calledNumber}@${configured.sipHost};transport=tcp`)}</Sip></Dial>`);
     }
     if (step === "dialed") {

@@ -70,7 +70,7 @@ test('Twilio rings the bedside through LiveKit, and only signed requests are acc
   const f = await fixture();
   const incoming = await f.twilio('incoming', { CallSid: sid('CA', 99), From: caller, To: porchNumber });
   assert.equal(incoming.status, 200);
-  assert.match(incoming.body, /<Dial answerOnBridge="true" timeout="25" action="https:\/\/porch\.example\/api\/calls\/inbound\/voice\/dialed" method="POST">/);
+  assert.match(incoming.body, /<Dial answerOnBridge="true" timeout="55" action="https:\/\/porch\.example\/api\/calls\/inbound\/voice\/dialed" method="POST">/);
   // The SIP login is derived from the LiveKit secret, matching what the setup script sets on the trunk.
   const password = createHmac('sha256', env.LIVEKIT_API_SECRET).update('porch-sip-inbound-v1').digest('base64url');
   assert.ok(incoming.body.includes(`<Sip username="porch" password="${password}">sip:+15550001111@test-project.sip.livekit.cloud;transport=tcp</Sip>`));
