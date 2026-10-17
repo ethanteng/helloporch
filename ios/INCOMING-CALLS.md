@@ -1,4 +1,4 @@
-# Incoming calls on a locked family iPhone
+# Incoming calls on a locked iPhone or bedside iPad
 
 The ordinary Porch attempt now has its own delivery path:
 
@@ -8,9 +8,9 @@ The ordinary Porch attempt now has its own delivery path:
 4. Porch validates the call against the authenticated server state. Answer atomically accepts the Porch call and cancels eligibility for regular-phone fallback. LiveKit joins after acceptance; CallKit activation controls its audio engine.
 5. The existing bedside wait timer still owns regular-phone fallback if the person doesn't answer. Pushes that APNs rejects for an unreachable app return the existing `offline` result, allowing immediate fallback. An APNs acknowledgment means accepted for delivery, not that the phone actually rang. Authenticated background polls acknowledge the exact incoming call separately from foreground availability; this preserves an already-ringing call if the APNs acknowledgment is lost.
 
-The server sends VoIP pushes only for new, ordinary calls to family devices. Drop-in retains its foreground bedside announcement and five-second consent window. Cancellation, revocation and expiry travel through authenticated signaling, never a second VoIP push. The app checks state every second while ringing and every five seconds during an incoming call. If iOS ends the ringing execution window, CallKit ringing stops locally and the caller's fallback timer continues.
+The server sends VoIP pushes for new, ordinary calls to either paired device role, including inbound telephone calls to the bedside iPad. Drop-in retains its foreground bedside announcement and five-second consent window. Cancellation, revocation and expiry travel through authenticated signaling, never a second VoIP push. The app checks state every second while ringing and every five seconds during an incoming call. If iOS ends the ringing execution window, CallKit ringing stops locally. The caller's fallback timer continues for calls from the bedside to a family device; bedside incoming calls release the server call and telephone leg.
 
-Incoming audio is owned by an application-level session rather than a view controller and survives leaving Porch or locking the phone. A video answer initially connects audio only. The family member explicitly enables the camera in the foreground; backgrounding turns it off. Outgoing calls, bedside calls, legacy rooms and phone-fallback media retain their existing foreground lifecycle.
+Incoming ordinary-call audio is owned by an application-level session rather than a view controller and survives leaving Porch or locking the device. A video answer initially connects audio only. The person explicitly enables the camera in the foreground; backgrounding turns it off. Outgoing calls, drop-in, legacy rooms and phone-fallback media retain their existing foreground lifecycle.
 
 ## Server setup
 
@@ -33,10 +33,10 @@ Without these variables, existing foreground calling and regular-phone fallback 
 
 1. Enable **Push Notifications** for App ID `com.ethanteng.helloporch` in Apple Developer. Regenerate development and App Store distribution profiles. Replace the `IOS_APPSTORE_PROFILE` TestFlight secret with the updated profile; the upload script requires production `aps-environment`.
 2. The app includes Push Notifications, `voip` and `audio` background modes. Debug uses the development entitlement and sandbox APNs; Release/TestFlight uses production. For an unusual signing configuration, set `APS_ENVIRONMENT` (`development` or `production`) and `PORCH_APNS_ENVIRONMENT` (`sandbox` or `production`) consistently with the signed profile.
-3. Build/install the updated app. Open it in **Family** mode, pair if needed, and allow microphone access while the app is open. Existing family credentials migrate to device-only Keychain protection accessible after the first unlock, so a cold launch can authenticate while locked. Caregiver PINs, bedside credentials and phone approvals retain unlocked-only protection.
+3. Build/install the updated app. Open it in **Family** or **Bedside** mode, pair if needed, and allow microphone access while the app is open. Existing paired calling credentials for either role migrate to device-only Keychain protection accessible after the first unlock, so a cold launch can authenticate while locked. Caregiver PINs, activation secrets and phone approvals retain unlocked-only protection.
 4. Confirm the family home screen says incoming calls can ring while locked. The message confirms registration and server configuration, not a completed APNs delivery test.
 
-The registry is created at application launch, before a scene is required. Tokens are updated at launch/resume and after pairing, invalidated by PushKit, unregistered when leaving family mode and removed when caregiver access is revoked. Replacing a family pairing unregisters the prior device credential first. A revoked prior pairing can be replaced without retaining access.
+The registry is created at application launch, before a scene is required. Tokens are updated at launch/resume and after pairing, invalidated by PushKit, unregistered from the inactive device role on mode changes and removed when caregiver access is revoked. Replacing a family pairing unregisters the prior device credential first. A revoked prior pairing can be replaced without retaining access. Existing bedside installations must open the updated app once while unlocked to register and migrate their saved calling credential.
 
 ## Physical-device acceptance checks
 

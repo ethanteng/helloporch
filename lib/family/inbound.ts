@@ -3,6 +3,7 @@ import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookE
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callRoom, config, expire, mutate, type Call, type Household, type InboundPhone } from "./household.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
+import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
 export const inboundRoomPrefix = "porch-inbound-";
 export const inboundRingSeconds = 45;
@@ -12,6 +13,7 @@ const sipParticipantKind = 3;
 export type InboundRoute = { householdID: string; bedsideID: string; trunkID: string };
 type Session = { householdID: string; callID: string; phone: InboundPhone };
 export type InboundDependencies = {
+  sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult>;
   store?: FamilyStore;
   now?: () => number;
   endRoom?: (room: string, configuration: CallServer) => Promise<void>;
@@ -119,17 +121,44 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   }
   // Clear an expired prior phone call before trying to reserve the household.
   await reconcileInboundCall(store, route.householdID, now, dependencies);
-  const { result } = await mutate(store, route.householdID, house => {
+  const pushEnabled = !!dependencies.sendPush || voipConfigured();
+  const { house, result } = await mutate(store, route.householdID, house => {
     expire(house, now);
     if (house.call?.id === session.callID) return house.call.state !== "ended";
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
-    if (!bedside || !bedside.available || bedside.seenAt <= now - 30 || (house.call && house.call.state !== "ended")) return false;
+    if (!bedside || (!(bedside.available && bedside.seenAt > now - 30) && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended")) return false;
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: "call",
       state: "pending", createdAt, expiresAt: createdAt + inboundRingSeconds, phone: session.phone };
     return true;
   });
   if (!result || await store.get(endedKey(room.sid))) {
     await endSession(store, session, "Porch is busy or unavailable.", dependencies);
+    return;
+  }
+  const call = house.call!, bedside = house.members.find(m => m.id === call.to)!;
+  // Webhook retries and simultaneous copies share one delivery claim. No VoIP
+  // push is used for cancellation, accepted calls, or an ended session.
+  if (call.state !== "pending" || !bedside.voip || !pushEnabled ||
+      !await store.create(`inbound-push:${room.sid}`, "1", 86400)) return;
+  const registration = bedside.voip;
+  let delivery: PushResult;
+  try {
+    delivery = await (dependencies.sendPush ?? sendVoIPPush)(registration, {
+      callID: call.id, recipientID: bedside.id, callerName: phone.callerNumber ?? "Phone caller", mode: "voice", expiresAt: call.expiresAt,
+    });
+  } catch { delivery = { delivered: false }; }
+  if (!delivery.delivered) {
+    const updated = await mutate(store, house.id, current => {
+      const recipient = current.members.find(m => m.id === bedside.id);
+      if (delivery.invalidToken && recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
+      const active = current.call;
+      if (recipient && !(recipient.available && recipient.seenAt > now - 30) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
+        active.state = "ended"; active.reason = "Incoming call delivery unavailable.";
+        return true;
+      }
+      return false;
+    });
+    if (updated.result) await cleanupInboundCall(store, house.id, updated.house.call!, dependencies);
   }
 }
 

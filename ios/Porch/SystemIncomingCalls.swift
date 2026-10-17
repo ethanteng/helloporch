@@ -9,7 +9,7 @@ extension Notification.Name {
     static let porchSystemCallChanged = Notification.Name("porch.systemCall.changed")
 }
 
-/// Owns incoming family calls independently of scenes and view controllers.
+/// Owns ordinary incoming calls independently of scenes and view controllers.
 /// PushKit must report to CallKit immediately, before any network request.
 @MainActor final class SystemIncomingCalls: NSObject, @preconcurrency PKPushRegistryDelegate, @preconcurrency CXProviderDelegate, RoomDelegate {
     static let shared = SystemIncomingCalls()
@@ -30,12 +30,14 @@ extension Notification.Name {
     private var connected = false
     private var recentIDs: [UUID] = []
     private var mute = false
+    private var inactivity = CallInactivityTimer(timeout: nil)
     private(set) var room: Room?
     private(set) var call: FamilyCallRecord?
     private(set) var answered = false
     private(set) var pushReady = false
     private(set) var status = "Incoming Porch call"
     var hasCall: Bool { uuid != nil }
+    func owns(_ callID: String) -> Bool { uuid?.uuidString.lowercased() == callID.lowercased() }
     var callerContact: CallContact? {
         guard let call, let state = FamilyCoordinator.shared.state else { return nil }
         return ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: call, in: state)
@@ -66,24 +68,34 @@ extension Notification.Name {
     }
 
     func registerDevice() {
+        let previous = registrationTask
         registrationTask?.cancel()
-        guard let token = pushToken, let profile = PorchDevice.credential(for: .family) else { return }
-        // Saving family credentials migrates existing installs to lock-screen access.
-        try? PorchDevice.save(profile)
+        guard let token = pushToken else { return }
+        let profile = PorchDevice.credential(for: PorchDevice.experience)
+        // Migrate existing installations while unlocked, before a locked launch.
+        if let profile { try? PorchDevice.save(profile) }
         let environment = Bundle.main.object(forInfoDictionaryKey: "PorchAPNsEnvironment") as? String ?? "production"
         registrationTask = Task {
             do {
+                await previous?.value
+                try Task.checkCancellation()
+                for role in [PorchExperience.bedside, .family] where role != profile?.role {
+                    if let other = PorchDevice.credential(for: role) {
+                        _ = try? await FamilyService(other).send("registerVoIP", ["token": NSNull()])
+                    }
+                }
+                guard let profile else { pushReady = false; changed(); return }
                 var microphone = AVCaptureDevice.authorizationStatus(for: .audio)
-                if PorchDevice.experience == .family && microphone == .notDetermined && UIApplication.shared.applicationState == .active {
+                if microphone == .notDetermined && UIApplication.shared.applicationState == .active {
                     _ = await AVCaptureDevice.requestAccess(for: .audio)
                     microphone = AVCaptureDevice.authorizationStatus(for: .audio)
                 }
                 try Task.checkCancellation()
-                let enabled = PorchDevice.experience == .family && microphone == .authorized
+                let enabled = PorchDevice.experience == profile.role && microphone == .authorized
                 let values: [String: Any] = enabled ? ["token": token, "environment": environment] : ["token": NSNull()]
                 let response = try await FamilyService(profile).send("registerVoIP", values)
                 pushReady = response.pushReady == true
-            } catch { pushReady = false }
+            } catch { if !Task.isCancelled { pushReady = false } }
             changed()
         }
     }
@@ -106,8 +118,14 @@ extension Notification.Name {
     func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         guard type == .voIP else { return }
         pushToken = nil; pushReady = false; registrationTask?.cancel(); changed()
-        if let profile = PorchDevice.credential(for: .family) {
-            Task { _ = try? await FamilyService(profile).send("registerVoIP", ["token": NSNull()]) }
+        let previous = registrationTask
+        registrationTask = Task {
+            await previous?.value
+            for role in [PorchExperience.bedside, .family] {
+                if let profile = PorchDevice.credential(for: role) {
+                    _ = try? await FamilyService(profile).send("registerVoIP", ["token": NSNull()])
+                }
+            }
         }
     }
     func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload,
@@ -122,9 +140,10 @@ extension Notification.Name {
     }
 
     func receive(_ call: FamilyCallRecord, credential: FamilyCredential) {
-        guard call.kind == "call", call.state == "pending", credential.role == .family,
+        guard call.kind == "call", call.state == "pending", credential.role == PorchDevice.experience,
               let id = UUID(uuidString: call.id) else { return }
         report(id: id, recipient: call.to, name: call.callerName, mode: call.mode, expiresAt: call.expiresAt, completion: {})
+        if uuid == id { self.call = call }
     }
 
     private func report(id: UUID, recipient: String?, name: String, mode: NativeCall.Mode,
@@ -133,7 +152,8 @@ extension Notification.Name {
         let rejected = uuid != nil || recentIDs.contains(id)
         if !rejected {
             uuid = id; incomingName = String(name.prefix(80)); self.mode = mode
-            expiry = expiresAt; credential = PorchDevice.credential(for: .family)
+            expiry = expiresAt; credential = PorchDevice.credential(for: PorchDevice.experience)
+            inactivity = CallInactivityTimer(timeout: CallPreferences.disconnectAfterSilence() ? TimeInterval(CallPreferences.silenceSeconds()) : nil)
             ending = false; answered = false; connected = false; status = "Incoming Porch call"
         }
         let update = CXCallUpdate()
@@ -151,9 +171,9 @@ extension Notification.Name {
                 }
                 guard self.uuid == id else { return }
                 if error != nil { self.finish(reason: .failed); return }
-                guard self.credential?.role == .family, let profile = self.credential,
+                guard let profile = self.credential,
                       profile.credential.split(separator: ".").first.map(String.init) == recipient,
-                      PorchDevice.experience == .family, expiresAt > Date().timeIntervalSince1970 else {
+                      PorchDevice.experience == profile.role, expiresAt > Date().timeIntervalSince1970 else {
                     self.finish(reason: .remoteEnded); return
                 }
                 self.backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Incoming Porch call") { [weak self] in
@@ -184,7 +204,20 @@ extension Notification.Name {
                 }
             }
             if Date().timeIntervalSince1970 >= expiry { finish(reason: .unanswered); return }
+            if let room {
+                let speaking = room.localParticipant.isSpeaking || room.remoteParticipants.values.contains { $0.isSpeaking }
+                if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected && audioActive && room.connectionState == .connected && !room.remoteParticipants.isEmpty, speaking: speaking) {
+                    requestEnd(); return
+                }
+            }
             do { try await Task.sleep(nanoseconds: answered ? 5_000_000_000 : 1_000_000_000) } catch { return }
+        }
+    }
+
+    func requestAnswer() {
+        guard let uuid, !answered, !ending else { return }
+        controller.request(CXTransaction(action: CXAnswerCallAction(call: uuid))) { [weak self] error in
+            if error != nil { Task { @MainActor in self?.finish(reason: .failed) } }
         }
     }
 
@@ -192,7 +225,7 @@ extension Notification.Name {
         guard uuid == action.callUUID, !ending, let profile = credential else { action.fail(); return }
         connectionTask = Task {
             do {
-                // Permission prompts must be completed during family setup/foreground use.
+                // Permission prompts must be completed during foreground setup.
                 guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
                     throw FamilyServiceError(message: "Allow microphone access in Settings to answer Porch calls.", status: 403)
                 }
@@ -304,7 +337,16 @@ extension Notification.Name {
             await room?.disconnect()
             // Let the caller's existing wait/fallback timer own unanswered calls.
             // iOS ending our ringing execution window must not cancel phone fallback.
-            if let profile, reason != .unanswered { _ = try? await FamilyService(profile).send("endCall", ["callID": id.uuidString.lowercased()]) }
+            if let profile, reason != .unanswered || profile.role == .bedside {
+                // Disconnect locally first, then retry server cleanup of the SIP leg.
+                for attempt in 0..<3 {
+                    do { _ = try await FamilyService(profile).send("endCall", ["callID": id.uuidString.lowercased()]); break }
+                    catch {
+                        if (error as? FamilyServiceError)?.status == 404 { break }
+                        if attempt < 2 { try? await Task.sleep(nanoseconds: 1_000_000_000) }
+                    }
+                }
+            }
             // Do not restore automatic audio handling until this room has stopped.
             AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = true
             try? AudioManager.shared.setEngineAvailability(.default)
@@ -323,6 +365,10 @@ extension Notification.Name {
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor in if room === self.room && self.connected { self.finish(reason: .failed) } }
     }
+    nonisolated func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        guard !participants.isEmpty else { return }
+        Task { @MainActor in if room === self.room { self.inactivity.reset() } }
+    }
 }
 
 /// Foreground controls for the session that CallKit owns. Dismissing/backgrounding
@@ -335,6 +381,34 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
     private let camera = PorchStyle.button("Camera on", symbol: "video")
     private var cameraEnabled = false
+    private weak var observedRoom: Room?
+    private var keypad = CallTrigger()
+    override var canBecomeFirstResponder: Bool { true }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
+    }
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        let slots = (try? CallSlots.load()) ?? CallSlots()
+        for press in presses {
+            guard PorchDevice.experience == .bedside, let key = press.key,
+                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
+                  let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)) else { unhandled.insert(press); continue }
+            let action = slots.action(for: digit)
+            guard action == .callControl || action == .toggleVideo else { unhandled.insert(press); continue }
+            guard keypad.keyDown(Int(key.keyCode.rawValue)) else { continue }
+            if action == .callControl { SystemIncomingCalls.shared.requestEnd() }
+            else { camera.sendActions(for: .touchUpInside) }
+        }
+        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
+    }
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses { if let key = press.key { keypad.keyUp(Int(key.keyCode.rawValue)) } }
+        super.pressesEnded(presses, with: event)
+    }
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        keypad.resetKeys(); super.pressesCancelled(presses, with: event)
+    }
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = PorchStyle.night
         overrideUserInterfaceStyle = .dark
@@ -364,7 +438,6 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         placeholder.font = PorchStyle.font(28)
         CallScreenLayout.install(in: view, video: video, placeholder: placeholder, title: title, status: status,
                                  photo: personPhoto.image == nil ? nil : personPhoto, buttons: [microphone, camera, end])
-        SystemIncomingCalls.shared.room?.add(delegate: self)
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
     }
@@ -372,6 +445,9 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
         guard calls.hasCall else { video.track = nil; dismiss(animated: true); return }
+        if let room = calls.room, room !== observedRoom {
+            room.add(delegate: self); observedRoom = room
+        }
         status.text = calls.status
         cameraEnabled = calls.room?.localParticipant.isCameraEnabled() == true
         camera.configuration?.title = cameraEnabled ? "Camera off" : "Camera on"

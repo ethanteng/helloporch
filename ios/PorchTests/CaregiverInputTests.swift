@@ -153,6 +153,29 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(try accessibility(), kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
     }
 
+    @MainActor func testBothPairedCallingCredentialsAreAvailableAfterFirstUnlock() throws {
+        for role in [PorchExperience.bedside, .family] {
+            let account = "porch.family.\(role.rawValue)"
+            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Bundle.main.bundleIdentifier!, kSecAttrAccount as String: account]
+            let previous = NativeCallSettings.readSecret(account)
+            var previousAttributes: CFTypeRef?
+            var attributes = query; attributes[kSecReturnAttributes as String] = true
+            SecItemCopyMatching(attributes as CFDictionary, &previousAttributes)
+            let wasBackgroundAccessible = (previousAttributes as? [String: Any])?[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
+            defer {
+                if let previous { try? NativeCallSettings.writeSecret(previous, account: account, accessibleAfterFirstUnlock: wasBackgroundAccessible) }
+                else { SecItemDelete(query as CFDictionary) }
+            }
+            let profile = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "test-device.test-secret", role: role)
+            try PorchDevice.save(profile)
+            var result: CFTypeRef?
+            XCTAssertEqual(SecItemCopyMatching(attributes as CFDictionary, &result), errSecSuccess)
+            XCTAssertEqual((result as? [String: Any])?[kSecAttrAccessible as String] as? String, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+            XCTAssertEqual(PorchDevice.credential(for: role)?.credential, profile.credential)
+        }
+    }
+
     @MainActor private func localizedBedside(_ language: BedsideLanguage = .traditionalChinese) -> () -> Void {
         let defaults = UserDefaults.standard
         let saved = defaults.object(forKey: "porch.bedsideDisplay.v1"), experience = defaults.object(forKey: "porch.experience")

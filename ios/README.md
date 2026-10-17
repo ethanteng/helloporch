@@ -1,6 +1,6 @@
 # Porch for iPhone and iPad
 
-Porch is one app with a quiet bedside clock and a family calling mode. Bedside mode supports ten configurable keypad slots, in-app audio/video calls and regular-phone fallback. Family mode supports CallKit incoming calls while locked/backgrounded, with APNs VoIP delivery configured as described in [incoming-call setup](INCOMING-CALLS.md), and can initiate approved audio/video drop-in.
+Porch is one app with a quiet bedside clock and a family calling mode. Bedside mode supports ten configurable keypad slots, in-app audio/video calls and regular-phone fallback. Both modes support ordinary CallKit incoming calls while locked/backgrounded, including telephone calls to the bedside iPad, with APNs VoIP delivery configured as described in [incoming-call setup](INCOMING-CALLS.md). Family devices can also initiate approved foreground audio/video drop-in.
 
 Start with the [family setup guide](FAMILY-SETUP.md). Family recipients join using a private invitation; no server address, shared calling code or room name is entered in the app.
 

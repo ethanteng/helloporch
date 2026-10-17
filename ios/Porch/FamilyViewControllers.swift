@@ -320,6 +320,7 @@ final class IncomingFamilyCallViewController: UIViewController {
     private var keypad = CallTrigger()
     private var callKey = IncomingCallKey()
     private var holdTimer: Timer?
+    private var systemOwned: Bool { SystemIncomingCalls.shared.owns(call.id) }
     override var canBecomeFirstResponder: Bool { true }
     private func handle(_ decision: IncomingCallKey.Decision?) {
         guard !answering else { return }
@@ -416,7 +417,8 @@ final class IncomingFamilyCallViewController: UIViewController {
         ])
         let centered = stack.centerYAnchor.constraint(equalTo: scroll.frameLayoutGuide.centerYAnchor); centered.priority = .defaultHigh; centered.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(checkCall), name: .porchFamilyChanged, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(reject), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(checkSystemCall), name: .porchSystemCallChanged, object: nil)
         BedsideText.applyAccessibilityLanguage(to: view)
         updateCountdown()
     }
@@ -440,7 +442,7 @@ final class IncomingFamilyCallViewController: UIViewController {
                     self.countdown.text = BedsideText.string("The sound couldn't play. Tap Answer to connect.")
                 }
             }
-        } else if !audio.ring() { countdown.text = BedsideText.string("The sound couldn't play. Tap Answer to connect.") }
+        } else if !systemOwned && !audio.ring() { countdown.text = BedsideText.string("The sound couldn't play. Tap Answer to connect.") }
     }
     deinit { holdTimer?.invalidate(); timer?.invalidate(); NotificationCenter.default.removeObserver(self) }
     func advanceCountdown() {
@@ -467,6 +469,11 @@ final class IncomingFamilyCallViewController: UIViewController {
     }
     @objc private func accept() {
         guard !answering, UIApplication.shared.applicationState == .active, view.window != nil else { return }
+        if systemOwned {
+            answering = true; answer.isEnabled = false; audio.stop()
+            SystemIncomingCalls.shared.requestAnswer()
+            return
+        }
         if call.kind == "dropIn" && (AVCaptureDevice.authorizationStatus(for: .audio) != .authorized || (call.mode == .video && AVCaptureDevice.authorizationStatus(for: .video) != .authorized)) { reject(); return }
         answering = true; answer.isEnabled = false; timer?.invalidate(); audio.stop()
         Task { [weak self] in
@@ -482,8 +489,18 @@ final class IncomingFamilyCallViewController: UIViewController {
     }
     @objc private func reject() {
         timer?.invalidate(); audio.stop(); answering = true
-        Task { await session.end() }
+        if systemOwned { SystemIncomingCalls.shared.requestEnd() }
+        else { Task { await session.end() } }
         dismiss(animated: true, completion: onDismiss)
+    }
+    @objc private func enteredBackground() {
+        if systemOwned { audio.stop(); dismiss(animated: false, completion: onDismiss) }
+        else { reject() }
+    }
+    @objc private func checkSystemCall() {
+        if call.kind == "call" && !SystemIncomingCalls.shared.hasCall {
+            audio.stop(); dismiss(animated: false, completion: onDismiss)
+        }
     }
 }
 

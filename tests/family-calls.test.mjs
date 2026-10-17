@@ -272,11 +272,11 @@ test('contact invitations expose pending status and a durable accepted identity 
 });
 
 
-test('VoIP registration is authenticated, family scoped, validated and never exposed in snapshots', async()=>{
+test('VoIP registration is authenticated, device scoped, validated and never exposed in snapshots', async()=>{
  const f=fixture({sendPush:async()=>({delivered:true})}),{bedside,family}=await f.setup();
  const token='ab'.repeat(32);
  assert.equal((await f.send('registerVoIP',{token,environment:'production'})).status,401);
- assert.equal((await f.send('registerVoIP',{token,environment:'production'},bedside.credential)).status,403);
+ assert.equal((await f.send('registerVoIP',{token,environment:'production'},bedside.credential)).status,200);
  for (const value of [{token:'bad',environment:'production'},{token,environment:'arbitrary-host'},{token:'a'.repeat(65),environment:'sandbox'}]) {
   assert.equal((await f.send('registerVoIP',value,family.credential)).status,400);
  }
@@ -438,4 +438,20 @@ test('a delivery receipt cannot skip the bedside drop-in announcement',async()=>
  assert.equal((await f.send('acceptCall',{callID,available:true},bedside.credential)).status,409);
  await f.json('poll',{available:true},bedside.credential);f.advance(5);
  await f.json('acceptCall',{callID,available:true},bedside.credential);
+});
+
+test('ordinary Porch calls wake the bedside, while drop-in still requires foreground consent', async () => {
+ const pushes = [], f = fixture({ sendPush: async (device, call) => { pushes.push({ device, call }); return { delivered: true }; } });
+ const { bedside, family } = await f.setup();
+ await f.json('registerVoIP', { token: 'ab'.repeat(32), environment: 'production' }, bedside.credential);
+ await f.json('setDropIn', { enabled: true }, bedside.credential, env.PORCH_CONTACT_SETUP_CODE);
+ await f.json('poll', { available: false }, bedside.credential); f.advance(90);
+ const state = (await f.json('poll', { available: true }, family.credential)).state;
+ assert.equal(state.people[0].online, false); assert.equal(state.people[0].canReceiveCalls, true);
+ assert.equal((await f.send('startCall', { targetID: bedside.state.me.id, mode: 'video', kind: 'dropIn' }, family.credential)).status, 409);
+ assert.equal(pushes.length, 0);
+ const started = await f.json('startCall', { targetID: bedside.state.me.id, mode: 'voice', kind: 'call' }, family.credential);
+ assert.equal(pushes.length, 1); assert.equal(pushes[0].call.recipientID, bedside.state.me.id);
+ await f.json('acceptCall', { callID: started.state.call.id, available: true }, bedside.credential);
+ assert.equal((await f.json('poll', { available: false }, bedside.credential)).state.call.state, 'accepted');
 });
