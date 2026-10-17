@@ -824,6 +824,60 @@ final class CallScreenLayoutTests: XCTestCase {
         }
     }
 
+    @MainActor func testLongNamesAndAccessibilityTextScrollWithoutCoveringControls() throws {
+        let traits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+        for size in [CGSize(width: 320, height: 568), CGSize(width: 568, height: 320), CGSize(width: 1024, height: 768)] {
+            let screen = UIViewController(), remote = VideoView(), preview = VideoView()
+            remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
+            preview.backgroundColor = UIColor(white: 0.35, alpha: 1)
+            let title = PorchStyle.label(String(String(repeating: "Family member ", count: 7).prefix(80)), size: 26)
+            let status = PorchStyle.label("Trying your family on Porch…\nTheir phone will ring if Porch isn't answered.", size: 17)
+            let hint = PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16)
+            for (label, pointSize) in [(title, CGFloat(26)), (status, CGFloat(17)), (hint, CGFloat(16))] {
+                // Keep the explicit accessibility metrics when this unmounted
+                // fixture inherits the test host's default content-size trait.
+                label.adjustsFontForContentSizeCategory = false
+                label.textColor = .white
+                label.font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: pointSize), compatibleWith: traits)
+            }
+            let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
+            for (button, text) in zip(buttons, ["Mute", "Camera off", "End call"]) {
+                CallScreenLayout.configure(button, title: text, symbol: "phone")
+                button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                    var attributes = PorchStyle.centeredTextAttributes(attributes)
+                    attributes.font = UIFont.systemFont(ofSize: UIFontMetrics.default.scaledValue(for: 16, compatibleWith: traits))
+                    return attributes
+                }
+            }
+            CallScreenLayout.install(in: screen.view, video: remote, preview: preview,
+                                     title: title, status: status, hint: hint, buttons: buttons)
+            screen.view.frame = CGRect(origin: .zero, size: size)
+            screen.view.layoutIfNeeded()
+            let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
+            let heading = try XCTUnwrap(scroll.subviews.first { $0.accessibilityIdentifier == "call.heading" })
+            let controls = try XCTUnwrap(scroll.subviews.first { $0.accessibilityIdentifier == "call.controls" })
+            XCTAssertGreaterThan(scroll.contentSize.height, scroll.bounds.height)
+            XCTAssertGreaterThanOrEqual(controls.frame.minY - heading.frame.maxY, 16)
+            XCTAssertGreaterThanOrEqual(preview.frame.minY - heading.frame.maxY, 12)
+            for label in [title, status, hint] {
+                let fitting = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+                XCTAssertGreaterThanOrEqual(label.bounds.height + 1, fitting.height, "Large text must remain readable")
+            }
+            let end = buttons[2]
+            scroll.scrollRectToVisible(end.convert(end.bounds, to: scroll), animated: false)
+            let endRect = end.convert(end.bounds, to: screen.view)
+            XCTAssertTrue(screen.view.bounds.insetBy(dx: -0.5, dy: -0.5).contains(endRect), "End call must be reachable in \(size): \(endRect)")
+            let attachment = XCTAttachment(image: UIGraphicsImageRenderer(size: size).image { screen.view.layer.render(in: $0.cgContext) })
+            attachment.name = "Accessibility call controls \(Int(size.width))x\(Int(size.height))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTAssertEqual(remote.frame, screen.view.bounds, "Scrolling overlays must not move or shrink the remote video")
+            XCTAssertFalse(heading.hasAmbiguousLayout)
+            XCTAssertFalse(controls.hasAmbiguousLayout)
+
+        }
+    }
+
     @MainActor func testRemoteVideoFillsPhoneAndTabletInBothOrientations() throws {
         // Both call controllers use this layout. Include the smallest supported
         // phone, landscape safe areas, and iPad split-view widths.
@@ -851,9 +905,12 @@ final class CallScreenLayoutTests: XCTestCase {
                 screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
                 XCTAssertEqual(remote.frame, screen.view.bounds)
                 XCTAssertEqual(remote.layoutMode, .fill)
-                let controls = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.controls" })
-                XCTAssertGreaterThan(controls.frame.minY, title.convert(title.bounds, to: screen.view).maxY)
-                XCTAssertLessThanOrEqual(controls.frame.maxY, screen.view.safeAreaLayoutGuide.layoutFrame.maxY)
+                let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
+                let controls = try XCTUnwrap(scroll.subviews.first { $0.accessibilityIdentifier == "call.controls" })
+                let controlsRect = controls.convert(controls.bounds, to: screen.view)
+                XCTAssertGreaterThan(controlsRect.minY, title.convert(title.bounds, to: screen.view).maxY)
+                XCTAssertLessThanOrEqual(controlsRect.maxY, screen.view.safeAreaLayoutGuide.layoutFrame.maxY)
+                XCTAssertLessThanOrEqual(scroll.contentSize.height, scroll.bounds.height + 1)
                 for button in buttons {
                     let rect = button.convert(button.bounds, to: screen.view)
                     XCTAssertGreaterThanOrEqual(rect.width, 44)
@@ -865,7 +922,7 @@ final class CallScreenLayoutTests: XCTestCase {
                     XCTAssertLessThanOrEqual(preview.bounds.width, 112)
                     XCTAssertLessThan(preview.bounds.width * preview.bounds.height, size.width * size.height * 0.04)
                     XCTAssertLessThan(preview.frame.maxY, controls.frame.minY)
-                    XCTAssertTrue(screen.view.safeAreaLayoutGuide.layoutFrame.contains(preview.frame))
+                    XCTAssertTrue(screen.view.safeAreaLayoutGuide.layoutFrame.contains(preview.convert(preview.bounds, to: screen.view)))
                 }
                 XCTAssertFalse(remote.hasAmbiguousLayout)
                 if size == CGSize(width: 393, height: 852) || size == CGSize(width: 1024, height: 768) {

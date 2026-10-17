@@ -47,6 +47,26 @@ import PorchCore
             video.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
+        // Normally the overlays sit at opposite edges. If large text needs more
+        // height, scroll the overlays together without shrinking the video.
+        let scroll = UIScrollView()
+        scroll.accessibilityIdentifier = "call.overlays"
+        scroll.contentInsetAdjustmentBehavior = .never
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll)
+        let content = scroll.contentLayoutGuide
+        let frame = scroll.frameLayoutGuide
+        let fittedHeight = content.heightAnchor.constraint(equalTo: frame.heightAnchor)
+        fittedHeight.priority = .defaultLow
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            content.widthAnchor.constraint(equalTo: frame.widthAnchor),
+            content.heightAnchor.constraint(greaterThanOrEqualTo: frame.heightAnchor), fittedHeight,
+        ])
+
         title.textAlignment = .center
         status.textAlignment = .center
         hint?.textAlignment = .center
@@ -63,6 +83,7 @@ import PorchCore
         let heading = UIStackView(arrangedSubviews: headingViews)
         heading.axis = .vertical
         heading.spacing = 4
+        heading.accessibilityIdentifier = "call.heading"
         let row = UIStackView(arrangedSubviews: buttons)
         row.distribution = .fillEqually
         row.spacing = 8
@@ -76,36 +97,38 @@ import PorchCore
             overlay.isLayoutMarginsRelativeArrangement = true
             overlay.directionalLayoutMargins = .init(top: 10, leading: 10, bottom: 10, trailing: 10)
             overlay.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(overlay)
-            let width = overlay.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -24)
+            scroll.addSubview(overlay)
+            let width = overlay.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -24)
             width.priority = .defaultHigh
             NSLayoutConstraint.activate([
-                overlay.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
-                overlay.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
-                overlay.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+                overlay.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+                overlay.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 12),
+                overlay.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
                 overlay.widthAnchor.constraint(lessThanOrEqualToConstant: 560), width,
             ])
         }
         NSLayoutConstraint.activate([
-            heading.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            controls.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
+            heading.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
+            controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
+            controls.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 16),
         ])
         if let placeholder {
             let space = UILayoutGuide()
-            view.addLayoutGuide(space)
+            scroll.addLayoutGuide(space)
             let identity = UIStackView(arrangedSubviews: (photo.map { [$0 as UIView] } ?? []) + [placeholder])
             identity.axis = .vertical; identity.alignment = .center; identity.spacing = 16
             identity.translatesAutoresizingMaskIntoConstraints = false
-            view.insertSubview(identity, aboveSubview: video)
+            scroll.addSubview(identity)
             NSLayoutConstraint.activate([
-                space.topAnchor.constraint(equalTo: heading.bottomAnchor),
-                space.bottomAnchor.constraint(equalTo: controls.topAnchor),
-                identity.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+                space.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 12),
+                space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
+                identity.centerXAnchor.constraint(equalTo: content.centerXAnchor),
                 identity.centerYAnchor.constraint(equalTo: space.centerYAnchor),
-                identity.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -48),
-                identity.topAnchor.constraint(greaterThanOrEqualTo: space.topAnchor, constant: 12),
-                identity.bottomAnchor.constraint(lessThanOrEqualTo: space.bottomAnchor, constant: -12),
+                identity.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -48),
+                identity.topAnchor.constraint(greaterThanOrEqualTo: space.topAnchor),
+                identity.bottomAnchor.constraint(lessThanOrEqualTo: space.bottomAnchor),
                 placeholder.widthAnchor.constraint(equalTo: identity.widthAnchor),
+
             ])
             if let photo {
                 let width = photo.widthAnchor.constraint(equalTo: identity.widthAnchor, multiplier: 0.85)
@@ -123,12 +146,13 @@ import PorchCore
             preview.layer.cornerRadius = 12
             preview.accessibilityIdentifier = "call.localPreview"
             preview.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(preview)
-            let width = preview.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, multiplier: 0.12)
+            scroll.addSubview(preview)
+            let width = preview.widthAnchor.constraint(equalTo: frame.widthAnchor, multiplier: 0.12)
             width.priority = .defaultHigh
             NSLayoutConstraint.activate([
-                preview.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+                preview.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
                 preview.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
+                preview.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 12),
                 preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
                 preview.widthAnchor.constraint(lessThanOrEqualToConstant: 112), width,
                 preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 0.75),
