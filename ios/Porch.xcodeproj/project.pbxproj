@@ -73,6 +73,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000002 /* Porch */,
+D35B1B665DD465099E9EBC97,
 C7962E57F4CAAA127932BFC1,
 52A45392B0CF245328719607,
 				C00000000000000000000003 /* Products */,
@@ -110,6 +111,7 @@ C7962E57F4CAAA127932BFC1,
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000007 /* Porch.app */,
+5FF61E1DFA7C6509D33D9F51,
 33A99B76AD9C0648FEEAF3B0,
 534FA3B8C9C3570FD518C233,
                 B00000000000000000000013 /* PorchTests.xctest */,
@@ -189,6 +191,7 @@ C7962E57F4CAAA127932BFC1,
 			projectRoot = "";
 			targets = (
 				F00000000000000000000001 /* Porch */,
+67AD5F5D9043CC8E05A4148D,
 0A31050BC2A0539A45FBCEBB,
 8D094A8E9EA7D1BBF97E39E7,
                 F00000000000000000000005 /* PorchTests */,
@@ -423,6 +426,37 @@ E56EAA0268CF2C8DEC62F9E2 = { "isa" = "XCConfigurationList"; "buildConfigurations
 F88139B24F3F64258D5C2230 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = 2147483647; "files" = ( ); "runOnlyForDeploymentPostprocessing" = 0; };
 89A3E915B4F969CF7CD78831 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = 2147483647; "files" = ( "A5AB3B3B74394BE1A665FB82", ); "runOnlyForDeploymentPostprocessing" = 0; };
 0A31050BC2A0539A45FBCEBB = { "isa" = "PBXNativeTarget"; "name" = "PorchCell2Jack"; "productName" = "PorchCell2Jack"; "productReference" = "33A99B76AD9C0648FEEAF3B0"; "productType" = "com.apple.product-type.application"; "buildConfigurationList" = "E56EAA0268CF2C8DEC62F9E2"; "buildPhases" = ( "7E2938D51E90C594ECDEE78A", "F88139B24F3F64258D5C2230", "89A3E915B4F969CF7CD78831", "AACFED9E3F8B6C2D7C81023C", ); "buildRules" = ( ); "dependencies" = ( "EFAF3BC6BDA0953CB7C61DFE", ); };
+
+/* Native HelloPorch keypad preview: UI and Core only, no calling engine. */
+3113041361DDBE10CFFE65F4 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "PorchKeypadPreviewApp.swift"; "sourceTree" = "<group>"; };
+7D7E7F0217FE47BFB7AA0818 = { "isa" = "PBXBuildFile"; "fileRef" = "3113041361DDBE10CFFE65F4"; };
+0F28892BEC8195F4D4CDD951 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "KeypadPreviewViewController.swift"; "sourceTree" = "<group>"; };
+5D6476E0B0716C61E99CBE28 = { "isa" = "PBXBuildFile"; "fileRef" = "0F28892BEC8195F4D4CDD951"; };
+89FF3024323BF91141C3F23D = { "isa" = "PBXFileReference"; "lastKnownFileType" = "text.plist.xml"; "path" = "Info.plist"; "sourceTree" = "<group>"; };
+714FAB9EE563EE4A6BE733DA = { "isa" = "PBXFileReference"; "lastKnownFileType" = "text.plist.entitlements"; "path" = "Preview.entitlements"; "sourceTree" = "<group>"; };
+CB5B513BB17474DA195954F9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "wrapper.plug-in"; "path" = "Settings.bundle"; "sourceTree" = "<group>"; };
+95AD8406A86FADA3A7FA3541 = { "isa" = "PBXBuildFile"; "fileRef" = "B00000000000000000000011"; };
+9210CF168268F689CECE7162 = { "isa" = "PBXBuildFile"; "fileRef" = "12250F37D96C3FDF0C95A4E6"; };
+0DDF6727991D7B695BD339C9 = { "isa" = "PBXBuildFile"; "fileRef" = "E2BB2D5731BDB5D22955B627"; };
+6B4477C3D95C9FE7D7C0AE2E = { "isa" = "PBXBuildFile"; "fileRef" = "C2D7F0000000000000000001"; };
+9AEDD692D6C00BCE189AF868 = { "isa" = "PBXBuildFile"; "fileRef" = "C2D7F0000000000000000003"; };
+D35B1B665DD465099E9EBC97 = { "isa" = "PBXGroup"; "children" = ( "3113041361DDBE10CFFE65F4", "0F28892BEC8195F4D4CDD951", "89FF3024323BF91141C3F23D", "714FAB9EE563EE4A6BE733DA", "CB5B513BB17474DA195954F9", ); "path" = "PorchKeypadPreview"; "sourceTree" = "<group>"; };
+5FF61E1DFA7C6509D33D9F51 = { "isa" = "PBXFileReference"; "explicitFileType" = "wrapper.application"; "path" = "PorchKeypadPreview.app"; "sourceTree" = "BUILT_PRODUCTS_DIR"; "includeInIndex" = 0; };
+2574517136F9FC66AED05F91 = { "isa" = "PBXBuildFile"; "fileRef" = "B00000000000000000000004"; };
+0E50320A77DAC01B3D139AFF = { "isa" = "PBXBuildFile"; "fileRef" = "B00000000000000000000005"; };
+B905112273946311B6D718C1 = { "isa" = "PBXBuildFile"; "fileRef" = "CB5B513BB17474DA195954F9"; };
+9D1869154EA77BC012D44143 = { "isa" = "PBXBuildFile"; "productRef" = "E00000000000000000000002"; };
+F5E80DF07CE3F3043F2944DA = { "isa" = "PBXBuildFile"; "fileRef" = "534FA3B8C9C3570FD518C233"; "settings" = { "ATTRIBUTES" = ( "RemoveHeadersOnCopy", ); }; };
+CB047F28764962B8EA30A9BF = { "isa" = "PBXCopyFilesBuildPhase"; "buildActionMask" = 2147483647; "dstPath" = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)"; "dstSubfolderSpec" = 16; "files" = ( "F5E80DF07CE3F3043F2944DA", ); "name" = "Embed Cell2Jack Driver"; "runOnlyForDeploymentPostprocessing" = 0; "platformFilters" = ( "ios", ); };
+4E2C82AF064DF43D21765952 = { "isa" = "PBXContainerItemProxy"; "containerPortal" = "F00000000000000000000002"; "proxyType" = 1; "remoteGlobalIDString" = "8D094A8E9EA7D1BBF97E39E7"; "remoteInfo" = "PorchCell2JackDriver"; };
+542CEFBD5CF91FA2A674ED73 = { "isa" = "PBXTargetDependency"; "target" = "8D094A8E9EA7D1BBF97E39E7"; "targetProxy" = "4E2C82AF064DF43D21765952"; "platformFilters" = ( "ios", ); };
+5FC6ED531AE0941A18A97929 = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.cell2jackpoc"; "CODE_SIGN_STYLE" = "Automatic"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "CURRENT_PROJECT_VERSION" = 10; "MARKETING_VERSION" = "0.1.0"; "GENERATE_INFOPLIST_FILE" = "NO"; "INFOPLIST_FILE" = "PorchKeypadPreview/Info.plist"; "CODE_SIGN_ENTITLEMENTS" = "PorchKeypadPreview/Preview.entitlements"; "SWIFT_OBJC_BRIDGING_HEADER" = "Cell2JackPOC/Bridging-Header.h"; "SWIFT_VERSION" = "5.0"; "ONLY_ACTIVE_ARCH" = "YES"; "CLANG_ENABLE_OBJC_ARC" = "YES"; "IPHONEOS_DEPLOYMENT_TARGET" = "16.0"; "SDKROOT" = "iphoneos"; "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator"; "TARGETED_DEVICE_FAMILY" = "2"; "SUPPORTS_MACCATALYST" = "NO"; "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon"; "OTHER_LDFLAGS" = ( "$(inherited)", "-framework", "IOKit", ); "LD_RUNPATH_SEARCH_PATHS" = ( "$(inherited)", "@executable_path/Frameworks", ); }; };
+8E879CF5DBA78C63FF52A6FE = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.cell2jackpoc"; "CODE_SIGN_STYLE" = "Automatic"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "CURRENT_PROJECT_VERSION" = 10; "MARKETING_VERSION" = "0.1.0"; "GENERATE_INFOPLIST_FILE" = "NO"; "INFOPLIST_FILE" = "PorchKeypadPreview/Info.plist"; "CODE_SIGN_ENTITLEMENTS" = "PorchKeypadPreview/Preview.entitlements"; "SWIFT_OBJC_BRIDGING_HEADER" = "Cell2JackPOC/Bridging-Header.h"; "SWIFT_VERSION" = "5.0"; "CLANG_ENABLE_OBJC_ARC" = "YES"; "IPHONEOS_DEPLOYMENT_TARGET" = "16.0"; "SDKROOT" = "iphoneos"; "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator"; "TARGETED_DEVICE_FAMILY" = "2"; "SUPPORTS_MACCATALYST" = "NO"; "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon"; "OTHER_LDFLAGS" = ( "$(inherited)", "-framework", "IOKit", ); "LD_RUNPATH_SEARCH_PATHS" = ( "$(inherited)", "@executable_path/Frameworks", ); }; };
+9FB1BF3A4A8A027863E7CB1D = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "5FC6ED531AE0941A18A97929", "8E879CF5DBA78C63FF52A6FE", ); "defaultConfigurationIsVisible" = 0; "defaultConfigurationName" = "Debug"; };
+6FB304852CEBA6A5835ACE9C = { "isa" = "PBXSourcesBuildPhase"; "buildActionMask" = 2147483647; "files" = ( "7D7E7F0217FE47BFB7AA0818", "5D6476E0B0716C61E99CBE28", "95AD8406A86FADA3A7FA3541", "9210CF168268F689CECE7162", "0DDF6727991D7B695BD339C9", "6B4477C3D95C9FE7D7C0AE2E", "9AEDD692D6C00BCE189AF868", ); "runOnlyForDeploymentPostprocessing" = 0; };
+538D74CCBDA8EE16978F8288 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = 2147483647; "files" = ( "9D1869154EA77BC012D44143", ); "runOnlyForDeploymentPostprocessing" = 0; };
+6F7375DC142444EB384D414E = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = 2147483647; "files" = ( "2574517136F9FC66AED05F91", "0E50320A77DAC01B3D139AFF", "B905112273946311B6D718C1", ); "runOnlyForDeploymentPostprocessing" = 0; };
+67AD5F5D9043CC8E05A4148D = { "isa" = "PBXNativeTarget"; "name" = "PorchKeypadPreview"; "productName" = "PorchKeypadPreview"; "productReference" = "5FF61E1DFA7C6509D33D9F51"; "productType" = "com.apple.product-type.application"; "buildConfigurationList" = "9FB1BF3A4A8A027863E7CB1D"; "buildPhases" = ( "6FB304852CEBA6A5835ACE9C", "538D74CCBDA8EE16978F8288", "6F7375DC142444EB384D414E", "CB047F28764962B8EA30A9BF", ); "buildRules" = ( ); "dependencies" = ( "542CEFBD5CF91FA2A674ED73", ); "packageProductDependencies" = ( "E00000000000000000000002", ); };
 
 	};
 	rootObject = F00000000000000000000002 /* Project object */;

@@ -76,4 +76,4 @@ Under **Caregiver mode → Advanced**, turn on **End calls after silence**, ente
 
 ## Cell2Jack USB experiment
 
-The isolated [version-only iPad proof of concept](CELL2JACK-POC.md) uses the `PorchCell2Jack` scheme and installs as **Porch USB Test**. It needs an M-series iPad and separately approved DriverKit signing permissions; it is not part of the regular Porch release.
+The [USB version and keypad proof of concept](CELL2JACK-POC.md) uses the `PorchCell2Jack` scheme. The newer [native keypad action preview](KEYPAD-PREVIEW.md) uses `PorchKeypadPreview` and installs as **Porch Preview**, replacing **Porch USB Test** while preserving the regular Porch app. It previews the saved keypad assignments without linking the calling engine. These experiments need an M-series iPad and DriverKit development signing; distribution permissions are separate and they are not part of the regular Porch release.

@@ -117,6 +117,21 @@ public struct CallSlots: Equatable {
         }
         return result
     }
+    /// Read a v2 setup snapshot for a preview without migrations, preferences
+    /// writes, photo persistence, or pruning the original app's photo store.
+    public static func snapshot(from data: Data, photoStore: ContactPhotoStore = .standard) throws -> Self {
+        let decoder = JSONDecoder()
+        decoder.userInfo[ContactPhotoStore.codingKey] = photoStore
+        let saved = try decoder.decode([Slot].self, from: data)
+        guard saved.count == count else { throw ValidationError.invalidSavedSlots }
+        var result = Self()
+        for (digit, slot) in zip(digits, saved) {
+            guard slot.action == .person || slot.contact == nil else { throw ValidationError.invalidSavedSlots }
+            try result.setContact(slot.contact, for: digit)
+            try result.setAction(slot.action, for: digit)
+        }
+        return result
+    }
     public func save(to defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) throws {
         let encoder = JSONEncoder()
         encoder.userInfo[ContactPhotoStore.codingKey] = photoStore

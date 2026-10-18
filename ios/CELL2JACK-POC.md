@@ -386,3 +386,11 @@ separate corrected-parser replay report. Physical evidence now covers all 12
 standard keypad symbols and both manual and foreground stop paths. Held keys,
 other call states, long-term operation, auto-expiry, and unplug-during-capture
 still require separate tests.
+
+## Native action preview (build 10)
+
+The newer **PorchKeypadPreview** scheme installs **Porch Preview** over this
+USB Test identity, reusing driver build 6. It previews real saved contact/keypad
+assignments without the calling engine. The physical M3 iPad test matched
+`12390*#` and the user confirmed both contacts and other actions. See
+[KEYPAD-PREVIEW.md](KEYPAD-PREVIEW.md) for setup, isolation, and validation limits.
