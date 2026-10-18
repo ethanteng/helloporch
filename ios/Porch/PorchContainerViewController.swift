@@ -54,7 +54,7 @@ final class PorchContainerViewController: UIViewController {
     }
     // Calls need the camera and the screen: the clock stops watching for someone first.
     override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
-        let presentNow = { [weak self] in self?.presentNow(viewControllerToPresent, animated: flag, completion: completion) }
+        let presentNow: () -> Void = { [weak self] in self?.presentNow(viewControllerToPresent, animated: flag, completion: completion) }
         guard let clock = content as? CallViewController else { presentNow(); return }
         clock.releaseCamera(then: presentNow)
     }
