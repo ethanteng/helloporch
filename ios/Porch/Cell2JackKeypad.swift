@@ -26,32 +26,58 @@ enum Cell2JackDigitRouter {
 
 extension Notification.Name { static let cell2JackKeypadChanged = Notification.Name("porch.cell2jack.changed") }
 
+enum Cell2JackKeypadUpdate { case ready, digits([Cell2JackDigitEvent], TimeInterval), finished(String) }
+protocol Cell2JackKeypadConnection: AnyObject {
+    func start()
+    func stop()
+}
+
 /// Main-thread owner. Stale callbacks cannot act after stopping/backgrounding.
 final class Cell2JackKeypad {
     static let shared = Cell2JackKeypad()
     static let enabledKey = "porch.cell2jack.realCalls.enabled"
     weak var root: UIViewController?
     private(set) var status = "Phone keypad off"
-    private var worker: Cell2JackKeypadTransport?
+    private var worker: Cell2JackKeypadConnection?
     private var stopping = false
     private var wanted = false
+    private var sceneActive = false
     private var generation = UUID()
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var records: [[String: Any]] = []
     private let reportQueue = DispatchQueue(label: "porch.cell2jack.actions")
-    var enabled: Bool { UserDefaults.standard.bool(forKey: Self.enabledKey) }
+    private let defaults: UserDefaults
+    private let isBedside: () -> Bool
+    private let makeConnection: (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection
+    var enabled: Bool { defaults.bool(forKey: Self.enabledKey) }
+
+    init(defaults: UserDefaults = .standard,
+         isBedside: @escaping () -> Bool = { PorchDevice.experience == .bedside },
+         makeConnection: @escaping (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection = { Cell2JackKeypadTransport($0) }) {
+        self.defaults = defaults; self.isBedside = isBedside; self.makeConnection = makeConnection
+    }
 
     func setEnabled(_ value: Bool) {
-        UserDefaults.standard.set(value, forKey: Self.enabledKey)
+        defaults.set(value, forKey: Self.enabledKey)
+        refresh()
+    }
+    func activate() {
+        sceneActive = true
+        record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
+                "applicationState": UIApplication.shared.applicationState.rawValue,
+                "sceneState": root?.viewIfLoaded?.window?.windowScene?.activationState.rawValue ?? -99])
         refresh()
     }
     func refresh() {
-        wanted = enabled && PorchDevice.experience == .bedside && UIApplication.shared.applicationState == .active
+        // The scene delegate event is authoritative. UIApplication can still
+        // report inactive while sceneDidBecomeActive is running.
+        wanted = enabled && isBedside() && sceneActive
         if !wanted { stop(); return }
         guard worker == nil else { return }
         let token = UUID(); generation = token
         changeStatus("Connecting phone keypad…")
-        let worker = Cell2JackKeypadTransport { [weak self] update in
+        record(["kind": "usbStartRequested"])
+        let worker = makeConnection { [weak self] update in
             guard let self else { return }
             switch update {
             case .ready:
@@ -61,7 +87,7 @@ final class Cell2JackKeypad {
             case .digits(let digits, let receivedAt):
                 guard self.generation == token, self.wanted, !self.stopping,
                       ProcessInfo.processInfo.systemUptime - receivedAt < 1,
-                      UIApplication.shared.applicationState == .active, PorchDevice.experience == .bedside,
+                      self.sceneActive, self.isBedside(),
                       let root = self.root, root.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive else { return }
                 for event in digits {
                     guard event.kind == .digit else { continue }
@@ -79,13 +105,17 @@ final class Cell2JackKeypad {
         }
         self.worker = worker; worker.start()
     }
-    func pause() { wanted = false; stop() }
+    func pause() {
+        sceneActive = false; wanted = false
+        record(["kind": "sceneInactive"])
+        stop()
+    }
     private func stop() {
         generation = UUID()
         guard let worker else { changeStatus(enabled ? "Phone keypad paused" : "Phone keypad off"); return }
         guard !stopping else { return }
         stopping = true; changeStatus("Stopping phone keypad…")
-        if UIApplication.shared.applicationState != .active {
+        if !sceneActive {
             backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Stop Cell2Jack logs") { [weak self] in
                 guard let self, self.backgroundTask != .invalid else { return }
                 UIApplication.shared.endBackgroundTask(self.backgroundTask); self.backgroundTask = .invalid
@@ -108,8 +138,8 @@ final class Cell2JackKeypad {
 
 /// Continuous foreground input. Bounded parser and action history; no raw log
 /// files and no two-minute cutoff that would remove hang-up during a call.
-private final class Cell2JackKeypadTransport {
-    enum Update { case ready, digits([Cell2JackDigitEvent], TimeInterval), finished(String) }
+private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
+    typealias Update = Cell2JackKeypadUpdate
     private let queue = DispatchQueue(label: "porch.cell2jack.real-calls.usb")
     private let callback: (Update) -> Void
     private var session: Cell2JackLogSession?

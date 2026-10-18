@@ -83,4 +83,57 @@ final class Cell2JackRoutingTests: XCTestCase {
             XCTAssertLessThan(status.convert(status.bounds, to: clock.view).maxY, button.frame.minY)
         }
     }
+    private final class Connection: Cell2JackKeypadConnection {
+        var starts = 0, stops = 0
+        let update: (Cell2JackKeypadUpdate) -> Void
+        init(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) { self.update = update }
+        func start() { starts += 1 }
+        func stop() { stops += 1 }
+    }
+    @MainActor func testEnabledBeforeSceneActivationConnectsAndForegroundReturnWaitsForCleanup() throws {
+        let name = "cell2jack-lifecycle-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connections: [Connection] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let connection = Connection(update); connections.append(connection); return connection
+        }
+        keypad.setEnabled(true) // launch happens before the window activates
+        XCTAssertTrue(connections.isEmpty)
+        keypad.activate()
+        XCTAssertEqual(connections.count, 1); XCTAssertEqual(connections[0].starts, 1)
+        connections[0].update(.ready)
+        XCTAssertEqual(keypad.status, "Phone keypad ready")
+        keypad.pause()
+        XCTAssertEqual(connections[0].stops, 1)
+        keypad.activate() // a quick return must not open two USB clients
+        XCTAssertEqual(connections.count, 1)
+        connections[0].update(.finished("/q sent"))
+        XCTAssertEqual(connections.count, 2); XCTAssertEqual(connections[1].starts, 1)
+        connections[0].update(.ready) // stale work from the previous activation
+        XCTAssertEqual(keypad.status, "Connecting phone keypad…")
+        connections[1].update(.ready)
+        XCTAssertEqual(keypad.status, "Phone keypad ready")
+        keypad.setEnabled(false)
+        XCTAssertEqual(connections[1].stops, 1)
+        connections[1].update(.finished("/q sent"))
+    }
+    @MainActor func testDisabledAndFamilyModeNeverOpenUsb() throws {
+        let name = "cell2jack-family-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var bedside = false
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { bedside }) { update in
+            XCTFail("Inactive, disabled, and family windows must not open USB")
+            return Connection(update)
+        }
+        keypad.activate()
+        keypad.setEnabled(true)
+        keypad.refresh()
+        keypad.pause()
+        bedside = true
+        keypad.refresh()
+        keypad.setEnabled(false)
+    }
+
 }

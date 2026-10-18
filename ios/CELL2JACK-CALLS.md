@@ -1,7 +1,7 @@
 # Cell2Jack keypad in the real Porch app
 
 Use the **PorchCell2JackCalls** scheme on
-`feature/cell2jack-ipad-version-poc`. Build 11 installs as **Porch**, with the
+`feature/cell2jack-ipad-version-poc`. Build 12 installs as **Porch**, with the
 real app identity `com.ethanteng.helloporch`. It replaces the installed Porch
 binary in place, preserving its settings, contact photos, and keychain identity.
 It uses the normal calling engine and live saved assignments, not Preview's
@@ -87,19 +87,21 @@ out of source control.
 
 ## Validation to date
 
-- Signed device build and deep signature verification passed. Build 11 installed
+- Signed device build and deep signature verification passed. Build 12 installed
   in place on the physical M3 iPad. Saved assignment bytes match the pre-install
   copy. No contact data or credentials were imported from Preview.
-- Six simulator routing tests passed: current-screen selection, unknown modal
+- Eight simulator routing tests passed: current-screen selection, unknown modal
   blocking, navigation, non-digit/hook rejection, repeated digits, fragmented
   USB/secondary report filtering, real call-screen hang-up using a remapped saved
-  key without starting a connection, and clock status layout at four iPad sizes.
+  key without starting a connection, clock status layout at four iPad sizes,
+  launch before activation, quick foreground return while the old client closes, disabled/family mode, and stale readiness
+  callback rejection.
 - The ordinary Porch simulator build passed. Preview's source/package safety
   boundary still passes. PorchCore was unchanged (68 tests passed at the prior
   preview milestone).
-- Physical driver activation, untouched-handset input, and placing/ending an
-  actual call remain pending the user-operated device check. Earlier Preview
-  hardware results establish digit transport, not real call completion.
+- Physical build 12 reached USB ready. The user pressed the unassigned key 3
+  with the handset untouched and confirmed that Porch showed no person assigned.
+  Placing and ending an actual call remain pending the user-operated check.
 
 Build:
 
@@ -111,3 +113,15 @@ xcodebuild -project ios/Porch.xcodeproj -scheme PorchCell2JackCalls \
 
 Simulator tests use the same scheme with a booted iPad destination and
 `CODE_SIGNING_ALLOWED=NO`; the driver is excluded on the simulator.
+
+## Build 12 startup correction
+
+Build 11 could remain at “Phone keypad paused” without opening USB. On the
+physical iPad, the build 12 scene activation trace recorded UIApplication state
+1 (inactive) while UIWindowScene state was 0 (foreground active), with bedside
+mode and the feature enabled. The scene callback arrived before the app-wide
+state caught up. Build 12 follows explicit scene activation/resignation for
+transport ownership and foreground cleanup; it still checks the active window
+before routing digits. It recorded `usbStartRequested`, then `usbReady` three
+seconds later. Eight simulator tests passed, including startup and rapid
+stop/restart lifecycle tests with an injected transport (no USB or calls).

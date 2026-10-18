@@ -47,7 +47,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
         SystemIncomingCalls.shared.resumeCamera()
         #if PORCH_CELL2JACK_CALLS
-        Cell2JackKeypad.shared.refresh()
+        Cell2JackKeypad.shared.activate()
         #endif
     }
 
