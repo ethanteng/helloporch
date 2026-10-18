@@ -253,7 +253,7 @@ the literal two-byte `/v`, `/d`, `/q` strings with no newline.
 
 Begin configures the UART, queries/reads the version, waits 500 ms, and writes
 `/d`. The app waits another 500 ms before polling. Each poll is one bounded
-250 ms read of up to one USB bulk packet (64 bytes on this unit), preserving
+250 ms read of up to one USB bulk packet, sized from the endpoint descriptor, preserving
 partial data on ordinary idle timeouts. One user client exclusively owns the
 log stream; concurrent version/start operations cannot reconfigure it.
 
@@ -322,4 +322,30 @@ Build 8 / driver 6 allocates command and polling buffers with
 the same iPad, instead of the Out-only command mapping that faulted. Both use
 256-byte allocation capacity, set the actual transfer length explicitly, and
 check the mapped address/range before CPU access. Signed compilation passed;
-the corrected command/poll path still requires the physical reconnect test.
+the corrected command/poll path subsequently passed the physical test below.
+
+### Verified physical iPad keypad capture — build 8 / driver 6
+
+On 2026-10-17 at 11:33–11:35 PM Pacific, the user reconnected Cell2Jack with its
+driver switch on. Logs arrived on enable attempt 2; the first attempt had no
+log bytes and was stopped with `/q` before retrying. The user then explicitly
+confirmed pressing `1 2 3 0 * # 5 5` in that order. The saved raw serial trace
+and parsed primary events contain exactly `1230*#55`, eight events, including
+both separate `5` reports. Digit events were received at
+`2026-10-18T06:34:11Z` through `06:34:22Z`. These are received-event timestamps;
+physical switch timing was not measured.
+
+The completed capture saved 859 log bytes plus two 34-byte version replies.
+Foreground cleanup was tested by opening Settings on the iPad: the summary
+recorded `App left the foreground`, `/q sent; USB session closed.`, and eight
+digit events. A fresh version request at `2026-10-18T06:35:13Z` then returned
+`a06`, 34 bytes, serial-chip revision `0x31`, USB status zero. The developer Mac
+started the app and retrieved reports over Wi-Fi; the device data path was
+iPad app → DriverKit → USB → Cell2Jack throughout.
+
+This verifies the tested key sequence, repeated primary digits, debug retry,
+foreground stop write, session release, and a subsequent version transaction.
+Full keypad coverage (`4`, `6`–`9` were not pressed), held-key behavior, different
+call states, long-term reliability, physical Stop-button use, two-minute expiry,
+and unplugging during an active capture remain separate checks. No HelloPorch
+call actions are attached to the diagnostic digit events.
