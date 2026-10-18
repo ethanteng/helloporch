@@ -786,6 +786,7 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Ethan (this phone). Porch is open. Audio drop-in · Caregiver." })
         XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Sam. Offline. Calls only." })
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
+        XCTAssertFalse(switches(admin.view).contains { $0.accessibilityIdentifier == "messages.autoplay" }, "Starting messages by camera is set on the bedside iPad itself")
         let me = FamilyPersonViewController(personID: "me", admin: admin); me.loadViewIfNeeded()
         XCTAssertFalse(buttons(in: me.view).contains { $0.configuration?.title == "Remove access" }, "A caregiver can't remove their own phone here")
         XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")

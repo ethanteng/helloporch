@@ -42,6 +42,11 @@ final class PorchContainerViewController: UIViewController {
         else if content?.presentedViewController != nil { content?.dismiss(animated: false, completion: finish) }
         else { finish() }
     }
+    // Calls need the camera and the screen: the clock stops watching for someone first.
+    override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
+        (content as? CallViewController)?.stopPresence()
+        super.present(viewControllerToPresent, animated: flag, completion: completion)
+    }
     func resume() { (content as? CallViewController)?.resume(); FamilyCoordinator.shared.start(); systemCallChanged() }
     func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
     @objc private func familyChanged() {

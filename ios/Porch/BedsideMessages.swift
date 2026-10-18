@@ -2,9 +2,11 @@ import UIKit
 import AVFoundation
 import LiveKit
 import PorchCore
+import Vision
 
 extension Notification.Name {
     static let porchMessagesReady = Notification.Name("porch.messages.ready")
+    static let porchMessageAutoplayChanged = Notification.Name("porch.messages.autoplay")
 }
 
 /// Keeps waiting family messages downloaded on the bedside iPad, so they play instantly and
@@ -901,5 +903,155 @@ extension BedsideVoicemailViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard (try? CallSlots.load())?.action(for: digit) == .callControl else { return "message key ignored" }
         finishFromKeypad(); return "message finished"
+    }
+}
+
+/// Notices someone sitting in front of the bedside iPad: the front camera runs at a low rate and
+/// Apple's on-device face detection looks at a few frames a second. Nothing is recorded, kept or sent.
+/// Callers run it only while messages are waiting and stop it before anything else uses the camera.
+final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    /// Called on the main thread once someone has been in front of the iPad for a couple of seconds.
+    var onPresent: (() -> Void)?
+    /// Main-thread state.
+    private(set) var running = false
+    // Everything below is used only on the capture queue.
+    private let queue = DispatchQueue(label: "porch.presence")
+    private let session = AVCaptureSession()
+    private var connection: AVCaptureConnection?
+    private var configured = false
+    private var trigger = PresenceTrigger()
+    private var lastAnalysis: TimeInterval = 0
+    private let faces = VNDetectFaceRectanglesRequest()
+
+    func start(orientation: UIInterfaceOrientation) {
+        guard !running, AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        running = true
+        queue.async { [self] in
+            if !configured { configured = configure() }
+            guard configured else { DispatchQueue.main.async { self.running = false }; return }
+            // Upright frames, whichever way the iPad is standing.
+            if let connection, connection.isVideoOrientationSupported {
+                switch orientation {
+                case .portraitUpsideDown: connection.videoOrientation = .portraitUpsideDown
+                case .landscapeLeft: connection.videoOrientation = .landscapeLeft
+                case .landscapeRight: connection.videoOrientation = .landscapeRight
+                default: connection.videoOrientation = .portrait
+                }
+            }
+            trigger.reset(); lastAnalysis = 0
+            if !session.isRunning { session.startRunning() }
+        }
+    }
+    func stop() {
+        guard running else { return }
+        running = false
+        queue.async { [self] in if session.isRunning { session.stopRunning() } }
+    }
+    private func configure() -> Bool {
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+              let input = try? AVCaptureDeviceInput(device: camera) else { return false }
+        session.beginConfiguration(); defer { session.commitConfiguration() }
+        session.sessionPreset = session.canSetSessionPreset(.vga640x480) ? .vga640x480 : .low
+        let output = AVCaptureVideoDataOutput()
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: queue)
+        guard session.canAddInput(input), session.canAddOutput(output) else { return false }
+        session.addInput(input); session.addOutput(output)
+        connection = output.connection(with: .video)
+        return true
+    }
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let time = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // About three looks a second is plenty, and keeps the iPad cool.
+        guard time - lastAnalysis >= 0.3, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        lastAnalysis = time
+        guard (try? VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up).perform([faces])) != nil else { return }
+        let largest = (faces.results ?? []).map { Double($0.boundingBox.height) }.max()
+        if trigger.observe(faceHeight: largest, at: time) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.running else { return }
+                self.onPresent?()
+            }
+        }
+    }
+}
+
+/// The glow and spoken notice when someone sits down in front of the iPad with messages waiting.
+/// When the notice finishes, playback starts; Not now (or the messages or call key) waits instead.
+final class MessageNoticeView: UIView {
+    var onNotNow: (() -> Void)?
+    var onFinished: (() -> Void)?
+    private let text: String
+    private let glow = UIView()
+    private let announcer = MessageAnnouncer()
+    private var session: SessionRequirementHandle?
+    private var ended = false
+    private static let warm = UIColor(red: 1, green: 0.74, blue: 0.32, alpha: 1)
+
+    init(count: Int) {
+        text = count == 1 ? BedsideText.string("You have 1 new message.") : BedsideText.string("You have %d new messages.", count)
+        super.init(frame: .zero)
+        backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        accessibilityViewIsModal = true
+        glow.isUserInteractionEnabled = false
+        glow.layer.borderColor = Self.warm.cgColor; glow.layer.borderWidth = 16
+        glow.layer.shadowColor = Self.warm.cgColor; glow.layer.shadowRadius = 36; glow.layer.shadowOpacity = 1; glow.layer.shadowOffset = .zero
+        let icon = UIImageView(image: UIImage(systemName: "envelope.open.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 72, weight: .semibold)))
+        icon.tintColor = Self.warm; icon.contentMode = .scaleAspectFit
+        let label = UILabel()
+        label.text = text; label.font = PorchStyle.font(44, weight: .semibold); label.textColor = PorchStyle.nightText
+        label.textAlignment = .center; label.numberOfLines = 0; label.adjustsFontSizeToFitWidth = true; label.minimumScaleFactor = 0.5
+        label.accessibilityIdentifier = "messages.notice"
+        let notNowButton = PorchStyle.button(BedsideText.string("Not now"), symbol: "xmark")
+        notNowButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(32, weight: .semibold); return attributes
+        }
+        notNowButton.configuration?.contentInsets = .init(top: 20, leading: 40, bottom: 20, trailing: 40)
+        notNowButton.configuration?.baseBackgroundColor = UIColor(white: 0.32, alpha: 1)
+        notNowButton.configuration?.baseForegroundColor = .white
+        notNowButton.accessibilityIdentifier = "messages.notNow"
+        notNowButton.addAction(UIAction { [weak self] _ in self?.notNow() }, for: .touchUpInside)
+        let card = UIStackView(arrangedSubviews: [icon, label, notNowButton])
+        card.axis = .vertical; card.spacing = 28; card.alignment = .center
+        card.isLayoutMarginsRelativeArrangement = true; card.directionalLayoutMargins = .init(top: 40, leading: 48, bottom: 40, trailing: 48)
+        card.backgroundColor = PorchStyle.night.withAlphaComponent(0.94); card.layer.cornerRadius = 32; card.layer.cornerCurve = .continuous
+        for view in [glow, card] { view.translatesAutoresizingMaskIntoConstraints = false; addSubview(view) }
+        NSLayoutConstraint.activate([
+            glow.leadingAnchor.constraint(equalTo: leadingAnchor), glow.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glow.topAnchor.constraint(equalTo: topAnchor), glow.bottomAnchor.constraint(equalTo: bottomAnchor),
+            card.centerXAnchor.constraint(equalTo: safeAreaLayoutGuide.centerXAnchor), card.centerYAnchor.constraint(equalTo: safeAreaLayoutGuide.centerYAnchor),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.leadingAnchor, constant: 32),
+            card.trailingAnchor.constraint(lessThanOrEqualTo: safeAreaLayoutGuide.trailingAnchor, constant: -32),
+            notNowButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 88)
+        ])
+        BedsideText.applyAccessibilityLanguage(to: self)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(count:)") }
+
+    func begin() {
+        if !UIAccessibility.isReduceMotionEnabled {
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1; pulse.toValue = 0.3; pulse.duration = 0.9
+            pulse.autoreverses = true; pulse.repeatCount = .infinity
+            glow.layer.add(pulse, forKey: "pulse")
+        }
+        UIAccessibility.post(notification: .screenChanged, argument: nil)
+        session = try? AudioManager.shared.audioSession.acquire(requirement: .playbackOnly)
+        announcer.announce(text) { [weak self] in
+            guard let self, !self.ended else { return }
+            self.end(); self.onFinished?()
+        }
+    }
+    func notNow() {
+        guard !ended else { return }
+        end(); onNotNow?()
+    }
+    /// Removes the notice without starting anything, for example when a call arrives.
+    func end() {
+        guard !ended else { return }
+        ended = true
+        announcer.stop(); glow.layer.removeAllAnimations()
+        try? session?.release(); session = nil
+        removeFromSuperview()
     }
 }

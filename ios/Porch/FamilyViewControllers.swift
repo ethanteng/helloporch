@@ -467,7 +467,45 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             self.navigationController?.pushViewController(queue, animated: true)
         }
         review.isEnabled = !waiting.isEmpty
-        return group("Messages", footer: "Family members can send audio and video messages, or leave one when a call isn't answered. Phone callers who aren't answered can leave voicemail; if their number isn't saved on the keypad, it waits for a caregiver's OK. Messages wait here until played, and unplayed ones are removed after a week.", rows: [toggleRow("Allow family messages", messagesOn), review])
+        // Starting messages when someone sits down uses this iPad's camera, so it's set on the iPad itself.
+        let autoplay = remote == nil ? [autoplayToggle(), autoplayHourRow("Starting at", \.startHour), autoplayHourRow("Until", \.endHour)] : []
+        return group("Messages", footer: "Family members can send audio and video messages, or leave one when a call isn't answered. Phone callers who aren't answered can leave voicemail; if their number isn't saved on the keypad, it waits for a caregiver's OK. Messages wait here until played, and unplayed ones are removed after a week.", rows: [toggleRow("Allow family messages", messagesOn), review] + autoplay)
+    }
+    private func autoplayToggle() -> UIView {
+        let on = UISwitch(); on.isOn = MessageAutoplay.load().enabled
+        on.accessibilityIdentifier = "messages.autoplay"
+        on.addAction(UIAction { [weak self, weak on] _ in
+            guard let self, let on else { return }
+            Task { @MainActor in
+                if on.isOn, !(await AVCaptureDevice.requestAccess(for: .video)) {
+                    on.setOn(false, animated: true)
+                    showPorchError(FamilyServiceError(message: "Allow camera access in iPad Settings → Porch to start messages when someone is in front of the iPad.", status: 403), on: self.navigationController?.topViewController ?? self)
+                    return
+                }
+                var settings = MessageAutoplay.load(); settings.enabled = on.isOn; settings.save()
+                NotificationCenter.default.post(name: .porchMessageAutoplayChanged, object: nil)
+            }
+        }, for: .valueChanged)
+        return toggleRow("Play when someone is in front of the iPad", detail: "The screen glows, says how many messages are waiting, then plays them. It uses the front camera only while messages are waiting, during the hours below; nothing is recorded or sent. After Not now or Stop, it waits 30 minutes unless a new message arrives.", on)
+    }
+    private func autoplayHourRow(_ title: String, _ hour: WritableKeyPath<MessageAutoplay, Int>) -> UIView {
+        let stepper = UIStepper()
+        stepper.minimumValue = Double(MessageAutoplay.hourRange.lowerBound); stepper.maximumValue = Double(MessageAutoplay.hourRange.upperBound)
+        stepper.value = Double(MessageAutoplay.load()[keyPath: hour])
+        stepper.accessibilityLabel = "Play messages \(title.lowercased())"
+        let value = PorchStyle.label(Self.hourText(Int(stepper.value)), size: 18, color: PorchStyle.ink)
+        stepper.accessibilityValue = value.text
+        stepper.addAction(UIAction { [weak stepper, weak value] _ in
+            guard let stepper else { return }
+            var settings = MessageAutoplay.load(); settings[keyPath: hour] = Int(stepper.value); settings.save()
+            value?.text = Self.hourText(Int(stepper.value)); stepper.accessibilityValue = value?.text
+            NotificationCenter.default.post(name: .porchMessageAutoplayChanged, object: nil)
+        }, for: .valueChanged)
+        return listRow([PorchStyle.label(title, size: 18, color: PorchStyle.ink), UIView(), value, stepper])
+    }
+    private static func hourText(_ hour: Int) -> String {
+        let formatter = DateFormatter(); formatter.setLocalizedDateFormatFromTemplate("j")
+        return formatter.string(from: Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date())
     }
     /// The caregiver PIN beside who can use it from their own phone.
     private func caregiverGroup(_ state: FamilyAdminState?) -> UIView {

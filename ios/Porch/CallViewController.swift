@@ -6,6 +6,11 @@ final class CallViewController: UIViewController {
     private var trigger = CallTrigger()
     private var opening = false
     private var cancelOpening = false
+    /// Plays waiting messages when someone sits down in front of the iPad, if a caregiver turned it on.
+    private let presence = BedsidePresence()
+    private var notice: MessageNoticeView?
+    /// After Not now or Stop: the messages that were waiting, left alone until then unless a new one arrives.
+    private var snooze: (until: Date, ids: Set<String>)?
     private let phoneKeypadStatus = UILabel()
     private var phoneKeypadStatusTimer: Timer?
     private var displayedPhoneKeypadStatus: String?
@@ -200,6 +205,9 @@ final class CallViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(updateMessages), name: .porchMessagesReady, object: nil)
         BedsideMessages.shared.start()
         BedsideOutbox.shared.start()
+        presence.onPresent = { [weak self] in self?.presenceDetected() }
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchFamilyChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchMessageAutoplayChanged, object: nil)
         updateDisplay(); resetClock()
     }
 
@@ -248,7 +256,13 @@ final class CallViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         clockTimer?.invalidate(); clockTimer = nil
+        stopPresence()
         resignFirstResponder()
+    }
+    // Calls, the message player and recording all need the camera or the screen.
+    override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
+        stopPresence()
+        super.present(viewControllerToPresent, animated: flag, completion: completion)
     }
 
     override func viewDidLayoutSubviews() {
@@ -288,15 +302,17 @@ final class CallViewController: UIViewController {
         refreshCallButton()
         resetClock()
         if clockTimer == nil {
-            let timer = Timer(fire: nextMinute, interval: 60, repeats: true) { [weak self] _ in self?.updateClock() }
+            let timer = Timer(fire: nextMinute, interval: 60, repeats: true) { [weak self] _ in self?.updateClock(); self?.refreshPresence() }
             timer.tolerance = 0.1
             RunLoop.main.add(timer, forMode: .common)
             clockTimer = timer
         }
         becomeFirstResponder()
+        refreshPresence()
     }
 
     func pause() {
+        stopPresence()
         trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil
         if opening { cancelOpening = true }
     }
@@ -392,6 +408,7 @@ final class CallViewController: UIViewController {
     }
     @objc private func updateMessages() {
         guard isViewLoaded else { return }
+        defer { refreshPresence() }
         let count = BedsideMessages.shared.ready.count
         messagesButton.configuration?.title = count == 1 ? BedsideText.string("Play 1 message") : BedsideText.string("Play %d messages", count)
         messagesButton.accessibilityLanguage = BedsideText.language.speechLanguage
@@ -407,8 +424,53 @@ final class CallViewController: UIViewController {
         guard !ready.isEmpty else { statusLabel.text = BedsideText.string("No new messages."); return }
         statusLabel.text = nil
         let player = MessagePlayerViewController(messages: ready, slots: slots)
-        player.onFinish = { [weak self] in self?.resume() }
+        player.onFinish = { [weak self] in
+            // Stopped with messages left: don't start them again on their own for a while.
+            let left = BedsideMessages.shared.ready
+            if !left.isEmpty { self?.snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), Set(left.map(\.id))) }
+            self?.resume()
+        }
         present(player, animated: true)
+    }
+
+    /// The camera runs only while it could start messages right away: the clock is showing and idle,
+    /// downloaded messages are waiting, it's within the caregiver's hours, and Mom hasn't just said not now.
+    private var presenceAllowed: Bool {
+        let ready = BedsideMessages.shared.ready
+        guard isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
+              notice == nil, !opening, !ready.isEmpty, UIApplication.shared.applicationState == .active,
+              PorchDevice.experience == .bedside, FamilyCoordinator.shared.state?.busy != true,
+              ProcessInfo.processInfo.thermalState != .serious, ProcessInfo.processInfo.thermalState != .critical,
+              MessageAutoplay.load().allows(Date()) else { return false }
+        if let snooze, Date() < snooze.until, ready.allSatisfy({ snooze.ids.contains($0.id) }) { return false }
+        return true
+    }
+    @objc private func refreshPresence() {
+        if presenceAllowed { presence.start(orientation: view.window?.windowScene?.interfaceOrientation ?? .landscapeLeft) }
+        else { presence.stop() }
+    }
+    /// Before anything else covers the clock or needs the camera. Nothing is snoozed.
+    func stopPresence() {
+        presence.stop()
+        notice?.end(); notice = nil
+    }
+    private func presenceDetected() {
+        presence.stop()
+        guard presenceAllowed else { return }
+        let notice = MessageNoticeView(count: BedsideMessages.shared.ready.count)
+        notice.onNotNow = { [weak self] in self?.declineNotice() }
+        notice.onFinished = { [weak self] in self?.notice = nil; self?.playMessages() }
+        notice.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(notice)
+        NSLayoutConstraint.activate([notice.leadingAnchor.constraint(equalTo: view.leadingAnchor), notice.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                                     notice.topAnchor.constraint(equalTo: view.topAnchor), notice.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
+        self.notice = notice
+        notice.begin()
+    }
+    private func declineNotice() {
+        notice?.end(); notice = nil
+        snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), Set(BedsideMessages.shared.ready.map(\.id)))
+        refreshPresence()
     }
     @objc private func restyleDisplay() { appliedDisplayStyle = nil; updateClock() }
     @objc private func reloadSlots() {
@@ -446,6 +508,12 @@ final class CallViewController: UIViewController {
     }
 
     private func call(slot: Int) {
+        // Any key answers the messages notice: the messages and call keys mean Not now; a person's key calls them instead.
+        if let notice {
+            let action = slots.action(for: slot)
+            notice.notNow()
+            if action == .messages || action == .callControl { return }
+        }
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         if slots.action(for: slot) == .messages { playMessages(); return }
