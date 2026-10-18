@@ -28,7 +28,9 @@ const day = 86400;
 async function fixture() {
   const store = new MemoryStore(), media = new FakeMedia();
   let now = 1_800_000_000;
-  const send = (action, values={}, credential, pin) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(pin?{'X-Porch-Setup-Code':pin}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{}});
+  const alerts = [], alertResult = { delivered: true };
+  const sendAlert = async (device, alert) => { alerts.push({ device, alert }); return alertResult; };
+  const send = (action, values={}, credential, pin) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(pin?{'X-Porch-Setup-Code':pin}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{},sendAlert});
   const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
   const bedside = await json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
   await json('initializeCaregiverPIN',{pin:'123456'},bedside.credential);
@@ -42,7 +44,11 @@ async function fixture() {
   };
   const queue = async () => (await json('poll',{available:true},bedside.credential)).state.messages;
   const sent = async who => (await json('listMessages',{},who.credential)).messages;
-  return { store, media, send, json, bedside, ethan, sam, sendMessage, queue, sent, advance: s => now += s };
+  // The bedside leaves a message for a family member who missed its call.
+  const leaveMessage = async (who, values={}) => sendMessage(bedside, { kind:'voicemail', to: who.state.me.id, ...values });
+  const received = async who => (await json('listMessages',{},who.credential)).received;
+  const unheard = async who => (await json('poll',{available:true},who.credential)).state.newMessages;
+  return { store, media, send, json, bedside, ethan, sam, sendMessage, queue, sent, leaveMessage, received, unheard, alerts, alertResult, advance: s => now += s };
 }
 
 test('a family message is uploaded, queued, delivered and played, then kept as a record',async()=>{
@@ -87,7 +93,7 @@ test('recordings are validated and each sender can only have ten waiting',async(
   assert.equal((await create({sizeBytes:11*1024*1024})).status,413);
   assert.equal((await create({mode:'video',contentType:'video/mp4',sizeBytes:101*1024*1024})).status,413);
   assert.equal((await create({kind:'letter'})).status,400);
-  assert.equal((await create({},f.bedside)).status,403);
+  assert.equal((await create({kind:'voicemail'},f.bedside)).status,404,'the bedside only leaves messages for a family member');
   for(let n=0;n<10;n++) await f.sendMessage(f.ethan);
   assert.equal((await create({})).status,409);
   assert.equal((await create({},f.sam)).status,200,'the limit is per sender');
@@ -148,4 +154,95 @@ test('removing a family member removes their unplayed messages',async()=>{
   await f.sendMessage(f.ethan); await f.sendMessage(f.sam);
   await f.json('revoke',{memberID:f.ethan.state.me.id},f.bedside.credential,'123456');
   assert.deepEqual((await f.queue()).map(m=>m.fromName),['Sam']);
+});
+
+test('the bedside leaves a message for one family member, who plays it and can play it again',async()=>{
+  const f=await fixture();
+  const token='ab'.repeat(32);
+  assert.equal((await f.json('registerAlerts',{token,environment:'sandbox'},f.ethan.credential)).alertsReady,false,'APNs is not configured in tests');
+  assert.equal(await f.unheard(f.ethan),0);
+  const created=await f.json('createMessage',{mode:'video',kind:'voicemail',to:f.ethan.state.me.id,contentType:'video/quicktime',sizeBytes:2_000_000,durationSeconds:42.4},f.bedside.credential);
+  assert.equal(created.message.state,'uploading');
+  assert.equal(f.alerts.length,0);
+  f.media.upload(created.upload,1_900_000);
+  const sent=(await f.json('completeMessage',{messageID:created.message.id},f.bedside.credential)).message;
+  assert.equal(sent.state,'queued');
+  await f.json('completeMessage',{messageID:created.message.id},f.bedside.credential);
+  assert.equal(f.alerts.length,1,'a retried completion notifies once');
+  assert.deepEqual(f.alerts[0],{device:{token,environment:'sandbox'},alert:{messageID:sent.id,title:'Mom left you a message',body:'Video message · 0:42',badge:1}});
+  assert.deepEqual(await f.queue(),[],'it never joins the bedside queue');
+  assert.equal(await f.unheard(f.ethan),1); assert.equal(await f.unheard(f.sam),0);
+  assert.equal((await f.json('poll',{available:true},f.bedside.credential)).state.newMessages,undefined);
+  const [message]=await f.received(f.ethan);
+  assert.deepEqual({...message,sentAt:undefined},{id:sent.id,fromName:'Mom',kind:'voicemail',mode:'video',durationSeconds:42,sentAt:undefined,state:'queued',available:true});
+  assert.deepEqual(await f.received(f.sam),[],'only the person it was left for sees it');
+  assert.equal((await f.send('receivedMessageMedia',{messageID:sent.id},f.sam.credential)).status,404);
+  assert.equal((await f.send('receivedMessageMedia',{messageID:sent.id},f.bedside.credential)).status,403);
+  assert.equal((await f.send('messageMedia',{messageID:sent.id},f.bedside.credential)).status,404);
+  assert.match((await f.json('receivedMessageMedia',{messageID:sent.id},f.ethan.credential)).media.url,new RegExp(`${sent.id}\\.mov`));
+  await f.json('receivedMessagePlayed',{messageID:sent.id},f.ethan.credential);
+  await f.json('receivedMessagePlayed',{messageID:sent.id},f.ethan.credential);
+  assert.equal(await f.unheard(f.ethan),0);
+  const [played]=await f.received(f.ethan);
+  assert.equal(played.state,'played'); assert.ok(played.playedAt); assert.equal(played.available,true);
+  assert.ok((await f.json('receivedMessageMedia',{messageID:sent.id},f.ethan.credential)).media.url,'played messages can be played again');
+  // Kept 90 days from sending, then deleted; the record stays.
+  f.advance(90*day-1); await f.queue(); assert.deepEqual(f.media.removed,[]);
+  f.advance(2); await f.queue();
+  assert.deepEqual(f.media.removed,[`messages/${f.bedside.state.householdID}/${sent.id}.mov`]);
+  assert.equal((await f.received(f.ethan))[0].available,false);
+  assert.equal((await f.send('receivedMessageMedia',{messageID:sent.id},f.ethan.credential)).status,404);
+});
+
+test('an unplayed message from the bedside waits 90 days, and the household switch for messages to the bedside does not block it',async()=>{
+  const f=await fixture();
+  await f.json('setMessages',{enabled:false},f.bedside.credential,'123456');
+  const message=await f.leaveMessage(f.ethan);
+  assert.equal(f.alerts.length,0,'no notifications without a registration');
+  f.advance(30*day);
+  assert.equal(await f.unheard(f.ethan),1,'unlike the bedside queue, it does not expire after a week');
+  f.advance(60*day+1); await f.queue();
+  assert.equal(await f.unheard(f.ethan),0);
+  assert.deepEqual((await f.received(f.ethan)).map(m=>[m.state,m.available]),[['expired',false]]);
+  assert.deepEqual(f.media.removed,[`messages/${f.bedside.state.householdID}/${message.id}.m4a`]);
+});
+
+test('bedside messages need a current family member, count per person, and notify with the waiting count',async()=>{
+  const f=await fixture();
+  const create=(values,who=f.bedside)=>f.send('createMessage',{mode:'audio',kind:'voicemail',contentType:'audio/mp4',sizeBytes:1000,durationSeconds:5,...values},who.credential);
+  assert.equal((await create({to:f.bedside.state.me.id})).status,404,'not to itself');
+  assert.equal((await create({to:randomUUID()})).status,404);
+  assert.equal((await create({to:f.ethan.state.me.id,kind:'message'})).status,400,'only voicemail');
+  assert.equal((await create({to:f.sam.state.me.id},f.ethan)).status,200,'family devices still send to the bedside, ignoring `to`');
+  await f.json('registerAlerts',{token:'cd'.repeat(32),environment:'production'},f.ethan.credential);
+  for(let n=0;n<10;n++) await f.leaveMessage(f.ethan);
+  assert.deepEqual(f.alerts.map(a=>a.alert.badge),[1,2,3,4,5,6,7,8,9,10]);
+  assert.equal((await create({to:f.ethan.state.me.id})).status,409);
+  assert.equal((await create({to:f.sam.state.me.id})).status,200,'the limit is per family member');
+  // An invalid registration is dropped after APNs rejects it.
+  f.alertResult.delivered=false; f.alertResult.invalidToken=true;
+  const [newest,next]=await f.received(f.ethan);
+  await f.json('receivedMessagePlayed',{messageID:newest.id},f.ethan.credential);
+  await f.leaveMessage(f.ethan);
+  assert.equal(f.alerts.length,11);
+  await f.json('receivedMessagePlayed',{messageID:next.id},f.ethan.credential);
+  await f.leaveMessage(f.ethan);
+  assert.equal(f.alerts.length,11,'no further alerts after the token was rejected');
+  // A message whose recipient lost access can't be completed.
+  const pending=await f.json('createMessage',{mode:'audio',kind:'voicemail',to:f.sam.state.me.id,contentType:'audio/mp4',sizeBytes:1000,durationSeconds:5},f.bedside.credential);
+  f.media.upload(pending.upload);
+  await f.json('revoke',{memberID:f.sam.state.me.id},f.bedside.credential,'123456');
+  assert.equal((await f.send('completeMessage',{messageID:pending.message.id},f.bedside.credential)).status,404);
+});
+
+test('removing or leaving deletes the messages the bedside left for that device',async()=>{
+  const f=await fixture();
+  const unplayed=await f.leaveMessage(f.ethan), played=await f.leaveMessage(f.ethan), kept=await f.leaveMessage(f.sam);
+  await f.json('receivedMessagePlayed',{messageID:played.id},f.ethan.credential);
+  await f.json('revoke',{memberID:f.ethan.state.me.id},f.bedside.credential,'123456');
+  const house=`messages/${f.bedside.state.householdID}`;
+  assert.deepEqual(f.media.removed.sort(),[`${house}/${unplayed.id}.m4a`,`${house}/${played.id}.m4a`].sort());
+  assert.equal(await f.unheard(f.sam),1);
+  await f.json('leaveHousehold',{},f.sam.credential);
+  assert.ok(f.media.removed.includes(`${house}/${kept.id}.m4a`));
 });

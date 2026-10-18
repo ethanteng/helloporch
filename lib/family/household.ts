@@ -5,7 +5,7 @@ import type { VoIPRegistration } from "./push.ts";
 export type Role = "bedside" | "family";
 export type Mode = "voice" | "video";
 export type Permissions = { audio: boolean; video: boolean };
-export type Member = { voip?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone };
 export type MessageKind = "message" | "voicemail";
@@ -14,9 +14,11 @@ export type MessageMode = "audio" | "video";
  * Phone voicemails come from "phone" and are held until a caregiver releases them, or the bedside does for a
  * carrier-verified caller saved on its keypad. */
 export type InboxEntry = { id: string; from: string; fromName: string; kind: MessageKind; mode: MessageMode; contentType: string; pathname: string; durationSeconds: number; sentAt: number; deliveredAt?: number; callerNumber?: string; callerVerified?: boolean; held?: boolean };
+/** A message the bedside left for a family member who missed its call, until they play it. */
+export type OutboxEntry = { id: string; to: string; sentAt: number };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
-export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number };
+export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }

@@ -15,6 +15,7 @@ public enum CallPreferences {
     private static let silenceSecondsKey = "porch.silenceSeconds"
     private static let fallbackKey = "porch.phoneFallbackSeconds"
     private static let cameraKey = "porch.startVideoWithCamera"
+    private static let leaveMessageKey = "porch.leaveMessageWhenUnanswered"
 
     public static func disconnectAfterSilence(in defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: silenceEnabledKey)
@@ -47,4 +48,17 @@ public enum CallPreferences {
     public static func saveStartVideoWithCamera(_ enabled: Bool, in defaults: UserDefaults = .standard) {
         defaults.set(enabled, forKey: cameraKey)
     }
+
+    /// Whether the bedside records a message when a Porch call isn't answered. On unless turned off.
+    /// Calls that ring through to a regular phone use that phone's own voicemail instead.
+    public static func leaveMessageWhenUnanswered(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: leaveMessageKey) as? Bool ?? true
+    }
+
+    public static func saveLeaveMessageWhenUnanswered(_ enabled: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: leaveMessageKey)
+    }
+
+    /// Bedside messages, like family ones, can be up to two minutes long.
+    public static let messageSeconds: Double = 120
 }

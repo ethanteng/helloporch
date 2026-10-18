@@ -367,3 +367,539 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
         stop(); return "message playback stopped"
     }
 }
+
+/// The microphone, or the front camera and microphone, for one message from the bedside.
+/// Recording stops on its own at two minutes. A recording without any sound isn't kept.
+@MainActor final class BedsideMessageRecorder: NSObject, AVAudioRecorderDelegate, AVCaptureFileOutputRecordingDelegate {
+    private(set) var video: Bool
+    let previewLayer = AVCaptureVideoPreviewLayer()
+    /// The finished recording, or nil when nothing worth sending was recorded.
+    var onFinish: ((MessageRecording?) -> Void)?
+    private var audio: AVAudioRecorder?
+    private let capture = AVCaptureSession()
+    private let movie = AVCaptureMovieFileOutput()
+    private let captureQueue = DispatchQueue(label: "porch.message.capture")
+    private var rotation: NSObject?
+    private var rotationObservation: NSKeyValueObservation?
+    private var file: URL?
+    private var startedAt: Date?
+    private var heard = 0
+    private var discarding = false
+    var isRecording: Bool { startedAt != nil }
+    var elapsed: TimeInterval { startedAt.map { Date().timeIntervalSince($0) } ?? 0 }
+    /// Something louder than a quiet room was picked up, such as someone speaking.
+    var heardSound: Bool { heard >= 2 }
+
+    init(video: Bool) { self.video = video; super.init() }
+
+    struct RecorderError: LocalizedError { var errorDescription: String? { "Couldn't record a message." } }
+
+    /// Asks for access and sets up the input. Video shows its preview from here on, and becomes
+    /// audio when the camera isn't available.
+    func prepare() async throws {
+        guard await AVCaptureDevice.requestAccess(for: .audio) else { throw RecorderError() }
+        if video, await AVCaptureDevice.requestAccess(for: .video),
+           let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+           let microphone = AVCaptureDevice.default(for: .audio) {
+            try configureVideo(camera: camera, microphone: microphone)
+            let session = capture
+            await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in captureQueue.async { session.startRunning(); done.resume() } }
+        } else {
+            video = false
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("bedside-message-\(UUID().uuidString).m4a")
+            let recorder = try AVAudioRecorder(url: file, settings: [AVFormatIDKey: Int(kAudioFormatMPEG4AAC), AVSampleRateKey: 44_100, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64_000])
+            recorder.delegate = self; recorder.isMeteringEnabled = true
+            guard recorder.prepareToRecord() else { throw RecorderError() }
+            audio = recorder; self.file = file
+        }
+    }
+
+    private func configureVideo(camera: AVCaptureDevice, microphone: AVCaptureDevice) throws {
+        capture.beginConfiguration()
+        defer { capture.commitConfiguration() }
+        // The audio session belongs to LiveKit's shared handle, so calls and cues stay consistent.
+        capture.automaticallyConfiguresApplicationAudioSession = false
+        // About the size of a family phone's video message, so two minutes stays well under the limit.
+        capture.sessionPreset = capture.canSetSessionPreset(.vga640x480) ? .vga640x480 : .medium
+        for input in [try AVCaptureDeviceInput(device: camera), try AVCaptureDeviceInput(device: microphone)] {
+            guard capture.canAddInput(input) else { throw RecorderError() }
+            capture.addInput(input)
+        }
+        guard capture.canAddOutput(movie) else { throw RecorderError() }
+        capture.addOutput(movie)
+        movie.maxRecordedDuration = CMTime(seconds: CallPreferences.messageSeconds, preferredTimescale: 600)
+        previewLayer.session = capture
+        previewLayer.videoGravity = .resizeAspectFill
+        if #available(iOS 17.0, *) {
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: previewLayer)
+            rotation = coordinator
+            rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak self] coordinator, _ in
+                let angle = coordinator.videoRotationAngleForHorizonLevelPreview
+                Task { @MainActor [weak self] in
+                    guard let connection = self?.previewLayer.connection, connection.isVideoRotationAngleSupported(angle) else { return }
+                    connection.videoRotationAngle = angle
+                }
+            }
+        }
+    }
+
+    /// Before iOS 17, the preview and recording follow the screen's orientation.
+    func orient(_ orientation: UIInterfaceOrientation) {
+        if #available(iOS 17.0, *) { return }
+        let value: AVCaptureVideoOrientation
+        switch orientation {
+        case .landscapeLeft: value = .landscapeLeft
+        case .landscapeRight: value = .landscapeRight
+        case .portraitUpsideDown: value = .portraitUpsideDown
+        default: value = .portrait
+        }
+        previewLayer.connection?.videoOrientation = value
+        if !movie.isRecording { movie.connection(with: .video)?.videoOrientation = value }
+    }
+
+    func start(orientation: UIInterfaceOrientation) -> Bool {
+        guard !isRecording, !discarding else { return false }
+        if video {
+            if #available(iOS 17.0, *), let coordinator = rotation as? AVCaptureDevice.RotationCoordinator, let connection = movie.connection(with: .video) {
+                let angle = coordinator.videoRotationAngleForHorizonLevelCapture
+                if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
+            } else { orient(orientation) }
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("bedside-message-\(UUID().uuidString).mov")
+            self.file = file
+            movie.startRecording(to: file, recordingDelegate: self)
+        } else {
+            guard audio?.record(forDuration: CallPreferences.messageSeconds) == true else { return false }
+        }
+        startedAt = Date()
+        return true
+    }
+
+    /// Called a few times a second while recording.
+    func sample() {
+        guard isRecording else { return }
+        let level: Float
+        if video { level = movie.connection(with: .audio)?.audioChannels.first?.averagePowerLevel ?? -160 }
+        else { audio?.updateMeters(); level = audio?.averagePower(forChannel: 0) ?? -160 }
+        if level > -40 { heard += 1 }
+    }
+
+    /// Finishes the recording; `onFinish` receives it.
+    func stop() {
+        guard isRecording else { return }
+        if video { movie.stopRecording() } else { audio?.stop() }
+    }
+    /// Throws the recording away, whether or not it started.
+    func cancel() {
+        discarding = true; onFinish = nil
+        if isRecording { stop() } else { finish(successfully: false) }
+    }
+
+    private func finish(successfully: Bool) {
+        let duration = min(CallPreferences.messageSeconds, elapsed)
+        startedAt = nil; audio = nil; rotationObservation = nil
+        let session = capture
+        captureQueue.async { if session.isRunning { session.stopRunning() } }
+        let callback = onFinish; onFinish = nil
+        guard successfully, !discarding, let file, duration >= 2, heardSound else {
+            if let file { try? FileManager.default.removeItem(at: file) }
+            callback?(nil); return
+        }
+        callback?(MessageRecording(file: file, mode: video ? "video" : "audio", contentType: video ? "video/quicktime" : "audio/mp4", duration: duration))
+    }
+
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        Task { @MainActor [weak self] in self?.finish(successfully: flag) }
+    }
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        Task { @MainActor [weak self] in self?.finish(successfully: false) }
+    }
+    nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        // Reaching the two-minute limit, or an interruption, still leaves a complete file.
+        let finished = error == nil || (error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true
+        Task { @MainActor [weak self] in self?.finish(successfully: finished) }
+    }
+}
+
+/// Messages the bedside left for family, kept on the iPad until they're sent. Mom goes back to the
+/// clock right away, and uploads retry on their own, so a dropped connection doesn't lose a message.
+@MainActor final class BedsideOutbox: NSObject {
+    static let shared = BedsideOutbox()
+    private struct Item: Codable {
+        let id: String; let file: String; let to: String; let mode: String; let contentType: String
+        let duration: TimeInterval; let createdAt: Date
+        var attempts = 0; var retryAt = Date.distantPast
+    }
+    /// A message that still can't be sent after two days is dropped.
+    private static let giveUpSeconds: TimeInterval = 2 * 86400
+    private let folder = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
+        .appendingPathComponent("PorchOutbox", isDirectory: true)
+    private var manifest: URL { folder.appendingPathComponent("outbox.json") }
+    private var items: [Item] = []
+    private var uploaders: [String: MessageUploader] = [:]
+    private var sending = false
+    private var started = false
+
+    func start() {
+        guard !started else { return }
+        started = true
+        items = ((try? Data(contentsOf: manifest)).flatMap { try? JSONDecoder().decode([Item].self, from: $0) } ?? [])
+            .filter { FileManager.default.fileExists(atPath: file(for: $0).path) }
+        NotificationCenter.default.addObserver(self, selector: #selector(send), name: .porchFamilyChanged, object: nil)
+        send()
+    }
+    func add(_ recording: MessageRecording, to memberID: String) throws {
+        start()
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let id = UUID().uuidString.lowercased()
+        let name = "\(id).\(recording.file.pathExtension)"
+        try FileManager.default.moveItem(at: recording.file, to: folder.appendingPathComponent(name))
+        items.append(Item(id: id, file: name, to: memberID, mode: recording.mode, contentType: recording.contentType, duration: recording.duration, createdAt: Date()))
+        save(); send()
+    }
+    private func file(for item: Item) -> URL { folder.appendingPathComponent(item.file) }
+    private func save() { try? JSONEncoder().encode(items).write(to: manifest, options: .atomic) }
+
+    /// Sends the next message that's due, one at a time. Runs again after each bedside poll.
+    @objc private func send() {
+        guard !sending, PorchDevice.experience == .bedside, let credential = PorchDevice.credential(for: .bedside),
+              // Don't compete with a call for bandwidth.
+              FamilyCoordinator.shared.state?.busy != true,
+              let item = items.first(where: { $0.retryAt <= Date() }) else { return }
+        sending = true
+        let uploader = uploaders[item.id] ?? MessageUploader()
+        uploaders[item.id] = uploader
+        let recording = MessageRecording(file: file(for: item), mode: item.mode, contentType: item.contentType, duration: item.duration)
+        Task { [weak self] in
+            var failure: Error?
+            do { _ = try await uploader.send(recording, kind: "voicemail", credential: credential, to: item.to) } catch { failure = error }
+            self?.finished(item, failure)
+        }
+    }
+    private func finished(_ item: Item, _ failure: Error?) {
+        sending = false
+        let error = failure as? FamilyServiceError
+        // Sent, or refused for good: the person no longer has access, or the recording can't be accepted.
+        let refused = error?.code != "upload" && [400, 401, 403, 404, 413].contains(error?.status ?? 0)
+        if failure == nil || refused || item.createdAt.addingTimeInterval(Self.giveUpSeconds) < Date() {
+            try? FileManager.default.removeItem(at: file(for: item))
+            items.removeAll { $0.id == item.id }; uploaders[item.id] = nil
+        } else if let index = items.firstIndex(where: { $0.id == item.id }) {
+            // An expired or rejected upload starts over with a new message.
+            if error?.code == "upload" || error?.status == 409 { uploaders[item.id] = nil }
+            items[index].attempts += 1
+            items[index].retryAt = Date().addingTimeInterval(min(900, 15 * pow(2, Double(items[index].attempts - 1))))
+        }
+        save(); send()
+    }
+}
+
+/// After a Porch call isn't answered, records a message for that person the way a phone's voicemail
+/// does: a spoken prompt, a beep, then up to two minutes of audio or video, matching the call.
+/// Finishing (the button, the hang-up key or the time limit) sends it. Saying nothing sends nothing.
+final class BedsideVoicemailViewController: UIViewController {
+    enum Reason { case unanswered, unavailable }
+    var onFinish: (() -> Void)?
+    private let contact: CallContact
+    private let memberID: String
+    private let reason: Reason
+    private let recorder: BedsideMessageRecorder
+    private let staticPreview: Bool
+    private let announcer = MessageAnnouncer()
+    private let beep = PorchTonePlayer()
+    private var session: SessionRequirementHandle?
+    private enum Phase { case starting, prompting, recording, stopping, done }
+    private var phase = Phase.starting
+    private var timer: Timer?
+    private var keypad = CallTrigger()
+    private var observers: [NSObjectProtocol] = []
+    private var closing: (() -> Void)?
+    private var dismissed = false
+
+    private let previewView = UIView()
+    private let panel = UIStackView()
+    private let titleLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let timerLabel = UILabel()
+    private let recordingDot = UIImageView(image: UIImage(systemName: "record.circle.fill"))
+    private lazy var timerRow = UIStackView(arrangedSubviews: [recordingDot, timerLabel])
+    /// Their photo, or a microphone, while recording audio. Video shows the camera instead.
+    private lazy var identity: UIImageView = RecipientAppearance.photo(contact.photoData) != nil
+        ? RecipientAppearance.photoView(contact.photoData) : UIImageView(image: UIImage(systemName: "mic.fill"))
+    private let hintLabel = UILabel()
+    private let sendButton = UIButton(type: .system)
+    private let cancelButton = UIButton(type: .system)
+    private let controls = UIStackView()
+    private lazy var centered = panel.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor, constant: -60)
+    private lazy var atTop = panel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24)
+
+    override var canBecomeFirstResponder: Bool { true }
+    override var prefersStatusBarHidden: Bool { true }
+
+    init(contact: CallContact, memberID: String, mode: NativeCall.Mode, reason: Reason, staticPreview: Bool = false) {
+        self.contact = contact; self.memberID = memberID; self.reason = reason; self.staticPreview = staticPreview
+        recorder = BedsideMessageRecorder(video: mode == .video)
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .fullScreen; isModalInPresentation = true
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(contact:memberID:mode:reason:)") }
+
+    private var reasonText: String { BedsideText.string(reason == .unanswered ? "%@ didn't answer." : "%@ isn't available right now.", contact.name) }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        overrideUserInterfaceStyle = .dark; view.backgroundColor = PorchStyle.night
+        let large = UIDevice.current.userInterfaceIdiom == .pad
+        previewView.layer.addSublayer(recorder.previewLayer)
+        previewView.isHidden = true; previewView.translatesAutoresizingMaskIntoConstraints = false
+        previewView.accessibilityLabel = BedsideText.string("Your camera preview")
+        view.addSubview(previewView)
+        titleLabel.text = BedsideText.string("Leave a message for %@", contact.name)
+        titleLabel.font = PorchStyle.font(large ? 60 : 36, weight: .semibold)
+        statusLabel.text = "\(reasonText)\n\(BedsideText.string("Speak after the beep."))"
+        statusLabel.font = PorchStyle.font(large ? 38 : 26)
+        timerLabel.font = .monospacedDigitSystemFont(ofSize: large ? 64 : 44, weight: .semibold)
+        hintLabel.font = PorchStyle.font(large ? 32 : 22)
+        for label in [titleLabel, statusLabel, timerLabel, hintLabel] {
+            label.textColor = label === hintLabel ? PorchStyle.nightSecondary : PorchStyle.nightText
+            label.textAlignment = .center; label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true
+        }
+        statusLabel.accessibilityTraits.insert(.updatesFrequently)
+        recordingDot.tintColor = .systemRed
+        recordingDot.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: large ? 48 : 32)
+        timerRow.spacing = 12; timerRow.alignment = .center
+        timerRow.isHidden = true
+        if RecipientAppearance.photo(contact.photoData) != nil {
+            identity.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([identity.widthAnchor.constraint(equalToConstant: large ? 240 : 160), identity.heightAnchor.constraint(equalTo: identity.widthAnchor)])
+        } else {
+            identity.tintColor = PorchStyle.nightText
+            identity.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: large ? 120 : 80)
+            identity.contentMode = .scaleAspectFit
+        }
+        panel.axis = .vertical; panel.spacing = 16; panel.alignment = .center
+        for subview in [titleLabel, statusLabel, timerRow, identity] { panel.addArrangedSubview(subview) }
+        panel.setCustomSpacing(32, after: timerRow)
+        panel.isLayoutMarginsRelativeArrangement = true
+        panel.directionalLayoutMargins = .init(top: 20, leading: 24, bottom: 20, trailing: 24)
+        panel.layer.cornerRadius = 24; panel.layer.cornerCurve = .continuous
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(panel)
+
+        configure(sendButton, title: "Send message", symbol: "paperplane.fill", color: UIColor(red: 0.18, green: 0.5, blue: 0.34, alpha: 1), size: large ? 40 : 28)
+        configure(cancelButton, title: "Don't send", symbol: "xmark", color: PorchStyle.nightSurface, size: large ? 40 : 28)
+        sendButton.accessibilityIdentifier = "voicemail.send"; cancelButton.accessibilityIdentifier = "voicemail.cancel"
+        sendButton.isEnabled = false
+        sendButton.addAction(UIAction { [weak self] _ in self?.finish(send: true) }, for: .touchUpInside)
+        cancelButton.addAction(UIAction { [weak self] _ in self?.finish(send: false) }, for: .touchUpInside)
+        let buttons = UIStackView(arrangedSubviews: [cancelButton, sendButton])
+        buttons.spacing = 16; buttons.distribution = .fillEqually
+        [hintLabel, buttons].forEach { controls.addArrangedSubview($0) }
+        controls.axis = .vertical; controls.spacing = 12
+        controls.layer.cornerRadius = 24; controls.layer.cornerCurve = .continuous
+        controls.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(controls)
+        let slots = (try? CallSlots.load()) ?? CallSlots()
+        hintLabel.text = slots.digit(for: .callControl).map { BedsideText.string("Press %d when you're finished.", $0) }
+        hintLabel.isHidden = hintLabel.text == nil
+
+        let guide = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            previewView.leadingAnchor.constraint(equalTo: view.leadingAnchor), previewView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            previewView.topAnchor.constraint(equalTo: view.topAnchor), previewView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            panel.topAnchor.constraint(greaterThanOrEqualTo: guide.topAnchor, constant: 24),
+            panel.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            panel.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
+            panel.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
+            panel.widthAnchor.constraint(lessThanOrEqualToConstant: 860),
+            panel.bottomAnchor.constraint(lessThanOrEqualTo: controls.topAnchor, constant: -24),
+            controls.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 24),
+            controls.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -24),
+            controls.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -32),
+            sendButton.heightAnchor.constraint(greaterThanOrEqualToConstant: large ? 112 : 80),
+        ])
+        centered.priority = .defaultHigh; centered.isActive = true
+        BedsideText.applyAccessibilityLanguage(to: view)
+        #if DEBUG
+        if staticPreview {
+            phase = .recording; sendButton.isEnabled = true; timerRow.isHidden = false
+            statusLabel.text = BedsideText.string("Recording your message…"); timerLabel.text = "0:12 / 2:00"
+            if recorder.video { previewView.backgroundColor = PorchStyle.nightSecondary; showCamera() }
+            return
+        }
+        #endif
+        // Like a call, the message ends when Porch leaves the screen; what was said is still sent.
+        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.interrupt(then: {}) }
+        })
+    }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        recorder.previewLayer.frame = previewView.bounds
+        if let orientation = view.window?.windowScene?.interfaceOrientation { recorder.orient(orientation) }
+    }
+
+    /// Video shows Mom her camera, with the text at the top and the controls on dark panels, like a video call.
+    private func showCamera() {
+        previewView.isHidden = false; identity.isHidden = true
+        for overlay in [panel, controls] { overlay.backgroundColor = UIColor.black.withAlphaComponent(0.65) }
+        controls.isLayoutMarginsRelativeArrangement = true
+        controls.directionalLayoutMargins = .init(top: 12, leading: 12, bottom: 12, trailing: 12)
+        centered.isActive = false; atTop.isActive = true
+        view.setNeedsLayout()
+    }
+
+    private func configure(_ button: UIButton, title: String, symbol: String, color: UIColor, size: CGFloat) {
+        var config = UIButton.Configuration.filled()
+        config.title = BedsideText.string(title)
+        config.image = UIImage(systemName: symbol)
+        config.imagePadding = 12
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: size * 0.8)
+        config.baseBackgroundColor = color; config.baseForegroundColor = .white
+        config.cornerStyle = .large
+        config.contentInsets = .init(top: 20, leading: 20, bottom: 20, trailing: 20)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(size, weight: .semibold); return attributes
+        }
+        button.configuration = config
+        button.titleLabel?.numberOfLines = 0
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        keypad.resetKeys(); becomeFirstResponder()
+        guard phase == .starting, !staticPreview else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                // Speech, the beep and recording share LiveKit's session; releasing it never interrupts a call.
+                self.session = try AudioManager.shared.audioSession.acquire(requirement: .playbackAndRecording)
+                try await self.recorder.prepare()
+            } catch {
+                self.complete(BedsideText.string("Couldn't record a message.")); return
+            }
+            guard self.phase == .starting else { self.recorder.cancel(); return }
+            if self.recorder.video { self.showCamera() }
+            self.phase = .prompting
+            let prompt = self.reason == .unanswered ? "%@ didn't answer. Please leave a message after the beep." : "%@ isn't available right now. Please leave a message after the beep."
+            self.announcer.announce(BedsideText.string(prompt, self.contact.name)) { [weak self] in self?.beepThenRecord() }
+        }
+    }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); resignFirstResponder() }
+
+    private func beepThenRecord() {
+        guard phase == .prompting else { return }
+        beep.play(.beep)
+        _ = Timer.scheduledTimer(withTimeInterval: CallTone.beep.duration + 0.1, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.record() }
+        }
+    }
+    private func record() {
+        guard phase == .prompting else { return }
+        recorder.onFinish = { [weak self] recording in self?.recorded(recording) }
+        guard recorder.start(orientation: view.window?.windowScene?.interfaceOrientation ?? .landscapeRight) else {
+            complete(BedsideText.string("Couldn't record a message.")); return
+        }
+        phase = .recording
+        sendButton.isEnabled = true
+        statusLabel.text = BedsideText.string("Recording your message…")
+        timerRow.isHidden = false
+        updateTimer()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.recorder.sample(); self?.updateTimer() }
+        }
+    }
+    private func updateTimer() {
+        let seconds = Int(min(CallPreferences.messageSeconds, recorder.elapsed))
+        timerLabel.text = String(format: "%d:%02d / %d:%02d", seconds / 60, seconds % 60, Int(CallPreferences.messageSeconds) / 60, Int(CallPreferences.messageSeconds) % 60)
+    }
+
+    /// Sending keeps what was recorded; before the beep, or with Don't send, nothing is kept.
+    private func finish(send: Bool) {
+        switch phase {
+        case .starting, .prompting:
+            phase = .done; announcer.stop(); beep.stop(); recorder.cancel()
+            complete(BedsideText.string("Message not sent."))
+        case .recording:
+            phase = .stopping; timer?.invalidate(); sendButton.isEnabled = false; cancelButton.isEnabled = false
+            if send { recorder.stop() } else { recorder.cancel(); complete(BedsideText.string("Message not sent.")) }
+        case .stopping, .done: break
+        }
+    }
+    private func recorded(_ recording: MessageRecording?) {
+        guard phase != .done else { return }
+        phase = .done; timer?.invalidate()
+        guard let recording else { complete(BedsideText.string("No message was recorded.")); return }
+        do {
+            try BedsideOutbox.shared.add(recording, to: memberID)
+            complete(BedsideText.string("Your message is on its way to %@.", contact.name), speak: true)
+        } catch {
+            try? FileManager.default.removeItem(at: recording.file)
+            complete(BedsideText.string("Couldn't record a message."))
+        }
+    }
+    /// Shows (and for a sent message, says) how it ended, then returns to the clock.
+    private func complete(_ text: String, speak: Bool = false) {
+        phase = .done; timer?.invalidate()
+        sendButton.isEnabled = false; cancelButton.isEnabled = false
+        statusLabel.text = text
+        timerRow.isHidden = true
+        if let next = closing { closing = nil; close(animated: false, then: next); return }
+        let later = { [weak self] in
+            _ = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.close() } }
+        }
+        if speak { announcer.announce(text, completion: later) } else { later() }
+    }
+    /// Closes at once for an incoming call or leaving Porch, keeping anything already said.
+    func interrupt(then next: @escaping () -> Void) {
+        switch phase {
+        case .recording, .stopping:
+            closing = next
+            if phase == .recording { finish(send: true) }
+            // The call mustn't wait on a recorder that never reports back.
+            _ = Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, let next = self.closing else { return }
+                    self.closing = nil; self.phase = .done; self.close(animated: false, then: next)
+                }
+            }
+        case .starting, .prompting: phase = .done; announcer.stop(); beep.stop(); recorder.cancel(); close(animated: false, then: next)
+        case .done: close(animated: false, then: next)
+        }
+    }
+    private func close(animated: Bool = true, then next: (() -> Void)? = nil) {
+        guard !dismissed else { next?(); return }
+        dismissed = true
+        timer?.invalidate(); announcer.stop(); beep.stop()
+        observers.forEach { NotificationCenter.default.removeObserver($0) }; observers = []
+        try? session?.release(); session = nil
+        let finished = onFinish
+        if presentingViewController != nil { dismiss(animated: animated) { finished?(); next?() } } else { finished?(); next?() }
+    }
+
+    /// The hang-up key finishes the message, as hanging up does on a phone: before the beep, nothing is sent.
+    fileprivate func finishFromKeypad() { finish(send: true) }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var unhandled = Set<UIPress>()
+        for press in presses {
+            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
+                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            if keypad.keyDown(Int(key.keyCode.rawValue)), (try? CallSlots.load())?.action(for: digit) == .callControl { finishFromKeypad() }
+        }
+        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
+    }
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses { if let key = press.key { keypad.keyUp(Int(key.keyCode.rawValue)) } }
+        super.pressesEnded(presses, with: event)
+    }
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        keypad.resetKeys(); super.pressesCancelled(presses, with: event)
+    }
+}
+
+extension BedsideVoicemailViewController: Cell2JackDigitReceiving {
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        guard (try? CallSlots.load())?.action(for: digit) == .callControl else { return "message key ignored" }
+        finishFromKeypad(); return "message finished"
+    }
+}

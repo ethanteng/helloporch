@@ -31,6 +31,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let starting: Bool
         let messages: Bool
         let held: Int
+        let unheard: Int
     }
     private var displayed: Presentation?
     private lazy var invitationButton = UIBarButtonItem(title: "Invitation", style: .plain, target: self, action: #selector(newInvitation))
@@ -44,9 +45,25 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         hideKeyboardControl()
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPushStatus), name: .porchSystemCallChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(openReceivedMessages), name: .porchOpenReceivedMessages, object: nil)
         refresh()
     }
+    @objc private func openReceivedMessages() {
+        guard PorchDevice.credential(for: .family) != nil, let navigationController else { return }
+        if navigationController.presentedViewController != nil { navigationController.dismiss(animated: false) }
+        navigationController.popToRootViewController(animated: false)
+        navigationController.pushViewController(ReceivedMessagesViewController(), animated: true)
+    }
     @objc private func refreshPushStatus() { displayed = nil; refresh() }
+    #if DEBUG
+    private var previewShown = false
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !previewShown else { return }
+        previewShown = true
+        if ProcessInfo.processInfo.arguments.contains("--preview-received-messages") { openReceivedMessages() }
+    }
+    #endif
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func newInvitation() { showPairing() }
     @objc private func showDeviceSettings() {
@@ -90,7 +107,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         guard isViewLoaded else { return }
         let coordinator = FamilyCoordinator.shared
         let state = coordinator.state
-        let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0)
+        let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0)
         guard next != displayed else { return }
         displayed = next
         // Once paired, joining another family lives in Device settings so it isn't done by accident.
@@ -112,6 +129,14 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             review.addAction(UIAction { [weak self] _ in self?.openCaregiverMode() }, for: .touchUpInside)
             people.addArrangedSubview(review)
         }
+        // Left by the bedside when its call to this phone wasn't answered.
+        let from = state.people.first { $0.role == .bedside }?.name ?? state.householdName
+        if next.unheard > 0 {
+            let play = PorchStyle.button(next.unheard == 1 ? "New message from \(from)" : "\(next.unheard) new messages from \(from)", symbol: "envelope.badge.fill")
+            play.accessibilityIdentifier = "family.newMessages"
+            play.addAction(UIAction { [weak self] _ in self?.openReceivedMessages() }, for: .touchUpInside)
+            people.addArrangedSubview(play)
+        }
         for person in state.people {
             let availability = PorchStyle.label(person.online ? (state.busy ? "On a call" : "Porch is open") : "Porch isn't ready", size: 17)
             let audio = PorchStyle.button("Audio call", symbol: "phone.fill")
@@ -131,6 +156,10 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             }
             people.addArrangedSubview(section(person.name, views: views))
         }
+        let received = PorchStyle.button("Messages from \(from)", symbol: "envelope.open", filled: false)
+        received.accessibilityIdentifier = "family.receivedMessages"
+        received.addAction(UIAction { [weak self] _ in self?.openReceivedMessages() }, for: .touchUpInside)
+        people.addArrangedSubview(received)
         let sent = PorchStyle.button("Your messages", symbol: "tray.full", filled: false)
         sent.addAction(UIAction { [weak self] _ in self?.navigationController?.pushViewController(SentMessagesViewController(), animated: true) }, for: .touchUpInside)
         people.addArrangedSubview(sent)

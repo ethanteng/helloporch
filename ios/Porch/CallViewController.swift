@@ -199,6 +199,7 @@ final class CallViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(restyleDisplay), name: UIAccessibility.reduceTransparencyStatusDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(updateMessages), name: .porchMessagesReady, object: nil)
         BedsideMessages.shared.start()
+        BedsideOutbox.shared.start()
         updateDisplay(); resetClock()
     }
 
@@ -238,6 +239,9 @@ final class CallViewController: UIViewController {
         else if args.contains("--preview-setup") { showSetup() }
         else if args.contains("--preview-people") { showPeople() }
         else if args.contains("--preview-display-settings") { present(PorchStyle.navigation(BedsideDisplaySettingsViewController()), animated: false) }
+        else if args.contains("--preview-voicemail"), let person = slots.contact(for: 1) {
+            present(BedsideVoicemailViewController(contact: person, memberID: UUID().uuidString, mode: args.contains("--preview-video") ? .video : .voice, reason: .unanswered, staticPreview: true), animated: false)
+        }
         #endif
     }
 
@@ -479,7 +483,9 @@ final class CallViewController: UIViewController {
                 }
                 Cell2JackKeypad.shared.record(["kind": "callSessionCreated"])
                 guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
-                self.present(try NativeCallViewController.paired(session, contact: contact), animated: true)
+                let screen = try NativeCallViewController.paired(session, contact: contact)
+                if let memberID { screen.onUnanswered = { [weak self] in self?.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unanswered) } }
+                self.present(screen, animated: true)
             } catch {
                 if self.cancelOpening { return }
                 Cell2JackKeypad.shared.record(["kind": "callStartFailed", "error": error.localizedDescription])
@@ -488,9 +494,21 @@ final class CallViewController: UIViewController {
                 if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
                     do { self.present(try NativeCallViewController.phoneFallback(contact), animated: true) }
                     catch { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
+                } else if let memberID, (error as? FamilyServiceError)?.code == "offline", CallPreferences.leaveMessageWhenUnanswered() {
+                    // Their Porch app can't ring and there's no phone to try: leave a message, as for a missed call.
+                    self.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unavailable)
                 } else { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
             }
         }
+    }
+
+    /// A Porch call that wasn't answered, and didn't ring through to a regular phone, records a message.
+    private func leaveMessage(for contact: CallContact, memberID: String, mode: NativeCall.Mode, reason: BedsideVoicemailViewController.Reason) {
+        guard CallPreferences.leaveMessageWhenUnanswered(), presentedViewController == nil,
+              view.window?.windowScene?.activationState == .foregroundActive else { return }
+        let screen = BedsideVoicemailViewController(contact: contact, memberID: memberID, mode: mode, reason: reason)
+        screen.onFinish = { [weak self] in self?.resume() }
+        present(screen, animated: true)
     }
 
     @objc private func heldSetup(_ gesture: UILongPressGestureRecognizer) {

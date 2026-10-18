@@ -4,8 +4,15 @@ import UIKit
 final class PorchApp: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         SystemIncomingCalls.shared.start()
+        FamilyMessageAlerts.shared.start()
         return true
     }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        FamilyMessageAlerts.shared.received(deviceToken: deviceToken)
+    }
+    // Without notifications, messages still show when Porch is opened.
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
 
     func application(_ application: UIApplication,
                      configurationForConnecting session: UISceneSession,
