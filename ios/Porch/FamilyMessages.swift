@@ -2,6 +2,7 @@ import UIKit
 import AVFoundation
 import AVKit
 import AudioToolbox
+import UserNotifications
 import PorchCore
 
 struct MessageRecording { let file: URL; let mode: String; let contentType: String; let duration: TimeInterval; var poster: UIImage? = nil }
@@ -72,11 +73,14 @@ final class MessagePosterView: UIControl {
 @MainActor final class MessageUploader {
     private var pending: (file: URL, message: SentMessage, target: MessageUploadTarget, uploaded: Bool)?
 
-    func send(_ recording: MessageRecording, kind: String, credential: FamilyCredential) async throws -> SentMessage {
+    /// `to` names the family member a bedside message is for; family devices always send to the bedside.
+    func send(_ recording: MessageRecording, kind: String, credential: FamilyCredential, to recipient: String? = nil) async throws -> SentMessage {
         let service = FamilyService(credential)
         if pending?.file != recording.file || (pending?.uploaded == false && (pending?.target.expiresAt ?? 0) < Date().timeIntervalSince1970 + 60) {
             let size = try recording.file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            let created = try await service.send("createMessage", ["mode": recording.mode, "kind": kind, "contentType": recording.contentType, "sizeBytes": size, "durationSeconds": max(1, recording.duration)])
+            var values: [String: Any] = ["mode": recording.mode, "kind": kind, "contentType": recording.contentType, "sizeBytes": size, "durationSeconds": max(1, recording.duration)]
+            if let recipient { values["to"] = recipient }
+            let created = try await service.send("createMessage", values)
             guard let message = created.message, let target = created.upload else { throw FamilyServiceError(message: "Couldn't send the message. Try again.", status: 503) }
             pending = (recording.file, message, target, false)
         }
@@ -88,7 +92,7 @@ final class MessagePosterView: UIControl {
             for (field, value) in current.target.headers { request.setValue(value, forHTTPHeaderField: field) }
             let (_, response) = try await URLSession.shared.upload(for: request, fromFile: recording.file)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<300).contains(status) else { throw FamilyServiceError(message: "The upload didn't finish. Check the connection and try again.", status: status) }
+            guard (200..<300).contains(status) else { throw FamilyServiceError(message: "The upload didn't finish. Check the connection and try again.", status: status, code: "upload") }
             pending?.uploaded = true
         }
         let sent = try await service.send("completeMessage", ["messageID": current.message.id]).message ?? current.message
@@ -505,5 +509,180 @@ final class MessageQueueViewController: CaregiverFormViewController {
             Task { [weak self] in await self?.change("removeMessage", message) }
         })
         present(alert, animated: true)
+    }
+}
+
+extension Notification.Name {
+    /// A message notification was tapped: show the messages the bedside left for this phone.
+    static let porchOpenReceivedMessages = Notification.Name("porch.messages.openReceived")
+}
+
+/// Ordinary notifications for messages the bedside leaves when this phone misses its call, and the
+/// app badge with how many haven't been played. Calls keep ringing through VoIP pushes and CallKit.
+@MainActor final class FamilyMessageAlerts: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = FamilyMessageAlerts()
+    private var token: String?
+    private var registered: (credential: String, token: String?)?
+    private var task: Task<Void, Never>?
+
+    func start() {
+        UNUserNotificationCenter.current().delegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
+    }
+
+    /// Asks once for permission on a paired family phone, then registers with APNs. A device used as
+    /// the bedside stops receiving its family pairing's message notifications.
+    func register() {
+        #if DEBUG
+        // Automated simulator checks don't stop at the permission prompt.
+        if ProcessInfo.processInfo.arguments.contains("--family-silent") { return }
+        #endif
+        guard PorchDevice.experience == .family, PorchDevice.credential(for: .family) != nil else { send(nil); return }
+        Task {
+            let center = UNUserNotificationCenter.current()
+            var settings = await center.notificationSettings()
+            if settings.authorizationStatus == .notDetermined, UIApplication.shared.applicationState == .active {
+                _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+                settings = await center.notificationSettings()
+            }
+            if [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) { UIApplication.shared.registerForRemoteNotifications() }
+            else { send(nil) }
+        }
+    }
+    func received(deviceToken: Data) {
+        token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        send(PorchDevice.experience == .family ? token : nil)
+    }
+    private func send(_ token: String?) {
+        guard let credential = PorchDevice.credential(for: .family), registered?.credential != credential.credential || registered?.token != token else { return }
+        let environment = Bundle.main.object(forInfoDictionaryKey: "PorchAPNsEnvironment") as? String ?? "production"
+        let previous = task
+        task = Task { [weak self] in
+            await previous?.value
+            let values: [String: Any] = token.map { ["token": $0, "environment": environment] } ?? ["token": NSNull()]
+            if (try? await FamilyService(credential).send("registerAlerts", values)) != nil { self?.registered = (credential.credential, token) }
+        }
+    }
+    @objc private func familyChanged() {
+        guard PorchDevice.experience == .family, let state = FamilyCoordinator.shared.state, state.me.role == .family else { return }
+        let count = state.newMessages ?? 0
+        if #available(iOS 16.0, *) { UNUserNotificationCenter.current().setBadgeCount(count) }
+        else { UIApplication.shared.applicationIconBadgeNumber = count }
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        await MainActor.run { NotificationCenter.default.post(name: .porchOpenReceivedMessages, object: nil) }
+    }
+}
+
+/// Messages the bedside left for this phone when its call wasn't answered, newest first.
+/// Playing one marks it played; each can be played again while the recording is kept (90 days).
+final class ReceivedMessagesViewController: CaregiverFormViewController {
+    private let list = UIStackView()
+    private var loading = false
+    private var opening = false
+    private var posterTask: Task<Void, Never>?
+    private let footer = PorchStyle.label("", size: 15)
+    /// The bedside's name, from the family snapshot or the messages themselves, whichever loads first.
+    private var loadedName: String?
+    private var from: String { FamilyCoordinator.shared.state?.people.first(where: { $0.role == .bedside })?.name ?? loadedName ?? "Your loved one" }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        list.axis = .vertical; list.spacing = 20
+        form.addArrangedSubview(list)
+        form.addArrangedSubview(footer)
+        hideKeyboardControl()
+        name()
+        NotificationCenter.default.addObserver(self, selector: #selector(name), name: .porchFamilyChanged, object: nil)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadMessages))
+    }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    @objc private func name() {
+        title = "Messages from \(from)"
+        footer.text = "\(from)'s Porch records a message when a Porch call to you isn't answered. Calls that ring your regular phone go to its voicemail instead. Recordings are kept for 90 days."
+    }
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
+    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
+    @objc private func reloadMessages() {
+        guard !loading, let credential = PorchDevice.credential(for: .family) else { return }
+        loading = true
+        Task { [weak self] in
+            defer { self?.loading = false }
+            do {
+                let messages = try await FamilyService(credential).send("listMessages").received ?? []
+                if let sender = messages.first?.fromName { self?.loadedName = sender; self?.name() }
+                self?.render(messages)
+            } catch {
+                self?.show([PorchStyle.label(error.localizedDescription)])
+            }
+        }
+    }
+    private func show(_ views: [UIView]) {
+        list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
+        views.forEach { list.addArrangedSubview($0) }
+    }
+    private func render(_ messages: [ReceivedMessage]) {
+        guard !messages.isEmpty else { show([PorchStyle.label("No messages from \(from) yet.")]); return }
+        var missing: [(String, MessagePosterView)] = []
+        show(messages.map { (message: ReceivedMessage) -> UIView in
+            var views: [UIView] = []
+            let cached = message.mode == "video" ? MessagePosters.cached(message.id) : nil
+            if message.mode == "video", message.available {
+                let poster = MessagePosterView(image: cached, playable: true)
+                poster.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
+                if cached == nil { missing.append((message.id, poster)) }
+                views.append(poster)
+            }
+            if message.available {
+                let play = PorchStyle.button(message.mode == "video" ? "Watch" : "Listen", symbol: "play.fill", filled: message.state == "queued")
+                play.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
+                views.append(play)
+            }
+            let type = message.mode == "video" ? "Video message" : "Audio message"
+            return section("\(message.state == "queued" ? "New · " : "")\(type) · \(MessageText.length(message.durationSeconds))", detail: status(message), views: views)
+        })
+        loadPosters(missing)
+    }
+    private func status(_ message: ReceivedMessage) -> String {
+        let left = "Left \(MessageText.when(message.sentAt))"
+        switch message.state {
+        case "queued": return message.available ? "\(left). Not played yet." : "\(left). It was deleted after 90 days."
+        case "played": return "\(left). Played \(MessageText.when(message.playedAt))." + (message.available ? "" : " The recording was deleted after 90 days.")
+        default: return "\(left). Not played within 90 days, so it was deleted."
+        }
+    }
+    private func play(_ message: ReceivedMessage) {
+        guard !opening, let credential = PorchDevice.credential(for: .family) else { return }
+        opening = true
+        Task { [weak self] in
+            defer { self?.opening = false }
+            do {
+                let service = FamilyService(credential)
+                guard let media = try await service.send("receivedMessageMedia", ["messageID": message.id]).media,
+                      let url = URL(string: media.url), let self else { return }
+                playMessage(from: url, on: self)
+                if message.state == "queued" {
+                    _ = try? await service.send("receivedMessagePlayed", ["messageID": message.id])
+                    self.reloadMessages()
+                }
+            } catch { if let self { showPorchError(error, on: self) } }
+        }
+    }
+    /// Makes missing preview frames one at a time; each is kept, so this happens once per video.
+    private func loadPosters(_ missing: [(String, MessagePosterView)]) {
+        posterTask?.cancel()
+        guard !missing.isEmpty, let credential = PorchDevice.credential(for: .family) else { return }
+        posterTask = Task {
+            for (id, poster) in missing {
+                guard !Task.isCancelled else { return }
+                guard let media = try? await FamilyService(credential).send("receivedMessageMedia", ["messageID": id]).media,
+                      let url = URL(string: media.url), let image = await MessagePosters.frame(from: url) else { continue }
+                MessagePosters.save(image, for: id)
+                poster.image = image
+            }
+        }
     }
 }

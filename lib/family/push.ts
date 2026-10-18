@@ -24,8 +24,8 @@ export function apnsAuthorization(now = Math.floor(Date.now() / 1000)) {
   return jwt;
 }
 
-export async function sendVoIPPush(device: VoIPRegistration, call: IncomingCallPush, createSession: typeof connect = connect): Promise<PushResult> {
-  if (!voipConfigured()) return { delivered: false };
+type APNsRequest = { topic: string; pushType: "voip" | "alert"; id: string; expiration: number; payload: object };
+function sendAPNs(device: VoIPRegistration, push: APNsRequest, createSession: typeof connect): Promise<PushResult> {
   const authorization = apnsAuthorization();
   return new Promise(resolve => {
     const client = createSession(device.environment === "sandbox" ? "https://api.sandbox.push.apple.com" : "https://api.push.apple.com");
@@ -37,8 +37,8 @@ export async function sendVoIPPush(device: VoIPRegistration, call: IncomingCallP
     const timer = setTimeout(() => finish({ delivered: false }), 5000);
     client.on("error", () => finish({ delivered: false }));
     const request = client.request({ ":method": "POST", ":path": `/3/device/${device.token}`,
-      authorization: `bearer ${authorization}`, "apns-topic": `${process.env.APNS_BUNDLE_ID}.voip`,
-      "apns-push-type": "voip", "apns-priority": "10", "apns-expiration": "0", "apns-id": call.callID });
+      authorization: `bearer ${authorization}`, "apns-topic": push.topic,
+      "apns-push-type": push.pushType, "apns-priority": "10", "apns-expiration": String(push.expiration), "apns-id": push.id });
     let status = 0, body = "";
     request.on("response", headers => { status = Number(headers[":status"]); });
     request.on("data", chunk => { body += chunk; });
@@ -48,8 +48,21 @@ export async function sendVoIPPush(device: VoIPRegistration, call: IncomingCallP
       try { reason = JSON.parse(body).reason; } catch { /* success has no body */ }
       finish({ delivered: status === 200, invalidToken: status === 410 || reason === "BadDeviceToken" || reason === "DeviceTokenNotForTopic" });
     });
-    // VoIP pushes only announce real incoming calls. Cancellation uses the live
-    // signaling poll; never send a second VoIP push to cancel or update a call.
-    request.end(JSON.stringify({ aps: {}, ...call }));
+    request.end(JSON.stringify(push.payload));
   });
+}
+
+export async function sendVoIPPush(device: VoIPRegistration, call: IncomingCallPush, createSession: typeof connect = connect): Promise<PushResult> {
+  if (!voipConfigured()) return { delivered: false };
+  // VoIP pushes only announce real incoming calls. Cancellation uses the live
+  // signaling poll; never send a second VoIP push to cancel or update a call.
+  return sendAPNs(device, { topic: `${process.env.APNS_BUNDLE_ID}.voip`, pushType: "voip", id: call.callID, expiration: 0, payload: { aps: {}, ...call } }, createSession);
+}
+
+/** A visible notification on a family phone. APNs keeps it for a week if the phone is off. */
+export type MessageAlert = { messageID: string; title: string; body: string; badge: number };
+export async function sendAlertPush(device: VoIPRegistration, alert: MessageAlert, createSession: typeof connect = connect, now = Math.floor(Date.now() / 1000)): Promise<PushResult> {
+  if (!voipConfigured()) return { delivered: false };
+  return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: alert.messageID, expiration: now + 7 * 86400,
+    payload: { aps: { alert: { title: alert.title, body: alert.body }, sound: "default", badge: alert.badge, "thread-id": "porch-messages" }, messageID: alert.messageID } }, createSession);
 }

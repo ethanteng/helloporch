@@ -12,6 +12,7 @@ final class CallPreferencesViewController: CaregiverFormViewController {
     /// The household's saved wait, once the server has sent it; the stepper follows it until changed here.
     private var savedVoicemailSeconds: Int?
     private var voicemailEdited = false
+    private let leaveMessage = UISwitch()
     private let testTone = PorchTonePlayer()
     private let testAnnouncement = PorchIncomingAudio()
     private let soundStatus = PorchStyle.label("", size: 16)
@@ -32,6 +33,9 @@ final class CallPreferencesViewController: CaregiverFormViewController {
         row.spacing = 20
         form.addArrangedSubview(section("Wait before phone fallback", detail: "How long to try Porch before calling their regular phone. Applies to all people with phone fallback enabled on this iPad.", views: [row, PorchStyle.label("Choose 5 seconds to 2 minutes. The default is 20 seconds. Phone fallback is always voice only.", size: 16)]))
         form.addArrangedSubview(section("While dialing", detail: "You'll hear a familiar ringing tone while waiting for an answer. It stops when the call connects or ends. Adjust the sound with the iPad's volume buttons.", views: []))
+        leaveMessage.isOn = CallPreferences.leaveMessageWhenUnanswered()
+        leaveMessage.accessibilityIdentifier = "calls.leaveMessage"
+        form.addArrangedSubview(group("When no one answers", footer: "If a Porch call isn't answered, is declined, or their Porch app isn't available, Porch says so, beeps and records a message for that person, like voicemail: audio for a voice call, video for a video call, up to two minutes. Pressing the hang-up key or Send message sends it; if nothing is said, nothing is sent. They get a notification and can play it in their Porch app. Calls that ring through to a regular phone use that phone's own voicemail instead.", rows: [toggleRow("Leave a message", leaveMessage)]))
         voicemailStepper.minimumValue = Double(CallPreferences.voicemailRange.lowerBound)
         voicemailStepper.maximumValue = Double(CallPreferences.voicemailRange.upperBound)
         voicemailStepper.stepValue = 5
@@ -106,6 +110,7 @@ final class CallPreferencesViewController: CaregiverFormViewController {
 
     @objc private func save() {
         CallPreferences.saveFallbackSeconds(Int(stepper.value))
+        CallPreferences.saveLeaveMessageWhenUnanswered(leaveMessage.isOn)
         let seconds = Int(voicemailStepper.value)
         guard let saved = savedVoicemailSeconds, seconds != saved, let credential = PorchDevice.credential(for: .bedside) else {
             navigationController?.popViewController(animated: true); return

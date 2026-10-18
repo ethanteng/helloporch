@@ -59,6 +59,13 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     public func format(_ english: String, arguments: [CVarArg]) -> String { String(format: text(english), locale: locale, arguments: arguments) }
 
     private static let simplifiedStrings: [String: String] = [
+        "%@ didn't answer.": "%@没有接听。", "%@ isn't available right now.": "%@现在无法接听。",
+        "Leave a message for %@": "给%@留言", "Speak after the beep.": "请在嘀声后说话。", "Recording your message…": "正在录制留言…",
+        "Send message": "发送留言", "Don't send": "不发送", "Press %d when you're finished.": "说完后请按 %d。",
+        "Your message is on its way to %@.": "您的留言正在发送给%@。", "No message was recorded.": "没有录到留言。", "Message not sent.": "留言未发送。",
+        "%@ didn't answer. Please leave a message after the beep.": "%@没有接听。请在嘀声后留言。",
+        "%@ isn't available right now. Please leave a message after the beep.": "%@现在无法接听。请在嘀声后留言。",
+        "Couldn't record a message.": "无法录制留言。",
         "Play 1 message": "播放 1 则留言", "Play %d messages": "播放 %d 则留言",
         "Message from %@": "%@的留言", "Voicemail from %@": "%@的语音留言",
         "Message from %@. Sent %@.": "%@的留言，发送于%@。", "Voicemail from %@. Sent %@.": "%@的语音留言，发送于%@。",
@@ -121,6 +128,13 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     ]
 
     private static let cantoneseStrings: [String: String] = [
+        "%@ didn't answer.": "%@冇接聽。", "%@ isn't available right now.": "%@而家未能接聽。",
+        "Leave a message for %@": "留言畀%@", "Speak after the beep.": "請喺嘟一聲之後講。", "Recording your message…": "錄緊留言…",
+        "Send message": "傳送留言", "Don't send": "唔傳送", "Press %d when you're finished.": "講完請按 %d。",
+        "Your message is on its way to %@.": "您嘅留言正傳送畀%@。", "No message was recorded.": "冇錄到留言。", "Message not sent.": "留言冇傳送。",
+        "%@ didn't answer. Please leave a message after the beep.": "%@冇接聽。請喺嘟一聲之後留言。",
+        "%@ isn't available right now. Please leave a message after the beep.": "%@而家未能接聽。請喺嘟一聲之後留言。",
+        "Couldn't record a message.": "錄唔到留言。",
         "Play 1 message": "播放 1 個留言", "Play %d messages": "播放 %d 個留言",
         "Message from %@": "%@嘅留言", "Voicemail from %@": "%@嘅語音留言",
         "Message from %@. Sent %@.": "%@嘅留言，喺%@傳送。", "Voicemail from %@. Sent %@.": "%@嘅語音留言，喺%@傳送。",
@@ -183,6 +197,13 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     ]
 
     private static let spanishStrings: [String: String] = [
+        "%@ didn't answer.": "%@ no ha contestado.", "%@ isn't available right now.": "%@ no está disponible ahora.",
+        "Leave a message for %@": "Deje un mensaje para %@", "Speak after the beep.": "Hable después del pitido.", "Recording your message…": "Grabando su mensaje…",
+        "Send message": "Enviar mensaje", "Don't send": "No enviar", "Press %d when you're finished.": "Pulse %d cuando termine.",
+        "Your message is on its way to %@.": "Su mensaje se está enviando a %@.", "No message was recorded.": "No se ha grabado ningún mensaje.", "Message not sent.": "Mensaje no enviado.",
+        "%@ didn't answer. Please leave a message after the beep.": "%@ no ha contestado. Deje un mensaje después del pitido.",
+        "%@ isn't available right now. Please leave a message after the beep.": "%@ no está disponible ahora. Deje un mensaje después del pitido.",
+        "Couldn't record a message.": "No se ha podido grabar el mensaje.",
         "Play 1 message": "Reproducir 1 mensaje", "Play %d messages": "Reproducir %d mensajes",
         "Message from %@": "Mensaje de %@", "Voicemail from %@": "Mensaje de voz de %@",
         "Message from %@. Sent %@.": "Mensaje de %@. Enviado %@.", "Voicemail from %@. Sent %@.": "Mensaje de voz de %@. Enviado %@.",
@@ -245,6 +266,13 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     ]
 
     private static let traditionalStrings: [String: String] = [
+        "%@ didn't answer.": "%@沒有接聽。", "%@ isn't available right now.": "%@現在無法接聽。",
+        "Leave a message for %@": "留言給%@", "Speak after the beep.": "請在嗶聲後說話。", "Recording your message…": "正在錄製留言…",
+        "Send message": "傳送留言", "Don't send": "不要傳送", "Press %d when you're finished.": "說完後請按 %d。",
+        "Your message is on its way to %@.": "您的留言正在傳送給%@。", "No message was recorded.": "沒有錄到留言。", "Message not sent.": "留言未傳送。",
+        "%@ didn't answer. Please leave a message after the beep.": "%@沒有接聽。請在嗶聲後留言。",
+        "%@ isn't available right now. Please leave a message after the beep.": "%@現在無法接聽。請在嗶聲後留言。",
+        "Couldn't record a message.": "無法錄製留言。",
         "Play 1 message": "播放 1 則留言", "Play %d messages": "播放 %d 則留言",
         "Message from %@": "%@的留言", "Voicemail from %@": "%@的語音留言",
         "Message from %@. Sent %@.": "%@的留言，傳送於%@。", "Voicemail from %@. Sent %@.": "%@的語音留言，傳送於%@。",

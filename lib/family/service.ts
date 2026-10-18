@@ -7,11 +7,10 @@ import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, care
 import { callRoom, config, dropInAllowed, expire, FamilyError, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
-import { handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom } from "./messages.ts";
+import { handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
+import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 
-export type FamilyDependencies = InboundDependencies & { media?: MediaStore };
-
-import { sendVoIPPush, voipConfigured, type PushResult } from "./push.ts";
+export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult> };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -80,12 +79,31 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ringSeconds: ringSeconds(house),
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [] } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
-    ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}), me: publicMember(me),
+    ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}),
+    // Messages the bedside left for this family member when they missed its call.
+    ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
     invitations: me.role === "bedside" ? pendingInvites(house, now) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     call: call && (call.from === me.id || call.to === me.id) ? { ...publicCall(call), source: call.phone ? "phone" : "porch", callerName: callerName(call),
       ...(call.phone?.callerNumber ? { callerNumber: call.phone.callerNumber } : {}) } : null,
     busy: !!call && call.state !== "ended", serverTime: now };
+}
+// Tells a family member that the bedside left them a message, with their unplayed count as the badge.
+async function alertRecipient(store: FamilyStore, householdID: string, recipientID: string, message: MessageRecord, now: number, dependencies: FamilyDependencies) {
+  const raw = await store.get(`house:${householdID}`);
+  if (!raw) return;
+  const house: Household = JSON.parse(raw);
+  const recipient = house.members.find(m => m.id === recipientID && !m.revoked);
+  const registration = recipient?.alerts;
+  if (!registration) return;
+  const from = house.members.find(m => m.role === "bedside")?.name ?? house.name;
+  const length = `${Math.floor(message.durationSeconds / 60)}:${String(message.durationSeconds % 60).padStart(2, "0")}`;
+  const result = await (dependencies.sendAlert ?? sendAlertPush)(registration, { messageID: message.id, title: `${from} left you a message`,
+    body: `${message.mode === "video" ? "Video" : "Audio"} message · ${length}`, badge: unheardCount(house, recipientID, now) });
+  if (result.invalidToken) await mutate(store, householdID, current => {
+    const member = current.members.find(m => m.id === recipientID);
+    if (member?.alerts?.token === registration.token) delete member.alerts;
+  });
 }
 async function endRoom(room: string, dependencies: FamilyDependencies) {
   const configuration = config();
@@ -209,7 +227,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const raw = await store.get(`house:${auth.householdID}`);
       requireValue(raw, "This household was not found.", 404);
       const house: Household = JSON.parse(raw);
-      const result = await handleMessageAction(String(action), { store, media, now, house, me: memberFor(house, auth), input });
+      const result = await handleMessageAction(String(action), { store, media, now, house, me: memberFor(house, auth), input,
+        alert: (recipientID, message) => alertRecipient(store, house.id, recipientID, message, now, dependencies) });
       if (!caregiverAction) return callJSON(result);
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });
@@ -246,16 +265,18 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       if (action === "leaveHousehold") {
         requireValue(me.role === "family", "A bedside device can't leave its household.", 403);
-        me.revoked = true; delete me.voip; delete me.caregiver;
+        me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver;
         const call = house.call;
         if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
         return undefined;
       }
-      if (action === "registerVoIP") {
-        if (input.token === null) { delete me.voip; return undefined; }
-        requireValue(typeof input.token === "string" && /^[a-f0-9]{32,512}$/.test(input.token) && input.token.length % 2 === 0, "Invalid VoIP token.");
+      if (action === "registerVoIP" || action === "registerAlerts") {
+        // Alerts are ordinary notifications, for messages the bedside leaves; VoIP pushes only ring calls.
+        const key = action === "registerVoIP" ? "voip" : "alerts";
+        if (input.token === null) { delete me[key]; return undefined; }
+        requireValue(typeof input.token === "string" && /^[a-f0-9]{32,512}$/.test(input.token) && input.token.length % 2 === 0, "Invalid push token.");
         requireValue(input.environment === "sandbox" || input.environment === "production", "Invalid push environment.");
-        me.voip = { token: input.token, environment: input.environment };
+        me[key] = { token: input.token, environment: input.environment };
         return undefined;
       }
       if (action === "poll") {
@@ -309,7 +330,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           requireValue(target, "This family member was not found.", 404);
           if (action === "revoke") {
             requireValue(target.id !== me.id, "To remove this device, choose Join a different family.", 403);
-            target.revoked = true; delete target.voip; delete target.caregiver;
+            target.revoked = true; delete target.voip; delete target.alerts; delete target.caregiver;
           } else if (action === "setCaregiver") {
             requireValue(target.id !== me.id, "Another caregiver must change your caregiver access.", 403);
             requireValue(typeof input.enabled === "boolean", "Choose whether they can use caregiver mode.");
@@ -373,6 +394,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "leaveHousehold") {
       // The call already ended in storage; LiveKit's empty-room timeout covers a failed delete.
       if (cleanupRoom) { try { await releaseRoom(cleanupRoom); } catch { /* see above */ } }
+      // No one else can play the bedside's messages for this device.
+      try { await removeMessagesTo(store, media, house, auth.deviceID, now); } catch { /* purged after 90 days */ }
       return callJSON({ left: true });
     }
     const me = memberFor(house, auth);
@@ -426,7 +449,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         canPublishSources: call.mode === "voice" ? [TrackSource.MICROPHONE] : [TrackSource.MICROPHONE, TrackSource.CAMERA] });
       return callJSON({ token: await token.toJwt(), serverUrl: configuration.serverUrl, room: roomName });
     }
-    return callJSON({ state: snapshot(house, me, now, pushEnabled), ...(caregiverAction ? { admin: adminState(house, now, pushEnabled) } : {}), ...(action === "registerVoIP" ? { pushReady: !!me.voip && pushEnabled } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
+    return callJSON({ state: snapshot(house, me, now, pushEnabled), ...(caregiverAction ? { admin: adminState(house, now, pushEnabled) } : {}), ...(action === "registerVoIP" ? { pushReady: !!me.voip && pushEnabled } : {}), ...(action === "registerAlerts" ? { alertsReady: !!me.alerts && pushEnabled } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
   } catch (error) {
     if (error instanceof FamilyError || error instanceof CaregiverAuthError) return callJSON({ error: error.message, ...(error instanceof FamilyError && error.code ? { errorCode: error.code } : {}) }, error.status);
     return callJSON({ error: "Family calling is unavailable. Check the connection and shared storage setup." }, 503);

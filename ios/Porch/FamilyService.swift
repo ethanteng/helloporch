@@ -77,6 +77,9 @@ struct FamilyResponse: Decodable {
     let admin: FamilyAdminState?
     /// Family devices only: this device's sent messages (`listMessages`).
     let messages: [SentMessage]?
+    /// Family devices only: messages the bedside left for this device (`listMessages`).
+    let received: [ReceivedMessage]?
+    let alertsReady: Bool?
     let message: SentMessage?
     let upload: MessageUploadTarget?
     let media: MessageMediaURL?
@@ -166,6 +169,7 @@ struct FamilyCallSession {
         isActive = true
         credential = PorchDevice.credential(for: PorchDevice.experience)
         state = nil; error = nil; accessRemoved = false
+        FamilyMessageAlerts.shared.register()
         guard let credential else { changed(); return }
         SystemIncomingCalls.shared.registerDevice()
         let generation = UUID(); self.generation = generation

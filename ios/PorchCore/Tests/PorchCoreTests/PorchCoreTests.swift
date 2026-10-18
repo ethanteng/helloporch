@@ -275,6 +275,21 @@ final class PorchCoreTests: XCTestCase {
             XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 20)
         }
     }
+    func testBedsideLeavesMessagesForUnansweredCallsUnlessTurnedOff() throws {
+        try withDefaults { defaults in
+            XCTAssertTrue(CallPreferences.leaveMessageWhenUnanswered(in: defaults))
+            CallPreferences.saveLeaveMessageWhenUnanswered(false, in: defaults)
+            XCTAssertFalse(CallPreferences.leaveMessageWhenUnanswered(in: defaults))
+            CallPreferences.saveLeaveMessageWhenUnanswered(true, in: defaults)
+            XCTAssertTrue(CallPreferences.leaveMessageWhenUnanswered(in: defaults))
+        }
+    }
+    func testReceivedMessagesDecodeWithAndWithoutPlayback() throws {
+        let unplayed = try JSONDecoder().decode(ReceivedMessage.self, from: Data(#"{"id":"a","fromName":"Mom","kind":"voicemail","mode":"video","durationSeconds":42,"sentAt":1800000000,"state":"queued","available":true}"#.utf8))
+        XCTAssertNil(unplayed.playedAt); XCTAssertTrue(unplayed.available); XCTAssertEqual(unplayed.mode, "video")
+        let played = try JSONDecoder().decode(ReceivedMessage.self, from: Data(#"{"id":"b","fromName":"Mom","kind":"voicemail","mode":"audio","durationSeconds":5,"sentAt":1800000000,"state":"played","playedAt":1800000100,"available":false}"#.utf8))
+        XCTAssertEqual(played.playedAt, 1800000100); XCTAssertFalse(played.available)
+    }
     func testFamilyVideoCallsStartWithCameraUnlessTurnedOff() throws {
         try withDefaults { defaults in
             XCTAssertTrue(CallPreferences.startVideoWithCamera(in: defaults))

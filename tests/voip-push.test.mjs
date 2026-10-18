@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { createServer, connect } from 'node:http2';
 import { test } from 'node:test';
-import { apnsAuthorization, sendVoIPPush, voipConfigured } from '../lib/family/push.ts';
+import { apnsAuthorization, sendAlertPush, sendVoIPPush, voipConfigured } from '../lib/family/push.ts';
 
 test('APNs provider JWT uses ES256/P1363 and refreshes before one hour without exposing the key',()=>{
  const keys=['APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'];
@@ -60,6 +60,33 @@ test('VoIP sender uses APNs call headers and handles success and invalid registr
   status=410;reason='Unregistered';assert.equal((await sendVoIPPush(device,call,session)).invalidToken,true);
   status=400;reason='BadDeviceToken';assert.equal((await sendVoIPPush(device,call,session)).invalidToken,true);
   status=403;reason='InvalidProviderToken';const failed=await sendVoIPPush(device,call,session);assert.equal(failed.delivered,false);assert.equal(failed.invalidToken,false);
+ } finally {
+  server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
+  keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);
+ }
+});
+
+test('message alerts are ordinary notifications for the app, kept by APNs for a week',async()=>{
+ const keys=['APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'];
+ const previous=keys.map(key=>process.env[key]);
+ const {privateKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const server=createServer(),received=[];
+ server.on('stream',(stream,headers)=>{
+  let body=''; stream.on('data',chunk=>body+=chunk);
+  stream.on('end',()=>{ received.push({headers,body:JSON.parse(body)}); stream.respond({':status':200}); stream.end(); });
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try {
+  assert.deepEqual(await sendAlertPush({token:'ab'.repeat(32),environment:'production'},{messageID:'x',title:'t',body:'b',badge:1}),{delivered:false},'unconfigured');
+  Object.assign(process.env,{APNS_KEY_ID:'test',APNS_TEAM_ID:'team',APNS_PRIVATE_KEY:privateKey.export({type:'pkcs8',format:'pem'}).toString(),APNS_BUNDLE_ID:'com.example.porch'});
+  const session=()=>connect(`http://127.0.0.1:${server.address().port}`);
+  const alert={messageID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',title:'Mom left you a message',body:'Audio message · 0:12',badge:2};
+  assert.equal((await sendAlertPush({token:'cd'.repeat(32),environment:'sandbox'},alert,session,1800000000)).delivered,true);
+  const {headers,body}=received[0];
+  assert.equal(headers['apns-topic'],'com.example.porch');
+  assert.equal(headers['apns-push-type'],'alert'); assert.equal(headers['apns-priority'],'10');
+  assert.equal(headers['apns-expiration'],String(1800000000+7*86400)); assert.equal(headers['apns-id'],alert.messageID);
+  assert.deepEqual(body,{aps:{alert:{title:alert.title,body:alert.body},sound:'default',badge:2,'thread-id':'porch-messages'},messageID:alert.messageID});
  } finally {
   server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
   keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);

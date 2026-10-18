@@ -17,7 +17,7 @@ final class PorchContainerViewController: UIViewController {
     deinit { NotificationCenter.default.removeObserver(self) }
     private var readyForIncoming: Bool {
         guard UIApplication.shared.applicationState == .active, presentedViewController == nil, view.window != nil else { return false }
-        if let clock = content as? CallViewController { return clock.presentedViewController == nil || clock.presentedViewController is PeoplePickerViewController || clock.presentedViewController is MessagePlayerViewController }
+        if let clock = content as? CallViewController { return clock.presentedViewController == nil || clock.presentedViewController is PeoplePickerViewController || clock.presentedViewController is MessagePlayerViewController || clock.presentedViewController is BedsideVoicemailViewController }
         if let nav = content as? UINavigationController { return nav.topViewController is FamilyHomeViewController && nav.presentedViewController == nil }
         return false
     }
@@ -66,8 +66,10 @@ final class PorchContainerViewController: UIViewController {
             self.present(incoming, animated: true)
         }
         // Calls take over from the people picker and from message playback (an unfinished message stays queued).
+        // Someone calling back while Mom leaves them a message interrupts it; what she said is still sent.
         if let picker = content?.presentedViewController as? PeoplePickerViewController { picker.dismiss(animated: false, completion: show) }
         else if let messages = content?.presentedViewController as? MessagePlayerViewController { messages.interrupt(then: show) }
+        else if let recording = content?.presentedViewController as? BedsideVoicemailViewController { recording.interrupt(then: show) }
         else { show() }
     }
     @objc private func systemCallChanged() {

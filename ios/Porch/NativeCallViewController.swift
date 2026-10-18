@@ -200,7 +200,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var familySession: FamilyCallSession?
     private var familyAccepted = false
     /// Runs after the screen closes when the other person never answered (declined, timed out
-    /// or unreachable) and the caller didn't hang up first. Family phones offer voicemail here.
+    /// or unreachable) and the caller didn't hang up first. Family phones offer voicemail here, and
+    /// the bedside records a message. A call that rang through to a regular phone never does:
+    /// that phone's own voicemail can answer instead.
     var onUnanswered: (() -> Void)?
     private var endedByCaller = false
     private var beginWithPhoneFallback = false
@@ -575,7 +577,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
-        let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted ? onUnanswered : nil
+        let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted && !isPhoneCall && !isSwitchingToPhone ? onUnanswered : nil
         ringback.stop()
         connectionCue.stop()
         connectionTask?.cancel()
@@ -586,7 +588,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
         endButton.isEnabled = false
-        statusLabel.text = BedsideText.string(message ?? "Ending call…")
+        // The message screen comes next, so don't say the call is returning to the clock.
+        statusLabel.text = unanswered != nil ? BedsideText.string("%@ didn't answer.", contact.name) : BedsideText.string(message ?? "Ending call…")
         if isPhoneCall || familySession?.call.source == "phone" || fallbackTask != nil {
             cleanupBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "End Porch phone call") { [weak self] in
                 self?.endCleanupBackgroundTask()

@@ -81,6 +81,25 @@ public struct SentMessage: Codable, Equatable, Identifiable {
     /// The recording can still be played back (it's kept for 90 days after playback).
     public let replayable: Bool?
 }
+/// A message the bedside left for this family device after a missed call (family devices only).
+/// States: queued (not played yet), played, expired (deleted after 90 days unplayed).
+public struct ReceivedMessage: Codable, Equatable, Identifiable {
+    public let id: String
+    public let fromName: String
+    public let kind: String
+    /// "audio" or "video", matching the call that wasn't answered.
+    public let mode: String
+    public let durationSeconds: Int
+    public let sentAt: TimeInterval
+    public let state: String
+    public let playedAt: TimeInterval?
+    /// The recording is kept for 90 days after it was left, played or not.
+    public let available: Bool
+    public init(id: String, fromName: String, kind: String, mode: String, durationSeconds: Int, sentAt: TimeInterval, state: String, playedAt: TimeInterval?, available: Bool) {
+        self.id = id; self.fromName = fromName; self.kind = kind; self.mode = mode; self.durationSeconds = durationSeconds
+        self.sentAt = sentAt; self.state = state; self.playedAt = playedAt; self.available = available
+    }
+}
 public struct PendingFamilyInvitation: Codable, Equatable {
     public let id: String
     /// The name the caregiver gave the invitation. Older servers don't send it.
@@ -105,6 +124,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let phoneDropIns: [PhoneDropInApproval]?
     /// How long calls to the bedside ring before the caller is offered voicemail. Older servers don't send it.
     public let ringSeconds: Int?
+    /// Family devices: messages the bedside left for this device that haven't been played.
+    public let newMessages: Int?
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
 /// family device's own snapshot doesn't include.
