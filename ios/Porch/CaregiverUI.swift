@@ -157,14 +157,23 @@ final class CaregiverTouchKeyboard: UIView {
         guard let field else { return }
         switch key {
         case "⌫": field.deleteBackward()
-        case "Space": field.insertText(" ")
+        case "Space": insert(" ", into: field)
         case "Paste": field.paste(nil)
         case "ABC", "abc": uppercase.toggle(); rebuild()
         case "Symbols", "Letters": symbols.toggle(); rebuild()
         case "Next": onNext?()
         case "Done": onDone?()
-        default: field.insertText(uppercase ? key.uppercased() : key)
+        default: insert(uppercase ? key.uppercased() : key, into: field)
         }
+    }
+    private func insert(_ text: String, into field: UITextField) {
+        // Secure UITextField insertion can clear its contents after a help
+        // alert restores focus. The touch keyboard should edit the caret or
+        // selection the caregiver kept, rather than start a new PIN.
+        if field.isSecureTextEntry, let range = field.selectedTextRange {
+            field.replace(range, withText: text)
+            field.sendActions(for: .editingChanged)
+        } else { field.insertText(text) }
     }
 }
 

@@ -359,3 +359,11 @@ final class MessagePlayerViewController: UIViewController {
         keypad.resetKeys(); super.pressesCancelled(presses, with: event)
     }
 }
+
+extension MessagePlayerViewController: Cell2JackDigitReceiving {
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        let action = (try? CallSlots.load())?.action(for: digit)
+        guard action == .messages || action == .callControl else { return "message key ignored" }
+        stop(); return "message playback stopped"
+    }
+}

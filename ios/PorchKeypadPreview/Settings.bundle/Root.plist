@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>FooterText</key>
+			<string>Calls are disabled in this preview build. Enable the system-provided Cell2Jack driver switch to test the phone keypad.</string>
+			<key>Title</key>
+			<string>HelloPorch keypad preview</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>10</string>
+			<key>Key</key>
+			<string>PorchPreviewBuild</string>
+			<key>Title</key>
+			<string>Preview build</string>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PreferenceSpecifiers</key>
+    <array>
+        <dict>
+            <key>Type</key>
+            <string>PSGroupSpecifier</string>
+            <key>Title</key>
+            <string>Cell2Jack USB Test</string>
+            <key>FooterText</key>
+            <string>iPadOS manages the driver permission. Enable the driver in the system-provided Drivers section if it appears on this page. Otherwise look for Drivers under Privacy &amp; Security or General in Settings.</string>
+        </dict>
+        <dict>
+            <key>Type</key>
+            <string>PSTitleValueSpecifier</string>
+            <key>Title</key>
+            <string>Test build</string>
+            <key>Key</key>
+            <string>Cell2JackTestBuild</string>
+            <key>DefaultValue</key>
+            <string>0.1.0 (9)</string>
+        </dict>
+    </array>
+</dict>
+</plist>

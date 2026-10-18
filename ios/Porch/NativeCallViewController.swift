@@ -567,7 +567,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         finish(message: hasConnectedPeer ? "Call ended. Returning to the clock…" : "The phone call ended before it was answered.")
     }
 
-    @objc private func endCall() { endedByCaller = true; finish() }
+    @objc private func endCall() {
+        Cell2JackKeypad.shared.record(["kind": "callEndRequested"])
+        endedByCaller = true; finish()
+    }
 
     private func finish(message: String? = nil) {
         guard !isEnding else { return }
@@ -625,7 +628,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 }
             }
             if message != nil { try? await Task.sleep(nanoseconds: 1_500_000_000) }
-            dismiss(animated: true) { unanswered?() }
+            dismiss(animated: true) {
+                Cell2JackKeypad.shared.record(["kind": "callScreenClosed"])
+                unanswered?()
+            }
         }
     }
 
@@ -842,5 +848,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             endButton.configuration?.title = BedsideText.string("Back to clock")
             // End call also cleans up any telephone leg created before failure.
         }
+    }
+}
+
+extension NativeCallViewController: Cell2JackDigitReceiving {
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        guard !isEnding else { return "call ending" }
+        performKeypadDigit(digit)
+        return "call key dispatched"
     }
 }

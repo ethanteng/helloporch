@@ -1,0 +1,6 @@
+// Simulator CI has no Apple signing certificate. The app and tests still need
+// ad-hoc signing for Keychain access; the DriverKit dependency cannot use it
+// and is not embedded in Simulator products. Device builds do not use this file.
+CODE_SIGN_IDENTITY = -
+CODE_SIGNING_ALLOWED = YES
+CODE_SIGNING_ALLOWED[sdk=driverkit*] = NO
