@@ -23,8 +23,11 @@ copies that result for troubleshooting.
 
 No `/d`, bootloader/recovery packets, arbitrary write interface, call actions,
 network connection, Mac bridge, firmware image or flash operation is included.
-The `/v` response was verified on the user's Mac. The CH34x register setup and
-iPad transport are new and **have not yet been verified on a physical iPad**.
+The `/v` response was verified on the user's Mac and now on the physical M3
+iPad. App build 5 / driver build 3 returned `a06`, 34 bytes, USB success and
+serial-chip revision `0x31` on three consecutive requests on 2026-10-17 (local
+time), after a detach/reattach. This verifies the CH34x register setup and iPad
+version transport for this unit; it does not verify debug logs, DTMF or calls.
 Serial-chip revisions below `0x30` intentionally report unsupported: older
 line-control variants need separate implementation and testing.
 
@@ -84,7 +87,7 @@ the development Mac, accept the normal device pairing/development setup, and
 select it in Xcode. Automatic provisioning must include **that iPad's UDID**
 before installation. Both development profiles now include the M3 iPad. The app was successfully
 installed and launched on the physical iPad on 2026-10-17. Direct Cell2Jack
-communication is still awaiting the driver-enable and USB connection test. The Mac is
+version communication subsequently passed with build 5 / driver 3. The Mac is
 only needed for provisioning/installing this development build, not at runtime.
 
 Rebuild/sign with the device selected, or use:
@@ -161,7 +164,7 @@ the distribution variant. Debug now uses
 [How to sign a DEXT](https://developer.apple.com/forums/thread/809202).
 The physical device accepted this build and launched the app. These install
 checks are in addition to host compilation and signature verification; they
-do not yet verify the actual USB version transaction.
+were followed by successful USB version tests described below.
 
 ### USB matching correction after the first iPad attempt
 
@@ -203,8 +206,10 @@ App build 5 / driver build 3 uses all five exact interface matching fields. The
 documented score is 100000 rather than the wildcard configuration's 89000. The
 Mac's installed AppleUSBCHCOM metadata uses the four-field 90000 combination;
 the exact iPad Apple personality has not been dumped. Outmatching the observed
-Apple driver is the intended correction, and still requires a detach/reattach
-test. No custom `IOProbeScore`, driver disabling, or system security change is
+Apple driver was the intended correction. After detach/reattach, the physical
+iPad registry showed `PorchCell2JackDriver (IOUserService)` attached to the
+interface and the app completed three version reads successfully. No custom
+`IOProbeScore`, driver disabling, or system security change is
 used.
 
 The app also preserves a read-only `Documents/usb-diagnostics.txt` snapshot on
@@ -213,3 +218,17 @@ Snapshots cover only our USB IDs, service, child names/classes, and bounded
 exact matching checks. The developer-only launch argument
 `--read-cell2jack-version` performs the same `/v` action as the visible button;
 ordinary launch still sends no serial request.
+
+The three independent results were timestamped `2026-10-18T06:14:01Z`,
+`06:14:33Z`, and `06:14:40Z` (2026-10-17 at 11:14 PM Pacific). Every result
+contained exactly the same 34 response bytes as the Mac test:
+
+```text
+20 3e 3e 3e 3e 3e 3e 3e 3e 3e 3e 3e 3e 3e 3e 20 43 4a 20 56 65 72 73 69 6f 6e 20 3d 20 61 30 36 0d 0a
+```
+
+The developer Mac launched the app and retrieved its saved reports over Wi-Fi;
+the `/v` transaction itself used the native iPad app → DriverKit → USB →
+Cell2Jack path. No Mac serial connection or relay participated. Fully manual
+use has the same native button path; unplugged-device behavior, charging-hub
+behavior, and longer-term operation remain separate acceptance checks.
