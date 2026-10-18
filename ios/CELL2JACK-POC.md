@@ -236,7 +236,7 @@ use has the same native button path; unplugged-device behavior, charging-hub
 behavior, and longer-term operation remain separate acceptance checks.
 
 
-## Keypad logging — app build 7, driver build 5, ABI 2
+## Keypad logging — app build 8, driver build 6, ABI 2
 
 The app adds **Start keypad test**, **Stop**, a large recent-digit display, and
 live raw logs. It does not invoke HelloPorch contact or call handlers. Existing
@@ -306,3 +306,20 @@ Host parser tests cover the observed Mac lines, every split boundary, bytewise
 fragmentation, repeated identical keys, duplicate-report classification,
 parameter rejection, malformed bytes, and line-overflow recovery. iPad keypad
 hardware observations should be recorded separately from those host tests.
+
+### First physical keypad startup and buffer correction
+
+App build 7 / driver build 5 failed before receiving log bytes. The saved event
+trace reported `0xfffffecc` (`MIG_SERVER_DIED`) on begin and `0xe00002d7` on the
+subsequent stop. The physical iPad's crash report at 2026-10-17 23:30:18 Pacific
+identified `EXC_BAD_ACCESS / SIGBUS / KERN_PROTECTION_FAILURE` in
+`PorchCell2JackDriver::WriteCommand(char)+140`, called by BeginLogs. This was a
+driver buffer access failure, not evidence of unsupported Cell2Jack commands or
+a missed physical digit.
+
+Build 8 / driver 6 allocates command and polling buffers with
+`kIOMemoryDirectionOutIn`, matching the version transaction already verified on
+the same iPad, instead of the Out-only command mapping that faulted. Both use
+256-byte allocation capacity, set the actual transfer length explicitly, and
+check the mapped address/range before CPU access. Signed compilation passed;
+the corrected command/poll path still requires the physical reconnect test.

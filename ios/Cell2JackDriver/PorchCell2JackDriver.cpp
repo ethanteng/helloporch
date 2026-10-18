@@ -172,15 +172,20 @@ kern_return_t PorchCell2JackDriver::WriteCommand(char command) {
     if (command != 'd' && command != 'q') return kIOReturnBadArgument;
     if (!ivars->opened) return kIOReturnNotAttached;
     IOBufferMemoryDescriptor *buffer = nullptr;
-    auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionOut, 2, &buffer);
+    // The driver fills and USB consumes this buffer. An Out-only allocation
+    // returned a protected CPU mapping on iPadOS (WriteCommand store fault).
+    // Match the bidirectional allocation proven by ReadVersion on this unit.
+    auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionOutIn, PorchC2JMaxReply, &buffer);
     if (status != kIOReturnSuccess) return status;
     IOAddressSegment memory = {};
     status = buffer->GetAddressRange(&memory);
+    if (status == kIOReturnSuccess && (!memory.address || memory.length < 2)) status = kIOReturnNoMemory;
     if (status == kIOReturnSuccess) {
         auto *bytes = reinterpret_cast<uint8_t *>(memory.address);
         bytes[0] = '/'; bytes[1] = command;
         uint32_t transferred = 0;
-        status = ivars->output->IO(buffer, 2, &transferred, 500);
+        status = buffer->SetLength(2);
+        if (status == kIOReturnSuccess) status = ivars->output->IO(buffer, 2, &transferred, 500);
         if (status == kIOReturnSuccess && transferred != 2) status = kIOReturnUnderrun;
     }
     buffer->release();
@@ -202,13 +207,15 @@ kern_return_t PorchCell2JackDriver::PollLogs(IOUserClient *owner, PorchC2JReply 
     reply->stage = PorchC2JLogRead; reply->chipVersion = ivars->chipVersion;
     if (!ivars->opened) return kIOReturnNotAttached;
     IOBufferMemoryDescriptor *buffer = nullptr;
-    auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionIn, ivars->packetSize, &buffer);
+    auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionOutIn, PorchC2JMaxReply, &buffer);
     if (status != kIOReturnSuccess) return status;
     IOAddressSegment memory = {};
     status = buffer->GetAddressRange(&memory);
+    if (status == kIOReturnSuccess && (!memory.address || memory.length < ivars->packetSize)) status = kIOReturnNoMemory;
     if (status == kIOReturnSuccess) {
         uint32_t transferred = 0;
-        status = ivars->input->IO(buffer, ivars->packetSize, &transferred, 250);
+        status = buffer->SetLength(ivars->packetSize);
+        if (status == kIOReturnSuccess) status = ivars->input->IO(buffer, ivars->packetSize, &transferred, 250);
         if (transferred > ivars->packetSize) status = kIOReturnOverrun;
         else {
             memcpy(reply->bytes, reinterpret_cast<void *>(memory.address), transferred);
