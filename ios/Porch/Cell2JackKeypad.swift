@@ -1,0 +1,179 @@
+import UIKit
+import PorchCore
+
+/// Only compiled by the experimental real-call target, not Porch or Preview.
+protocol Cell2JackDigitReceiving: AnyObject {
+    func receiveCell2JackDigit(_ digit: Int) -> String
+}
+
+enum Cell2JackDigitRouter {
+    static func route(_ symbol: String, root: UIViewController) -> String {
+        guard symbol.utf8.count == 1, let byte = symbol.utf8.first, (48...57).contains(byte) else { return "unassigned symbol" }
+        var screen = root
+        while true {
+            guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return "screen transitioning" }
+            if let presented = screen.presentedViewController { screen = presented }
+            else if let nav = screen as? UINavigationController, let top = nav.topViewController { screen = top }
+            else if let tabs = screen as? UITabBarController, let selected = tabs.selectedViewController { screen = selected }
+            else if screen is PorchContainerViewController, let child = screen.children.first { screen = child }
+            else { break }
+        }
+        // An unknown modal (PIN, settings, alert, permission UI) blocks input.
+        guard let receiver = screen as? Cell2JackDigitReceiving else { return "screen does not accept phone keys" }
+        return receiver.receiveCell2JackDigit(Int(byte - 48))
+    }
+}
+
+extension Notification.Name { static let cell2JackKeypadChanged = Notification.Name("porch.cell2jack.changed") }
+
+/// Main-thread owner. Stale callbacks cannot act after stopping/backgrounding.
+final class Cell2JackKeypad {
+    static let shared = Cell2JackKeypad()
+    static let enabledKey = "porch.cell2jack.realCalls.enabled"
+    weak var root: UIViewController?
+    private(set) var status = "Phone keypad off"
+    private var worker: Cell2JackKeypadTransport?
+    private var stopping = false
+    private var wanted = false
+    private var generation = UUID()
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var records: [[String: Any]] = []
+    private let reportQueue = DispatchQueue(label: "porch.cell2jack.actions")
+    var enabled: Bool { UserDefaults.standard.bool(forKey: Self.enabledKey) }
+
+    func setEnabled(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: Self.enabledKey)
+        refresh()
+    }
+    func refresh() {
+        wanted = enabled && PorchDevice.experience == .bedside && UIApplication.shared.applicationState == .active
+        if !wanted { stop(); return }
+        guard worker == nil else { return }
+        let token = UUID(); generation = token
+        changeStatus("Connecting phone keypad…")
+        let worker = Cell2JackKeypadTransport { [weak self] update in
+            guard let self else { return }
+            switch update {
+            case .ready:
+                guard self.generation == token, !self.stopping else { return }
+                self.changeStatus("Phone keypad ready")
+                self.record(["kind": "usbReady"])
+            case .digits(let digits, let receivedAt):
+                guard self.generation == token, self.wanted, !self.stopping,
+                      ProcessInfo.processInfo.systemUptime - receivedAt < 1,
+                      UIApplication.shared.applicationState == .active, PorchDevice.experience == .bedside,
+                      let root = self.root, root.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive else { return }
+                for event in digits {
+                    guard event.kind == .digit else { continue }
+                    let outcome = Cell2JackDigitRouter.route(event.digit, root: root)
+                    self.record(["kind": "digit", "symbol": event.digit, "outcome": outcome,
+                                 "rawLine": event.line, "embeddedInLine": event.embeddedInLine])
+                }
+            case .finished(let message):
+                let restart = self.stopping && self.wanted
+                self.worker = nil; self.stopping = false
+                self.changeStatus(message); self.record(["kind": "usbStopped", "result": message])
+                if self.backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(self.backgroundTask); self.backgroundTask = .invalid }
+                if restart { self.refresh() }
+            }
+        }
+        self.worker = worker; worker.start()
+    }
+    func pause() { wanted = false; stop() }
+    private func stop() {
+        generation = UUID()
+        guard let worker else { changeStatus(enabled ? "Phone keypad paused" : "Phone keypad off"); return }
+        guard !stopping else { return }
+        stopping = true; changeStatus("Stopping phone keypad…")
+        if UIApplication.shared.applicationState != .active {
+            backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Stop Cell2Jack logs") { [weak self] in
+                guard let self, self.backgroundTask != .invalid else { return }
+                UIApplication.shared.endBackgroundTask(self.backgroundTask); self.backgroundTask = .invalid
+            }
+        }
+        worker.stop()
+    }
+    private func changeStatus(_ text: String) {
+        status = text
+        NotificationCenter.default.post(name: .cell2JackKeypadChanged, object: nil)
+    }
+    func record(_ values: [String: Any]) {
+        var values = values; values["utc"] = ISO8601DateFormatter().string(from: Date())
+        records.append(values); records = Array(records.suffix(200))
+        guard let data = try? JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys]) else { return }
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("cell2jack-call-actions.json")
+        reportQueue.async { try? data.write(to: url, options: .atomic) }
+    }
+}
+
+/// Continuous foreground input. Bounded parser and action history; no raw log
+/// files and no two-minute cutoff that would remove hang-up during a call.
+private final class Cell2JackKeypadTransport {
+    enum Update { case ready, digits([Cell2JackDigitEvent], TimeInterval), finished(String) }
+    private let queue = DispatchQueue(label: "porch.cell2jack.real-calls.usb")
+    private let callback: (Update) -> Void
+    private var session: Cell2JackLogSession?
+    private var timer: DispatchSourceTimer?
+    private var parser = Cell2JackDTMFParser()
+    private var finished = false
+    private var attempts = 0
+    private var attemptTime = 0.0
+    private var ready = false
+    init(_ callback: @escaping (Update) -> Void) { self.callback = callback }
+    private func emit(_ update: Update) { DispatchQueue.main.async { self.callback(update) } }
+    private func unpack(_ data: Data) throws -> Data {
+        guard data.count >= MemoryLayout<PorchC2JReply>.size else { throw failure("Short driver reply") }
+        let reply = data.withUnsafeBytes { $0.loadUnaligned(as: PorchC2JReply.self) }
+        var bytes = reply.bytes
+        guard reply.usbStatus == 0, Int(reply.count) <= MemoryLayout.size(ofValue: bytes) else {
+            throw failure("USB stage \(reply.stage): \(String(format: "0x%08x", reply.usbStatus))")
+        }
+        return withUnsafeBytes(of: &bytes) { Data($0.prefix(Int(reply.count))) }
+    }
+    private func failure(_ message: String) -> NSError { NSError(domain: "PorchCell2Jack", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
+    func start() {
+        queue.async {
+            guard !self.finished else { return }
+            do {
+                self.session = try Cell2JackLogSession.open()
+                try self.begin()
+                let timer = DispatchSource.makeTimerSource(queue: self.queue)
+                timer.schedule(deadline: .now(), repeating: .milliseconds(1))
+                timer.setEventHandler { [weak self] in self?.poll() }
+                self.timer = timer; timer.resume()
+            } catch { self.finish("Phone keypad unavailable: \(error.localizedDescription)") }
+        }
+    }
+    private func begin() throws {
+        guard let session else { throw failure("USB session closed") }
+        attempts += 1; parser.resetPartialLine()
+        _ = try unpack(session.beginLogs())
+        attemptTime = ProcessInfo.processInfo.systemUptime
+    }
+    private func poll() {
+        guard !finished, let session else { return }
+        do {
+            let bytes = try unpack(session.pollLogs())
+            if !bytes.isEmpty {
+                if !ready { ready = true; emit(.ready) }
+                let digits = parser.append(bytes)
+                if !digits.isEmpty { emit(.digits(digits, ProcessInfo.processInfo.systemUptime)) }
+            } else if !ready, ProcessInfo.processInfo.systemUptime - attemptTime >= 2 {
+                guard attempts < 3 else { throw failure("No device logs after three attempts. Check the driver and reconnect, then tap Retry.") }
+                _ = try unpack(session.endLogs()); try begin()
+            }
+        } catch { finish("Phone keypad stopped: \(error.localizedDescription)") }
+    }
+    func stop() { queue.async { self.finish("Phone keypad stopped") } }
+    private func finish(_ message: String) {
+        guard !finished else { return }
+        finished = true; timer?.cancel(); timer = nil
+        var cleanup = ""
+        if let session {
+            do { _ = try unpack(session.endLogs()); cleanup = " · /q sent" }
+            catch { cleanup = " · /q unconfirmed; unplug Cell2Jack if logging persists" }
+            session.close()
+        }
+        session = nil; emit(.finished(message + cleanup))
+    }
+}

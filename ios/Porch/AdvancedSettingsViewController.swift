@@ -2,6 +2,10 @@ import UIKit
 import PorchCore
 
 final class AdvancedSettingsViewController: CaregiverFormViewController {
+    #if PORCH_CELL2JACK_CALLS
+    private let phoneSwitch = UISwitch()
+    private let phoneStatus = PorchStyle.label("", size: 16)
+    #endif
     private let defaults: UserDefaults
     private let silenceSwitch = UISwitch()
     private let secondsField = UITextField()
@@ -32,6 +36,24 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         secondsField.addTarget(self, action: #selector(updateControls), for: .editingChanged)
         timeoutGroup = field(secondsField, title: "Seconds without talking", placeholder: "120", helper: "Choose 15–1800 seconds (up to 30 minutes). The default is 120 seconds.")
         form.addArrangedSubview(section("Automatic hang-up", detail: "Optionally end a call when neither person has spoken for this long. Speech from either side restarts the timer, including a voicemail greeting or message. Applies to Porch calls and phone fallback on this device. The timer starts after connection and resets while reconnecting.", views: [row, timeoutGroup, validation]))
+        #if PORCH_CELL2JACK_CALLS
+        phoneSwitch.isOn = Cell2JackKeypad.shared.enabled
+        phoneSwitch.onTintColor = PorchStyle.accent
+        phoneSwitch.accessibilityIdentifier = "advanced.cell2jack"
+        phoneSwitch.accessibilityLabel = "Use Cell2Jack phone keypad"
+        phoneSwitch.addTarget(self, action: #selector(changePhoneKeypad), for: .valueChanged)
+        let phoneRow = UIStackView(arrangedSubviews: [PorchStyle.label("Use Cell2Jack phone keypad", size: 20), phoneSwitch])
+        phoneRow.spacing = 20; phoneRow.alignment = .center
+        let retry = PorchStyle.button("Retry phone connection", symbol: "arrow.clockwise", filled: false)
+        retry.addAction(UIAction { _ in Cell2JackKeypad.shared.refresh() }, for: .touchUpInside)
+        let driver = PorchStyle.button("Open app settings", symbol: "gearshape", filled: false)
+        driver.addAction(UIAction { _ in
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        }, for: .touchUpInside)
+        form.addArrangedSubview(section("Cell2Jack phone keypad · experimental", detail: "This switch takes effect immediately. Phone keys can place real calls using your saved assignments. Keep Porch open on the clock. Press 0 (or your assigned call-control key) to hang up; hanging up the handset alone does not end a Porch call. Enable the USB driver in this app’s settings. USB provides keypad input; call audio follows the iPad’s selected audio output.", views: [phoneRow, phoneStatus, retry, driver]))
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshPhoneStatus), name: .cell2JackKeypadChanged, object: nil)
+        refreshPhoneStatus()
+        #endif
         updateControls()
     }
 
@@ -54,3 +76,10 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         navigationController?.popViewController(animated: true)
     }
 }
+
+#if PORCH_CELL2JACK_CALLS
+extension AdvancedSettingsViewController {
+    @objc private func changePhoneKeypad() { Cell2JackKeypad.shared.setEnabled(phoneSwitch.isOn) }
+    @objc private func refreshPhoneStatus() { phoneStatus.text = Cell2JackKeypad.shared.status }
+}
+#endif

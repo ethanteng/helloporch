@@ -1030,3 +1030,14 @@ final class ChangeCaregiverPINViewController: CaregiverFormViewController {
         }
     }
 }
+
+#if PORCH_CELL2JACK_CALLS
+extension IncomingFamilyCallViewController: Cell2JackDigitReceiving {
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        guard !answering, (try? CallSlots.load())?.action(for: digit) == .callControl else { return "incoming key ignored" }
+        // A serial DTMF report is a tap, never an inferred long press.
+        if call.kind == "dropIn" && !requiresManualAnswer { reject(); return "drop-in cancelled" }
+        accept(); return "answer requested"
+    }
+}
+#endif

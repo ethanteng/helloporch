@@ -485,3 +485,18 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         Task { @MainActor [weak self] in self?.refresh() }
     }
 }
+
+#if PORCH_CELL2JACK_CALLS
+extension SystemCallViewController: Cell2JackDigitReceiving {
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        switch (try? CallSlots.load())?.action(for: digit) {
+        case .callControl:
+            SystemIncomingCalls.shared.requestEnd()
+            Cell2JackKeypad.shared.record(["kind": "callEndRequested", "screen": "systemCall"])
+            return "system call end requested"
+        case .toggleVideo: camera.sendActions(for: .touchUpInside); return "system camera key dispatched"
+        default: return "system call key ignored"
+        }
+    }
+}
+#endif

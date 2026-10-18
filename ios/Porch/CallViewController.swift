@@ -5,6 +5,10 @@ final class CallViewController: UIViewController {
     private var slots = CallSlots()
     private var trigger = CallTrigger()
     private var opening = false
+    #if PORCH_CELL2JACK_CALLS
+    private var cancelOpening = false
+    private let phoneKeypadStatus = UILabel()
+    #endif
     private var loadError: String?
     private let sceneView = BedsideSceneView()
     private let clock = UIStackView()
@@ -89,6 +93,16 @@ final class CallViewController: UIViewController {
         }
         timeLabel.accessibilityTraits.insert(.updatesFrequently)
         [contextLabel, weekdayLabel, timeLabel, dateLabel].forEach { clock.addArrangedSubview($0) }
+        #if PORCH_CELL2JACK_CALLS
+        phoneKeypadStatus.font = PorchStyle.font(16)
+        phoneKeypadStatus.textColor = PorchStyle.nightSecondary
+        phoneKeypadStatus.textAlignment = .center
+        phoneKeypadStatus.numberOfLines = 0
+        phoneKeypadStatus.accessibilityIdentifier = "clock.cell2jack"
+        clock.addArrangedSubview(phoneKeypadStatus)
+        NotificationCenter.default.addObserver(self, selector: #selector(updatePhoneKeypadStatus), name: .cell2JackKeypadChanged, object: nil)
+        updatePhoneKeypadStatus()
+        #endif
         clock.axis = .vertical
         clock.spacing = 24
         clock.isAccessibilityElement = false
@@ -260,7 +274,9 @@ final class CallViewController: UIViewController {
         // Permission dialogs, app switching and keyboard changes must never take focus
         // from a caregiver's text field or from an active call.
         guard isViewLoaded, presentedViewController == nil else { return }
+        #if !PORCH_CELL2JACK_CALLS
         opening = false
+        #endif
         updateDisplay()
         statusLabel.text = nil
         refreshCallButton()
@@ -274,7 +290,12 @@ final class CallViewController: UIViewController {
         becomeFirstResponder()
     }
 
-    func pause() { trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil }
+    func pause() {
+        trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil
+        #if PORCH_CELL2JACK_CALLS
+        if opening { cancelOpening = true }
+        #endif
+    }
 
     @objc private func resetClock() {
         for formatter in [timeFormatter, weekdayFormatter, dateFormatter] {
@@ -443,15 +464,31 @@ final class CallViewController: UIViewController {
             showError("Porch isn't ready", message: "Check Family & drop-in in caregiver mode, then try again."); return
         }
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
+        #if PORCH_CELL2JACK_CALLS
+        cancelOpening = false
+        Cell2JackKeypad.shared.record(["kind": "callStartRequested", "digitSource": "shared touch/keyboard/USB handler"])
+        #endif
         opening = true; refreshCallButton()
         Task { [weak self] in
             guard let self else { return }
             defer { self.opening = false; self.refreshCallButton() }
             do {
                 let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
+                #if PORCH_CELL2JACK_CALLS
+                if self.cancelOpening {
+                    await session.end()
+                    Cell2JackKeypad.shared.record(["kind": "pendingCallCancelled"])
+                    return
+                }
+                Cell2JackKeypad.shared.record(["kind": "callSessionCreated"])
+                #endif
                 guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
                 self.present(try NativeCallViewController.paired(session, contact: contact), animated: true)
             } catch {
+                #if PORCH_CELL2JACK_CALLS
+                if self.cancelOpening { return }
+                Cell2JackKeypad.shared.record(["kind": "callStartFailed", "error": error.localizedDescription])
+                #endif
                 // A lost response may still have created a Porch call. Only a
                 // confirmed offline result permits an unpaired phone handoff.
                 if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
@@ -624,3 +661,28 @@ final class PeoplePickerViewController: UIViewController {
         trigger.resetKeys(); super.pressesCancelled(presses, with: event)
     }
 }
+
+#if PORCH_CELL2JACK_CALLS
+extension CallViewController: Cell2JackDigitReceiving {
+    @objc private func updatePhoneKeypadStatus() { phoneKeypadStatus.text = Cell2JackKeypad.shared.status }
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        guard presentedViewController == nil else { return "clock covered" }
+        if opening {
+            if slots.action(for: digit) == .callControl {
+                cancelOpening = true
+                statusLabel.text = BedsideText.string("Ending call…")
+                return "cancel pending call requested"
+            }
+            return "call already opening"
+        }
+        call(slot: digit)
+        return "clock key dispatched"
+    }
+}
+extension PeoplePickerViewController: Cell2JackDigitReceiving {
+    func receiveCell2JackDigit(_ digit: Int) -> String {
+        choose(digit)
+        return "people picker key dispatched"
+    }
+}
+#endif
