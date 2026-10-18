@@ -56,7 +56,11 @@ final class Cell2JackLogCapture {
                 self.session = try Cell2JackLogSession.open()
                 try self.beginAttempt()
                 let timer = DispatchSource.makeTimerSource(queue: self.queue)
-                timer.schedule(deadline: .now() + 0.5, repeating: .milliseconds(30))
+                // Unlike a system serial driver, our transport has no ongoing
+                // USB receive loop while the app waits. Start draining as soon
+                // as /d completes and keep reading promptly during bursts.
+                // Idle reads still block for at most 250 ms on this queue.
+                timer.schedule(deadline: .now(), repeating: .milliseconds(1))
                 timer.setEventHandler { [weak self] in self?.poll() }
                 self.timer = timer
                 timer.resume()
@@ -116,7 +120,8 @@ final class Cell2JackLogCapture {
                 let digits = parser.append(bytes)
                 for digit in digits {
                     if digit.kind == .digit { digitCount += 1; digitTail = String((digitTail + digit.digit).suffix(128)) }
-                    try event(["kind": digit.kind.rawValue, "digit": digit.digit, "line": digit.line, "digitCount": digitCount])
+                    try event(["kind": digit.kind.rawValue, "digit": digit.digit, "line": digit.line, "digitCount": digitCount,
+                               "embeddedInLine": digit.embeddedInLine])
                 }
                 emit(Update(kind: .packet, message: "Receiving logs · \(digitCount) digit events · \(received) bytes",
                             bytes: bytes, digits: digits, received: received))

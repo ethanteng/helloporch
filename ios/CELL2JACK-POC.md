@@ -236,7 +236,7 @@ use has the same native button path; unplugged-device behavior, charging-hub
 behavior, and longer-term operation remain separate acceptance checks.
 
 
-## Keypad logging — app build 8, driver build 6, ABI 2
+## Keypad logging — app build 9, driver build 6, ABI 2
 
 The app adds **Start keypad test**, **Stop**, a large recent-digit display, and
 live raw logs. It does not invoke HelloPorch contact or call handlers. Existing
@@ -252,7 +252,9 @@ five-field USB match that outmatched AppleUSBCHCOM. All serial writes are still
 the literal two-byte `/v`, `/d`, `/q` strings with no newline.
 
 Begin configures the UART, queries/reads the version, waits 500 ms, and writes
-`/d`. The app waits another 500 ms before polling. Each poll is one bounded
+`/d`. Starting in app build 9, the app immediately begins draining received
+data instead of waiting another 500 ms without an active USB receive request.
+Each poll is one bounded
 250 ms read of up to one USB bulk packet, sized from the endpoint descriptor, preserving
 partial data on ordinary idle timeouts. One user client exclusively owns the
 log stream; concurrent version/start operations cannot reconfigure it.
@@ -272,13 +274,15 @@ is best effort, not a promise that `/q` reaches disconnected hardware. If stop
 fails, the app reports it instead of claiming logging was disabled.
 
 The byte-framed parser handles CR, LF, fragmented CRLF, and lines split across
-USB reads. Only complete lines beginning with `DTMF` and one valid digit
+USB reads. Complete lines beginning with `DTMF` and one valid digit
 (`0`–`9`, `*`, `#`, `A`–`D`) become primary digit events. Consecutive identical
 primary events are retained. `Double DTMF` / `RX Double DTMF` lines are saved as
 separate diagnostic reports, not counted again as physical presses. Parameter
 lines such as `DTMF=1` and `Unknown DTMF key` messages are rejected. Overlong
 lines are discarded until the next delimiter, preventing suffix stitching.
-No timing debounce or invented key-up event is applied.
+No timing debounce or invented key-up event is applied. Build 9 also recovers
+the full observed numeric DTMF record shape at the end of a line joined to
+unrelated status text; such events are explicitly marked `embeddedInLine`.
 
 Files are saved under `Documents/keypad-<UUID>/`: `received.bin` preserves all
 received version/log bytes, `events.jsonl` records timestamps, raw offsets,
@@ -349,3 +353,36 @@ Full keypad coverage (`4`, `6`–`9` were not pressed), held-key behavior, diffe
 call states, long-term reliability, physical Stop-button use, two-minute expiry,
 and unplugging during an active capture remain separate checks. No HelloPorch
 call actions are attached to the diagnostic digit events.
+
+### Full keypad test and joined-line recovery
+
+The user's next build-8 capture, started at `2026-10-18T06:36:30Z`, contains
+`1 2 3 4 5 6 7 8 9 0 * #` in the received bytes. Build 8 displayed and saved
+only 11 primary events because the first record was joined to preceding text:
+` Cal DTMF 1 :0 20: 2`. The raw capture proves that `1` was received. It does
+not establish whether firmware output or lost status-line bytes caused the
+join. The earlier strict line-start parser rejected that record.
+
+Build 9 adds a conservative fallback requiring the complete observed suffix
+shape `DTMF <digit> :<number> <number>: <number>` and marks recovered records
+`embeddedInLine=true`. It preserves Double DTMF classification and does not
+recover arbitrary mentions such as `status DTMF 1`. Tests cover every split
+boundary of the joined first-digit record and replay the actual raw capture:
+the corrected parser produces exactly `1234567890*#`, 12 events, with only the
+first marked as embedded. This is a replay verification, not a claim that a
+fresh physical build-9 capture has already shown all 12 on screen.
+
+The same app-only update starts polling immediately after enable and reduces
+the timer interval from 30 ms to 1 ms, allowing quicker draining during bursts;
+idle USB reads still wait up to 250 ms, and timer events coalesce on the serial
+queue. This is intended to reduce receive backlog, not proof of lossless UART
+capture. The driver binary/version and wire commands are unchanged, so this
+update requires no driver reconnect.
+
+The user's Stop button also completed this second capture: its original summary
+records `Stopped by you`, `/q sent; USB session closed.`, and 1317 log bytes.
+The original 11-event JSON and summary are retained unchanged alongside a
+separate corrected-parser replay report. Physical evidence now covers all 12
+standard keypad symbols and both manual and foreground stop paths. Held keys,
+other call states, long-term operation, auto-expiry, and unplug-during-capture
+still require separate tests.

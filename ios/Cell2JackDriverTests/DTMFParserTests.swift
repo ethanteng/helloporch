@@ -31,6 +31,25 @@ import Foundation
         precondition(parser.append(Data([0xff] + Array("DTMF 1\n".utf8))).isEmpty)
         precondition(parser.append(Data("DTMF 4\r".utf8)).map(\.digit) == ["4"])
         precondition(parser.append(Data("\n".utf8)).isEmpty)
+        let joinedLine = " Cal DTMF 1 :0 20: 2\r\n"
+        for split in 0...joinedLine.utf8.count {
+            var recovery = Cell2JackDTMFParser()
+            let bytes = Data(joinedLine.utf8)
+            let recovered = recovery.append(bytes.prefix(split)) + recovery.append(bytes.dropFirst(split))
+            precondition(recovered.map(\.digit) == ["1"])
+            precondition(recovered[0].embeddedInLine)
+        }
+        let diagnostic = parser.append(Data(" Cal RX Double DTMF 1 :0 20: 2\n".utf8))
+        precondition(diagnostic.count == 1 && diagnostic[0].kind == .doubleReport)
+        precondition(parser.append(Data("status mentions DTMF 1\nUnknown DTMF key 1\nstatus DTMF 12 :0 20: 2\n".utf8)).isEmpty)
+        if CommandLine.arguments.count > 1 {
+            var capture = Cell2JackDTMFParser()
+            let bytes = try! Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
+            let actual = capture.append(bytes).filter { $0.kind == .digit }
+            precondition(actual.map(\.digit).joined() == "1234567890*#")
+            precondition(actual.filter(\.embeddedInLine).map(\.digit) == ["1"])
+            print("Physical full-keypad capture: all 12 events recovered; joined first-digit line marked")
+        }
         print("DTMF parser: observed capture, every split, bytewise framing, repeats, duplicate diagnostics, config rejection and overflow recovery passed")
     }
 }
