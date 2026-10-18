@@ -26,7 +26,10 @@ enum Cell2JackDigitRouter {
 
 extension Notification.Name { static let cell2JackKeypadChanged = Notification.Name("porch.cell2jack.changed") }
 
-enum Cell2JackKeypadUpdate { case ready, digits([Cell2JackDigitEvent], TimeInterval), finished(String) }
+enum Cell2JackKeypadUpdate {
+    case ready, digits([Cell2JackDigitEvent], TimeInterval), finished(String)
+    case health(bytes: Int, packets: Int, primaryDigits: Int)
+}
 protocol Cell2JackKeypadConnection: AnyObject {
     func start()
     func stop()
@@ -86,9 +89,16 @@ final class Cell2JackKeypad {
                 self.changeStatus("Phone keypad ready")
                 self.record(["kind": "usbReady"])
             case .digits(let digits, let receivedAt):
+                let age = ProcessInfo.processInfo.systemUptime - receivedAt
                 guard self.generation == token, self.wanted, !self.stopping,
-                      ProcessInfo.processInfo.systemUptime - receivedAt < 1,
-                      self.sceneActive, self.isBedside() else { return }
+                      age < 1, self.sceneActive, self.isBedside() else {
+                    self.record(["kind": "digitIgnored", "reason": "session or foreground gate",
+                                 "symbols": digits.filter { $0.kind == .digit }.map(\.digit).joined(),
+                                 "callbackAge": age, "generationMatches": self.generation == token,
+                                 "wanted": self.wanted, "stopping": self.stopping,
+                                 "sceneActive": self.sceneActive, "bedside": self.isBedside()])
+                    return
+                }
                 // A full-screen call detaches the presenting clock view from
                 // its window. The owning scene, not that view, stays active.
                 guard let root = self.root, self.windowScene?.activationState == .foregroundActive else {
@@ -103,6 +113,11 @@ final class Cell2JackKeypad {
                                  "rawLine": event.line, "embeddedInLine": event.embeddedInLine,
                                  "rootViewAttached": root.viewIfLoaded?.window != nil])
                 }
+            case .health(let bytes, let packets, let primaryDigits):
+                guard self.generation == token, self.wanted, !self.stopping else { return }
+                self.record(["kind": "usbHealth", "bytes": bytes, "packets": packets,
+                             "primaryDigits": primaryDigits,
+                             "sceneState": self.windowScene?.activationState.rawValue ?? -99])
             case .finished(let message):
                 let restart = self.stopping && self.wanted
                 self.worker = nil; self.stopping = false
@@ -144,8 +159,8 @@ final class Cell2JackKeypad {
     }
 }
 
-/// Continuous foreground input. Bounded parser and action history; no raw log
-/// files and no two-minute cutoff that would remove hang-up during a call.
+/// Continuous foreground input. Bounded parser, action history and 64 KiB raw
+/// diagnostic tail; no time cutoff that would remove hang-up during a call.
 private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
     typealias Update = Cell2JackKeypadUpdate
     private let queue = DispatchQueue(label: "porch.cell2jack.real-calls.usb")
@@ -157,6 +172,14 @@ private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
     private var attempts = 0
     private var attemptTime = 0.0
     private var ready = false
+    private var totalBytes = 0
+    private var packets = 0
+    private var primaryDigits = 0
+    private var rawTail = Data()
+    private var lastHealth = 0.0
+    private var tailDirty = false
+    private let tailURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("cell2jack-usb-tail.bin")
     init(_ callback: @escaping (Update) -> Void) { self.callback = callback }
     private func emit(_ update: Update) { DispatchQueue.main.async { self.callback(update) } }
     private func unpack(_ data: Data) throws -> Data {
@@ -193,19 +216,38 @@ private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
         do {
             let bytes = try unpack(session.pollLogs())
             if !bytes.isEmpty {
+                totalBytes += bytes.count; packets += 1
+                rawTail.append(bytes)
+                if rawTail.count > 65_536 { rawTail = Data(rawTail.suffix(65_536)) }
+                tailDirty = true
                 if !ready { ready = true; emit(.ready) }
                 let digits = parser.append(bytes)
+                primaryDigits += digits.filter { $0.kind == .digit }.count
                 if !digits.isEmpty { emit(.digits(digits, ProcessInfo.processInfo.systemUptime)) }
             } else if !ready, ProcessInfo.processInfo.systemUptime - attemptTime >= 2 {
                 guard attempts < 3 else { throw failure("No device logs after three attempts. Check the driver and reconnect, then tap Retry.") }
                 _ = try unpack(session.endLogs()); try begin()
             }
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastHealth >= 5 {
+                lastHealth = now
+                saveTail()
+                emit(.health(bytes: totalBytes, packets: packets, primaryDigits: primaryDigits))
+            }
         } catch { finish("Phone keypad stopped: \(error.localizedDescription)") }
+    }
+    private func saveTail() {
+        guard tailDirty else { return }
+        do {
+            try rawTail.write(to: tailURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            tailDirty = false
+        } catch { /* Diagnostic storage never disables the call controls. */ }
     }
     func stop() { queue.async { self.finish("Phone keypad stopped") } }
     private func finish(_ message: String) {
         guard !finished else { return }
         finished = true; timer?.cancel(); timer = nil
+        saveTail()
         var cleanup = ""
         if let session {
             do { _ = try unpack(session.endLogs()); cleanup = " · /q sent" }

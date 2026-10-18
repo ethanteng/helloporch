@@ -6,7 +6,7 @@
 	<array>
 		<dict>
 			<key>FooterText</key>
-			<string>Experimental build 13. Enable the USB driver here, then turn on Use Cell2Jack phone keypad in Porch caregiver mode → Advanced.</string>
+			<string>Experimental build 14. Enable the USB driver here, then turn on Use Cell2Jack phone keypad in Porch caregiver mode → Advanced.</string>
 			<key>Title</key>
 			<string>Porch · Cell2Jack call test</string>
 			<key>Type</key>

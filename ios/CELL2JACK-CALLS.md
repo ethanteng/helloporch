@@ -1,7 +1,7 @@
 # Cell2Jack keypad in the real Porch app
 
 Use the **PorchCell2JackCalls** scheme on
-`feature/cell2jack-ipad-version-poc`. Build 13 installs as **Porch**, with the
+`feature/cell2jack-ipad-version-poc`. Build 14 installs as **Porch**, with the
 real app identity `com.ethanteng.helloporch`. It replaces the installed Porch
 binary in place, preserving its settings, contact photos, and keychain identity.
 It uses the normal calling engine and live saved assignments, not Preview's
@@ -49,10 +49,12 @@ rollback: that can remove its saved data.
   available when USB is disconnected.
 
 Pickup and handset hang-up events are never routed to app actions. The app's
-interface depends only on digit events. The intended phone has a separate
-handset/headset and base keypad; whether it emits digits with the handset
-untouched requires a physical test. Previous successful captures used an
-off-hook handset, so they do not establish on-hook hardware behavior.
+interface depends only on digit events. The current physical test uses an AT&T
+210 with its handset off the cradle.
+The handset was left in that position during the successful key and call tests.
+This establishes operation without pickup/hang-up between calls; it does not
+establish on-cradle digit output or behavior of the intended separate-headset
+phone.
 
 USB transports keypad input only. Call audio uses the existing iPad audio route.
 This integration does not add a USB audio device or automatically route audio to
@@ -67,9 +69,13 @@ separate primary reports, including repeated digits, remain separate inputs.
 sequence, two million baud, and the existing DriverKit bridge. It drains USB on
 one serial queue; idle reads block for up to 250 ms. It retries initial silence
 at most three times and closes on an error. There is no preview time/byte cutoff
-that would disable hang-up during a longer call. It does not save an unbounded
-raw log. Parser state is bounded and the local action trace retains only its
-last 200 records in `Documents/cell2jack-call-actions.json`.
+that would disable hang-up during a longer call. Parser state is bounded and
+the local action trace retains only its last 200
+records in `Documents/cell2jack-call-actions.json`. Build 14 also retains a
+64 KiB maximum raw USB tail in `Documents/cell2jack-usb-tail.bin`, written at
+most once every five seconds during normal polling and on cleanup. Diagnostic
+storage failure does not stop input. Health records report packet, byte, and
+primary-digit counts; input gate failures report their reason.
 
 Routing chooses the current visible receiver; an unknown modal blocks routing
 instead of falling through to the clock. Transitioning screens and callbacks
@@ -87,14 +93,15 @@ out of source control.
 
 ## Validation to date
 
-- Signed device build and deep signature verification passed. Build 13 installed
+- Signed device build and deep signature verification passed. Build 14 installed
   in place on the physical M3 iPad. Saved assignment bytes match the pre-install
   copy. No contact data or credentials were imported from Preview.
 - Nine simulator routing tests passed: current-screen selection, unknown modal
   blocking, navigation, non-digit/hook rejection, repeated digits, fragmented
   USB/secondary report filtering, real call-screen hang-up using a remapped saved
   key without starting a connection, clock status layout at four iPad sizes,
-  launch before activation, quick foreground return while the old client closes, disabled/family mode, and stale readiness
+  launch before activation, quick foreground return while the old client closes,
+  disabled/family mode, and stale readiness
   callback rejection, plus USB dispatch to a full-screen receiver while its
   presenting clock view is detached from the window.
 - The ordinary Porch simulator build passed. Preview's source/package safety
@@ -103,8 +110,11 @@ out of source control.
 - Physical build 12 reached USB ready. The user pressed the unassigned key 3
   with the handset untouched and confirmed that Porch showed no person assigned.
   The user then started a call with 1, but 0 did nothing in build 12; on-screen
-  End worked. Build 13 fixes the full-screen input gate; its physical retest is
-  pending.
+  End worked. Build 13 changed the full-screen gate, but another test had no
+  accepted digits, with no raw capture available to establish its cause.
+  Build 14 captured 3/5/0, then two successful 1 → answer → 0 call cycles. The
+  user confirmed both ended on both devices without moving the handset or
+  reconnecting USB.
 
 Build:
 
@@ -145,4 +155,22 @@ and records a scene-gate rejection instead of silently losing its evidence.
 The new regression test sends USB 0 to a visible receiver while the clock view
 has no window, then verifies the same input is blocked after scene resignation.
 Nine simulator tests and the signed device build passed. Driver build 6 is
-unchanged. Physical call teardown needs the subsequent user retest.
+unchanged. The build 14 physical retest subsequently verified call teardown, including
+`rootViewAttached: false` on the USB 0 dispatch.
+
+## Build 14 physical call verification and bounded diagnostics
+
+Build 14 adds the bounded raw tail, periodic receive counters, and explicit
+rejection diagnostics. It changes no driver commands or calling actions. The
+user pressed 3, 5, 0 on the AT&T 210 while off the cradle; all three appear in
+both the raw USB tail and action trace, dispatched at the clock with the root
+view attached.
+
+The user then pressed 1, answered on the other device, and pressed 0. The trace
+records USB 1 → call request/session creation → call-end request and USB 0 to the
+call screen → local screen closure. The 0 event explicitly records the root
+view detached from its window, verifying the full-screen gate correction. The
+user confirmed the call ended on both devices. A second complete cycle also
+worked without handset movement or USB reconnection. Nine simulator tests and
+the signed build passed. This is a verified experimental build, not a claim of
+unattended reliability, on-cradle detection, or distribution approval.
