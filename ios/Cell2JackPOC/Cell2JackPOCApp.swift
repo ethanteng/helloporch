@@ -31,7 +31,7 @@ final class Cell2JackVersionViewController: UIViewController {
         title = "Cell2Jack USB Test"
         view.backgroundColor = .systemBackground
         let instructions = UILabel()
-        instructions.text = "Connect Cell2Jack directly to this iPad using a USB data cable. Enable the driver in Settings → General → Drivers. Then read its version."
+        instructions.text = "Connect Cell2Jack directly to this iPad using a USB data cable. Tap Open app settings and enable its driver if listed. You can also look for Drivers under Settings → Privacy & Security or General. Then read its version."
         instructions.numberOfLines = 0; instructions.font = .preferredFont(forTextStyle: .title3)
         let detail = UILabel()
         detail.text = "This test sends only /v at 2,000,000 baud. It does not enable debug logging or place a call."

@@ -111,8 +111,15 @@ can be explicitly selected with `PORCH_CELL2JACK_DRIVER_PROFILE` if required.
 ## Physical acceptance test
 
 1. Install the signed **Porch USB Test** app on the M3 iPad.
-2. Enable its driver under **Settings → General → Drivers**. If that section is
-   absent, inspect signing/embedding rather than assuming the device is silent.
+2. Tap **Open app settings** in the test app and enable its system-provided driver
+   switch if present. Alternatively, look for **Drivers** under **Settings →
+   Privacy & Security** or **General**; Apple's documentation gives different
+   locations. Build 2 includes a `Settings.bundle` so iPadOS always creates an
+   app settings page. This follows Apple's [suggested workaround for missing
+   driver settings](https://developer.apple.com/forums/thread/843589), but does
+   not guarantee the driver switch appears. The bundle contains no custom driver
+   toggle: only iPadOS can grant this permission. If absent in all locations,
+   investigate system registration rather than assuming the device is silent.
 3. Use a USB-C data adapter/cable to connect Cell2Jack's USB port to the iPad.
    If simultaneous charging or extra power is needed, use an appropriate powered
    USB-C hub; a charge-only cable will not work.
