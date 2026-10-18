@@ -20,14 +20,16 @@ export default function Home() {
         </nav>
 
         <header className="hero">
-          <div className="hero__badge">Video calls for individuals who can&rsquo;t use a phone anymore</div>
+          <div className="hero__badge">
+            One-button video calling for people with Parkinson&rsquo;s, dementia, and limited dexterity.
+          </div>
           <h1 className="hero__title">
-            <span className="hero__title-lead">Phones can get complicated.</span>
-            <em>Seeing family shouldn&rsquo;t.</em>
+            <span className="hero__title-lead">Phones got complicated.</span>{" "}
+            <em>Staying connected shouldn&rsquo;t.</em>
           </h1>
           <p className="hero__lede">
-            Porch is a tablet and a large-button keypad for individuals with dementia or limited dexterity. Each button is
-            someone they love. <strong>One press starts a video call.</strong>
+            When using a phone becomes difficult, seeing someone you love can still be simple. Porch pairs a tablet with a
+            physical keypad of large photo buttons. <strong>Press a loved one&rsquo;s photo to start a video call on the tablet.</strong>
           </p>
           <HeroWaitlist />
         </header>
