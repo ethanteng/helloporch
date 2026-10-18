@@ -2,9 +2,11 @@ import UIKit
 import AVFoundation
 import LiveKit
 import PorchCore
+import Vision
 
 extension Notification.Name {
     static let porchMessagesReady = Notification.Name("porch.messages.ready")
+    static let porchMessageAutoplayChanged = Notification.Name("porch.messages.autoplay")
 }
 
 /// Keeps waiting family messages downloaded on the bedside iPad, so they play instantly and
@@ -188,6 +190,8 @@ final class MessagePlayerViewController: UIViewController {
     private var observers: [NSObjectProtocol] = []
     private var keypad = CallTrigger()
     private var ended = false
+    /// An incoming call took over. That is not Stop, so whatever is still waiting can start on its own afterward.
+    private(set) var interrupted = false
 
     override var canBecomeFirstResponder: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
@@ -332,7 +336,10 @@ final class MessagePlayerViewController: UIViewController {
     /// Stopping early leaves the current message queued to play another time.
     @objc func stop() { close() }
     /// Closes at once for something more important, such as an incoming call.
-    func interrupt(then next: @escaping () -> Void) { close(animated: false, then: next) }
+    func interrupt(then next: @escaping () -> Void) {
+        interrupted = true
+        close(animated: false, then: next)
+    }
     private func close(animated: Bool = true, then next: (() -> Void)? = nil) {
         guard !ended else { next?(); return }
         ended = true; tearDown()
@@ -901,5 +908,203 @@ extension BedsideVoicemailViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard (try? CallSlots.load())?.action(for: digit) == .callControl else { return "message key ignored" }
         finishFromKeypad(); return "message finished"
+    }
+}
+
+/// Notices someone sitting in front of the bedside iPad: the front camera runs at a low rate and
+/// Apple's on-device face detection looks at a few frames a second. Nothing is recorded, kept or sent.
+/// Callers run it only while messages are waiting and stop it before anything else uses the camera.
+final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    /// Called on the main thread once someone has been in front of the iPad for a couple of seconds.
+    var onPresent: (() -> Void)?
+    /// Main-thread state.
+    private(set) var running = false
+    // Starting, stopping and setup happen on the session queue; frames are analyzed on the video
+    // queue, so waiting for a stop never holds up frame delivery.
+    private let sessionQueue = DispatchQueue(label: "porch.presence.session")
+    private let videoQueue = DispatchQueue(label: "porch.presence.video")
+    private let session = AVCaptureSession()
+    private var connection: AVCaptureConnection?
+    private var configured = false
+    private var trigger = PresenceTrigger()
+    private var lastAnalysis: TimeInterval = 0
+    private let faces = VNDetectFaceRectanglesRequest()
+    /// Main-thread count of session-queue jobs. Start and stop bounce to the main thread, so a
+    /// caller must not block on this queue waiting for them.
+    private var sessionJobs = 0
+    /// Invalidates a failed start's "not running" callback once a newer start or a stop has begun.
+    private var startToken = 0
+
+    deinit {
+        let capture = session
+        sessionQueue.async { if capture.isRunning { capture.stopRunning() } }
+    }
+
+    /// Starts watching, or keeps watching with the iPad's current orientation.
+    func start(orientation: UIInterfaceOrientation) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        // Permission revoked while watching: stop, instead of leaving the camera running.
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { stop(); return }
+        if !running { videoQueue.async { [self] in trigger.reset(); lastAnalysis = 0 } }
+        running = true
+        startToken += 1
+        let token = startToken
+        enqueueSession { [self] in
+            if !configured { configured = configure() }
+            guard configured else {
+                DispatchQueue.main.async { if self.startToken == token { self.running = false } }
+                return
+            }
+            // Upright frames, whichever way the iPad is standing, including after it's turned.
+            if let connection, connection.isVideoOrientationSupported {
+                switch orientation {
+                case .portraitUpsideDown: connection.videoOrientation = .portraitUpsideDown
+                case .landscapeLeft: connection.videoOrientation = .landscapeLeft
+                case .landscapeRight: connection.videoOrientation = .landscapeRight
+                default: connection.videoOrientation = .portrait
+                }
+            }
+            if !session.isRunning { session.startRunning() }
+        }
+    }
+    func stop() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        startToken += 1
+        guard running else { return }
+        running = false
+        enqueueSession { [self] in if session.isRunning { session.stopRunning() } }
+    }
+    /// Stops if needed, then calls `done` on the main thread once the camera is free.
+    /// Never blocks: start and stop can synchronously need the main thread, so waiting
+    /// for them there deadlocks (a call or the player would freeze while the camera stops).
+    func stopThen(_ done: @escaping () -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        startToken += 1
+        running = false
+        if sessionJobs == 0, !session.isRunning { done(); return }
+        sessionJobs += 1
+        sessionQueue.async { [self] in
+            if session.isRunning { session.stopRunning() }
+            DispatchQueue.main.async {
+                self.sessionJobs -= 1
+                done()
+            }
+        }
+    }
+    private func enqueueSession(_ work: @escaping () -> Void) {
+        sessionJobs += 1
+        sessionQueue.async { [self] in
+            work()
+            DispatchQueue.main.async { self.sessionJobs -= 1 }
+        }
+    }
+    private func configure() -> Bool {
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+              let input = try? AVCaptureDeviceInput(device: camera) else { return false }
+        session.beginConfiguration(); defer { session.commitConfiguration() }
+        // Video only. LiveKit owns the shared audio session; taking it over cuts off the spoken notice and calls.
+        session.automaticallyConfiguresApplicationAudioSession = false
+        session.sessionPreset = session.canSetSessionPreset(.vga640x480) ? .vga640x480 : .low
+        let output = AVCaptureVideoDataOutput()
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: videoQueue)
+        guard session.canAddInput(input), session.canAddOutput(output) else { return false }
+        session.addInput(input); session.addOutput(output)
+        connection = output.connection(with: .video)
+        return true
+    }
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let time = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // About three looks a second is plenty, and keeps the iPad cool.
+        guard time - lastAnalysis >= 0.3, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        lastAnalysis = time
+        guard (try? VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up).perform([faces])) != nil else { return }
+        let largest = (faces.results ?? []).map { Double($0.boundingBox.height) }.max()
+        if trigger.observe(faceHeight: largest, at: time) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.running else { return }
+                self.onPresent?()
+            }
+        }
+    }
+}
+
+/// The glow and spoken notice when someone sits down in front of the iPad with messages waiting.
+/// When the notice finishes, playback starts; Not now (or the messages or call key) waits instead.
+final class MessageNoticeView: UIView {
+    var onNotNow: (() -> Void)?
+    var onFinished: (() -> Void)?
+    private let text: String
+    private let glow = UIView()
+    private let messageLabel = UILabel()
+    private let announcer = MessageAnnouncer()
+    private var session: SessionRequirementHandle?
+    private var ended = false
+    private static let warm = UIColor(red: 1, green: 0.74, blue: 0.32, alpha: 1)
+
+    init(count: Int) {
+        text = count == 1 ? BedsideText.string("You have 1 new message.") : BedsideText.string("You have %d new messages.", count)
+        super.init(frame: .zero)
+        backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        accessibilityViewIsModal = true
+        glow.isUserInteractionEnabled = false
+        glow.layer.borderColor = Self.warm.cgColor; glow.layer.borderWidth = 16
+        glow.layer.shadowColor = Self.warm.cgColor; glow.layer.shadowRadius = 36; glow.layer.shadowOpacity = 1; glow.layer.shadowOffset = .zero
+        let icon = UIImageView(image: UIImage(systemName: "envelope.open.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 72, weight: .semibold)))
+        icon.tintColor = Self.warm; icon.contentMode = .scaleAspectFit; icon.isAccessibilityElement = false
+        messageLabel.text = text; messageLabel.font = PorchStyle.font(44, weight: .semibold); messageLabel.textColor = PorchStyle.nightText
+        messageLabel.textAlignment = .center; messageLabel.numberOfLines = 0; messageLabel.adjustsFontSizeToFitWidth = true; messageLabel.minimumScaleFactor = 0.5
+        messageLabel.accessibilityIdentifier = "messages.notice"
+        let notNowButton = PorchStyle.button(BedsideText.string("Not now"), symbol: "xmark")
+        notNowButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(32, weight: .semibold); return attributes
+        }
+        notNowButton.configuration?.contentInsets = .init(top: 20, leading: 40, bottom: 20, trailing: 40)
+        notNowButton.configuration?.baseBackgroundColor = UIColor(white: 0.32, alpha: 1)
+        notNowButton.configuration?.baseForegroundColor = .white
+        notNowButton.accessibilityIdentifier = "messages.notNow"
+        notNowButton.addAction(UIAction { [weak self] _ in self?.notNow() }, for: .touchUpInside)
+        let card = UIStackView(arrangedSubviews: [icon, messageLabel, notNowButton])
+        card.axis = .vertical; card.spacing = 28; card.alignment = .center
+        card.isLayoutMarginsRelativeArrangement = true; card.directionalLayoutMargins = .init(top: 40, leading: 48, bottom: 40, trailing: 48)
+        card.backgroundColor = PorchStyle.night.withAlphaComponent(0.94); card.layer.cornerRadius = 32; card.layer.cornerCurve = .continuous
+        for view in [glow, card] { view.translatesAutoresizingMaskIntoConstraints = false; addSubview(view) }
+        NSLayoutConstraint.activate([
+            glow.leadingAnchor.constraint(equalTo: leadingAnchor), glow.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glow.topAnchor.constraint(equalTo: topAnchor), glow.bottomAnchor.constraint(equalTo: bottomAnchor),
+            card.centerXAnchor.constraint(equalTo: safeAreaLayoutGuide.centerXAnchor), card.centerYAnchor.constraint(equalTo: safeAreaLayoutGuide.centerYAnchor),
+            card.leadingAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.leadingAnchor, constant: 32),
+            card.trailingAnchor.constraint(lessThanOrEqualTo: safeAreaLayoutGuide.trailingAnchor, constant: -32),
+            notNowButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 88)
+        ])
+        BedsideText.applyAccessibilityLanguage(to: self)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(count:)") }
+
+    func begin() {
+        if !UIAccessibility.isReduceMotionEnabled {
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1; pulse.toValue = 0.3; pulse.duration = 0.9
+            pulse.autoreverses = true; pulse.repeatCount = .infinity
+            glow.layer.add(pulse, forKey: "pulse")
+        }
+        UIAccessibility.post(notification: .screenChanged, argument: messageLabel)
+        session = try? AudioManager.shared.audioSession.acquire(requirement: .playbackOnly)
+        announcer.announce(text) { [weak self] in
+            guard let self, !self.ended else { return }
+            self.end(); self.onFinished?()
+        }
+    }
+    func notNow() {
+        guard !ended else { return }
+        end(); onNotNow?()
+    }
+    /// Removes the notice without starting anything, for example when a call arrives.
+    func end() {
+        guard !ended else { return }
+        ended = true
+        announcer.stop(); glow.layer.removeAllAnimations()
+        try? session?.release(); session = nil
+        removeFromSuperview()
     }
 }
