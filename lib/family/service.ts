@@ -8,7 +8,7 @@ import { callRoom, config, displayName, displayPhoto, dropInAllowed, expire, Fam
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
-import { handleProfileAction, profileActions, profileMedia, publicProfile } from "./profiles.ts";
+import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult> };
@@ -284,7 +284,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "leaveHousehold") {
         requireValue(me.role === "family", "A bedside device can't leave its household.", 403);
         removedMedia = profileMedia(me);
-        me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.profile; delete me.override;
+        me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.profile; delete me.override; delete me.pendingPhotos;
         const call = house.call;
         if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
         return undefined;
@@ -350,7 +350,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           if (action === "revoke") {
             requireValue(target.id !== me.id, "To remove this device, choose Join a different family.", 403);
             removedMedia = profileMedia(target);
-            target.revoked = true; delete target.voip; delete target.alerts; delete target.caregiver; delete target.profile; delete target.override;
+            target.revoked = true; delete target.voip; delete target.alerts; delete target.caregiver; delete target.profile; delete target.override; delete target.pendingPhotos;
           } else if (action === "setCaregiver") {
             requireValue(target.id !== me.id, "Another caregiver must change your caregiver access.", 403);
             requireValue(typeof input.enabled === "boolean", "Choose whether they can use caregiver mode.");
@@ -456,7 +456,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     // Message housekeeping never fails the request it rides on; the next poll retries it.
     if (action === "revoke" && typeof input.memberID === "string") { try { await removeMessagesFrom(store, media, house, input.memberID, now); } catch { /* retried by caregivers */ } }
     try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
-    if (action === "poll" && me.role === "bedside") { try { await maintainMessages(store, media, house, now); } catch { /* next poll */ } }
+    if (action === "poll" && me.role === "bedside") {
+      try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
+      try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
+    }
     if (cleanupRoom) {
       try { await releaseRoom(cleanupRoom); }
       catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }

@@ -9,8 +9,10 @@ export type Permissions = { audio: boolean; video: boolean };
 export type ProfilePhoto = { id: string; pathname: string };
 /** How a family member appears on Porch: the name and photo they chose, or ones a caregiver chose for them. */
 export type Profile = { name?: string; photo?: ProfilePhoto };
+/** A photo upload the server signed that hasn't been saved yet; deleted once `expiresAt` passes. */
+export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's. */
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile };
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone };
 export type MessageKind = "message" | "voicemail";

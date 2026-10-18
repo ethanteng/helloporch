@@ -151,3 +151,32 @@ test('losing access deletes a member\'s photos',async()=>{
   const house=JSON.parse(await f.store.get(`house:${f.bedside.state.householdID}`));
   assert.ok(house.members.every(m => !m.profile && !m.override));
 });
+
+test('unsaved uploads are limited, and deleted once they expire or access is removed',async()=>{
+  const f=await fixture();
+  const request=(who=f.ethan, values={}, pin) => f.json(values.memberID ? 'overridePhotoUpload' : 'profilePhotoUpload',{sizeBytes:50_000,...values},who.credential,pin);
+  const abandoned=[];
+  for (let n=0;n<3;n++) { const created=await request(); f.media.upload(created.upload,50_000); abandoned.push(created.pathname); }
+  assert.equal(await f.status('profilePhotoUpload',{sizeBytes:50_000},f.ethan.credential),429,'three unsaved uploads at a time');
+  assert.ok(await request(f.sam,{memberID:f.id(f.ethan)},'123456'),'a caregiver\'s uploads are counted separately');
+  // Only an upload the server signed can be saved, even if a file is at a valid-looking path.
+  const forged=abandoned[0].replace(/[a-f0-9-]{36}\.jpg$/,`${randomUUID()}.jpg`);
+  f.media.blobs.set(forged,{size:50_000,contentType:'image/jpeg'});
+  assert.equal(await f.status('setProfile',{photo:{id:photoID('forged'),pathname:forged}},f.ethan.credential),409);
+  // Saving one frees its place; saving it again is a harmless retry.
+  const saved={id:photoID('saved'),pathname:abandoned.pop()};
+  await f.json('setProfile',{photo:saved},f.ethan.credential);
+  await f.json('setProfile',{photo:saved},f.ethan.credential);
+  assert.ok(await request());
+  // The bedside deletes uploads that were never saved, once they expire.
+  f.advance(1199); await f.json('poll',{available:true},f.bedside.credential);
+  assert.ok(!f.media.removed.includes(abandoned[0]));
+  f.advance(1); await f.json('poll',{available:true},f.bedside.credential);
+  for (const pathname of abandoned) assert.ok(f.media.removed.includes(pathname), pathname);
+  assert.ok(!f.media.removed.includes(saved.pathname),'the saved photo stays');
+  assert.equal(await f.status('setProfile',{photo:{id:photoID('late'),pathname:abandoned[0]}},f.ethan.credential),409,'an expired upload can\'t be saved');
+  // Removing access deletes uploads that are still waiting too.
+  const waiting=(await request()).pathname;
+  await f.json('revoke',{memberID:f.id(f.ethan)},f.bedside.credential,'123456');
+  assert.ok(f.media.removed.includes(waiting));
+});

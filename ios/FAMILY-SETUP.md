@@ -25,7 +25,7 @@ To move a phone to a different family, open **gear → Join a different family**
 
 ## Names and photos
 
-Each family member chooses how they appear on the bedside: on their phone, tap the **profile icon** at the top left of the Porch screen, then add a photo (take one or choose from the library) and type their name. Leaving the name blank uses the name on their invitation. The bedside shows that name and photo on its keypad cards, incoming calls and drop-in announcements, the active call screen, and message playback, including for people without a keypad number. Photos are resized on the phone (at most 768 pixels, under 1 MB) and stored in the private Blob store with messages; the bedside downloads each one once and checks it matches what was uploaded.
+Each family member chooses how they appear on the bedside: on their phone, tap the **profile icon** at the top left of the Porch screen, then add a photo (take one or choose from the library) and type their name. Leaving the name blank uses the name on their invitation. The bedside shows that name and photo on its keypad cards, incoming calls and drop-in announcements, the active call screen, and message playback, including for people without a keypad number. Photos are resized on the phone (at most 768 pixels, under 1 MB) and stored in the private Blob store with messages; the bedside downloads each one once and checks it matches what was uploaded. A photo uploaded but not saved within 20 minutes is deleted.
 
 A caregiver can choose a different name or photo for anyone, which then shows instead of theirs:
 
