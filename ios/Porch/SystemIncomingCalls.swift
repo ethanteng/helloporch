@@ -30,6 +30,9 @@ extension Notification.Name {
     private var connected = false
     private var recentIDs: [UUID] = []
     private var mute = false
+    /// Whether this call's camera belongs on while Porch is open. Leaving Porch turns
+    /// the camera off; returning turns it back on unless the person turned it off.
+    private var wantsCamera = false
     private var inactivity = CallInactivityTimer(timeout: nil)
     private(set) var room: Room?
     private(set) var call: FamilyCallRecord?
@@ -154,7 +157,7 @@ extension Notification.Name {
             uuid = id; incomingName = String(name.prefix(80)); self.mode = mode
             expiry = expiresAt; credential = PorchDevice.credential(for: PorchDevice.experience)
             inactivity = CallInactivityTimer(timeout: CallPreferences.disconnectAfterSilence() ? TimeInterval(CallPreferences.silenceSeconds()) : nil)
-            ending = false; answered = false; connected = false; status = "Incoming Porch call"
+            ending = false; answered = false; connected = false; wantsCamera = false; status = "Incoming Porch call"
         }
         let update = CXCallUpdate()
         update.localizedCallerName = String(name.prefix(80))
@@ -233,6 +236,7 @@ extension Notification.Name {
                 try Task.checkCancellation()
                 guard uuid == action.callUUID, let accepted = response.state?.call, accepted.state == "accepted" else { action.fail(); return }
                 call = accepted; answered = true; status = "Connecting…"
+                wantsCamera = isVideo && profile.role == .family && CallPreferences.startVideoWithCamera()
                 AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = false
                 try AudioManager.shared.setEngineAvailability(.none)
                 try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: mode == .video ? .videoChat : .voiceChat,
@@ -276,21 +280,29 @@ extension Notification.Name {
                 status = "Call connected"
                 endBackgroundTask()
                 changed()
+                resumeCamera()
             } catch { if !Task.isCancelled { finish(reason: .failed) } }
         }
     }
     func setCamera(enabled: Bool) async throws {
         guard let room, answered, connected, isVideo else { return }
-        // Answering from the lock screen starts audio only; camera requires an
-        // explicit foreground tap, so it cannot start behind the lock screen.
+        wantsCamera = enabled
+        // The camera only runs in the foreground, so answering from the lock
+        // screen starts audio and it can never start behind the lock screen.
         guard !enabled || UIApplication.shared.applicationState == .active else { return }
         if enabled {
             guard await AVCaptureDevice.requestAccess(for: .video) else { return }
         }
-        guard !enabled || UIApplication.shared.applicationState == .active else { return }
+        guard !enabled || (wantsCamera && UIApplication.shared.applicationState == .active) else { return }
         try await room.localParticipant.setCamera(enabled: enabled)
         if enabled && UIApplication.shared.applicationState != .active { try await room.localParticipant.setCamera(enabled: false) }
         changed()
+    }
+    /// Starts the camera once Porch is open, when this call wants it.
+    func resumeCamera() {
+        guard wantsCamera, let room, !room.localParticipant.isCameraEnabled(),
+              UIApplication.shared.applicationState == .active else { return }
+        Task { try? await setCamera(enabled: true) }
     }
     func enterBackground() {
         guard let room else { return }
@@ -351,7 +363,7 @@ extension Notification.Name {
             AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = true
             try? AudioManager.shared.setEngineAvailability(.default)
             self.room = nil; call = nil; uuid = nil; credential = nil; answered = false
-            connected = false; audioActive = false; mute = false; mediaTask = nil
+            connected = false; audioActive = false; mute = false; wantsCamera = false; mediaTask = nil
             endBackgroundTask(); changed()
         }
     }

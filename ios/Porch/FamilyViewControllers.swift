@@ -53,6 +53,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let paired = PorchDevice.credential(for: .family) != nil
         let sheet = UIAlertController(title: "Device settings", message: nil, preferredStyle: .actionSheet)
         if paired {
+            sheet.addAction(UIAlertAction(title: "Call settings", style: .default) { [weak self] _ in self?.navigationController?.pushViewController(FamilyCallSettingsViewController(), animated: true) })
             sheet.addAction(UIAlertAction(title: "Caregiver mode", style: .default) { [weak self] _ in self?.openCaregiverMode() })
             sheet.addAction(UIAlertAction(title: "Join a different family", style: .default) { [weak self] _ in self?.confirmNewFamily() })
         }
@@ -166,6 +167,22 @@ final class FamilyHomeViewController: CaregiverFormViewController {
                 else { showPorchError(error, on: self) }
             }
         }
+    }
+}
+
+/// Preferences kept on this phone for its own calls. Changes apply right away.
+final class FamilyCallSettingsViewController: CaregiverFormViewController {
+    private let camera = UISwitch()
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Call settings"
+        camera.isOn = CallPreferences.startVideoWithCamera()
+        camera.accessibilityIdentifier = "family.startVideoWithCamera"
+        camera.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            CallPreferences.saveStartVideoWithCamera(self.camera.isOn)
+        }, for: .valueChanged)
+        form.addArrangedSubview(group("Video calls", footer: "When this is on, your camera turns on as soon as a video call connects. If you answer from the lock screen, it turns on when you open Porch. It never runs while Porch is closed or the screen is locked. You can turn the camera on or off during any call.", rows: [toggleRow("Start with my camera on", camera)]))
+        hideKeyboardControl()
     }
 }
 

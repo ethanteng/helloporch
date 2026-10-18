@@ -14,6 +14,7 @@ public enum CallPreferences {
     private static let silenceEnabledKey = "porch.disconnectAfterSilence"
     private static let silenceSecondsKey = "porch.silenceSeconds"
     private static let fallbackKey = "porch.phoneFallbackSeconds"
+    private static let cameraKey = "porch.startVideoWithCamera"
 
     public static func disconnectAfterSilence(in defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: silenceEnabledKey)
@@ -36,5 +37,14 @@ public enum CallPreferences {
 
     public static func saveFallbackSeconds(_ seconds: Int, in defaults: UserDefaults = .standard) {
         defaults.set(min(fallbackRange.upperBound, max(fallbackRange.lowerBound, seconds)), forKey: fallbackKey)
+    }
+
+    /// Whether a family phone turns its camera on when a video call connects. On unless turned off.
+    public static func startVideoWithCamera(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: cameraKey) as? Bool ?? true
+    }
+
+    public static func saveStartVideoWithCamera(_ enabled: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: cameraKey)
     }
 }
