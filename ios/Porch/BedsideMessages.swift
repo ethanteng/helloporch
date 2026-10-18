@@ -927,7 +927,8 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
 
     /// Starts watching, or keeps watching with the iPad's current orientation.
     func start(orientation: UIInterfaceOrientation) {
-        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        // Permission revoked while watching: stop, instead of leaving the camera running.
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { stop(); return }
         if !running { videoQueue.async { [self] in trigger.reset(); lastAnalysis = 0 } }
         running = true
         sessionQueue.async { [self] in
