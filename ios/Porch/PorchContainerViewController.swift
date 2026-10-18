@@ -17,7 +17,12 @@ final class PorchContainerViewController: UIViewController {
     deinit { NotificationCenter.default.removeObserver(self) }
     private var readyForIncoming: Bool {
         guard UIApplication.shared.applicationState == .active, presentedViewController == nil, view.window != nil else { return false }
-        if let clock = content as? CallViewController { return clock.presentedViewController == nil || clock.presentedViewController is PeoplePickerViewController || clock.presentedViewController is MessagePlayerViewController || clock.presentedViewController is BedsideVoicemailViewController }
+        if let clock = content as? CallViewController {
+            // The clock is about to present something else once the camera stops. Wait for that,
+            // then familyChanged runs again, instead of covering the clock twice.
+            if clock.isReleasingCamera { return false }
+            return clock.presentedViewController == nil || clock.presentedViewController is PeoplePickerViewController || clock.presentedViewController is MessagePlayerViewController || clock.presentedViewController is BedsideVoicemailViewController
+        }
         if let nav = content as? UINavigationController { return nav.topViewController is FamilyHomeViewController && nav.presentedViewController == nil }
         return false
     }
@@ -34,9 +39,14 @@ final class PorchContainerViewController: UIViewController {
         if SystemIncomingCalls.shared.hasCall { SystemIncomingCalls.shared.requestEnd() }
         FamilyCoordinator.shared.pause()
         let finish = { [weak self] in
-            self?.installExperience(); self?.incomingID = nil
-            Cell2JackKeypad.shared.refresh()
-            if UIApplication.shared.applicationState == .active { FamilyCoordinator.shared.start() }
+            guard let self else { return }
+            let swap = {
+                self.installExperience(); self.incomingID = nil
+                Cell2JackKeypad.shared.refresh()
+                if UIApplication.shared.applicationState == .active { FamilyCoordinator.shared.start() }
+            }
+            // Stop the bedside camera before the clock is removed and the next screen starts a call.
+            if let clock = self.content as? CallViewController { clock.releaseCamera(then: swap) } else { swap() }
         }
         if presentedViewController != nil { dismiss(animated: false, completion: finish) }
         else if content?.presentedViewController != nil { content?.dismiss(animated: false, completion: finish) }
@@ -44,9 +54,15 @@ final class PorchContainerViewController: UIViewController {
     }
     // Calls need the camera and the screen: the clock stops watching for someone first.
     override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
-        (content as? CallViewController)?.stopPresence()
+        let presentNow = { [weak self] in self?.presentNow(viewControllerToPresent, animated: flag, completion: completion) }
+        guard let clock = content as? CallViewController else { presentNow(); return }
+        clock.releaseCamera(then: presentNow)
+    }
+    private func presentNow(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
         super.present(viewControllerToPresent, animated: flag, completion: completion)
     }
+    /// A call that arrived while the camera was stopping. Safe to call when nothing is pending.
+    func reevaluateIncoming() { familyChanged(); systemCallChanged() }
     func resume() { (content as? CallViewController)?.resume(); FamilyCoordinator.shared.start(); systemCallChanged() }
     func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
     @objc private func familyChanged() {
@@ -78,6 +94,7 @@ final class PorchContainerViewController: UIViewController {
         else { show() }
     }
     @objc private func systemCallChanged() {
+        if (content as? CallViewController)?.isReleasingCamera == true { return }
         let calls = SystemIncomingCalls.shared
         guard calls.answered, UIApplication.shared.applicationState == .active,
               !(presentedViewController is SystemCallViewController) else { return }

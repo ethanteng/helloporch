@@ -929,16 +929,32 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private var trigger = PresenceTrigger()
     private var lastAnalysis: TimeInterval = 0
     private let faces = VNDetectFaceRectanglesRequest()
+    /// Main-thread count of session-queue jobs. Start and stop bounce to the main thread, so a
+    /// caller must not block on this queue waiting for them.
+    private var sessionJobs = 0
+    /// Invalidates a failed start's "not running" callback once a newer start or a stop has begun.
+    private var startToken = 0
+
+    deinit {
+        let capture = session
+        sessionQueue.async { if capture.isRunning { capture.stopRunning() } }
+    }
 
     /// Starts watching, or keeps watching with the iPad's current orientation.
     func start(orientation: UIInterfaceOrientation) {
+        dispatchPrecondition(condition: .onQueue(.main))
         // Permission revoked while watching: stop, instead of leaving the camera running.
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { stop(); return }
         if !running { videoQueue.async { [self] in trigger.reset(); lastAnalysis = 0 } }
         running = true
-        sessionQueue.async { [self] in
+        startToken += 1
+        let token = startToken
+        enqueueSession { [self] in
             if !configured { configured = configure() }
-            guard configured else { DispatchQueue.main.async { self.running = false }; return }
+            guard configured else {
+                DispatchQueue.main.async { if self.startToken == token { self.running = false } }
+                return
+            }
             // Upright frames, whichever way the iPad is standing, including after it's turned.
             if let connection, connection.isVideoOrientationSupported {
                 switch orientation {
@@ -952,14 +968,35 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         }
     }
     func stop() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        startToken += 1
         guard running else { return }
         running = false
-        sessionQueue.async { [self] in if session.isRunning { session.stopRunning() } }
+        enqueueSession { [self] in if session.isRunning { session.stopRunning() } }
     }
-    /// Stops and returns only once the camera is free, before a call or a recording takes it.
-    func stopAndWait() {
+    /// Stops if needed, then calls `done` on the main thread once the camera is free.
+    /// Never blocks: start and stop can synchronously need the main thread, so waiting
+    /// for them there deadlocks (a call or the player would freeze while the camera stops).
+    func stopThen(_ done: @escaping () -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        startToken += 1
         running = false
-        sessionQueue.sync { if session.isRunning { session.stopRunning() } }
+        if sessionJobs == 0, !session.isRunning { done(); return }
+        sessionJobs += 1
+        sessionQueue.async { [self] in
+            if session.isRunning { session.stopRunning() }
+            DispatchQueue.main.async {
+                self.sessionJobs -= 1
+                done()
+            }
+        }
+    }
+    private func enqueueSession(_ work: @escaping () -> Void) {
+        sessionJobs += 1
+        sessionQueue.async { [self] in
+            work()
+            DispatchQueue.main.async { self.sessionJobs -= 1 }
+        }
     }
     private func configure() -> Bool {
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),

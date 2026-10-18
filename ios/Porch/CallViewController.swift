@@ -9,6 +9,12 @@ final class CallViewController: UIViewController {
     /// Plays waiting messages when someone sits down in front of the iPad, if a caregiver turned it on.
     private let presence = BedsidePresence()
     private var notice: MessageNoticeView?
+    /// True while the camera is being released before something covers the clock. Presence must not
+    /// start again until that present has either appeared or been abandoned.
+    private var presenceSuppressed = false
+    private var cameraReleaseWaiters: [() -> Void] = []
+    /// The container skips a new incoming call until this is false, then checks again.
+    var isReleasingCamera: Bool { presenceSuppressed }
     /// After Not now or Stop: the messages that were waiting, left alone until then unless a new one arrives.
     private var snooze: (until: Date, ids: Set<String>)?
     private let phoneKeypadStatus = UILabel()
@@ -257,7 +263,9 @@ final class CallViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         clockTimer?.invalidate(); clockTimer = nil
-        stopPresence()
+        // The present that covered us already waited for the camera. A removal just stops it.
+        presence.stop()
+        notice?.end(); notice = nil
         resignFirstResponder()
     }
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -267,7 +275,9 @@ final class CallViewController: UIViewController {
     }
     // Calls, the message player and recording all need the camera or the screen.
     override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
-        stopPresence()
+        releaseCamera { [weak self] in self?.presentNow(viewControllerToPresent, animated: flag, completion: completion) }
+    }
+    private func presentNow(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
         super.present(viewControllerToPresent, animated: flag, completion: completion)
     }
 
@@ -427,7 +437,7 @@ final class CallViewController: UIViewController {
         typographySize = .zero; view.setNeedsLayout()
     }
     @objc private func playMessages() {
-        guard presentedViewController == nil, !opening, view.window?.windowScene?.activationState == .foregroundActive else { return }
+        guard !presenceSuppressed, presentedViewController == nil, !opening, view.window?.windowScene?.activationState == .foregroundActive else { return }
         let ready = BedsideMessages.shared.ready
         guard !ready.isEmpty else { statusLabel.text = BedsideText.string("No new messages."); return }
         statusLabel.text = nil
@@ -448,7 +458,7 @@ final class CallViewController: UIViewController {
     /// downloaded messages are waiting, it's within the caregiver's hours, and Mom hasn't just said not now.
     private var presenceAllowed: Bool {
         let ready = BedsideMessages.shared.ready
-        guard isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
+        guard !presenceSuppressed, isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
               notice == nil, !opening, !ready.isEmpty, UIApplication.shared.applicationState == .active,
               PorchDevice.experience == .bedside, FamilyCoordinator.shared.state?.busy != true,
               ProcessInfo.processInfo.thermalState != .serious, ProcessInfo.processInfo.thermalState != .critical,
@@ -465,9 +475,25 @@ final class CallViewController: UIViewController {
         if Thread.isMainThread { refreshPresence() } else { DispatchQueue.main.async { [weak self] in self?.refreshPresence() } }
     }
     /// Before anything else covers the clock or needs the camera. Nothing is snoozed.
-    func stopPresence() {
-        presence.stopAndWait()
+    /// `done` runs on the main thread after the capture session has stopped, without blocking
+    /// until then: blocking here deadlocks start and stop, which need the main thread themselves.
+    func releaseCamera(then done: @escaping () -> Void) {
+        presenceSuppressed = true
         notice?.end(); notice = nil
+        cameraReleaseWaiters.append(done)
+        guard cameraReleaseWaiters.count == 1 else { return }
+        presence.stopThen { [weak self] in
+            guard let self else { return }
+            let waiters = self.cameraReleaseWaiters
+            self.cameraReleaseWaiters = []
+            waiters.forEach { $0() }
+            guard self.cameraReleaseWaiters.isEmpty else { return }
+            self.presenceSuppressed = false
+            guard self.view.window != nil, self.parent != nil else { return }
+            (self.parent as? PorchContainerViewController)?.reevaluateIncoming()
+            guard self.cameraReleaseWaiters.isEmpty, !self.presenceSuppressed else { return }
+            self.refreshPresence()
+        }
     }
     private func presenceDetected() {
         presence.stop()
@@ -514,7 +540,7 @@ final class CallViewController: UIViewController {
     }
 
     @objc private func showPeople() {
-        guard presentedViewController == nil else { return }
+        guard !presenceSuppressed, presentedViewController == nil else { return }
         let picker = PeoplePickerViewController(slots: slots)
         picker.onCall = { [weak self, weak picker] number in
             picker?.dismiss(animated: true) { self?.call(slot: number) }
@@ -523,6 +549,8 @@ final class CallViewController: UIViewController {
     }
 
     private func call(slot: Int) {
+        // The camera is still stopping for a screen that's about to appear. Ignore the key until it does.
+        guard !presenceSuppressed else { return }
         // Any key answers the messages notice: the messages and call keys mean Not now; a person's key calls them instead.
         if let notice {
             let action = slots.action(for: slot)
@@ -587,7 +615,7 @@ final class CallViewController: UIViewController {
 
     /// A Porch call that wasn't answered, and didn't ring through to a regular phone, records a message.
     private func leaveMessage(for contact: CallContact, memberID: String, mode: NativeCall.Mode, reason: BedsideVoicemailViewController.Reason) {
-        guard CallPreferences.leaveMessageWhenUnanswered(), presentedViewController == nil,
+        guard !presenceSuppressed, CallPreferences.leaveMessageWhenUnanswered(), presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         let screen = BedsideVoicemailViewController(contact: contact, memberID: memberID, mode: mode, reason: reason)
         screen.onFinish = { [weak self] in self?.resume() }
@@ -601,7 +629,7 @@ final class CallViewController: UIViewController {
     @objc private func accessibleSetup() -> Bool { showSetup(); return true }
 
     func showSetup() {
-        guard presentedViewController == nil else { return }
+        guard !presenceSuppressed, presentedViewController == nil else { return }
         trigger.resetKeys(); resignFirstResponder()
         let gate = CaregiverPINViewController()
         gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
@@ -609,7 +637,7 @@ final class CallViewController: UIViewController {
     }
 
     private func showUnlockedSetup() {
-        guard presentedViewController == nil else { return }
+        guard !presenceSuppressed, presentedViewController == nil else { return }
         trigger.resetKeys()
         resignFirstResponder()
         let setup = SlotsViewController(slots: slots)
