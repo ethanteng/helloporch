@@ -28,8 +28,8 @@ export default function Home() {
             <em>Staying connected shouldn&rsquo;t.</em>
           </h1>
           <p className="hero__lede">
-            When using a phone becomes difficult, seeing someone you love can still be simple. Porch pairs a tablet with a
-            physical keypad of large photo buttons. <strong>Press a loved one&rsquo;s photo to start a video call on the tablet.</strong>
+            When phones become difficult to use, staying connected shouldn&apos;t be. Porch makes video calling simple with
+            one-button calls for people with Parkinson&apos;s, dementia, and other accessibility challenges.
           </p>
           <HeroWaitlist />
         </header>
