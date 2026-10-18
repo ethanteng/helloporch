@@ -62,11 +62,17 @@ final class Cell2JackKeypad {
         self.defaults = defaults; self.isBedside = isBedside; self.makeConnection = makeConnection
     }
     static var supportsDriverPlatform: Bool {
+        #if PORCH_NO_CELL2JACK
+        return false
+        #else
         if #available(iOS 16.0, *) { return UIDevice.current.userInterfaceIdiom == .pad }
         return false
+        #endif
     }
     private static func makeDefaultConnection(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection {
+        #if !PORCH_NO_CELL2JACK
         if #available(iOS 16.0, *), supportsDriverPlatform { return Cell2JackKeypadTransport(update) }
+        #endif
         return Cell2JackUnavailableConnection(update)
     }
 
@@ -176,6 +182,7 @@ private final class Cell2JackUnavailableConnection: Cell2JackKeypadConnection {
     func stop() {}
 }
 
+#if !PORCH_NO_CELL2JACK
 /// Continuous foreground input. Bounded parser, action history and 64 KiB raw
 /// diagnostic tail; no time cutoff that would remove hang-up during a call.
 @available(iOS 16.0, *)
@@ -275,3 +282,4 @@ private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
         session = nil; emit(.finished(message + cleanup))
     }
 }
+#endif

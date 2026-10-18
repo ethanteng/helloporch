@@ -3,6 +3,11 @@ name: Upload Porch to TestFlight
 on:
   workflow_dispatch:
     inputs:
+      variant:
+        description: Family excludes Cell2Jack; Cell2Jack requires approved driver distribution entitlements
+        type: choice
+        options: [family, cell2jack]
+        default: family
       verify_only:
         description: Verify profiles, signed archive, and App Store validation without uploading
         type: boolean
@@ -39,12 +44,15 @@ jobs:
       IOS_APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
       IOS_DRIVER_APPSTORE_PROFILE: ${{ secrets.IOS_DRIVER_APPSTORE_PROFILE }}
       PORCH_VERIFY_ONLY: ${{ inputs.verify_only }}
+      PORCH_DISTRIBUTION_VARIANT: ${{ inputs.variant }}
     steps:
       - uses: actions/checkout@v4
       - name: Test contact validation and keypad handling
         run: swift test --package-path ios/PorchCore
       - name: Test distribution provisioning checks
-        run: python3 -m unittest discover -s ios/scripts -p 'test_distribution_profiles.py'
+        run: |
+          python3 -m unittest discover -s ios/scripts -p 'test_distribution_profiles.py'
+          python3 ios/scripts/check-build-variants.py
       - name: Archive, sign, validate, and optionally upload
         run: bash ios/scripts/testflight.sh
       - name: Clean up signing files
