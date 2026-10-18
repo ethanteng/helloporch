@@ -11,7 +11,7 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>OSBundleUsageDescription</key>
@@ -39,7 +39,9 @@
 			<key>bInterfaceNumber</key>
 			<integer>0</integer>
 			<key>bConfigurationValue</key>
-			<string>*</string>
+			<integer>1</integer>
+			<key>bcdDevice</key>
+			<integer>612</integer>
 			<key>UserClientProperties</key>
 			<dict>
 				<key>IOClass</key>

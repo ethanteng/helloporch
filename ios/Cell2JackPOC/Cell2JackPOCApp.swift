@@ -28,7 +28,7 @@ final class Cell2JackVersionViewController: UIViewController {
     private var busy = false
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Cell2Jack USB Test"
+        title = "Cell2Jack USB Test · Build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?")"
         view.backgroundColor = .systemBackground
         let instructions = UILabel()
         instructions.text = "Connect Cell2Jack directly to this iPad using a USB data cable. Tap Open app settings and enable its driver if listed. You can also look for Drivers under Settings → Privacy & Security or General. Then read its version."
@@ -62,6 +62,22 @@ final class Cell2JackVersionViewController: UIViewController {
             read.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
             output.heightAnchor.constraint(greaterThanOrEqualToConstant: 120)
         ])
+        worker.async { [weak self] in
+            let snapshot = Cell2JackBridge.usbDiagnostics()
+            self?.saveDiagnostics(snapshot)
+            DispatchQueue.main.async {
+                guard let self, !self.busy else { return }
+                self.output.text += "\n\n" + snapshot
+            }
+        }
+        if ProcessInfo.processInfo.arguments.contains("--read-cell2jack-version") {
+            readVersion()
+        }
+    }
+    private func saveDiagnostics(_ text: String, filename: String = "usb-diagnostics.txt") {
+        guard let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let stamped = "\(ISO8601DateFormatter().string(from: Date()))\n" + text
+        try? stamped.write(to: folder.appendingPathComponent(filename), atomically: true, encoding: .utf8)
     }
     @objc private func openSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -87,7 +103,12 @@ final class Cell2JackVersionViewController: UIViewController {
                 if let version = report.version, reply.usbStatus == 0 {
                     title = "Cell2Jack version: \(version)"
                 } else { title = reply.usbStatus == 0 ? "Reply received; version not recognized" : "USB test did not complete" }
-            } catch { result = error.localizedDescription; title = "Could not read Cell2Jack" }
+            } catch {
+                result = error.localizedDescription + "\n\n" + Cell2JackBridge.usbDiagnostics()
+                self?.saveDiagnostics(result)
+                title = "Could not read Cell2Jack"
+            }
+            self?.saveDiagnostics(title + "\n" + result, filename: "version-result.txt")
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.output.text += result

@@ -11,7 +11,8 @@ Delete this test app to remove the experiment from the iPad.
 
 On **Read Cell2Jack version**, the app opens only its named DriverKit service,
 asks for one version response, then closes the user client. The driver matches
-USB **VID 1A86 / PID 7523 / interface 0 / any configuration**, discovers bulk endpoints, identifies
+USB **VID 1A86 / PID 7523 / interface 0 / configuration 1 / device revision
+0x0264**, discovers bulk endpoints, identifies
 the CH34x serial-chip revision, and configures its volatile serial registers
 for **2,000,000 baud, 8N1, no hardware flow control, DTR/RTS inactive**. The only
 serial bytes it sends are **`2f 76` (`/v`)**. It collects up to 256 received
@@ -180,3 +181,35 @@ it with the driver's switch enabled.
 
 References: Apple's [USB interface matching combinations](https://developer.apple.com/documentation/iousbhost/iousbhostinterface/creatematchingdictionary(vendorid:productid:bcddevice:interfacenumber:configurationvalue:interfaceclass:interfacesubclass:interfaceprotocol:speed:productidarray:))
 and [USB matching rules and string wildcards](https://developer.apple.com/library/archive/qa/qa1076/_index.html).
+
+### Confirmed iPad registry observations and more-specific matching
+
+The first matching correction did not resolve the failure. A read-only snapshot
+captured from the physical iPad showed one matching `IOUSBHostDevice`, one
+matching `IOUSBHostInterface`, and an `AppleUSBCHCOM` child of that interface
+(`IOUserSerial`). No `IOUserService` with our `IOUserClass` was present. Thus the
+USB device and interface are visible, and Apple's built-in serial driver has
+attached; this is stronger evidence than the previous generic app error.
+
+Individual property reads were filtered by iPadOS even though the APIs reported
+success. Exact `IOPropertyMatch` queries confirmed configuration 1, interface 0,
+and `bcdDevice=612` (`0x0264`) for VID 6790 / PID 29987. Configuration 2, several
+other device revisions, and an unrelated VID/PID negative control gave zero
+matches. These are observed descriptor matches, not assumed values. This USB
+device revision is distinct from the serial-chip revision read by the USB
+vendor request, and from Cell2Jack firmware `a06`.
+
+App build 5 / driver build 3 uses all five exact interface matching fields. The
+documented score is 100000 rather than the wildcard configuration's 89000. The
+Mac's installed AppleUSBCHCOM metadata uses the four-field 90000 combination;
+the exact iPad Apple personality has not been dumped. Outmatching the observed
+Apple driver is the intended correction, and still requires a detach/reattach
+test. No custom `IOProbeScore`, driver disabling, or system security change is
+used.
+
+The app also preserves a read-only `Documents/usb-diagnostics.txt` snapshot on
+launch and failure and `Documents/version-result.txt` after a version attempt.
+Snapshots cover only our USB IDs, service, child names/classes, and bounded
+exact matching checks. The developer-only launch argument
+`--read-cell2jack-version` performs the same `/v` action as the visible button;
+ordinary launch still sends no serial request.
