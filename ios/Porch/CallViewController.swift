@@ -317,7 +317,9 @@ final class CallViewController: UIViewController {
     }
 
     func pause() {
-        stopPresence()
+        // Leaving the foreground. Stopping the camera waits on its own queue so this can return.
+        presence.stop()
+        notice?.end(); notice = nil
         trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil
         if opening { cancelOpening = true }
     }
