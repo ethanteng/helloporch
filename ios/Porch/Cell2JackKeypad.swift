@@ -37,6 +37,7 @@ final class Cell2JackKeypad {
     static let shared = Cell2JackKeypad()
     static let enabledKey = "porch.cell2jack.realCalls.enabled"
     weak var root: UIViewController?
+    weak var windowScene: UIWindowScene?
     private(set) var status = "Phone keypad off"
     private var worker: Cell2JackKeypadConnection?
     private var stopping = false
@@ -65,7 +66,7 @@ final class Cell2JackKeypad {
         sceneActive = true
         record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
                 "applicationState": UIApplication.shared.applicationState.rawValue,
-                "sceneState": root?.viewIfLoaded?.window?.windowScene?.activationState.rawValue ?? -99])
+                "sceneState": windowScene?.activationState.rawValue ?? -99])
         refresh()
     }
     func refresh() {
@@ -87,13 +88,20 @@ final class Cell2JackKeypad {
             case .digits(let digits, let receivedAt):
                 guard self.generation == token, self.wanted, !self.stopping,
                       ProcessInfo.processInfo.systemUptime - receivedAt < 1,
-                      self.sceneActive, self.isBedside(),
-                      let root = self.root, root.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive else { return }
+                      self.sceneActive, self.isBedside() else { return }
+                // A full-screen call detaches the presenting clock view from
+                // its window. The owning scene, not that view, stays active.
+                guard let root = self.root, self.windowScene?.activationState == .foregroundActive else {
+                    self.record(["kind": "digitIgnored", "reason": "window scene inactive or root missing",
+                                 "sceneState": self.windowScene?.activationState.rawValue ?? -99])
+                    return
+                }
                 for event in digits {
                     guard event.kind == .digit else { continue }
                     let outcome = Cell2JackDigitRouter.route(event.digit, root: root)
                     self.record(["kind": "digit", "symbol": event.digit, "outcome": outcome,
-                                 "rawLine": event.line, "embeddedInLine": event.embeddedInLine])
+                                 "rawLine": event.line, "embeddedInLine": event.embeddedInLine,
+                                 "rootViewAttached": root.viewIfLoaded?.window != nil])
                 }
             case .finished(let message):
                 let restart = self.stopping && self.wanted

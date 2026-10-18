@@ -136,4 +136,27 @@ final class Cell2JackRoutingTests: XCTestCase {
         keypad.setEnabled(false)
     }
 
+    @MainActor func testUsbHangupReachesFullScreenReceiverWhenClockViewIsDetached() throws {
+        let name = "cell2jack-fullscreen-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver(), call = Receiver()
+        clock.loadViewIfNeeded(); clock.overlay = call
+        XCTAssertNil(clock.view.window) // UIKit removes a full-screen presenter's view
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.setEnabled(true); keypad.activate()
+        let transport = try XCTUnwrap(connection)
+        transport.update(.digits([Cell2JackDigitEvent(kind: .digit, digit: "0", line: "DTMF 0 :0 20: 2")], ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.received, [0]); XCTAssertTrue(clock.received.isEmpty)
+        keypad.pause()
+        transport.update(.digits([Cell2JackDigitEvent(kind: .digit, digit: "0", line: "DTMF 0")], ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.received, [0], "Input must still stop when the scene becomes inactive")
+        transport.update(.finished("/q sent"))
+    }
+
 }

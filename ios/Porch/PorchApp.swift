@@ -31,6 +31,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         self.window = window
         #if PORCH_CELL2JACK_CALLS
         Cell2JackKeypad.shared.root = window.rootViewController
+        Cell2JackKeypad.shared.windowScene = scene
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--enable-cell2jack-keypad") { Cell2JackKeypad.shared.setEnabled(true) }
         #endif

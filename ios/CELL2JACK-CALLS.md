@@ -1,7 +1,7 @@
 # Cell2Jack keypad in the real Porch app
 
 Use the **PorchCell2JackCalls** scheme on
-`feature/cell2jack-ipad-version-poc`. Build 12 installs as **Porch**, with the
+`feature/cell2jack-ipad-version-poc`. Build 13 installs as **Porch**, with the
 real app identity `com.ethanteng.helloporch`. It replaces the installed Porch
 binary in place, preserving its settings, contact photos, and keychain identity.
 It uses the normal calling engine and live saved assignments, not Preview's
@@ -87,21 +87,24 @@ out of source control.
 
 ## Validation to date
 
-- Signed device build and deep signature verification passed. Build 12 installed
+- Signed device build and deep signature verification passed. Build 13 installed
   in place on the physical M3 iPad. Saved assignment bytes match the pre-install
   copy. No contact data or credentials were imported from Preview.
-- Eight simulator routing tests passed: current-screen selection, unknown modal
+- Nine simulator routing tests passed: current-screen selection, unknown modal
   blocking, navigation, non-digit/hook rejection, repeated digits, fragmented
   USB/secondary report filtering, real call-screen hang-up using a remapped saved
   key without starting a connection, clock status layout at four iPad sizes,
   launch before activation, quick foreground return while the old client closes, disabled/family mode, and stale readiness
-  callback rejection.
+  callback rejection, plus USB dispatch to a full-screen receiver while its
+  presenting clock view is detached from the window.
 - The ordinary Porch simulator build passed. Preview's source/package safety
   boundary still passes. PorchCore was unchanged (68 tests passed at the prior
   preview milestone).
 - Physical build 12 reached USB ready. The user pressed the unassigned key 3
   with the handset untouched and confirmed that Porch showed no person assigned.
-  Placing and ending an actual call remain pending the user-operated check.
+  The user then started a call with 1, but 0 did nothing in build 12; on-screen
+  End worked. Build 13 fixes the full-screen input gate; its physical retest is
+  pending.
 
 Build:
 
@@ -125,3 +128,21 @@ transport ownership and foreground cleanup; it still checks the active window
 before routing digits. It recorded `usbStartRequested`, then `usbReady` three
 seconds later. Eight simulator tests passed, including startup and rapid
 stop/restart lifecycle tests with an injected transport (no USB or calls).
+
+## Build 13 full-screen call input correction
+
+Build 12 checked `root.view.window.windowScene` before dispatching a digit. A
+full-screen call can remove its presenting clock/container view from the window,
+so valid input was discarded before it could be recorded or sent to the call
+screen. The physical trace showed call creation from 1, no dispatched 0, then
+an on-screen end request and local closure. The user confirmed that 0 did nothing
+and the touch End button worked.
+
+Build 13 retains a weak reference to the owning UIWindowScene, assigned by the
+scene delegate. Input checks that scene's activation state independently of the
+presenter's view attachment. It records `rootViewAttached` for accepted digits
+and records a scene-gate rejection instead of silently losing its evidence.
+The new regression test sends USB 0 to a visible receiver while the clock view
+has no window, then verifies the same input is blocked after scene resignation.
+Nine simulator tests and the signed device build passed. Driver build 6 is
+unchanged. Physical call teardown needs the subsequent user retest.
