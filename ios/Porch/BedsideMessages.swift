@@ -190,6 +190,8 @@ final class MessagePlayerViewController: UIViewController {
     private var observers: [NSObjectProtocol] = []
     private var keypad = CallTrigger()
     private var ended = false
+    /// An incoming call took over. That is not Stop, so whatever is still waiting can start on its own afterward.
+    private(set) var interrupted = false
 
     override var canBecomeFirstResponder: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
@@ -334,7 +336,10 @@ final class MessagePlayerViewController: UIViewController {
     /// Stopping early leaves the current message queued to play another time.
     @objc func stop() { close() }
     /// Closes at once for something more important, such as an incoming call.
-    func interrupt(then next: @escaping () -> Void) { close(animated: false, then: next) }
+    func interrupt(then next: @escaping () -> Void) {
+        interrupted = true
+        close(animated: false, then: next)
+    }
     private func close(animated: Bool = true, then next: (() -> Void)? = nil) {
         guard !ended else { next?(); return }
         ended = true; tearDown()

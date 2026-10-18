@@ -35,6 +35,12 @@ final class MessageAutoplayTests: XCTestCase {
         XCTAssertTrue(always.allows(at(3), calendar: calendar))
     }
 
+    func testStopDefersOnlyMessagesThatWereAlreadyWaiting() {
+        XCTAssertEqual(MessageAutoplay.deferredMessageIDs(startedWith: ["a", "b"], stillReady: ["b", "c"]), ["b"])
+        XCTAssertTrue(MessageAutoplay.deferredMessageIDs(startedWith: ["a"], stillReady: ["c"]).isEmpty)
+        XCTAssertTrue(MessageAutoplay.deferredMessageIDs(startedWith: ["a", "b"], stillReady: []).isEmpty)
+    }
+
     func testPresenceNeedsACloseFaceForTwoSecondsAndFiresOnce() {
         var trigger = PresenceTrigger()
         // Someone across the room, or walking past, doesn't count.

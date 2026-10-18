@@ -35,6 +35,13 @@ public struct MessageAutoplay: Codable, Equatable {
         valid.startHour = min(23, max(0, startHour)); valid.endHour = min(23, max(0, endHour))
         defaults.set(try? JSONEncoder().encode(valid), forKey: Self.key)
     }
+
+    /// After Stop: messages that were already waiting when playback started and still are.
+    /// A message that arrived during playback is left out, so it can start on its own.
+    public static func deferredMessageIDs(startedWith: [String], stillReady: [String]) -> Set<String> {
+        let started = Set(startedWith)
+        return Set(stillReady.filter { started.contains($0) })
+    }
 }
 
 /// Decides from face detections that someone is sitting in front of the iPad: a face large enough

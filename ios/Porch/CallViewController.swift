@@ -429,10 +429,13 @@ final class CallViewController: UIViewController {
         guard !ready.isEmpty else { statusLabel.text = BedsideText.string("No new messages."); return }
         statusLabel.text = nil
         let player = MessagePlayerViewController(messages: ready, slots: slots)
-        player.onFinish = { [weak self] in
-            // Stopped with messages left: don't start them again on their own for a while.
-            let left = BedsideMessages.shared.ready
-            if !left.isEmpty { self?.snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), Set(left.map(\.id))) }
+        player.onFinish = { [weak self, weak player] in
+            // Stop leaves what was already waiting. A message that arrived during playback still
+            // starts on its own, and a call that takes over is not Stop.
+            if player?.interrupted != true {
+                let deferred = MessageAutoplay.deferredMessageIDs(startedWith: ready.map(\.id), stillReady: BedsideMessages.shared.ready.map(\.id))
+                if !deferred.isEmpty { self?.snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), deferred) }
+            }
             self?.resume()
         }
         present(player, animated: true)
