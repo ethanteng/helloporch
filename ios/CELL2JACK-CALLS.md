@@ -288,11 +288,11 @@ wildcard development permissions, incorrect devices/platforms/IDs/certificates,
 and a valid restricted or vendor-level distribution grant. These checks are also
 part of normal simulator CI.
 
-Next: submit a reviewed request through [Apple's DriverKit entitlement form](https://developer.apple.com/contact/request/system-extension/)
-for `com.apple.developer.driverkit` and USB transport covering vendor 6790
+With user authorization, a request was submitted on 2026-10-18 through [Apple's DriverKit entitlement form](https://developer.apple.com/contact/request/system-extension/)
+requesting `com.apple.developer.driverkit` and USB transport covering vendor 6790
 (`0x1A86`), product 29987 (`0x7523`). The request must disclose that Cell2Jack
 is third-party hardware and the developer does not own the shared vendor ID.
-After Apple grants the entitlements, regenerate the driver App Store profile,
+Apple confirmed receipt; approval remains pending. After Apple grants the entitlements, regenerate the driver App Store profile,
 configure `IOS_DRIVER_APPSTORE_PROFILE`, and run verification-only archive/export
 and App Store validation with the GitHub-held signing identity. Upload only after
 those checks pass. Apple's [entitlement instructions](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development)
