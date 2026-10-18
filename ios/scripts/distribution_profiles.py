@@ -19,7 +19,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def validate_profile(profile, team, bundle, driver=False, now=None):
+def validate_profile(profile, team, bundle, driver=False, now=None, communicates=True):
     ent = profile.get("Entitlements", {})
     label = "Driver" if driver else "App"
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -44,7 +44,8 @@ def validate_profile(profile, team, bundle, driver=False, now=None):
             "Driver: profile lacks USB distribution permission for Cell2Jack (VID 0x1A86, PID 0x7523)")
     else:
         require(ent.get("aps-environment") == "production", "App: production Push Notifications are missing")
-        require(ent.get(COMMUNICATES) is True, "App: DriverKit Communicates with Drivers is missing")
+        if communicates:
+            require(ent.get(COMMUNICATES) is True, "App: DriverKit Communicates with Drivers is missing")
     return {"name": profile["Name"], "uuid": profile["UUID"], "bundleID": bundle,
             "expires": expiry.isoformat(), "driver": driver}
 
@@ -61,14 +62,22 @@ def decode_profile(path):
                                         capture_output=True, check=True).stdout)
 
 
-def verify_bundle(bundle, team, app_id, driver_id):
+def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
     drivers = list((bundle / "SystemExtensions").glob("*.dext"))
-    require(len(drivers) == 1, "Signed app must embed exactly one Cell2Jack driver")
-    profiles = [decode_profile(bundle / "embedded.mobileprovision"),
-                decode_profile(drivers[0] / "embedded.provisionprofile")]
-    summaries = validate_pair(*profiles, team, app_id, driver_id)
+    family = variant == "family"
+    require(len(drivers) == (0 if family else 1),
+            "Family build must not embed a driver" if family else "Signed app must embed exactly one Cell2Jack driver")
+    profiles = [decode_profile(bundle / "embedded.mobileprovision")]
+    products, identifiers = [bundle], [app_id]
+    if family:
+        require(not (bundle / "Settings.bundle").exists(), "Family build must not include Cell2Jack driver settings")
+        summaries = [validate_profile(profiles[0], team, app_id, communicates=False)]
+    else:
+        profiles.append(decode_profile(drivers[0] / "embedded.provisionprofile"))
+        products.append(drivers[0]); identifiers.append(driver_id)
+        summaries = validate_pair(*profiles, team, app_id, driver_id)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
-    for index, (product, identifier, profile) in enumerate(zip([bundle, drivers[0]], [app_id, driver_id], profiles)):
+    for index, (product, identifier, profile) in enumerate(zip(products, identifiers, profiles)):
         info = plistlib.loads((product / "Info.plist").read_bytes())
         require(info["CFBundleIdentifier"] == identifier, "Signed product has the wrong bundle ID")
         ent = plistlib.loads(subprocess.run(["codesign", "-d", "--entitlements", ":-", str(product)],
@@ -78,8 +87,12 @@ def verify_bundle(bundle, team, app_id, driver_id):
         signed_id = ent.get("application-identifier", ent.get("com.apple.application-identifier"))
         require(signed_id == f"{team}.{identifier}", "Signature has the wrong application identifier")
         if index == 0:
-            require(ent.get("aps-environment") == "production" and ent.get(COMMUNICATES) is True,
-                    "App signature is missing production push or driver communication")
+            require(ent.get("aps-environment") == "production", "App signature is missing production push")
+            if family:
+                require(not any(key.startswith(DRIVER) for key in ent),
+                        "Family signature must not request DriverKit entitlements")
+            else:
+                require(ent.get(COMMUNICATES) is True, "App signature is missing driver communication")
         else:
             require(ent.get(DRIVER) is True and ent.get(USB) == [{"idVendor": 6790, "idProduct": 29987}],
                     "Driver signature must contain DriverKit and the exact Cell2Jack USB restriction")
@@ -90,10 +103,11 @@ def verify_bundle(bundle, team, app_id, driver_id):
             cert = Path(prefix + "0").read_bytes()
             require(cert in profile["DeveloperCertificates"], "Actual signer is not authorized by its embedded profile")
             summaries[index]["signerSHA256"] = hashlib.sha256(cert).hexdigest()
-    require(summaries[0]["signerSHA256"] == summaries[1]["signerSHA256"], "App and driver use different signers")
-    require(plistlib.loads((bundle / "Info.plist").read_bytes())["CFBundleVersion"] ==
-            plistlib.loads((drivers[0] / "Info.plist").read_bytes())["CFBundleVersion"],
-            "App and embedded driver build numbers differ")
+    if not family:
+        require(summaries[0]["signerSHA256"] == summaries[1]["signerSHA256"], "App and driver use different signers")
+        require(plistlib.loads((bundle / "Info.plist").read_bytes())["CFBundleVersion"] ==
+                plistlib.loads((drivers[0] / "Info.plist").read_bytes())["CFBundleVersion"],
+                "App and embedded driver build numbers differ")
     return summaries
 
 
@@ -103,14 +117,18 @@ def main():
     parser.add_argument("--team", required=True)
     parser.add_argument("--app-id", required=True)
     parser.add_argument("--driver-id", required=True)
+    parser.add_argument("--variant", choices=["family", "cell2jack"], default="cell2jack")
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--bundle", type=Path)
     args = parser.parse_args()
     try:
         if args.action == "prepare":
             app = plistlib.loads((args.directory / "profile.plist").read_bytes())
-            driver = plistlib.loads((args.directory / "driver-profile.plist").read_bytes())
-            summaries = validate_pair(app, driver, args.team, args.app_id, args.driver_id)
+            if args.variant == "family":
+                summaries = [validate_profile(app, args.team, args.app_id, communicates=False)]
+            else:
+                driver = plistlib.loads((args.directory / "driver-profile.plist").read_bytes())
+                summaries = validate_pair(app, driver, args.team, args.app_id, args.driver_id)
             options = {"method": "app-store-connect", "destination": "export", "signingStyle": "manual",
                        "teamID": args.team, "signingCertificate": "Apple Distribution",
                        "provisioningProfiles": {s["bundleID"]: s["uuid"] for s in summaries},
@@ -121,9 +139,9 @@ def main():
                     (args.directory / f"{prefix}-{field}").write_text(summary[field])
         else:
             require(args.bundle is not None, "--bundle is required for signed bundle verification")
-            summaries = verify_bundle(args.bundle, args.team, args.app_id, args.driver_id)
+            summaries = verify_bundle(args.bundle, args.team, args.app_id, args.driver_id, args.variant)
         (args.directory / f"{args.action}-verification.json").write_text(json.dumps(summaries, indent=2) + "\n")
-        print(f"{args.action}: app and Cell2Jack driver distribution checks passed")
+        print(f"{args.action}: {args.variant} distribution checks passed")
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError, plistlib.InvalidFileException) as error:
         parser.exit(1, f"Distribution verification blocked: {error}\n")
 

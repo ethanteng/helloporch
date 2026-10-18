@@ -109,48 +109,14 @@ C7962E57F4CAAA127932BFC1,
 			path = Porch;
 			sourceTree = "<group>";
 		};
-		C00000000000000000000003 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				B00000000000000000000007 /* Porch.app */,
-E993ECC28174F28EECD7A529,
-CC66522B15F5E2FD17933FBF,
-550DE4C420E436AEA658BE39,
-5FF61E1DFA7C6509D33D9F51,
-33A99B76AD9C0648FEEAF3B0,
-534FA3B8C9C3570FD518C233,
-                B00000000000000000000013 /* PorchTests.xctest */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
+
+C00000000000000000000003 = { "isa" = "PBXGroup"; "name" = "Products"; "children" = ( "B00000000000000000000007", "E993ECC28174F28EECD7A529", "CC66522B15F5E2FD17933FBF", "550DE4C420E436AEA658BE39", "5FF61E1DFA7C6509D33D9F51", "33A99B76AD9C0648FEEAF3B0", "534FA3B8C9C3570FD518C233", "B00000000000000000000013", "8AA86E8575A7D52C0D3EA7B3", "6664906F7F9748903C363D28", ); "sourceTree" = "<group>"; };
         C00000000000000000000004 = {isa = PBXGroup; children = (B00000000000000000000012); path = PorchTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F00000000000000000000001 /* Porch */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F00000000000000000000004 /* Build configuration list for PBXNativeTarget "Porch" */;
-			buildPhases = (
-				D00000000000000000000001 /* Sources */,
-				D00000000000000000000003 /* Frameworks */,
-				D00000000000000000000002 /* Resources */,
-                53AC827AEB4E6221D05505C7,
-            );
-			buildRules = (
-			);
-			dependencies = (
-                572C8B8ACF2FEBB7F39857EF,
-            );
-			name = Porch;
-			packageProductDependencies = (
-				E00000000000000000000002 /* PorchCore */,
-				E00000000000000000000004 /* LiveKit */,
-			);
-			productName = Porch;
-			productReference = B00000000000000000000007 /* Porch.app */;
-			productType = "com.apple.product-type.application";
-		};
+
+F00000000000000000000001 = { "buildConfigurationList" = "F00000000000000000000004"; "productReference" = "B00000000000000000000007"; "productType" = "com.apple.product-type.application"; "packageProductDependencies" = ( "E00000000000000000000002", "E00000000000000000000004", ); "productName" = "Porch"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "D00000000000000000000001", "D00000000000000000000003", "D00000000000000000000002", "EBB3169BDD00A49B465125BA", "53AC827AEB4E6221D05505C7", ); "dependencies" = ( "572C8B8ACF2FEBB7F39857EF", ); "name" = "Porch"; "buildRules" = ( ); };
         F00000000000000000000005 /* PorchTests */ = {
             isa = PBXNativeTarget; buildConfigurationList = F00000000000000000000006;
             buildPhases = (D00000000000000000000004, D00000000000000000000005);
@@ -168,58 +134,13 @@ CC66522B15F5E2FD17933FBF,
 /* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
-		F00000000000000000000002 /* Project object */ = {
-			isa = PBXProject;
-			attributes = {
-				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2600;
-				TargetAttributes = {
-					F00000000000000000000001 = {
-						CreatedOnToolsVersion = 26.0;
-                        SystemCapabilities = { com.apple.Push = {enabled = 1;}; com.apple.BackgroundModes = {enabled = 1;}; };
-					};
-				};
-			};
-			buildConfigurationList = F00000000000000000000003 /* Build configuration list for PBXProject "Porch" */;
-			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = en;
-			hasScannedForEncodings = 0;
-			knownRegions = (
-				en,
-				Base,
-			);
-			mainGroup = C00000000000000000000001;
-			packageReferences = (
-				E00000000000000000000001 /* XCLocalSwiftPackageReference "PorchCore" */,
-				E00000000000000000000003 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
-			);
-			productRefGroup = C00000000000000000000003 /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
-			targets = (
-				F00000000000000000000001 /* Porch */,
-09B8B30F902CC5A8B0E617FC,
-C2FFE517B885B9A4D48D0ACC,
-8BA32E7DAAE5C042A5A8F79B,
-67AD5F5D9043CC8E05A4148D,
-0A31050BC2A0539A45FBCEBB,
-8D094A8E9EA7D1BBF97E39E7,
-                F00000000000000000000005 /* PorchTests */,
-			);
-		};
+
+F00000000000000000000002 = { "buildConfigurationList" = "F00000000000000000000003"; "packageReferences" = ( "E00000000000000000000001", "E00000000000000000000003", ); "targets" = ( "F00000000000000000000001", "09B8B30F902CC5A8B0E617FC", "C2FFE517B885B9A4D48D0ACC", "8BA32E7DAAE5C042A5A8F79B", "67AD5F5D9043CC8E05A4148D", "0A31050BC2A0539A45FBCEBB", "8D094A8E9EA7D1BBF97E39E7", "F00000000000000000000005", "B593041B63DB50D4C7298CCC", "04655FE6A3EA8CC4C45BFF1A", ); "developmentRegion" = "en"; "knownRegions" = ( "en", "Base", ); "isa" = "PBXProject"; "compatibilityVersion" = "Xcode 14.0"; "productRefGroup" = "C00000000000000000000003"; "projectDirPath" = ""; "attributes" = { "LastUpgradeCheck" = "2600"; "BuildIndependentTargetsInParallel" = "YES"; "TargetAttributes" = { "F00000000000000000000001" = { "SystemCapabilities" = { "com.apple.Push" = { "enabled" = "1"; }; "com.apple.BackgroundModes" = { "enabled" = "1"; }; }; "CreatedOnToolsVersion" = "26.0"; }; "B593041B63DB50D4C7298CCC" = { "SystemCapabilities" = { "com.apple.Push" = { "enabled" = "1"; }; "com.apple.BackgroundModes" = { "enabled" = "1"; }; }; "CreatedOnToolsVersion" = "26.0"; }; }; }; "hasScannedForEncodings" = "0"; "projectRoot" = ""; "mainGroup" = "C00000000000000000000001"; };
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		D00000000000000000000002 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				A00000000000000000000004 /* Assets.xcassets in Resources */,
-				A00000000000000000000005 /* PrivacyInfo.xcprivacy in Resources */,
-                356FD1D86F08F309C2B0A7BF,
-            );
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+
+D00000000000000000000002 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "A00000000000000000000004", "A00000000000000000000005", ); "runOnlyForDeploymentPostprocessing" = "0"; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -521,6 +442,28 @@ CB047F28764962B8EA30A9BF = { "isa" = "PBXCopyFilesBuildPhase"; "buildActionMask"
 538D74CCBDA8EE16978F8288 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = 2147483647; "files" = ( "9D1869154EA77BC012D44143", ); "runOnlyForDeploymentPostprocessing" = 0; };
 6F7375DC142444EB384D414E = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = 2147483647; "files" = ( "2574517136F9FC66AED05F91", "0E50320A77DAC01B3D139AFF", "B905112273946311B6D718C1", ); "runOnlyForDeploymentPostprocessing" = 0; };
 67AD5F5D9043CC8E05A4148D = { "isa" = "PBXNativeTarget"; "name" = "PorchKeypadPreview"; "productName" = "PorchKeypadPreview"; "productReference" = "5FF61E1DFA7C6509D33D9F51"; "productType" = "com.apple.product-type.application"; "buildConfigurationList" = "9FB1BF3A4A8A027863E7CB1D"; "buildPhases" = ( "6FB304852CEBA6A5835ACE9C", "538D74CCBDA8EE16978F8288", "6F7375DC142444EB384D414E", "CB047F28764962B8EA30A9BF", ); "buildRules" = ( ); "dependencies" = ( "542CEFBD5CF91FA2A674ED73", ); "packageProductDependencies" = ( "E00000000000000000000002", ); };
+
+/* Shared-source family build: no USB driver dependency or embedding. */
+
+DE8C77052069C391268E7695 = { "isa" = "XCBuildConfiguration"; "buildSettings" = { "CODE_SIGN_ENTITLEMENTS" = "Porch/PorchFamily.entitlements"; "MARKETING_VERSION" = "0.1.0"; "EXCLUDED_SOURCE_FILE_NAMES" = "Cell2JackBridge.m Cell2JackLogCapture.swift"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "APS_ENVIRONMENT" = "development"; "ONLY_ACTIVE_ARCH" = "YES"; "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch"; "CURRENT_PROJECT_VERSION" = "17"; "PROVISIONING_PROFILE_SPECIFIER" = "$(PORCH_APP_PROVISIONING_PROFILE)"; "PRODUCT_MODULE_NAME" = "Porch"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) PORCH_NO_CELL2JACK"; "SUPPORTS_MACCATALYST" = "NO"; "TARGETED_DEVICE_FAMILY" = "1,2"; "CODE_SIGN_STYLE" = "Automatic"; "OTHER_LDFLAGS" = ( "$(inherited)", ); "PORCH_APNS_ENVIRONMENT" = "sandbox"; "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon"; "LD_RUNPATH_SEARCH_PATHS" = ( "$(inherited)", "@executable_path/Frameworks", ); "CLANG_ENABLE_OBJC_ARC" = "YES"; "SWIFT_VERSION" = "5.0"; "PRODUCT_NAME" = "PorchFamily"; "SWIFT_OBJC_BRIDGING_HEADER" = ""; "INFOPLIST_FILE" = "Porch/Info.plist"; "GENERATE_INFOPLIST_FILE" = "NO"; }; "name" = "Debug"; };
+
+D38AC27362B4DD1B06730EA7 = { "isa" = "XCBuildConfiguration"; "buildSettings" = { "CODE_SIGN_ENTITLEMENTS" = "Porch/PorchFamily.entitlements"; "MARKETING_VERSION" = "0.1.0"; "EXCLUDED_SOURCE_FILE_NAMES" = "Cell2JackBridge.m Cell2JackLogCapture.swift"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "APS_ENVIRONMENT" = "production"; "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch"; "CURRENT_PROJECT_VERSION" = "17"; "PRODUCT_MODULE_NAME" = "Porch"; "PROVISIONING_PROFILE_SPECIFIER" = "$(PORCH_APP_PROVISIONING_PROFILE)"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) PORCH_NO_CELL2JACK"; "SUPPORTS_MACCATALYST" = "NO"; "TARGETED_DEVICE_FAMILY" = "1,2"; "CODE_SIGN_STYLE" = "Automatic"; "OTHER_LDFLAGS" = ( "$(inherited)", ); "PORCH_APNS_ENVIRONMENT" = "production"; "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon"; "LD_RUNPATH_SEARCH_PATHS" = ( "$(inherited)", "@executable_path/Frameworks", ); "CLANG_ENABLE_OBJC_ARC" = "YES"; "SWIFT_VERSION" = "5.0"; "PRODUCT_NAME" = "PorchFamily"; "SWIFT_OBJC_BRIDGING_HEADER" = ""; "INFOPLIST_FILE" = "Porch/Info.plist"; "GENERATE_INFOPLIST_FILE" = "NO"; }; "name" = "Release"; };
+A887DE88DBDF1737C86A0A3B = { "isa" = "XCConfigurationList"; "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; "buildConfigurations" = ( "DE8C77052069C391268E7695", "D38AC27362B4DD1B06730EA7", ); };
+
+8AA86E8575A7D52C0D3EA7B3 = { "path" = "PorchFamily.app"; "isa" = "PBXFileReference"; "includeInIndex" = "0"; "explicitFileType" = "wrapper.application"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
+
+B593041B63DB50D4C7298CCC = { "productType" = "com.apple.product-type.application"; "productReference" = "8AA86E8575A7D52C0D3EA7B3"; "buildConfigurationList" = "A887DE88DBDF1737C86A0A3B"; "packageProductDependencies" = ( "E00000000000000000000002", "E00000000000000000000004", ); "productName" = "Porch"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "D00000000000000000000001", "D00000000000000000000003", "D00000000000000000000002", ); "dependencies" = ( ); "name" = "PorchFamily"; "buildRules" = ( ); };
+
+A69B9737580D69535B091E0B = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "GENERATE_INFOPLIST_FILE" = "YES"; "ONLY_ACTIVE_ARCH" = "YES"; "TARGETED_DEVICE_FAMILY" = "1,2"; "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/PorchFamily.app/PorchFamily"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.familytests"; "CODE_SIGN_STYLE" = "Automatic"; "SWIFT_VERSION" = "5.0"; "BUNDLE_LOADER" = "$(TEST_HOST)"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "PRODUCT_NAME" = "PorchFamilyTests"; }; };
+
+9573EB3BAE5882601F9951B4 = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "GENERATE_INFOPLIST_FILE" = "YES"; "TARGETED_DEVICE_FAMILY" = "1,2"; "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/PorchFamily.app/PorchFamily"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.familytests"; "CODE_SIGN_STYLE" = "Automatic"; "SWIFT_VERSION" = "5.0"; "BUNDLE_LOADER" = "$(TEST_HOST)"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "PRODUCT_NAME" = "PorchFamilyTests"; }; };
+8800BD80F7CF957EFD34335D = { "isa" = "XCConfigurationList"; "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; "buildConfigurations" = ( "A69B9737580D69535B091E0B", "9573EB3BAE5882601F9951B4", ); };
+6664906F7F9748903C363D28 = { "path" = "PorchFamilyTests.xctest"; "isa" = "PBXFileReference"; "explicitFileType" = "wrapper.cfbundle"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
+78812CE57ADF8333CB1010D0 = { "isa" = "PBXContainerItemProxy"; "containerPortal" = "F00000000000000000000002"; "proxyType" = "1"; "remoteGlobalIDString" = "B593041B63DB50D4C7298CCC"; "remoteInfo" = "PorchFamily"; };
+75DC8F2B788E4CC3A4897E38 = { "isa" = "PBXTargetDependency"; "target" = "B593041B63DB50D4C7298CCC"; "targetProxy" = "78812CE57ADF8333CB1010D0"; };
+04655FE6A3EA8CC4C45BFF1A = { "buildConfigurationList" = "8800BD80F7CF957EFD34335D"; "productReference" = "6664906F7F9748903C363D28"; "productType" = "com.apple.product-type.bundle.unit-test"; "productName" = "PorchFamilyTests"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "D00000000000000000000004", "D00000000000000000000005", ); "dependencies" = ( "75DC8F2B788E4CC3A4897E38", ); "name" = "PorchFamilyTests"; "buildRules" = ( ); };
+
+EBB3169BDD00A49B465125BA = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "356FD1D86F08F309C2B0A7BF", ); "runOnlyForDeploymentPostprocessing" = "0"; };
 
 	};
 	rootObject = F00000000000000000000002 /* Project object */;

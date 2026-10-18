@@ -297,3 +297,12 @@ configure `IOS_DRIVER_APPSTORE_PROFILE`, and run verification-only archive/expor
 and App Store validation with the GitHub-held signing identity. Upload only after
 those checks pass. Apple's [entitlement instructions](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development)
 describe the required approved entitlement group and distribution profile.
+
+## Separate family TestFlight builds
+
+The [build variants guide](BUILD-VARIANTS.md) describes `PorchFamily`, which shares
+feature sources/resources but excludes Cell2Jack transport, its driver and settings,
+and DriverKit signature entitlements. The TestFlight workflow defaults to this
+family variant and needs only the app profile. The earlier distribution blocker
+above applies to `variant=cell2jack`; it does not prevent family-only TestFlight
+updates. Continue using the `Porch` development scheme on the bedside iPad.

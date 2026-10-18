@@ -36,6 +36,7 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         timeoutGroup = field(secondsField, title: "Seconds without talking", placeholder: "120", helper: "Choose 15–1800 seconds (up to 30 minutes). The default is 120 seconds.")
         form.addArrangedSubview(section("Automatic hang-up", detail: "Optionally end a call when neither person has spoken for this long. Speech from either side restarts the timer, including a voicemail greeting or message. Applies to Porch calls and phone fallback on this device. The timer starts after connection and resets while reconnecting.", views: [row, timeoutGroup, validation]))
         form.addArrangedSubview(section("USB keypad & touch controls", detail: "Your standard USB keypad and the on-screen controls stay available at all times, including when Cell2Jack is off or disconnected. Connect a standard keypad to use it as a backup; no driver or mode switch is needed.", views: []))
+        #if !PORCH_NO_CELL2JACK
         if Cell2JackKeypad.supportsDriverPlatform {
         phoneSwitch.isOn = phoneKeypad.enabled
         phoneSwitch.onTintColor = PorchStyle.accent
@@ -54,6 +55,7 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         } else {
             form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Cell2Jack requires an M-series iPad with iPadOS 16 or later. You can continue using a standard USB keypad and touch controls on this device.", views: []))
         }
+        #endif
         updateControls()
     }
 
