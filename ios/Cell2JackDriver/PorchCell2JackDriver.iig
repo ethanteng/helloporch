@@ -10,5 +10,9 @@ public:
     virtual kern_return_t Stop(IOService *provider) override;
     virtual kern_return_t NewUserClient(uint32_t type, IOUserClient **client) override;
     kern_return_t ReadVersion(PorchC2JReply *reply) LOCALONLY;
+    kern_return_t BeginLogs(IOUserClient *owner, PorchC2JReply *reply) LOCALONLY;
+    kern_return_t PollLogs(IOUserClient *owner, PorchC2JReply *reply) LOCALONLY;
+    kern_return_t EndLogs(IOUserClient *owner, PorchC2JReply *reply) LOCALONLY;
+    kern_return_t WriteCommand(char command) LOCALONLY;
 };
 #endif

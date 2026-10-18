@@ -27,18 +27,28 @@ kern_return_t PorchCell2JackUserClient::Start_Impl(IOService *provider) {
     return status;
 }
 kern_return_t PorchCell2JackUserClient::Stop_Impl(IOService *provider) {
+    if (ivars->driver) {
+        PorchC2JReply reply = {};
+        ivars->driver->EndLogs(this, &reply); // best effort on close/crash
+    }
     return Stop(provider, SUPERDISPATCH);
 }
 kern_return_t PorchCell2JackUserClient::ExternalMethod(uint64_t selector,
     IOUserClientMethodArguments *arguments, const IOUserClientMethodDispatch *, OSObject *, void *) {
     // This endpoint deliberately accepts no input and no asynchronous callback.
-    if (!arguments || selector != PorchC2JReadVersion || arguments->completion ||
+    if (!arguments || selector > PorchC2JEndLogs || arguments->completion ||
         arguments->scalarInputCount || arguments->scalarOutputCount || arguments->structureInput ||
         arguments->structureInputDescriptor || arguments->structureOutputDescriptor ||
         arguments->structureOutputMaximumSize != sizeof(PorchC2JReply)) return kIOReturnBadArgument;
     if (!ivars->driver) return kIOReturnNotAttached;
     PorchC2JReply reply = {};
-    auto status = ivars->driver->ReadVersion(&reply);
+    kern_return_t status = kIOReturnBadArgument;
+    switch (selector) {
+        case PorchC2JReadVersion: status = ivars->driver->ReadVersion(&reply); break;
+        case PorchC2JBeginLogs: status = ivars->driver->BeginLogs(this, &reply); break;
+        case PorchC2JPollLogs: status = ivars->driver->PollLogs(this, &reply); break;
+        case PorchC2JEndLogs: status = ivars->driver->EndLogs(this, &reply); break;
+    }
     if (status != kIOReturnSuccess) return status;
     arguments->structureOutput = OSData::withBytes(&reply, sizeof(reply));
     return arguments->structureOutput ? kIOReturnSuccess : kIOReturnNoMemory;

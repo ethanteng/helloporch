@@ -1,4 +1,4 @@
-# Cell2Jack version-only iPad proof of concept
+# Cell2Jack USB version and keypad iPad proof of concept
 
 This experiment is on `feature/cell2jack-ipad-version-poc`. Open `ios/Porch.xcodeproj`
 and select the **PorchCell2Jack** scheme. It builds a separate **Porch USB Test**
@@ -21,7 +21,8 @@ shows the `CJ Version = a06` header when present, raw text/hex, serial-chip
 revision, and the USB error/stage when an operation fails. The copy button
 copies that result for troubleshooting.
 
-No `/d`, bootloader/recovery packets, arbitrary write interface, call actions,
+The keypad test adds only `/d` (start debug logs) and `/q` (stop), alongside
+`/v`. No bootloader/recovery packets, arbitrary write interface, call actions,
 network connection, Mac bridge, firmware image or flash operation is included.
 The `/v` response was verified on the user's Mac and now on the physical M3
 iPad. App build 5 / driver build 3 returned `a06`, 34 bytes, USB success and
@@ -133,7 +134,8 @@ can be explicitly selected with `PORCH_CELL2JACK_DRIVER_PROFILE` if required.
    Also verify a disconnected device gives a clear failure rather than a stale
    version. Report chip revision, failing stage and hexadecimal result on errors.
 6. Disable/remove the driver after testing. HelloPorch calls, audio routing and
-   DTMF control are outside this first milestone.
+   DTMF-to-HelloPorch control are outside this experiment; keypad logging is
+   described below.
 
 ## Protocol references and limits
 
@@ -232,3 +234,75 @@ the `/v` transaction itself used the native iPad app → DriverKit → USB →
 Cell2Jack path. No Mac serial connection or relay participated. Fully manual
 use has the same native button path; unplugged-device behavior, charging-hub
 behavior, and longer-term operation remain separate acceptance checks.
+
+
+## Keypad logging — app build 7, driver build 5, ABI 2
+
+The app adds **Start keypad test**, **Stop**, a large recent-digit display, and
+live raw logs. It does not invoke HelloPorch contact or call handlers. Existing
+phone keypad behavior inside Cell2Jack remains active. Foreground use only:
+losing active status requests stop, and the app keeps the screen awake during
+capture. Every capture has a 120-second limit and a 4 MiB raw-data limit.
+
+The driver accepts four fixed, input-free user-client selectors with the same
+276-byte reply structure: version (0), begin logs (1), poll logs (2), and end
+logs (3). ABI is now 2 so older installed drivers fail with a clear mismatch.
+The driver retains the hardware-tested fixed 2 Mbaud setup and the exact
+five-field USB match that outmatched AppleUSBCHCOM. All serial writes are still
+the literal two-byte `/v`, `/d`, `/q` strings with no newline.
+
+Begin configures the UART, queries/reads the version, waits 500 ms, and writes
+`/d`. The app waits another 500 ms before polling. Each poll is one bounded
+250 ms read of up to one USB bulk packet (64 bytes on this unit), preserving
+partial data on ordinary idle timeouts. One user client exclusively owns the
+log stream; concurrent version/start operations cannot reconfigure it.
+
+If an enable attempt yields no log bytes for two seconds, the app writes `/q`
+and retries the version/enable sequence, up to three attempts. This adapts the
+Windows logger's sequence: the original queries `/v` once and tests for at
+least 100 bytes in one read; this iPad test re-queries on retry and treats any
+received log bytes as activity because its reads use smaller USB packets.
+Neither activity nor the Windows count heuristic is a semantic acknowledgement
+of debug mode. Actual `DTMF` lines must be correlated with physical keypresses.
+
+Stop writes `/q`, records its USB write result, and closes the user client.
+The driver's client Stop callback also attempts `/q` for its owning client;
+provider detach clears ownership and closes USB. Cleanup on abnormal termination
+is best effort, not a promise that `/q` reaches disconnected hardware. If stop
+fails, the app reports it instead of claiming logging was disabled.
+
+The byte-framed parser handles CR, LF, fragmented CRLF, and lines split across
+USB reads. Only complete lines beginning with `DTMF` and one valid digit
+(`0`–`9`, `*`, `#`, `A`–`D`) become primary digit events. Consecutive identical
+primary events are retained. `Double DTMF` / `RX Double DTMF` lines are saved as
+separate diagnostic reports, not counted again as physical presses. Parameter
+lines such as `DTMF=1` and `Unknown DTMF key` messages are rejected. Overlong
+lines are discarded until the next delimiter, preventing suffix stitching.
+No timing debounce or invented key-up event is applied.
+
+Files are saved under `Documents/keypad-<UUID>/`: `received.bin` preserves all
+received version/log bytes, `events.jsonl` records timestamps, raw offsets,
+retry/start/stop state and parsed events, and `summary.txt` records the outcome.
+`Documents/keypad-latest.txt` identifies the latest folder. The screen keeps a
+bounded raw-text tail and the last 32 primary digits; files preserve the full
+bounded test. Copy test result copies the visible text.
+
+Physical acceptance:
+
+1. After installation, unplug for 10 seconds, confirm the driver switch is on,
+   and reconnect so the ABI 2 driver replaces the version-only build.
+2. Tap **Start keypad test**. Wait for receiving logs; lift the handset.
+3. Press `1 2 3 0 * # 5 5`, slowly and separately, then hang up. Compare the
+   displayed primary digits with physical presses; retain raw logs for extras.
+4. Tap **Stop**. Confirm `/q sent` and that Start/Read are available again.
+5. Start a fresh capture, test another short sequence, then leave the app.
+   Confirm foreground cleanup and that a subsequent version read still works.
+6. Separately test USB disconnection and idle timeout. A failed session must
+   end with an error, not invent or repeat cached digits.
+
+The developer-only launch argument `--start-keypad-test` starts exactly the same
+capture as the visible button. No capture starts during an ordinary launch.
+Host parser tests cover the observed Mac lines, every split boundary, bytewise
+fragmentation, repeated identical keys, duplicate-report classification,
+parameter rejection, malformed bytes, and line-overflow recovery. iPad keypad
+hardware observations should be recorded separately from those host tests.

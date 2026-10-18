@@ -14,6 +14,8 @@ struct PorchCell2JackDriver_IVars {
     IOUSBHostPipe *output;
     uint16_t packetSize;
     bool opened;
+    IOUserClient *logOwner; // non-owning; the client retains this driver
+    uint8_t chipVersion;
 };
 
 bool PorchCell2JackDriver::init() {
@@ -71,6 +73,7 @@ kern_return_t PorchCell2JackDriver::Start_Impl(IOService *provider) {
     return status;
 }
 kern_return_t PorchCell2JackDriver::Stop_Impl(IOService *provider) {
+    ivars->logOwner = nullptr;
     if (ivars->opened) { ivars->interface->Close(this, 0); ivars->opened = false; }
     return Stop(provider, SUPERDISPATCH);
 }
@@ -86,6 +89,7 @@ kern_return_t PorchCell2JackDriver::NewUserClient_Impl(uint32_t type, IOUserClie
 
 kern_return_t PorchCell2JackDriver::ReadVersion(PorchC2JReply *reply) {
     bzero(reply, sizeof(*reply)); reply->abi = PorchC2JABI;
+    if (ivars->logOwner) return kIOReturnBusy;
     if (!ivars->opened) return kIOReturnNotAttached;
     IOBufferMemoryDescriptor *buffer = nullptr;
     auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionOutIn, PorchC2JMaxReply, &buffer);
@@ -110,6 +114,7 @@ kern_return_t PorchCell2JackDriver::ReadVersion(PorchC2JReply *reply) {
     status = control(0xc0, 0x5f, 0, 0, 2);
     if (status == kIOReturnSuccess) {
         reply->chipVersion = bytes[0];
+        ivars->chipVersion = bytes[0];
         // Older variants need different line-control sequencing, not implemented.
         if (reply->chipVersion < 0x30) status = kIOReturnUnsupported;
     }
@@ -161,4 +166,69 @@ kern_return_t PorchCell2JackDriver::ReadVersion(PorchC2JReply *reply) {
     reply->usbStatus = status;
     buffer->release();
     return kIOReturnSuccess; // USB result is carried in the fixed-size response.
+}
+
+kern_return_t PorchCell2JackDriver::WriteCommand(char command) {
+    if (command != 'd' && command != 'q') return kIOReturnBadArgument;
+    if (!ivars->opened) return kIOReturnNotAttached;
+    IOBufferMemoryDescriptor *buffer = nullptr;
+    auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionOut, 2, &buffer);
+    if (status != kIOReturnSuccess) return status;
+    IOAddressSegment memory = {};
+    status = buffer->GetAddressRange(&memory);
+    if (status == kIOReturnSuccess) {
+        auto *bytes = reinterpret_cast<uint8_t *>(memory.address);
+        bytes[0] = '/'; bytes[1] = command;
+        uint32_t transferred = 0;
+        status = ivars->output->IO(buffer, 2, &transferred, 500);
+        if (status == kIOReturnSuccess && transferred != 2) status = kIOReturnUnderrun;
+    }
+    buffer->release();
+    return status;
+}
+kern_return_t PorchCell2JackDriver::BeginLogs(IOUserClient *owner, PorchC2JReply *reply) {
+    auto status = ReadVersion(reply); // configures 2 Mbaud and sends only /v
+    if (status != kIOReturnSuccess || reply->usbStatus != kIOReturnSuccess) return status;
+    ivars->logOwner = owner;
+    IOSleep(500); // observed logger sequencing: /v, read, 500 ms, /d
+    reply->stage = PorchC2JLogEnable;
+    reply->usbStatus = WriteCommand('d');
+    // Retain ownership even on a partial write so close/Stop can attempt /q.
+    return kIOReturnSuccess;
+}
+kern_return_t PorchCell2JackDriver::PollLogs(IOUserClient *owner, PorchC2JReply *reply) {
+    if (ivars->logOwner != owner) return kIOReturnNotOpen;
+    bzero(reply, sizeof(*reply)); reply->abi = PorchC2JABI;
+    reply->stage = PorchC2JLogRead; reply->chipVersion = ivars->chipVersion;
+    if (!ivars->opened) return kIOReturnNotAttached;
+    IOBufferMemoryDescriptor *buffer = nullptr;
+    auto status = ivars->interface->CreateIOBuffer(kIOMemoryDirectionIn, ivars->packetSize, &buffer);
+    if (status != kIOReturnSuccess) return status;
+    IOAddressSegment memory = {};
+    status = buffer->GetAddressRange(&memory);
+    if (status == kIOReturnSuccess) {
+        uint32_t transferred = 0;
+        status = ivars->input->IO(buffer, ivars->packetSize, &transferred, 250);
+        if (transferred > ivars->packetSize) status = kIOReturnOverrun;
+        else {
+            memcpy(reply->bytes, reinterpret_cast<void *>(memory.address), transferred);
+            reply->count = transferred;
+            // An idle read is normal while waiting for physical keys.
+            if (status == kIOReturnTimeout || status == kIOReturnUnderrun) status = kIOReturnSuccess;
+        }
+    }
+    reply->usbStatus = status;
+    buffer->release();
+    return kIOReturnSuccess;
+}
+kern_return_t PorchCell2JackDriver::EndLogs(IOUserClient *owner, PorchC2JReply *reply) {
+    bzero(reply, sizeof(*reply)); reply->abi = PorchC2JABI;
+    reply->stage = PorchC2JReady;
+    if (ivars->logOwner && ivars->logOwner != owner) return kIOReturnBusy;
+    if (ivars->logOwner == owner) {
+        reply->stage = PorchC2JLogStop;
+        reply->usbStatus = WriteCommand('q');
+        ivars->logOwner = nullptr;
+    }
+    return kIOReturnSuccess;
 }
