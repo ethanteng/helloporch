@@ -661,7 +661,9 @@ extension CallViewController: Cell2JackDigitReceiving {
         displayPhoneKeypadStatus(Cell2JackKeypad.shared.status, enabled: Cell2JackKeypad.shared.enabled)
     }
     func displayPhoneKeypadStatus(_ status: String, enabled: Bool) {
-        let visibleStatus = enabled ? status : nil
+        // Only the brief success confirmation belongs in the app UI.
+        // Connection diagnostics stay in the local diagnostic files.
+        let visibleStatus = enabled && status == "Phone keypad ready" ? status : nil
         // Duplicate status notifications must not restart the ready confirmation.
         guard visibleStatus != displayedPhoneKeypadStatus else { return }
         displayedPhoneKeypadStatus = visibleStatus

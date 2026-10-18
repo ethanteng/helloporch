@@ -99,10 +99,19 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertTrue(label.isHidden, "A duplicate ready update must not extend the confirmation")
         clock.displayPhoneKeypadStatus("Phone keypad ready", enabled: true)
         XCTAssertTrue(label.isHidden)
-        clock.displayPhoneKeypadStatus("Connecting phone keypad…", enabled: true)
-        XCTAssertFalse(label.isHidden)
+        for diagnostic in ["Connecting phone keypad…", "Phone keypad paused", "Stopping phone keypad…",
+                           "Phone keypad unavailable: No running Cell2Jack driver service was found.",
+                           "Phone keypad stopped: USB stage 10: 0xe00002ed · /q unconfirmed; unplug Cell2Jack if logging persists"] {
+            clock.displayPhoneKeypadStatus(diagnostic, enabled: true)
+            XCTAssertTrue(label.isHidden, "Connection diagnostics must not appear on the bedside screen")
+            XCTAssertNil((label as? UILabel)?.text)
+        }
         clock.displayPhoneKeypadStatus("Phone keypad ready", enabled: true)
         XCTAssertFalse(label.isHidden, "A new connection gets its own confirmation")
+        clock.displayPhoneKeypadStatus("Phone keypad stopped: USB disconnected", enabled: true)
+        XCTAssertTrue(label.isHidden, "A stopped update must also dismiss a visible ready confirmation")
+        clock.displayPhoneKeypadStatus("Phone keypad ready", enabled: true)
+        XCTAssertFalse(label.isHidden)
         clock.displayPhoneKeypadStatus("Phone keypad off", enabled: false)
         XCTAssertTrue(label.isHidden)
     }

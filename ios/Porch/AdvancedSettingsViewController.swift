@@ -3,7 +3,6 @@ import PorchCore
 
 final class AdvancedSettingsViewController: CaregiverFormViewController {
     private let phoneSwitch = UISwitch()
-    private let phoneStatus = PorchStyle.label("", size: 16)
     private let defaults: UserDefaults
     private let phoneKeypad: Cell2JackKeypad
     private let silenceSwitch = UISwitch()
@@ -51,9 +50,7 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         driver.addAction(UIAction { _ in
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         }, for: .touchUpInside)
-        form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Optional, off by default. Requires an M-series iPad with iPadOS 16 or later and the USB driver enabled in this app’s settings. This switch takes effect immediately. Use your saved person keys to call and your call-control key (normally 0) to hang up. Keep Porch open. Receiver pickup and hang-up do not control Porch. USB provides keypad input; sound follows the iPad’s selected audio output.", views: [phoneRow, phoneStatus, retry, driver]))
-        NotificationCenter.default.addObserver(self, selector: #selector(refreshPhoneStatus), name: .cell2JackKeypadChanged, object: nil)
-        refreshPhoneStatus()
+        form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Optional, off by default. Requires an M-series iPad with iPadOS 16 or later and the USB driver enabled in this app’s settings. This switch takes effect immediately. Use your saved person keys to call and your call-control key (normally 0) to hang up. Keep Porch open. Receiver pickup and hang-up do not control Porch. USB provides keypad input; sound follows the iPad’s selected audio output.", views: [phoneRow, retry, driver]))
         } else {
             form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Cell2Jack requires an M-series iPad with iPadOS 16 or later. You can continue using a standard USB keypad and touch controls on this device.", views: []))
         }
@@ -82,5 +79,4 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
 
 extension AdvancedSettingsViewController {
     @objc private func changePhoneKeypad() { phoneKeypad.setEnabled(phoneSwitch.isOn) }
-    @objc private func refreshPhoneStatus() { phoneStatus.text = phoneKeypad.status }
 }

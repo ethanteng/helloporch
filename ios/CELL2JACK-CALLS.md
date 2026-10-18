@@ -1,7 +1,7 @@
 # Cell2Jack and backup keypads in Porch
 
 Use the normal **Porch** scheme on `feature/cell2jack-ipad-version-poc`.
-Build 16 installs as **Porch**, identity `com.ethanteng.helloporch`, preserving
+Build 17 installs as **Porch**, identity `com.ethanteng.helloporch`, preserving
 contacts, photos, calling credentials, and ordinary keyboard/touch input.
 The app's Cell2Jack option starts **off**, including on the iPad that previously
 ran the automatically enabled experiment. It uses a new opt-in preference,
@@ -36,7 +36,7 @@ individual chip models; an unsupported iPad or missing driver produces an
 unavailable status instead of blocking the standard input paths.
 
 Both normal Debug and unsigned Release builds passed. Signed development build
-16 installed on the physical M3 iPad. Distribution remains subject to Apple's
+17 installed on the physical M3 iPad. Distribution remains subject to Apple's
 [DriverKit entitlements](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development)
 and provisioning approval. An unsigned Release build is not a TestFlight or
 App Store signing validation. Apple's [iPadOS driver guide](https://developer.apple.com/documentation/driverkit/creating-drivers-for-ipados)
@@ -227,8 +227,9 @@ text selection, deletion, and native/hardware-keyboard setup tests.
 The phone keypad status now sits directly below Call someone, outside the clock
 stack. A ready confirmation hides after three seconds without changing USB
 ownership or digit routing. Duplicate ready notifications do not restart the
-timer; reconnecting gets a fresh confirmation. Other connection/error statuses
-remain visible, and switching the feature off hides the status immediately.
+timer; reconnecting gets a fresh confirmation. Build 17 restricts the bedside label to this ready confirmation; connection,
+paused, stopped, and error details are not displayed in the app UI.
+Switching the feature off hides the status immediately.
 Layout checks cover four iPad portrait/landscape sizes. A timed regression checks
 visibility before three seconds, dismissal afterwards, duplicate notifications,
 reconnection, and disabling. All 63 iPad simulator cases passed. Xcode’s runner stalled during result
@@ -237,3 +238,21 @@ The signed
 build installed on the M3 iPad, preserving the user's now-enabled Cell2Jack
 preference and saved contacts. Build 15's physical backup-keypad and touchscreen
 checks remain the latest hardware verification for those paths.
+
+## PR verification and build 17
+
+The automated code review of the integration reported no findings. The initial
+GitHub simulator build rejected ad-hoc signing for its DriverKit dependency.
+Simulator CI now uses `SimulatorCI.xcconfig`: app/test ad-hoc signing remains
+enabled for real Keychain tests, while signing is disabled only for the
+DriverKit SDK dependency, which is not embedded in Simulator. Device signing
+settings are unchanged. The universal simulator build and all 63 cases on both
+iPad and iPhone completed successfully locally with this configuration. Local
+runs disabled test diagnostic collection to avoid earlier result-finalization
+stalls. CI also runs the USB protocol/parser and no-call Preview boundary checks.
+
+Build 17 hides all connection diagnostics on the bedside clock, including the
+reported USB stage 10 stop message. The caregiver status label is also removed;
+the toggle and Retry control remain. Diagnostics stay in local diagnostic files. The ready confirmation still appears below Call someone for
+three seconds. The existing timed regression now also checks diagnostic
+suppression and dismissing an active confirmation when the connection stops.
