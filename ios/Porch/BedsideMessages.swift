@@ -360,7 +360,6 @@ final class MessagePlayerViewController: UIViewController {
     }
 }
 
-#if PORCH_CELL2JACK_CALLS
 extension MessagePlayerViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         let action = (try? CallSlots.load())?.action(for: digit)
@@ -368,4 +367,3 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
         stop(); return "message playback stopped"
     }
 }
-#endif

@@ -29,13 +29,8 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = PorchContainerViewController()
         window.makeKeyAndVisible()
         self.window = window
-        #if PORCH_CELL2JACK_CALLS
         Cell2JackKeypad.shared.root = window.rootViewController
         Cell2JackKeypad.shared.windowScene = scene
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--enable-cell2jack-keypad") { Cell2JackKeypad.shared.setEnabled(true) }
-        #endif
-        #endif
         if let url = options.urlContexts.first?.url { (window.rootViewController as? PorchContainerViewController)?.openInvitation(url) }
     }
 
@@ -47,9 +42,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
         UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
         SystemIncomingCalls.shared.resumeCamera()
-        #if PORCH_CELL2JACK_CALLS
         Cell2JackKeypad.shared.activate()
-        #endif
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
@@ -58,9 +51,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
-        #if PORCH_CELL2JACK_CALLS
         Cell2JackKeypad.shared.pause()
-        #endif
         (window?.rootViewController as? PorchContainerViewController)?.pause()
         UIApplication.shared.isIdleTimerDisabled = false
     }

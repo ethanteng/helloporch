@@ -35,9 +35,7 @@ final class PorchContainerViewController: UIViewController {
         FamilyCoordinator.shared.pause()
         let finish = { [weak self] in
             self?.installExperience(); self?.incomingID = nil
-            #if PORCH_CELL2JACK_CALLS
             Cell2JackKeypad.shared.refresh()
-            #endif
             if UIApplication.shared.applicationState == .active { FamilyCoordinator.shared.start() }
         }
         if presentedViewController != nil { dismiss(animated: false, completion: finish) }

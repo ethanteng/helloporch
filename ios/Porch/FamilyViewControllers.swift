@@ -1031,7 +1031,6 @@ final class ChangeCaregiverPINViewController: CaregiverFormViewController {
     }
 }
 
-#if PORCH_CELL2JACK_CALLS
 extension IncomingFamilyCallViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard !answering, (try? CallSlots.load())?.action(for: digit) == .callControl else { return "incoming key ignored" }
@@ -1040,4 +1039,3 @@ extension IncomingFamilyCallViewController: Cell2JackDigitReceiving {
         accept(); return "answer requested"
     }
 }
-#endif

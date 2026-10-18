@@ -5,10 +5,10 @@ final class CallViewController: UIViewController {
     private var slots = CallSlots()
     private var trigger = CallTrigger()
     private var opening = false
-    #if PORCH_CELL2JACK_CALLS
     private var cancelOpening = false
     private let phoneKeypadStatus = UILabel()
-    #endif
+    private var phoneKeypadStatusTimer: Timer?
+    private var displayedPhoneKeypadStatus: String?
     private var loadError: String?
     private let sceneView = BedsideSceneView()
     private let clock = UIStackView()
@@ -93,16 +93,16 @@ final class CallViewController: UIViewController {
         }
         timeLabel.accessibilityTraits.insert(.updatesFrequently)
         [contextLabel, weekdayLabel, timeLabel, dateLabel].forEach { clock.addArrangedSubview($0) }
-        #if PORCH_CELL2JACK_CALLS
         phoneKeypadStatus.font = PorchStyle.font(16)
         phoneKeypadStatus.textColor = PorchStyle.nightSecondary
         phoneKeypadStatus.textAlignment = .center
-        phoneKeypadStatus.numberOfLines = 0
+        phoneKeypadStatus.numberOfLines = 1
+        phoneKeypadStatus.adjustsFontSizeToFitWidth = true
+        phoneKeypadStatus.minimumScaleFactor = 0.75
         phoneKeypadStatus.accessibilityIdentifier = "clock.cell2jack"
-        clock.addArrangedSubview(phoneKeypadStatus)
+        phoneKeypadStatus.isHidden = true
         NotificationCenter.default.addObserver(self, selector: #selector(updatePhoneKeypadStatus), name: .cell2JackKeypadChanged, object: nil)
         updatePhoneKeypadStatus()
-        #endif
         clock.axis = .vertical
         clock.spacing = 24
         clock.isAccessibilityElement = false
@@ -150,7 +150,7 @@ final class CallViewController: UIViewController {
         messagesButton.accessibilityIdentifier = "clock.messages"
         messagesButton.isHidden = true
         messagesButton.addTarget(self, action: #selector(playMessages), for: .touchUpInside)
-        [callButton, caregiver, statusLabel, messagesButton].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
+        [callButton, caregiver, statusLabel, messagesButton, phoneKeypadStatus].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; view.addSubview($0) }
         let guide = view.safeAreaLayoutGuide
         view.addLayoutGuide(clockArea)
         clockTop = clockArea.topAnchor.constraint(equalTo: guide.topAnchor, constant: 16)
@@ -178,6 +178,11 @@ final class CallViewController: UIViewController {
             callButton.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
             callButton.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
             callButton.widthAnchor.constraint(lessThanOrEqualToConstant: 760),
+            phoneKeypadStatus.topAnchor.constraint(equalTo: callButton.bottomAnchor, constant: 8),
+            phoneKeypadStatus.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            phoneKeypadStatus.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
+            phoneKeypadStatus.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
+            phoneKeypadStatus.bottomAnchor.constraint(lessThanOrEqualTo: guide.bottomAnchor, constant: -2),
             statusLabel.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -24),
@@ -197,7 +202,7 @@ final class CallViewController: UIViewController {
         updateDisplay(); resetClock()
     }
 
-    deinit { clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
+    deinit { phoneKeypadStatusTimer?.invalidate(); clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -274,9 +279,6 @@ final class CallViewController: UIViewController {
         // Permission dialogs, app switching and keyboard changes must never take focus
         // from a caregiver's text field or from an active call.
         guard isViewLoaded, presentedViewController == nil else { return }
-        #if !PORCH_CELL2JACK_CALLS
-        opening = false
-        #endif
         updateDisplay()
         statusLabel.text = nil
         refreshCallButton()
@@ -292,9 +294,7 @@ final class CallViewController: UIViewController {
 
     func pause() {
         trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil
-        #if PORCH_CELL2JACK_CALLS
         if opening { cancelOpening = true }
-        #endif
     }
 
     @objc private func resetClock() {
@@ -464,31 +464,25 @@ final class CallViewController: UIViewController {
             showError("Porch isn't ready", message: "Check Family & drop-in in caregiver mode, then try again."); return
         }
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
-        #if PORCH_CELL2JACK_CALLS
         cancelOpening = false
         Cell2JackKeypad.shared.record(["kind": "callStartRequested", "digitSource": "shared touch/keyboard/USB handler"])
-        #endif
         opening = true; refreshCallButton()
         Task { [weak self] in
             guard let self else { return }
             defer { self.opening = false; self.refreshCallButton() }
             do {
                 let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
-                #if PORCH_CELL2JACK_CALLS
                 if self.cancelOpening {
                     await session.end()
                     Cell2JackKeypad.shared.record(["kind": "pendingCallCancelled"])
                     return
                 }
                 Cell2JackKeypad.shared.record(["kind": "callSessionCreated"])
-                #endif
                 guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
                 self.present(try NativeCallViewController.paired(session, contact: contact), animated: true)
             } catch {
-                #if PORCH_CELL2JACK_CALLS
                 if self.cancelOpening { return }
                 Cell2JackKeypad.shared.record(["kind": "callStartFailed", "error": error.localizedDescription])
-                #endif
                 // A lost response may still have created a Porch call. Only a
                 // confirmed offline result permits an unpaired phone handoff.
                 if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
@@ -662,9 +656,26 @@ final class PeoplePickerViewController: UIViewController {
     }
 }
 
-#if PORCH_CELL2JACK_CALLS
 extension CallViewController: Cell2JackDigitReceiving {
-    @objc private func updatePhoneKeypadStatus() { phoneKeypadStatus.text = Cell2JackKeypad.shared.status }
+    @objc private func updatePhoneKeypadStatus() {
+        displayPhoneKeypadStatus(Cell2JackKeypad.shared.status, enabled: Cell2JackKeypad.shared.enabled)
+    }
+    func displayPhoneKeypadStatus(_ status: String, enabled: Bool) {
+        let visibleStatus = enabled ? status : nil
+        // Duplicate status notifications must not restart the ready confirmation.
+        guard visibleStatus != displayedPhoneKeypadStatus else { return }
+        displayedPhoneKeypadStatus = visibleStatus
+        phoneKeypadStatusTimer?.invalidate()
+        phoneKeypadStatusTimer = nil
+        phoneKeypadStatus.text = visibleStatus
+        phoneKeypadStatus.isHidden = visibleStatus == nil
+        if visibleStatus == "Phone keypad ready" {
+            phoneKeypadStatusTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
+                self?.phoneKeypadStatus.isHidden = true
+                self?.phoneKeypadStatusTimer = nil
+            }
+        }
+    }
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard presentedViewController == nil else { return "clock covered" }
         if opening {
@@ -685,4 +696,3 @@ extension PeoplePickerViewController: Cell2JackDigitReceiving {
         return "people picker key dispatched"
     }
 }
-#endif

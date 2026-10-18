@@ -486,7 +486,6 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     }
 }
 
-#if PORCH_CELL2JACK_CALLS
 extension SystemCallViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         switch (try? CallSlots.load())?.action(for: digit) {
@@ -499,4 +498,3 @@ extension SystemCallViewController: Cell2JackDigitReceiving {
         }
     }
 }
-#endif

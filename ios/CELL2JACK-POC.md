@@ -394,3 +394,10 @@ USB Test identity, reusing driver build 6. It previews real saved contact/keypad
 assignments without the calling engine. The physical M3 iPad test matched
 `12390*#` and the user confirmed both contacts and other actions. See
 [KEYPAD-PREVIEW.md](KEYPAD-PREVIEW.md) for setup, isolation, and validation limits.
+
+## Integrated normal build
+
+Build 15 folds the optional input into the normal **Porch** scheme, off by
+default, while retaining standard HID keypad and touchscreen controls. Use
+[CELL2JACK-CALLS.md](CELL2JACK-CALLS.md) for the current setup. Earlier build
+records above describe the prototype and remain historical evidence.

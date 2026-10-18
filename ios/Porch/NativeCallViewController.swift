@@ -568,9 +568,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     @objc private func endCall() {
-        #if PORCH_CELL2JACK_CALLS
         Cell2JackKeypad.shared.record(["kind": "callEndRequested"])
-        #endif
         endedByCaller = true; finish()
     }
 
@@ -631,9 +629,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
             if message != nil { try? await Task.sleep(nanoseconds: 1_500_000_000) }
             dismiss(animated: true) {
-                #if PORCH_CELL2JACK_CALLS
                 Cell2JackKeypad.shared.record(["kind": "callScreenClosed"])
-                #endif
                 unanswered?()
             }
         }
@@ -855,7 +851,6 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 }
 
-#if PORCH_CELL2JACK_CALLS
 extension NativeCallViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard !isEnding else { return "call ending" }
@@ -863,4 +858,3 @@ extension NativeCallViewController: Cell2JackDigitReceiving {
         return "call key dispatched"
     }
 }
-#endif

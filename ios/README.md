@@ -74,8 +74,10 @@ On the same screen, **Announcement voice** lists matching voices available on th
 
 Under **Caregiver mode → Advanced**, turn on **End calls after silence**, enter the number of seconds, then tap **Save**. It is off by default; when enabled the default is 120 seconds, adjustable from 15 to 1800 seconds. It applies to connected Porch calls and phone fallback on this device. Audio activity from either side, including a voicemail greeting or a spoken message, restarts the interval. Dialing and reconnection do not count. On timeout Porch uses the normal hang-up path, including ending the telephone leg, and returns to the clock. This uses LiveKit's speaker activity events without recording or transcribing audio. A recipient hanging up also ends phone fallback automatically.
 
-## Cell2Jack USB experiment
+## Cell2Jack and backup keypads
 
-The [USB version and keypad proof of concept](CELL2JACK-POC.md) uses the `PorchCell2Jack` scheme. The newer [native keypad action preview](KEYPAD-PREVIEW.md) uses `PorchKeypadPreview` and installs as **Porch Preview**, replacing **Porch USB Test** while preserving the regular Porch app. It previews the saved keypad assignments without linking the calling engine. These experiments need an M-series iPad and DriverKit development signing; distribution permissions are separate and they are not part of the regular Porch release.
+The normal **Porch** scheme now includes optional [Cell2Jack phone keypad support](CELL2JACK-CALLS.md). It starts **off**, under caregiver mode → **Advanced**. Standard USB/Bluetooth keyboards and numeric keypads keep their existing input path and need no Cell2Jack switch or driver. Touchscreen controls remain available alongside either input. On the bedside screen, the Phone keypad ready confirmation appears beneath Call someone for three seconds, then hides while input stays active.
 
-For experimental **real calls** from Cell2Jack, use the [PorchCell2JackCalls scheme](CELL2JACK-CALLS.md). It installs over Porch with live saved assignments, an explicit caregiver switch, and digit-only foreground control. Preview remains a separate no-call target.
+Cell2Jack requires an M-series iPad with iPadOS 16 or later and its driver enabled in Porch's app settings. The universal app keeps its existing iOS 15 minimum for ordinary keyboard/touch operation; USB driver communication is gated and IOKit is weak-linked. DriverKit distribution approval is still needed before distributing the driver through TestFlight or the App Store.
+
+The earlier [USB version/keypad test](CELL2JACK-POC.md), [no-call Preview](KEYPAD-PREVIEW.md), and `PorchCell2JackCalls` scheme remain as historical development fixtures. Build and install **Porch** for the integrated app.

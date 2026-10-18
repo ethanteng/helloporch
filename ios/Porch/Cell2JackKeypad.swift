@@ -1,7 +1,7 @@
 import UIKit
 import PorchCore
 
-/// Only compiled by the experimental real-call target, not Porch or Preview.
+/// Phone digits share Porch's existing actions; keyboard input remains independent.
 protocol Cell2JackDigitReceiving: AnyObject {
     func receiveCell2JackDigit(_ digit: Int) -> String
 }
@@ -38,7 +38,8 @@ protocol Cell2JackKeypadConnection: AnyObject {
 /// Main-thread owner. Stale callbacks cannot act after stopping/backgrounding.
 final class Cell2JackKeypad {
     static let shared = Cell2JackKeypad()
-    static let enabledKey = "porch.cell2jack.realCalls.enabled"
+    // The prototype's automatic test opt-in is deliberately not migrated.
+    static let enabledKey = "porch.cell2jack.enabled"
     weak var root: UIViewController?
     weak var windowScene: UIWindowScene?
     private(set) var status = "Phone keypad off"
@@ -57,8 +58,16 @@ final class Cell2JackKeypad {
 
     init(defaults: UserDefaults = .standard,
          isBedside: @escaping () -> Bool = { PorchDevice.experience == .bedside },
-         makeConnection: @escaping (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection = { Cell2JackKeypadTransport($0) }) {
+         makeConnection: @escaping (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection = { Cell2JackKeypad.makeDefaultConnection($0) }) {
         self.defaults = defaults; self.isBedside = isBedside; self.makeConnection = makeConnection
+    }
+    static var supportsDriverPlatform: Bool {
+        if #available(iOS 16.0, *) { return UIDevice.current.userInterfaceIdiom == .pad }
+        return false
+    }
+    private static func makeDefaultConnection(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection {
+        if #available(iOS 16.0, *), supportsDriverPlatform { return Cell2JackKeypadTransport(update) }
+        return Cell2JackUnavailableConnection(update)
     }
 
     func setEnabled(_ value: Bool) {
@@ -67,9 +76,9 @@ final class Cell2JackKeypad {
     }
     func activate() {
         sceneActive = true
-        record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
+        if enabled { record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
                 "applicationState": UIApplication.shared.applicationState.rawValue,
-                "sceneState": windowScene?.activationState.rawValue ?? -99])
+                "sceneState": windowScene?.activationState.rawValue ?? -99]) }
         refresh()
     }
     func refresh() {
@@ -130,7 +139,7 @@ final class Cell2JackKeypad {
     }
     func pause() {
         sceneActive = false; wanted = false
-        record(["kind": "sceneInactive"])
+        if enabled || worker != nil { record(["kind": "sceneInactive"]) }
         stop()
     }
     private func stop() {
@@ -151,6 +160,7 @@ final class Cell2JackKeypad {
         NotificationCenter.default.post(name: .cell2JackKeypadChanged, object: nil)
     }
     func record(_ values: [String: Any]) {
+        guard enabled || worker != nil else { return }
         var values = values; values["utc"] = ISO8601DateFormatter().string(from: Date())
         records.append(values); records = Array(records.suffix(200))
         guard let data = try? JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys]) else { return }
@@ -159,8 +169,16 @@ final class Cell2JackKeypad {
     }
 }
 
+private final class Cell2JackUnavailableConnection: Cell2JackKeypadConnection {
+    private let update: (Cell2JackKeypadUpdate) -> Void
+    init(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) { self.update = update }
+    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack requires an M-series iPad with iPadOS 16 or later. USB keypads and touch controls remain available.")) } }
+    func stop() {}
+}
+
 /// Continuous foreground input. Bounded parser, action history and 64 KiB raw
 /// diagnostic tail; no time cutoff that would remove hang-up during a call.
+@available(iOS 16.0, *)
 private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
     typealias Update = Cell2JackKeypadUpdate
     private let queue = DispatchQueue(label: "porch.cell2jack.real-calls.usb")

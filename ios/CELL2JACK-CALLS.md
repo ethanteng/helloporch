@@ -1,28 +1,48 @@
-# Cell2Jack keypad in the real Porch app
+# Cell2Jack and backup keypads in Porch
 
-Use the **PorchCell2JackCalls** scheme on
-`feature/cell2jack-ipad-version-poc`. Build 14 installs as **Porch**, with the
-real app identity `com.ethanteng.helloporch`. It replaces the installed Porch
-binary in place, preserving its settings, contact photos, and keychain identity.
-It uses the normal calling engine and live saved assignments, not Preview's
-snapshot. This experiment can place real calls.
+Use the normal **Porch** scheme on `feature/cell2jack-ipad-version-poc`.
+Build 16 installs as **Porch**, identity `com.ethanteng.helloporch`, preserving
+contacts, photos, calling credentials, and ordinary keyboard/touch input.
+The app's Cell2Jack option starts **off**, including on the iPad that previously
+ran the automatically enabled experiment. It uses a new opt-in preference,
+`porch.cell2jack.enabled`; the prototype's `porch.cell2jack.realCalls.enabled`
+value and its Debug auto-enable launch argument do not activate the normal app.
 
-## Build boundary
+## Build and input boundaries
 
-The ordinary **Porch** scheme remains free of the USB extension and transport.
-The experimental target compiles the regular app sources with
-`PORCH_CELL2JACK_CALLS`, plus the verified bridge/parser and the new keypad owner.
-Its separate entitlement file includes APNs and driver communication. It embeds
-**PorchCell2JackCallsDriver**, the same driver implementation/build 6/ABI 2 under
-`com.ethanteng.helloporch.usbdriver`. iPad installation requires exactly one
-identifier component after the parent app prefix; the Preview driver's nested
-identifier cannot be embedded in the real Porch app.
+The normal target compiles the tested owner, bridge and parser, embeds
+**PorchCell2JackCallsDriver** (build 6, ABI 2), and includes driver communication
+alongside its existing APNs entitlement. The driver identity remains
+`com.ethanteng.helloporch.usbdriver`, preserving the verified installed driver.
+The old experimental real-call target is a historical fixture, not required to
+build the normal app. No experimental compilation flag gates the integration.
+Preview still excludes the calling engine and this owner.
 
-Debug signing succeeded using development profiles. Distribution approval is
-still separate; this scheme does not archive. The regular app's release target
-and entitlements are unchanged. Reinstalling an ordinary Porch build removes
-this integration while retaining the app's data. Do not uninstall Porch as a
-rollback: that can remove its saved data.
+Standard USB/Bluetooth HID keypads still go through UIKit's `pressesBegan` /
+`pressesEnded` and the existing `CallTrigger`, separately from Cell2Jack. Neither
+Cell2Jack's switch, connection status, nor driver registration disables that
+path. A hardware key held down retains repeat suppression; outgoing launch
+cooldown is shared through the existing call handler. The current call screen
+still accepts HID hang-up and camera keys. Touchscreen buttons retain their
+existing handlers. Caregiver/PIN fields continue using normal keyboard input.
+There is no input-device mode switch and the driver still matches only the
+specific Cell2Jack USB interface, not HID keyboard interfaces.
+
+The universal app retains device families 1 and 2 and minimum iOS 15. IOKit is
+weak-linked, and the default USB transport is created only on an iPad with
+OS 16 or later; the settings explain that an M-series chip is required. Other
+platforms retain keyboard/touch operation. This OS/idiom check does not identify
+individual chip models; an unsupported iPad or missing driver produces an
+unavailable status instead of blocking the standard input paths.
+
+Both normal Debug and unsigned Release builds passed. Signed development build
+16 installed on the physical M3 iPad. Distribution remains subject to Apple's
+[DriverKit entitlements](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development)
+and provisioning approval. An unsigned Release build is not a TestFlight or
+App Store signing validation. Apple's [iPadOS driver guide](https://developer.apple.com/documentation/driverkit/creating-drivers-for-ipados)
+describes the driver packaging; [Apple DTS](https://developer.apple.com/forums/thread/793915)
+explains that the same client app can run on iOS and iPadOS, while DriverKit
+communication is an iPadOS facility.
 
 ## Setup and use
 
@@ -31,9 +51,10 @@ rollback: that can remove its saved data.
   disconnect Cell2Jack for ten seconds, then reconnect it.
 - In Porch caregiver mode → **Advanced**, turn on **Use Cell2Jack phone keypad**.
   This takes effect immediately, separately from the existing Save button for
-  silence settings. It is off by default. For this authorized device test, the
-  Debug launch argument `--enable-cell2jack-keypad` enabled it during installation.
-- Return to the bedside clock and wait for **Phone keypad ready**. Input is
+  silence settings. It is off by default. No launch argument automatically enables the normal app.
+  To use it, explicitly turn on this switch; it persists until turned off again.
+- Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
+  disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.
 - Press a saved person's key to call them. Press the configured call-control key
   (currently **0**) to end the call, including while it is ringing. During the
@@ -119,13 +140,15 @@ out of source control.
 Build:
 
 ```sh
-xcodebuild -project ios/Porch.xcodeproj -scheme PorchCell2JackCalls \
+xcodebuild -project ios/Porch.xcodeproj -scheme Porch \
   -configuration Debug -destination 'generic/platform=iOS' \
-  -derivedDataPath ios/build/Cell2JackCalls -allowProvisioningUpdates build
+  -derivedDataPath ios/build/PorchIntegrated -allowProvisioningUpdates build
 ```
 
 Simulator tests use the same scheme with a booted iPad destination and
-`CODE_SIGNING_ALLOWED=NO`; the driver is excluded on the simulator.
+normal automatic signing. Ad-hoc simulator app signing is needed for the
+keychain tests; disabling signing causes those tests to fail independently of
+Cell2Jack. The driver is not embedded into the simulator app.
 
 ## Build 12 startup correction
 
@@ -174,3 +197,43 @@ user confirmed the call ended on both devices. A second complete cycle also
 worked without handset movement or USB reconnection. Nine simulator tests and
 the signed build passed. This is a verified experimental build, not a claim of
 unattended reliability, on-cradle detection, or distribution approval.
+
+## Build 15 normal integration verification
+
+The normal Porch scheme's full 62-test suite passed on both iPad and iPhone
+simulators. The normal signed device build and unsigned Release build passed,
+and the device signature verified. The app keeps its iOS 15 deployment target;
+IOKit references are weak imports in the built binary. Preview's source/package
+boundary still passed.
+
+New coverage checks off-by-default behavior even with the old test preference
+set, the immediate caregiver toggle, ordinary HID person selection and hang-up
+with Cell2Jack off/ready/disconnected, repeat suppression, and touchscreen entry
+to the person picker. The keypad-backup checks exercise UIKit handlers using
+synthetic HID presses, not a physical USB connection. The user also physically verified the standard USB keypad on the M3 iPad
+with Cell2Jack off: key 3 showed its empty-slot message, 1 placed a call,
+0 ended it, and tapping Call someone opened the touch person picker. The
+installed preferences confirm Cell2Jack is off and the saved slot bytes are
+unchanged from the pre-install copy.
+
+The broader setup tests also exposed secure PIN insertion clearing the previous
+text after keyboard help restored focus. The touch keyboard now replaces its
+current caret/selection explicitly for secure text and emits editing-change
+notification. The existing PIN-preservation regression passes alongside normal
+text selection, deletion, and native/hardware-keyboard setup tests.
+
+## Build 16 bedside confirmation
+
+The phone keypad status now sits directly below Call someone, outside the clock
+stack. A ready confirmation hides after three seconds without changing USB
+ownership or digit routing. Duplicate ready notifications do not restart the
+timer; reconnecting gets a fresh confirmation. Other connection/error statuses
+remain visible, and switching the feature off hides the status immediately.
+Layout checks cover four iPad portrait/landscape sizes. A timed regression checks
+visibility before three seconds, dismissal afterwards, duplicate notifications,
+reconnection, and disabling. All 63 iPad simulator cases passed. Xcode’s runner stalled during result
+finalization after reporting all suites passed; it was terminated afterwards.
+The signed
+build installed on the M3 iPad, preserving the user's now-enabled Cell2Jack
+preference and saved contacts. Build 15's physical backup-keypad and touchscreen
+checks remain the latest hardware verification for those paths.
