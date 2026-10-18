@@ -90,6 +90,38 @@ input::placeholder {
   background: var(--ink);
   color: #fff;
 }
+.nav__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.social {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.social__link {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--ink);
+  transition: color 0.15s;
+}
+.social__link:hover {
+  color: var(--tomato-deep);
+}
+.social__link:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 2px;
+}
+.social__link svg {
+  width: 20px;
+  height: 20px;
+}
 
 /* ---------- Hero ---------- */
 .hero {
@@ -919,5 +951,12 @@ input::placeholder {
   .footer {
     padding: 8px 16px 32px;
     flex-direction: column;
+  }
+}
+
+/* Not enough room for both on phones; the waitlist button wins. */
+@media (max-width: 480px) {
+  .social {
+    display: none;
   }
 }
