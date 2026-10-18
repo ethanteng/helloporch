@@ -208,6 +208,7 @@ final class CallViewController: UIViewController {
         presence.onPresent = { [weak self] in self?.presenceDetected() }
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchMessageAutoplayChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(thermalStateChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
         updateDisplay(); resetClock()
     }
 
@@ -459,6 +460,10 @@ final class CallViewController: UIViewController {
         if presenceAllowed { presence.start(orientation: view.window?.windowScene?.interfaceOrientation ?? .landscapeLeft) }
         else { presence.stop() }
     }
+    /// Posted off the main thread on some iOS versions. Presence state is main-thread only.
+    @objc private func thermalStateChanged() {
+        if Thread.isMainThread { refreshPresence() } else { DispatchQueue.main.async { [weak self] in self?.refreshPresence() } }
+    }
     /// Before anything else covers the clock or needs the camera. Nothing is snoozed.
     func stopPresence() {
         presence.stopAndWait()
@@ -548,10 +553,10 @@ final class CallViewController: UIViewController {
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
         cancelOpening = false
         Cell2JackKeypad.shared.record(["kind": "callStartRequested", "digitSource": "shared touch/keyboard/USB handler"])
-        opening = true; refreshCallButton()
+        opening = true; refreshCallButton(); refreshPresence()
         Task { [weak self] in
             guard let self else { return }
-            defer { self.opening = false; self.refreshCallButton() }
+            defer { self.opening = false; self.refreshCallButton(); self.refreshPresence() }
             do {
                 let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
                 if self.cancelOpening {
