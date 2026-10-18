@@ -11,7 +11,7 @@ Delete this test app to remove the experiment from the iPad.
 
 On **Read Cell2Jack version**, the app opens only its named DriverKit service,
 asks for one version response, then closes the user client. The driver matches
-USB **VID 1A86 / PID 7523 / interface 0**, discovers bulk endpoints, identifies
+USB **VID 1A86 / PID 7523 / interface 0 / any configuration**, discovers bulk endpoints, identifies
 the CH34x serial-chip revision, and configures its volatile serial registers
 for **2,000,000 baud, 8N1, no hardware flow control, DTR/RTS inactive**. The only
 serial bytes it sends are **`2f 76` (`/v`)**. It collects up to 256 received
@@ -161,3 +161,22 @@ the distribution variant. Debug now uses
 The physical device accepted this build and launched the app. These install
 checks are in addition to host compilation and signature verification; they
 do not yet verify the actual USB version transaction.
+
+### USB matching correction after the first iPad attempt
+
+The user enabled the driver in the app's settings and connected Cell2Jack, but
+app build 2 reported no running driver service. That error occurs before the
+version request and cannot establish a baud-rate or firmware failure.
+
+App build 3 / driver build 2 adds the missing `bConfigurationValue` property to
+the USB interface personality. Apple's documented vendor/product interface
+matching combination requires configuration and interface number as well as
+vendor and product. The configuration uses the documented string wildcard `*`
+because the actual descriptor value has not been captured from this unit;
+vendor, product, and interface remain exact. This is a concrete metadata defect
+correction, but hardware retesting is required to determine whether it resolves
+the observed failure. Unplug Cell2Jack during driver replacement, then reconnect
+it with the driver's switch enabled.
+
+References: Apple's [USB interface matching combinations](https://developer.apple.com/documentation/iousbhost/iousbhostinterface/creatematchingdictionary(vendorid:productid:bcddevice:interfacenumber:configurationvalue:interfaceclass:interfacesubclass:interfaceprotocol:speed:productidarray:))
+and [USB matching rules and string wildcards](https://developer.apple.com/library/archive/qa/qa1076/_index.html).

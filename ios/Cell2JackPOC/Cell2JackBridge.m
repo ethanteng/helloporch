@@ -24,7 +24,7 @@
     if (service == IO_OBJECT_NULL) {
         IOObjectRelease(iterator);
         if (error) *error = [NSError errorWithDomain:@"PorchCell2Jack" code:2 userInfo:@{NSLocalizedDescriptionKey:
-            @"Cell2Jack driver not found. Enable it in Settings → General → Drivers, connect Cell2Jack with a USB data cable, then retry. If Drivers is absent, this build may not contain an approved, signed driver."}];
+            @"No running Cell2Jack driver service was found. Turn on its driver switch using Open app settings, then unplug and reconnect Cell2Jack's USB data cable to the iPad and retry. If the switch is already on, this can mean a USB connection, driver matching, or driver startup problem; it does not establish a firmware or baud-rate failure."}];
         return nil;
     }
     io_service_t extra = IOIteratorNext(iterator);
