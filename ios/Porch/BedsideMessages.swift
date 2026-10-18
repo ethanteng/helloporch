@@ -959,6 +959,8 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
               let input = try? AVCaptureDeviceInput(device: camera) else { return false }
         session.beginConfiguration(); defer { session.commitConfiguration() }
+        // Video only. LiveKit owns the shared audio session; taking it over cuts off the spoken notice and calls.
+        session.automaticallyConfiguresApplicationAudioSession = false
         session.sessionPreset = session.canSetSessionPreset(.vga640x480) ? .vga640x480 : .low
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
