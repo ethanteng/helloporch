@@ -3,7 +3,7 @@
 This experiment is on `feature/cell2jack-ipad-version-poc`. Open `ios/Porch.xcodeproj`
 and select the **PorchCell2Jack** scheme. It builds a separate **Porch USB Test**
 app (`com.ethanteng.helloporch.cell2jackpoc`) containing a USB DriverKit extension
-(`com.ethanteng.helloporch.cell2jackpoc.driver`). The normal Porch scheme, app ID,
+(`com.ethanteng.helloporch.cell2jackpoc.usbdriver`). The normal Porch scheme, app ID,
 entitlements, contact data, calling code, and release workflow are unchanged.
 Delete this test app to remove the experiment from the iPad.
 
@@ -65,21 +65,25 @@ Xcode automatic provisioning successfully created **development** profiles for
 both experiment identifiers on this Mac. The signed development app and its
 embedded driver now build successfully. The app profile contains
 `com.apple.developer.driverkit.communicates-with-drivers`; the driver profile
-contains DriverKit and a development USB matching allowance. The driver's own
-signed entitlement and matching personality restrict it to 1A86:7523/interface 0.
+contains DriverKit and a development USB matching allowance. The Debug driver uses Apple's required development-only wildcard USB
+entitlement. Its matching personality remains restricted to
+1A86:7523/interface 0; the Release entitlement file retains the vendor/product
+restriction and requires separate distribution approval.
 This does **not** establish approval for TestFlight/App Store distribution.
 
 | Target | Required entitlement |
 | --- | --- |
 | PorchCell2Jack | `com.apple.developer.driverkit.communicates-with-drivers = true` |
 | PorchCell2JackDriver | `com.apple.developer.driverkit = true` |
-| PorchCell2JackDriver | `com.apple.developer.driverkit.transport.usb = [{idVendor: 6790, idProduct: 29987}]` |
+| PorchCell2JackDriver (Debug) | `com.apple.developer.driverkit.transport.usb = [{idVendor: "*"}]` |
+| PorchCell2JackDriver (Release) | `com.apple.developer.driverkit.transport.usb = [{idVendor: 6790, idProduct: 29987}]` |
 
 For the first physical test, temporarily connect and unlock the **M3 iPad** on
 the development Mac, accept the normal device pairing/development setup, and
 select it in Xcode. Automatic provisioning must include **that iPad's UDID**
-before installation. The current generated app profile covers one previously
-registered device; the M3 iPad was not attached during development. The Mac is
+before installation. Both development profiles now include the M3 iPad. The app was successfully
+installed and launched on the physical iPad on 2026-10-17. Direct Cell2Jack
+communication is still awaiting the driver-enable and USB connection test. The Mac is
 only needed for provisioning/installing this development build, not at runtime.
 
 Rebuild/sign with the device selected, or use:
@@ -136,3 +140,17 @@ can be explicitly selected with `PORCH_CELL2JACK_DRIVER_PROFILE` if required.
 - Cell2Jack `/v` bytes and speed come from static analysis of the user's logger/
   Mac utility followed by the user's successful HW5/a06 Mac test. No trailing
   newline, debug activation, or recovery is added to this version request.
+
+### Physical-device signing correction
+
+Installation initially rejected a cached driver profile that covered only the
+previous A16 iPad. Regenerating under the experiment's `.usbdriver` identifier
+included the M3. iPadOS then rejected the numeric vendor entitlement because
+the development profile grants the development-only wildcard variant, not
+the distribution variant. Debug now uses
+`Cell2JackDriver.Development.entitlements`; Release keeps the restricted
+`Cell2JackDriver.entitlements`. This follows Apple's
+[How to sign a DEXT](https://developer.apple.com/forums/thread/809202).
+The physical device accepted this build and launched the app. These install
+checks are in addition to host compilation and signature verification; they
+do not yet verify the actual USB version transaction.
