@@ -28,7 +28,12 @@ struct ProfilePhotoURL: Decodable { let id: String; let url: String; let expires
             for person in state.people { if let id = person.photoID { wanted[id] = ["memberID": person.id] } }
         } else if let id = state.me.photoID { wanted[id] = [:] }
         for (id, values) in wanted { load(id, values: values, credential: credential) }
-        let keep = Set(wanted.keys).union([state.me.profile?.photoID].compactMap { $0 })
+        var keep = Set(wanted.keys).union([state.me.profile?.photoID].compactMap { $0 })
+        // A key keeps the previous photo until the new one has downloaded, and a removed member's
+        // photo until the caregiver edits that key. Those files are not in `wanted`, so keep them.
+        if state.me.role == .bedside, let slots = try? CallSlots.load() {
+            for contact in slots.contacts { if let id = contact?.memberPhotoID { keep.insert(id) } }
+        }
         if keep != kept { kept = keep; store.prune(keeping: keep) }
     }
 
