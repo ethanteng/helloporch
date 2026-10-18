@@ -259,6 +259,11 @@ final class CallViewController: UIViewController {
         stopPresence()
         resignFirstResponder()
     }
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        // The camera's frames follow the iPad's orientation.
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.refreshPresence() }
+    }
     // Calls, the message player and recording all need the camera or the screen.
     override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
         stopPresence()
@@ -451,7 +456,7 @@ final class CallViewController: UIViewController {
     }
     /// Before anything else covers the clock or needs the camera. Nothing is snoozed.
     func stopPresence() {
-        presence.stop()
+        presence.stopAndWait()
         notice?.end(); notice = nil
     }
     private func presenceDetected() {

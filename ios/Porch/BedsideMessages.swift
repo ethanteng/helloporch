@@ -914,8 +914,10 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     var onPresent: (() -> Void)?
     /// Main-thread state.
     private(set) var running = false
-    // Everything below is used only on the capture queue.
-    private let queue = DispatchQueue(label: "porch.presence")
+    // Starting, stopping and setup happen on the session queue; frames are analyzed on the video
+    // queue, so waiting for a stop never holds up frame delivery.
+    private let sessionQueue = DispatchQueue(label: "porch.presence.session")
+    private let videoQueue = DispatchQueue(label: "porch.presence.video")
     private let session = AVCaptureSession()
     private var connection: AVCaptureConnection?
     private var configured = false
@@ -923,13 +925,15 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private var lastAnalysis: TimeInterval = 0
     private let faces = VNDetectFaceRectanglesRequest()
 
+    /// Starts watching, or keeps watching with the iPad's current orientation.
     func start(orientation: UIInterfaceOrientation) {
-        guard !running, AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        if !running { videoQueue.async { [self] in trigger.reset(); lastAnalysis = 0 } }
         running = true
-        queue.async { [self] in
+        sessionQueue.async { [self] in
             if !configured { configured = configure() }
             guard configured else { DispatchQueue.main.async { self.running = false }; return }
-            // Upright frames, whichever way the iPad is standing.
+            // Upright frames, whichever way the iPad is standing, including after it's turned.
             if let connection, connection.isVideoOrientationSupported {
                 switch orientation {
                 case .portraitUpsideDown: connection.videoOrientation = .portraitUpsideDown
@@ -938,14 +942,18 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
                 default: connection.videoOrientation = .portrait
                 }
             }
-            trigger.reset(); lastAnalysis = 0
             if !session.isRunning { session.startRunning() }
         }
     }
     func stop() {
         guard running else { return }
         running = false
-        queue.async { [self] in if session.isRunning { session.stopRunning() } }
+        sessionQueue.async { [self] in if session.isRunning { session.stopRunning() } }
+    }
+    /// Stops and returns only once the camera is free, before a call or a recording takes it.
+    func stopAndWait() {
+        running = false
+        sessionQueue.sync { if session.isRunning { session.stopRunning() } }
     }
     private func configure() -> Bool {
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
@@ -954,7 +962,7 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         session.sessionPreset = session.canSetSessionPreset(.vga640x480) ? .vga640x480 : .low
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
-        output.setSampleBufferDelegate(self, queue: queue)
+        output.setSampleBufferDelegate(self, queue: videoQueue)
         guard session.canAddInput(input), session.canAddOutput(output) else { return false }
         session.addInput(input); session.addOutput(output)
         connection = output.connection(with: .video)
