@@ -85,7 +85,7 @@ def verify_bundle(bundle, team, app_id, driver_id):
                     "Driver signature must contain DriverKit and the exact Cell2Jack USB restriction")
         with tempfile.TemporaryDirectory() as tmp:
             prefix = str(Path(tmp) / "signer-")
-            subprocess.run(["codesign", "-d", "--extract-certificates", prefix, str(product)],
+            subprocess.run(["codesign", "-d", f"--extract-certificates={prefix}", str(product)],
                            capture_output=True, check=True)
             cert = Path(prefix + "0").read_bytes()
             require(cert in profile["DeveloperCertificates"], "Actual signer is not authorized by its embedded profile")
