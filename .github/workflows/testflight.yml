@@ -2,6 +2,11 @@ name: Upload Porch to TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      verify_only:
+        description: Verify profiles, signed archive, and App Store validation without uploading
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -12,11 +17,13 @@ concurrency:
 
 jobs:
   calling-server:
+    if: ${{ !inputs.verify_only }}
     uses: ./.github/workflows/calling-server-deploy.yml
     secrets:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
   upload:
+    if: ${{ !cancelled() && (inputs.verify_only || needs.calling-server.result == 'success') }}
     needs: calling-server
     runs-on: macos-26
     timeout-minutes: 30
@@ -30,11 +37,15 @@ jobs:
       IOS_DISTRIBUTION_P12: ${{ secrets.IOS_DISTRIBUTION_P12 }}
       IOS_DISTRIBUTION_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_PASSWORD }}
       IOS_APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+      IOS_DRIVER_APPSTORE_PROFILE: ${{ secrets.IOS_DRIVER_APPSTORE_PROFILE }}
+      PORCH_VERIFY_ONLY: ${{ inputs.verify_only }}
     steps:
       - uses: actions/checkout@v4
       - name: Test contact validation and keypad handling
         run: swift test --package-path ios/PorchCore
-      - name: Archive, sign, and upload
+      - name: Test distribution provisioning checks
+        run: python3 -m unittest discover -s ios/scripts -p 'test_distribution_profiles.py'
+      - name: Archive, sign, validate, and optionally upload
         run: bash ios/scripts/testflight.sh
       - name: Clean up signing files
         if: always()

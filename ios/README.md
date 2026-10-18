@@ -41,7 +41,7 @@ For visual Debug previews, use `--preview-phone-setup`, `--preview-caregiver`, `
 
 App: **Porch Family Calling**, App Store Connect ID **6822602923**. Bundle ID: **com.ethanteng.helloporch**. Apple team: **7U9T57JPF7**.
 
-**iPhone and iPad build** runs the core and caregiver keyboard/focus tests and compiles the simulator and iPad release app without signing credentials. **Upload Porch to TestFlight** is manually dispatched, and tests, archives, signs, validates, and uploads the app. It does not publish to the App Store or invite testers.
+**iPhone and iPad build** runs the core and caregiver keyboard/focus tests and compiles the simulator and iPad release app without signing credentials. **Upload Porch to TestFlight** is manually dispatched, and tests, archives, signs, validates, and uploads the app. It defaults to **verification only**: it checks both profiles, signs and verifies the archive/export, and runs App Store validation without uploading or deploying the calling server. Clear **verify_only** explicitly when uploading is intended. It does not publish to the App Store or invite testers.
 
 Configure these encrypted GitHub secrets in the `testflight` environment or repository:
 
@@ -52,13 +52,14 @@ Configure these encrypted GitHub secrets in the `testflight` environment or repo
 | `ASC_PRIVATE_KEY` | Downloaded `.p8` file contents; Developer role is sufficient for binary upload |
 | `IOS_DISTRIBUTION_P12` | Base64-encoded Apple Distribution certificate and private key, exported as `.p12` |
 | `IOS_DISTRIBUTION_PASSWORD` | Password protecting the `.p12` |
-| `IOS_APPSTORE_PROFILE` | Base64-encoded App Store distribution profile for this bundle ID and certificate |
+| `IOS_APPSTORE_PROFILE` | Base64-encoded App Store profile with production push and DriverKit Communicates with Drivers |
+| `IOS_DRIVER_APPSTORE_PROFILE` | Base64-encoded iPadOS App Store profile for `com.ethanteng.helloporch.usbdriver`, with Apple-approved DriverKit and USB transport grants for Cell2Jack, authorizing the same distribution certificate |
 
 Set variables `APPLE_TEAM_ID=7U9T57JPF7` and `IOS_BUNDLE_ID=com.ethanteng.helloporch`.
 
 Enable **Push Notifications** for the app ID in Apple Developer and regenerate the distribution profile with `aps-environment=production`; the upload script checks this. Create the certificate/profile in Apple Developer and the upload key in App Store Connect → Users and Access → Integrations. Team API keys apply across every app on the team; use the lowest required role. Keep credentials out of Git; signing files are ignored.
 
-Run the workflow on the desired branch. Build numbers use the workflow run number and attempt. After upload, wait for Apple processing and assign the build to an internal group. External testing requires beta test information and Apple's beta review.
+Run the workflow on the desired branch with **verify_only** checked first. The app and driver retain their separate project bundle IDs and provisioning profiles; do not pass a global `PRODUCT_BUNDLE_IDENTIFIER`. The script checks the actual archive and exported IPA signatures, embedded profiles, signer certificates, build numbers, and restricted USB entitlements before App Store validation. A successful compilation or development archive is insufficient. Only after verification succeeds should an upload run use **verify_only=false**. Build numbers use the workflow run number and attempt. After upload, wait for Apple processing and assign the build to an internal group. External testing requires beta test information and Apple's beta review.
 
 Alternatively, in Xcode select **Any iOS Device**, Product → Archive, and Distribute App → App Store Connect, using automatic signing with your team. This avoids storing signing credentials on GitHub.
 
@@ -81,3 +82,12 @@ The normal **Porch** scheme now includes optional [Cell2Jack phone keypad suppor
 Cell2Jack requires an M-series iPad with iPadOS 16 or later and its driver enabled in Porch's app settings. The universal app keeps its existing iOS 15 minimum for ordinary keyboard/touch operation; USB driver communication is gated and IOKit is weak-linked. DriverKit distribution approval is still needed before distributing the driver through TestFlight or the App Store.
 
 The earlier [USB version/keypad test](CELL2JACK-POC.md), [no-call Preview](KEYPAD-PREVIEW.md), and `PorchCell2JackCalls` scheme remain as historical development fixtures. Build and install **Porch** for the integrated app.
+
+Cell2Jack distribution verification on 2026-10-18 regenerated the previously invalid
+Porch App Store profile. The app profile includes production push and driver
+communication, but the generated driver App Store profile contains neither
+`com.apple.developer.driverkit` nor `com.apple.developer.driverkit.transport.usb`.
+The signed archive attempt was rejected by Xcode for those missing entitlements.
+Apple DriverKit distribution authorization, a regenerated driver profile, and
+`IOS_DRIVER_APPSTORE_PROFILE` are still required. No Cell2Jack TestFlight upload
+has been validated. See [distribution evidence](CELL2JACK-CALLS.md#distribution-verification-2026-10-18).

@@ -24,10 +24,11 @@ jobs:
         run: xcodebuild -version
       - name: Test contact validation and keypad handling
         run: swift test --package-path ios/PorchCore
-      - name: Test Cell2Jack protocol and preview boundary
+      - name: Test Cell2Jack protocol, preview, and distribution checks
         run: |
           bash ios/scripts/test-cell2jack.sh
           python3 ios/scripts/check-keypad-preview.py
+          python3 -m unittest discover -s ios/scripts -p test_distribution_profiles.py
       # DriverKit extensions cannot run in Simulator and require development
       # certificates. Keep the app/tests ad-hoc signed, but do not sign the
       # driver-only SDK dependency on this certificate-free CI runner.

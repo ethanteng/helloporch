@@ -256,3 +256,44 @@ reported USB stage 10 stop message. The caregiver status label is also removed;
 the toggle and Retry control remain. Diagnostics stay in local diagnostic files. The ready confirmation still appears below Call someone for
 three seconds. The existing timed regression now also checks diagnostic
 suppression and dismissing an active confirmation when the connection stops.
+
+## Distribution verification 2026-10-18
+
+Apple Developer showed the existing Porch TestFlight App Store profile as invalid
+after adding the app capability. It was regenerated with the existing Apple
+Distribution certificate. Its signed profile now grants production APNs and
+`com.apple.developer.driverkit.communicates-with-drivers`, and has no device
+list or development debugging permission. The encrypted GitHub app-profile
+secret was updated.
+
+A separate App Store profile, Porch Cell2Jack TestFlight, was generated for
+`com.ethanteng.helloporch.usbdriver` with the same certificate. Its signed
+entitlements contain **neither DriverKit nor USB transport authorization**.
+An App Store profile existing in the portal does not establish permission to
+distribute a DriverKit extension. Xcode's actual Release archive attempt rejected
+this profile for both missing entitlements. The local Mac also lacks the Apple
+Distribution private key; the existing distribution identity is stored in the
+GitHub environment. No valid distribution archive/export or App Store validation
+can be claimed yet. Development builds remain separately signed and functional.
+
+The manual TestFlight workflow now defaults to verification only, without a server
+deployment or upload. It requires independent app and driver profiles; checks
+team, bundle IDs, expiration, App Store type, shared signing certificate, production
+APNs, app driver communication, and the driver's approved hardware grant; and
+checks the actual signatures and embedded profiles in both archive and exported
+IPA before App Store validation. The driver signature must retain the exact USB
+VID/PID restriction. A global product bundle ID override was removed because it
+would also rename the driver. Nine provisioning regressions cover missing grants,
+wildcard development permissions, incorrect devices/platforms/IDs/certificates,
+and a valid restricted or vendor-level distribution grant. These checks are also
+part of normal simulator CI.
+
+Next: submit a reviewed request through [Apple's DriverKit entitlement form](https://developer.apple.com/contact/request/system-extension/)
+for `com.apple.developer.driverkit` and USB transport covering vendor 6790
+(`0x1A86`), product 29987 (`0x7523`). The request must disclose that Cell2Jack
+is third-party hardware and the developer does not own the shared vendor ID.
+After Apple grants the entitlements, regenerate the driver App Store profile,
+configure `IOS_DRIVER_APPSTORE_PROFILE`, and run verification-only archive/export
+and App Store validation with the GitHub-held signing identity. Upload only after
+those checks pass. Apple's [entitlement instructions](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development)
+describe the required approved entitlement group and distribution profile.
