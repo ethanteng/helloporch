@@ -999,6 +999,7 @@ final class MessageNoticeView: UIView {
     var onFinished: (() -> Void)?
     private let text: String
     private let glow = UIView()
+    private let messageLabel = UILabel()
     private let announcer = MessageAnnouncer()
     private var session: SessionRequirementHandle?
     private var ended = false
@@ -1013,11 +1014,10 @@ final class MessageNoticeView: UIView {
         glow.layer.borderColor = Self.warm.cgColor; glow.layer.borderWidth = 16
         glow.layer.shadowColor = Self.warm.cgColor; glow.layer.shadowRadius = 36; glow.layer.shadowOpacity = 1; glow.layer.shadowOffset = .zero
         let icon = UIImageView(image: UIImage(systemName: "envelope.open.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 72, weight: .semibold)))
-        icon.tintColor = Self.warm; icon.contentMode = .scaleAspectFit
-        let label = UILabel()
-        label.text = text; label.font = PorchStyle.font(44, weight: .semibold); label.textColor = PorchStyle.nightText
-        label.textAlignment = .center; label.numberOfLines = 0; label.adjustsFontSizeToFitWidth = true; label.minimumScaleFactor = 0.5
-        label.accessibilityIdentifier = "messages.notice"
+        icon.tintColor = Self.warm; icon.contentMode = .scaleAspectFit; icon.isAccessibilityElement = false
+        messageLabel.text = text; messageLabel.font = PorchStyle.font(44, weight: .semibold); messageLabel.textColor = PorchStyle.nightText
+        messageLabel.textAlignment = .center; messageLabel.numberOfLines = 0; messageLabel.adjustsFontSizeToFitWidth = true; messageLabel.minimumScaleFactor = 0.5
+        messageLabel.accessibilityIdentifier = "messages.notice"
         let notNowButton = PorchStyle.button(BedsideText.string("Not now"), symbol: "xmark")
         notNowButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(32, weight: .semibold); return attributes
@@ -1027,7 +1027,7 @@ final class MessageNoticeView: UIView {
         notNowButton.configuration?.baseForegroundColor = .white
         notNowButton.accessibilityIdentifier = "messages.notNow"
         notNowButton.addAction(UIAction { [weak self] _ in self?.notNow() }, for: .touchUpInside)
-        let card = UIStackView(arrangedSubviews: [icon, label, notNowButton])
+        let card = UIStackView(arrangedSubviews: [icon, messageLabel, notNowButton])
         card.axis = .vertical; card.spacing = 28; card.alignment = .center
         card.isLayoutMarginsRelativeArrangement = true; card.directionalLayoutMargins = .init(top: 40, leading: 48, bottom: 40, trailing: 48)
         card.backgroundColor = PorchStyle.night.withAlphaComponent(0.94); card.layer.cornerRadius = 32; card.layer.cornerCurve = .continuous
@@ -1051,7 +1051,7 @@ final class MessageNoticeView: UIView {
             pulse.autoreverses = true; pulse.repeatCount = .infinity
             glow.layer.add(pulse, forKey: "pulse")
         }
-        UIAccessibility.post(notification: .screenChanged, argument: nil)
+        UIAccessibility.post(notification: .screenChanged, argument: messageLabel)
         session = try? AudioManager.shared.audioSession.acquire(requirement: .playbackOnly)
         announcer.announce(text) { [weak self] in
             guard let self, !self.ended else { return }
