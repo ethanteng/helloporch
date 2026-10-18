@@ -24,11 +24,18 @@ jobs:
         run: xcodebuild -version
       - name: Test contact validation and keypad handling
         run: swift test --package-path ios/PorchCore
+      - name: Test Cell2Jack protocol and preview boundary
+        run: |
+          bash ios/scripts/test-cell2jack.sh
+          python3 ios/scripts/check-keypad-preview.py
+      # DriverKit extensions cannot run in Simulator and require development
+      # certificates. Keep the app/tests ad-hoc signed, but do not sign the
+      # driver-only SDK dependency on this certificate-free CI runner.
       - name: Build universal simulator app
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch
           -configuration Debug -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
+          -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=YES 'CODE_SIGNING_ALLOWED[sdk=driverkit*]=NO' CODE_SIGN_IDENTITY=- build
       - name: Build release app for iPhone and iPad
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch
@@ -43,7 +50,7 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
             -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
-            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
+            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES 'CODE_SIGNING_ALLOWED[sdk=driverkit*]=NO' CODE_SIGN_IDENTITY=- test
       - name: Launch on an iPad simulator and capture the screens
         timeout-minutes: 10
         shell: bash
@@ -79,7 +86,7 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
             -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
-            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
+            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES 'CODE_SIGNING_ALLOWED[sdk=driverkit*]=NO' CODE_SIGN_IDENTITY=- test
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png
       - name: Save the iPhone screenshot
         uses: actions/upload-artifact@v4
