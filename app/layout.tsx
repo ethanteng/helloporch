@@ -7,9 +7,9 @@ const sans = DM_Sans({ subsets: ["latin"], axes: ["opsz"], variable: "--font-san
 const brand = Bricolage_Grotesque({ subsets: ["latin"], axes: ["opsz"], variable: "--font-brand" });
 
 export const metadata: Metadata = {
-  title: "Porch — Press a face. See a face.",
+  title: "HelloPorch | One-button video calling for dementia & Parkinson’s",
   description:
-    "Porch is a tablet and a large-button keypad for individuals with dementia or limited dexterity. Each button is someone they love. One press starts a video call.",
+    "HelloPorch makes one-button video calling simpler for people with Parkinson’s, dementia, and limited dexterity, with a tablet and large physical photo buttons.",
 };
 
 export const viewport: Viewport = {
