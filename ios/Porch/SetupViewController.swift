@@ -150,6 +150,10 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     private let phoneField = UITextField()
     private var selectedFamilyID: String?
     private var invitationID: String?
+    /// The paired (or invited) family member's own name, which this key uses when Name is left empty.
+    private var memberName: String?
+    private let nameHelp = PorchStyle.label("", size: 15)
+    private let photoSource = PorchStyle.label("Their photo from Porch", size: 15)
     private let invitationStatus = PorchStyle.label("", size: 17, color: PorchStyle.ink, weight: .medium)
     private let familyLink = PorchStyle.button("Invite them", symbol: "person.badge.plus", filled: false)
     private let existingPerson = PorchStyle.button("Choose from your Porch", symbol: "person.2", filled: false)
@@ -182,9 +186,10 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         actionControl.accessibilityLabel = "Keypad action"
         actionControl.addTarget(self, action: #selector(updateAction), for: .valueChanged)
         form.addArrangedSubview(section("What this key does", views: [actionControl, actionDetail]))
-        nameField.text = initialContact?.name
+        nameField.text = initialContact?.customName
         selectedFamilyID = initialContact?.familyMemberID
         invitationID = initialContact?.invitationID
+        memberName = initialContact?.memberName
         nameField.autocapitalizationType = .words
         phoneField.text = initialContact?.phoneNumber ?? (initialContact?.nativeCall == nil ? initialContact.flatMap { try? PhoneNumberNormalization.e164($0.address) } : nil)
         phoneField.keyboardType = .phonePad
@@ -202,11 +207,12 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         chooseContactButton.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
         configureFamilyLinks()
         familyLink.addTarget(self, action: #selector(invitePerson), for: .touchUpInside)
-        personGroup = section("Their details", views: [personName, chooseContactButton, PorchStyle.label("Default calling mode", size: 18, color: PorchStyle.ink, weight: .semibold), modeControl, invitationStatus, familyLink, existingPerson])
+        personGroup = section("Their details", views: [personName, nameHelp, chooseContactButton, PorchStyle.label("Default calling mode", size: 18, color: PorchStyle.ink, weight: .semibold), modeControl, invitationStatus, familyLink, existingPerson])
         form.addArrangedSubview(personGroup)
         buttonColorHex = initialContact?.buttonColorHex
-        photoData = initialContact?.photoData
+        photoData = initialContact?.customPhotoData
         photoPreview.contentMode = .scaleAspectFit
+        photoSource.textAlignment = .center
         photoPreview.heightAnchor.constraint(equalToConstant: 240).isActive = true
         colorButton.accessibilityIdentifier = "recipient.chooseColor"
         photoButton.accessibilityIdentifier = "recipient.choosePhoto"
@@ -215,7 +221,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         photoButton.addTarget(self, action: #selector(pickPhoto), for: .touchUpInside)
         removePhotoButton.addAction(UIAction { [weak self] _ in self?.photoData = nil; self?.updateAppearance() }, for: .touchUpInside)
         resetColorButton.addAction(UIAction { [weak self] _ in self?.buttonColorHex = nil; self?.updateAppearance() }, for: .touchUpInside)
-        appearanceGroup = section("Photo & button color", detail: "Help them recognize this person. Their photo appears on the call button and call screens. Saved on this device only.", views: [photoPreview, photoButton, removePhotoButton, colorButton, resetColorButton])
+        appearanceGroup = section("Photo & button color", detail: "Help them recognize this person. Their photo appears on the call button and call screens. Saved on this device only. For someone with the Porch app, Porch uses the photo they chose unless you add one here.", views: [photoPreview, photoSource, photoButton, removePhotoButton, colorButton, resetColorButton])
         form.addArrangedSubview(appearanceGroup)
         updateAppearance()
         nameField.autocapitalizationType = .words
@@ -294,11 +300,24 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         } catch { picker.dismiss(animated: true) { [weak self] in self?.showContactError(error) } }
     }
 
+    private var linkedPerson: FamilyPerson? { selectedFamilyID.flatMap { id in FamilyCoordinator.shared.state?.people.first { $0.id == id } } }
+    /// The photo the linked family member has on Porch, shown when this key has none of its own.
+    private var memberPhotoID: String? {
+        if let person = linkedPerson { return person.photoID }
+        return selectedFamilyID == nil ? nil : initialContact?.memberPhotoID
+    }
+    private var memberPhoto: Data? { FamilyPhotos.shared.data(for: memberPhotoID) }
+    /// The member photo on screen, so polling redraws only once a new one has downloaded.
+    private var shownMemberPhoto: String?
     private func updateAppearance() {
-        photoPreview.image = RecipientAppearance.photo(photoData)
+        shownMemberPhoto = memberPhotoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil }
+        let fallback = photoData == nil ? memberPhoto : nil
+        photoPreview.image = RecipientAppearance.photo(photoData ?? fallback)
         photoPreview.isHidden = photoPreview.image == nil
+        photoSource.isHidden = fallback == nil
         removePhotoButton.isHidden = photoData == nil
-        photoButton.configuration?.title = photoData == nil ? "Add photo" : "Change photo"
+        removePhotoButton.configuration?.title = memberPhoto == nil ? "Remove photo" : "Use their photo from Porch"
+        photoButton.configuration?.title = photoData != nil ? "Change photo" : fallback != nil ? "Use a different photo" : "Add photo"
         let color = RecipientAppearance.color(hex: buttonColorHex)
         colorButton.configuration?.baseBackgroundColor = color
         colorButton.configuration?.baseForegroundColor = RecipientAppearance.foreground(on: color)
@@ -360,7 +379,19 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         case .messages: actionDetail.text = "Play waiting family messages, or stop them while they play. This replaces any person assigned to this key."
         }
     }
+    /// A Porch family member can go by their own name, so Name is optional for them.
+    private func updateNameHelp() {
+        let porch = selectedFamilyID != nil || invitationID != nil
+        let theirs = linkedPerson?.name ?? memberName
+        nameField.attributedPlaceholder = NSAttributedString(string: porch ? theirs ?? "Their name" : "For example, David", attributes: [.foregroundColor: PorchStyle.secondary])
+        nameHelp.text = "Leave blank to use their name from Porch\(theirs.map { " (now “\($0)”)" } ?? "")."
+        nameHelp.isHidden = !porch
+    }
     @objc private func configureFamilyLinks() {
+        defer {
+            updateNameHelp()
+            if memberPhotoID.flatMap({ FamilyPhotos.shared.store.contains($0) ? $0 : nil }) != shownMemberPhoto { updateAppearance() }
+        }
         let state = FamilyCoordinator.shared.state
         let people = state?.people ?? []
         if let invitationID, let accepted = people.first(where: { $0.invitationID == invitationID }) { selectedFamilyID = accepted.id }
@@ -372,16 +403,19 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         existingPerson.isHidden = selectedFamilyID != nil || pending || people.isEmpty
         existingPerson.menu = UIMenu(children: people.map { person in
             UIAction(title: person.name) { [weak self] _ in
+                // Name stays as typed; left empty, the key follows the name they choose in Porch.
                 self?.selectedFamilyID = person.id; self?.invitationID = person.invitationID
-                self?.nameField.text = person.name; self?.configureFamilyLinks()
+                self?.memberName = person.name; self?.configureFamilyLinks()
             }
         })
         existingPerson.showsMenuAsPrimaryAction = true
     }
     @objc private func invitePerson() {
-        let controller = FamilyInviteViewController(); controller.prefilledName = nameField.text; controller.returnsToPerson = true
+        let typed = nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let controller = FamilyInviteViewController(); controller.prefilledName = typed.isEmpty ? memberName : typed; controller.returnsToPerson = true
+        // The name moves to the invitation, and the key follows the name they choose once they join.
         controller.onCreated = { [weak self] id, name in
-            self?.invitationID = id; self?.nameField.text = name; self?.selectedFamilyID = nil
+            self?.invitationID = id; self?.memberName = name; self?.nameField.text = nil; self?.selectedFamilyID = nil
             self?.configureFamilyLinks()
         }
         navigationController?.pushViewController(controller, animated: true)
@@ -416,7 +450,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
             }
             let call = try NativeCall(room: initialContact?.nativeCall?.room ?? "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
             let contact = try CallContact(name: nameField.text ?? "", nativeCall: call,
-                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID, invitationID: invitationID, buttonColorHex: buttonColorHex, photoData: photoData)
+                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID, invitationID: invitationID,
+                memberName: linkedPerson?.name ?? memberName, buttonColorHex: buttonColorHex, photoData: photoData)
             phoneField.text = contact.phoneNumber
             view.isUserInteractionEnabled = false
             navigationItem.rightBarButtonItem?.isEnabled = false

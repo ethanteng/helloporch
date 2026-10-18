@@ -83,6 +83,10 @@ struct FamilyResponse: Decodable {
     let message: SentMessage?
     let upload: MessageUploadTarget?
     let media: MessageMediaURL?
+    /// Where an uploaded profile photo goes (`profilePhotoUpload`, `overridePhotoUpload`).
+    let pathname: String?
+    /// A family member's photo (`profilePhoto`, `caregiverProfilePhoto`).
+    let photo: ProfilePhotoURL?
 }
 /// A presigned upload: send the file as the body with exactly these headers.
 struct MessageUploadTarget: Decodable { let url: String; let method: String; let headers: [String: String]; let expiresAt: TimeInterval }
@@ -143,6 +147,8 @@ struct FamilyCallSession {
     /// How long this caller rings before giving up. Family phones use the household's voicemail wait.
     var waitSeconds = CallPreferences.defaultVoicemailSeconds
     var service: FamilyService { FamilyService(credential) }
+    /// The other device on this call.
+    var peerID: String { call.from == credential.credential.split(separator: ".").first.map(String.init) ? call.to : call.from }
     func end() async { _ = try? await service.send("endCall", ["callID": call.id]) }
     func endConfirmed() async throws {
         do { _ = try await service.send("endCall", ["callID": call.id]) }
@@ -200,7 +206,10 @@ struct FamilyCallSession {
     func update(_ response: FamilyResponse) {
         if let state = response.state { self.state = state; error = nil; changed() }
     }
+    /// A family member's photo finished downloading: keypad contacts and open screens can show it.
+    func photoLoaded() { changed() }
     private func changed() {
+        if let state, let credential { FamilyPhotos.shared.sync(state, credential: credential) }
         if let state, state.me.role == .bedside {
             do {
                 var slots = try CallSlots.load()

@@ -42,24 +42,35 @@ public struct CallSlots: Equatable {
         let validated = try contact.map { contact in
             if let native = contact.nativeCall {
                 guard contact.shortcutName == nil, contact.address.isEmpty else { throw ValidationError.invalidSavedSlots }
-                return try CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
-                    familyMemberID: contact.familyMemberID, invitationID: contact.invitationID, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
+                return try CallContact(name: contact.customName, nativeCall: native, phoneNumber: contact.phoneNumber,
+                    familyMemberID: contact.familyMemberID, invitationID: contact.invitationID, memberName: contact.memberName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
             }
             guard contact.phoneNumber == nil, contact.familyMemberID == nil, contact.invitationID == nil else { throw ValidationError.invalidSavedSlots }
-            return try CallContact(name: contact.name, address: contact.address, shortcutName: contact.shortcutName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
+            return try CallContact(name: contact.customName, address: contact.address, shortcutName: contact.shortcutName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
         }
         slots[index] = Slot(action: .person, contact: validated)
     }
     /// Pair by the server-issued invitation identity, never a person's name.
     /// Removal of a member also removes their stale calling target.
-    public mutating func reconcile(with state: FamilySnapshot) throws {
+    /// Also keeps each contact showing its family member's current name and photo, once the
+    /// photo is in `memberPhotos`. A removed member's last name and photo stay until the caregiver edits the key.
+    public mutating func reconcile(with state: FamilySnapshot, memberPhotos: ContactPhotoStore = ContactPhotoStore.standard.familyMembers) throws {
         guard state.me.role == .bedside else { return }
         for digit in Self.digits {
             guard let contact = contact(for: digit), let native = contact.nativeCall else { continue }
-            let linked = Self.member(for: contact, in: state)?.id
-            if linked != contact.familyMemberID {
-                try setContact(CallContact(name: contact.name, nativeCall: native, phoneNumber: contact.phoneNumber,
-                    familyMemberID: linked, invitationID: contact.invitationID, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact), for: digit)
+            let member = Self.member(for: contact, in: state)
+            // Until the invitation is accepted, a contact goes by the name the caregiver gave it.
+            let invited = member == nil ? contact.invitationID.flatMap { id in state.invitations?.first { $0.id == id }?.name } : nil
+            let name = member?.name ?? invited ?? contact.memberName
+            var photoID = contact.memberPhotoID
+            if let member {
+                // A new photo replaces the previous one once it has downloaded. This checks for the file without reading it.
+                photoID = member.photoID.flatMap { memberPhotos.contains($0) ? $0 : contact.memberPhotoID }
+            }
+            if member?.id != contact.familyMemberID || name != contact.memberName || photoID != contact.memberPhotoID {
+                try setContact(CallContact(name: contact.customName, nativeCall: native, phoneNumber: contact.phoneNumber,
+                    familyMemberID: member?.id, invitationID: contact.invitationID, memberName: name, buttonColorHex: contact.buttonColorHex)
+                    .preservingPhoto(from: contact).showingMember(name: name, photoID: photoID, photos: memberPhotos), for: digit)
             }
         }
     }

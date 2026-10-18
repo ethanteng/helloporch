@@ -32,6 +32,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let messages: Bool
         let held: Int
         let unheard: Int
+        /// The photo Porch shows for this phone, once it's on this device.
+        let photo: String?
     }
     private var displayed: Presentation?
     private lazy var invitationButton = UIBarButtonItem(title: "Invitation", style: .plain, target: self, action: #selector(newInvitation))
@@ -62,10 +64,20 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         guard !previewShown else { return }
         previewShown = true
         if ProcessInfo.processInfo.arguments.contains("--preview-received-messages") { openReceivedMessages() }
+        if ProcessInfo.processInfo.arguments.contains("--preview-profile") { showProfile() }
     }
     #endif
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func newInvitation() { showPairing() }
+    /// This phone's name and photo, as the bedside shows them.
+    private func profileButton(photo: String?) -> UIBarButtonItem {
+        let image = RecipientAppearance.cardPhoto(FamilyPhotos.shared.data(for: photo), width: 30) ?? UIImage(systemName: "person.crop.circle")
+        let item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(showProfile))
+        item.accessibilityLabel = "Your profile"
+        item.accessibilityIdentifier = "family.profile"
+        return item
+    }
+    @objc private func showProfile() { navigationController?.pushViewController(FamilyProfileViewController(), animated: true) }
     @objc private func showDeviceSettings() {
         let paired = PorchDevice.credential(for: .family) != nil
         let sheet = UIAlertController(title: "Device settings", message: nil, preferredStyle: .actionSheet)
@@ -107,11 +119,12 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         guard isViewLoaded else { return }
         let coordinator = FamilyCoordinator.shared
         let state = coordinator.state
-        let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0)
+        let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0,
+                              photo: state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
         guard next != displayed else { return }
         displayed = next
         // Once paired, joining another family lives in Device settings so it isn't done by accident.
-        navigationItem.leftBarButtonItem = next.paired ? nil : invitationButton
+        navigationItem.leftBarButtonItem = next.paired ? profileButton(photo: next.photo) : invitationButton
         people.arrangedSubviews.forEach { people.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard next.paired else {
             status.text = "Ask the caregiver to invite you to the family Porch."
@@ -226,7 +239,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
         link.text = invitation?.absoluteString; link.keyboardType = .URL
         form.addArrangedSubview(section("Your Porch invite", detail: "Ask the caregiver to invite you to the family Porch. It can be used once and expires after 24 hours.", views: [field(link, title: "Porch invitation", placeholder: "Paste the complete invitation link"), join]))
         if replacing { form.addArrangedSubview(PorchStyle.label("Joining removes this phone from \(FamilyCoordinator.shared.state?.householdName ?? "your current family").", size: 17, color: PorchStyle.ink)) }
-        form.addArrangedSubview(PorchStyle.label("Your invitation sets your name and access. Audio and video drop-in are approved separately by the caregiver. No calling code is needed."))
+        form.addArrangedSubview(PorchStyle.label("Your invitation sets your name and access. Once you've joined, you can choose your own name and photo under Your profile. Audio and video drop-in are approved separately by the caregiver. No calling code is needed."))
         join.addTarget(self, action: #selector(pair), for: .touchUpInside)
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
@@ -355,7 +368,16 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         details.addArrangedSubview(messagesGroup(state))
         details.addArrangedSubview(caregiverGroup(state))
         personScreen?.render()
+        #if DEBUG
+        if !previewedPerson, ProcessInfo.processInfo.arguments.contains("--preview-family-person"), let person = state?.people.first {
+            previewedPerson = true
+            DispatchQueue.main.async { self.showPerson(person.id) }
+        }
+        #endif
     }
+    #if DEBUG
+    private var previewedPerson = false
+    #endif
     /// Everyone with access and everyone invited, so a pending invitation sits beside the people it will join.
     private func familyGroup(_ state: FamilyAdminState?) -> UIView {
         var rows: [UIView] = (state?.people ?? []).map { person in
@@ -367,7 +389,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
                 PorchStyle.label(access, size: 15, color: person.access == nil ? PorchStyle.secondary : PorchStyle.accent, weight: .medium),
             ])
             text.axis = .vertical; text.spacing = 2
-            let row = PorchListRow([Self.avatar(person.name), text], label: "\(name). \(person.shortStatus). \(access).") { [weak self] in self?.showPerson(person.id) }
+            let row = PorchListRow([Self.avatar(person.name, photo: FamilyPhotos.shared.data(for: person.photoID)), text], label: "\(name). \(person.shortStatus). \(access).") { [weak self] in self?.showPerson(person.id) }
             row.accessibilityIdentifier = "family.person.\(person.id)"
             return row
         }
@@ -394,8 +416,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         }
         rows.append(actionRow("Invite a family member", symbol: "person.badge.plus") { [weak self] in self?.showInvite() })
         let footer = remote == nil
-            ? "Tap a person to change their drop-in and caregiver access. To put someone on a keypad number, edit that keypad contact and choose Link their Porch app."
-            : "Tap a person to change their drop-in and caregiver access."
+            ? "Tap a person to change their name, photo, drop-in and caregiver access. To put someone on a keypad number, edit that keypad contact and choose Link their Porch app."
+            : "Tap a person to change their name, photo, drop-in and caregiver access."
         return group("Family", footer: footer, rows: rows)
     }
     /// The master switch above everything it governs: family members' drop-in and approved phone numbers.
@@ -525,7 +547,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         }
         let footer = remote == nil
             ? "The PIN opens caregiver settings on this iPad. Family caregivers also use it to manage this page from their own phone. Turn on caregiver mode for a person in Family."
-            : "Keypad numbers, contacts, photos, call preferences, the display and the caregiver PIN can only be changed on the bedside iPad."
+            : "Keypad numbers and contacts, call preferences, the display and the caregiver PIN can only be changed on the bedside iPad."
         return group("Caregiver access", footer: footer, rows: rows)
     }
     private func actionRow(_ title: String, symbol: String, action: @escaping () -> Void) -> UIView {
@@ -544,10 +566,19 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         view.setContentCompressionResistancePriority(.required, for: .horizontal)
         return view
     }
-    /// Initials in a fixed circle. It never stretches, so a row's text column takes the spare width.
-    static func avatar(_ name: String, size: CGFloat = 44) -> UIView {
+    /// Their photo, or initials, in a fixed circle. It never stretches, so a row's text column takes the spare width.
+    static func avatar(_ name: String, photo: Data? = nil, size: CGFloat = 44) -> UIView {
         let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
         let badge = circle(size: size)
+        if let image = RecipientAppearance.photo(photo) {
+            let view = UIImageView(image: image)
+            view.contentMode = .scaleAspectFill; view.clipsToBounds = true; view.layer.cornerRadius = size / 2
+            view.translatesAutoresizingMaskIntoConstraints = false
+            badge.addSubview(view)
+            NSLayoutConstraint.activate([view.leadingAnchor.constraint(equalTo: badge.leadingAnchor), view.trailingAnchor.constraint(equalTo: badge.trailingAnchor),
+                                         view.topAnchor.constraint(equalTo: badge.topAnchor), view.bottomAnchor.constraint(equalTo: badge.bottomAnchor)])
+            return badge
+        }
         let label = UILabel()
         label.text = initials
         label.font = .systemFont(ofSize: size * 0.36, weight: .semibold)
@@ -578,13 +609,14 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         }
         return true
     }
+    /// The PIN for the next caregiver request; nil (and locked) once a phone's caregiver session has ended.
+    private func caregiverPIN() -> String? {
+        guard remote != nil else { return NativeCallSettings.caregiverCode }
+        guard let active = RemoteCaregiverSession.shared.activePIN else { lock(nil); return nil }
+        return active
+    }
     @discardableResult fileprivate func perform(_ action: String, _ values: [String: Any] = [:]) async -> Bool {
-        guard !busy, let credential else { return false }
-        let pin: String
-        if remote != nil {
-            guard let active = RemoteCaregiverSession.shared.activePIN else { lock(nil); return false }
-            pin = active
-        } else { pin = NativeCallSettings.caregiverCode }
+        guard !busy, let credential, let pin = caregiverPIN() else { return false }
         busy = true; defer { busy = false }
         do {
             let response = try await FamilyService(credential).send(action, values, pin: pin)
@@ -598,6 +630,25 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             if action != "setHouseholdName" { refresh() }; showPorchError(error, on: navigationController?.topViewController ?? self)
             return false
         }
+    }
+    /// Uploads a photo a caregiver chose for a family member, then shows it in place of theirs.
+    fileprivate func chooseOverridePhoto(_ data: Data, for memberID: String) async {
+        guard !busy, let credential, let pin = caregiverPIN() else { return }
+        busy = true
+        let photo: [String: String]
+        do { photo = try await FamilyPhotos.shared.upload(data, action: "overridePhotoUpload", values: ["memberID": memberID], credential: credential, pin: pin); busy = false }
+        catch {
+            busy = false
+            if remote != nil, let failure = error as? FamilyServiceError, [401, 403, 429].contains(failure.status) { lock(error) }
+            else { showPorchError(error, on: navigationController?.topViewController ?? self) }
+            return
+        }
+        await perform("setMemberOverride", ["memberID": memberID, "photo": photo])
+    }
+    /// The bedside downloads everyone's photo itself; a caregiver's phone fetches one when it's shown.
+    fileprivate func loadPhoto(of person: FamilyPerson) {
+        guard let remote, let id = person.photoID, !FamilyPhotos.shared.store.contains(id), let pin = RemoteCaregiverSession.shared.activePIN else { return }
+        FamilyPhotos.shared.load(id, action: "caregiverProfilePhoto", values: ["memberID": person.id], credential: remote, pin: pin)
     }
     private func showInvite() {
         let invite = FamilyInviteViewController(); invite.remote = remote
@@ -629,11 +680,21 @@ fileprivate extension FamilyPerson {
     }
 }
 
-/// One family member's drop-in and caregiver access, opened from Family & drop-in.
+/// One family member's name, photo, drop-in and caregiver access, opened from Family & drop-in.
 final class FamilyPersonViewController: CaregiverFormViewController {
     private let personID: String
     private weak var admin: FamilyAdminViewController?
     private let content = UIStackView()
+    /// Kept across redraws, which happen whenever anything in the family changes.
+    private let overrideName = UITextField()
+    private var editedName: String?
+    private var renderAfterEditing = false
+    private var shownPhoto: String?
+    private lazy var chooser = PhotoChooser(presenter: self) { [weak self] data in
+        guard let self, let admin = self.admin else { return }
+        guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
+        Task { await admin.chooseOverridePhoto(data, for: self.personID) }
+    }
     init(personID: String, admin: FamilyAdminViewController) {
         self.personID = personID; self.admin = admin; super.init(nibName: nil, bundle: nil)
     }
@@ -642,11 +703,26 @@ final class FamilyPersonViewController: CaregiverFormViewController {
         super.viewDidLoad()
         content.axis = .vertical; content.spacing = 24
         form.addArrangedSubview(content)
-        hideKeyboardControl(); render()
+        overrideName.autocapitalizationType = .words
+        overrideName.accessibilityIdentifier = "person.overrideName"
+        overrideName.addAction(UIAction { [weak self] _ in self?.editedName = self?.overrideName.text }, for: .editingChanged)
+        NotificationCenter.default.addObserver(self, selector: #selector(photoMayHaveLoaded), name: .porchFamilyChanged, object: nil)
+        render()
+    }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    @objc private func photoMayHaveLoaded() {
+        let id = admin?.current?.people.first { $0.id == personID }?.photoID
+        if let id, id != shownPhoto, FamilyPhotos.shared.store.contains(id) { render() }
+    }
+    override func textFieldDidEndEditing(_ textField: UITextField) {
+        super.textFieldDidEndEditing(textField)
+        if renderAfterEditing { renderAfterEditing = false; render() }
     }
     /// Redrawn after every change, including one another caregiver made.
     func render() {
         guard isViewLoaded else { return }
+        // Waits while the caregiver types a name, so the keyboard doesn't close.
+        guard !overrideName.isFirstResponder else { renderAfterEditing = true; return }
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard let admin, let state = admin.current, let person = state.people.first(where: { $0.id == personID }) else {
             // Removed here or by another caregiver.
@@ -657,9 +733,13 @@ final class FamilyPersonViewController: CaregiverFormViewController {
         title = person.name
         let status = PorchStyle.label(isMe ? "\(person.status). You're using this phone." : person.status, size: 17)
         status.textAlignment = .center
-        let header = UIStackView(arrangedSubviews: [FamilyAdminViewController.avatar(person.name, size: 72), status])
+        let photo = FamilyPhotos.shared.data(for: person.photoID)
+        shownPhoto = photo == nil ? nil : person.photoID
+        if photo == nil { admin.loadPhoto(of: person) }
+        let header = UIStackView(arrangedSubviews: [FamilyAdminViewController.avatar(person.name, photo: photo, size: 96), status])
         header.axis = .vertical; header.alignment = .center; header.spacing = 10
         content.addArrangedSubview(header)
+        content.addArrangedSubview(appearanceGroup(person, admin: admin))
         let audio = UISwitch(); audio.isOn = person.permissions.audio
         let video = UISwitch(); video.isOn = person.permissions.video
         for toggle in [audio, video] {
@@ -693,6 +773,39 @@ final class FamilyPersonViewController: CaregiverFormViewController {
             self?.present(alert, animated: true)
         }, for: .touchUpInside)
         content.addArrangedSubview(remove)
+    }
+    /// A caregiver's name and photo for this person replace the ones they chose, everywhere Porch shows them.
+    private func appearanceGroup(_ person: FamilyPerson, admin: FamilyAdminViewController) -> UIView {
+        let theirs = person.profile?.name ?? person.invitedName ?? person.name
+        overrideName.text = editedName ?? person.override?.name
+        let saveName = PorchStyle.button("Save", symbol: "checkmark")
+        saveName.accessibilityLabel = "Save name"
+        saveName.addAction(UIAction { [weak self, weak admin] _ in
+            guard let self, let admin else { return }
+            self.view.endEditing(true)
+            let name = self.overrideName.text ?? ""
+            Task { if await admin.perform("setMemberOverride", ["memberID": person.id, "name": name]) { self.editedName = nil; self.render() } }
+        }, for: .touchUpInside)
+        let nameRow = listRow(field(overrideName, title: "Name on Porch", placeholder: theirs), trailing: FamilyAdminViewController.singleLine(saveName), alignedToBottom: true)
+        let chosen = person.override?.photoID != nil
+        let photoStatus = chosen ? "Showing a photo a caregiver chose." : person.profile?.photoID != nil ? "Showing the photo they chose." : "They haven't added a photo."
+        let choose = rowButton(chosen ? "Choose a different photo" : "Choose a photo for them", symbol: "photo")
+        chooser.attach(to: choose)
+        var rows: [UIView] = [nameRow, listRow([PorchStyle.label(photoStatus, size: 16)]), choose]
+        if chosen {
+            let restore = rowButton(person.profile?.photoID != nil ? "Use their own photo" : "Remove this photo", symbol: "arrow.uturn.backward")
+            restore.addAction(UIAction { [weak admin] _ in Task { await admin?.perform("setMemberOverride", ["memberID": person.id, "photo": NSNull()]) } }, for: .touchUpInside)
+            rows.append(restore)
+        }
+        let footer = "Leave the name blank to use theirs (now “\(theirs)”). A name or photo you choose replaces theirs on the bedside Porch, for calls, drop-ins and messages."
+        return group("Name and photo", footer: admin.remote == nil ? footer + " A name or photo saved on a keypad number still comes first on that key." : footer, rows: rows)
+    }
+    private func rowButton(_ title: String, symbol: String) -> UIButton {
+        let button = PorchStyle.button(title, symbol: symbol, filled: false)
+        button.contentHorizontalAlignment = .leading
+        button.configuration?.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+        return button
     }
 }
 
@@ -877,6 +990,7 @@ final class IncomingFamilyCallViewController: UIViewController {
     var onDismiss: (() -> Void)?
     private let countdown = UILabel()
     private let callerContact: CallContact?
+    private let callerPhoto: Data?
     private let answer = PorchStyle.button("Answer", symbol: "phone.fill")
     private let keypadHint = PorchStyle.label("", size: 18, color: PorchStyle.nightSecondary)
     private let audio: IncomingCallAudioPlaying
@@ -933,6 +1047,9 @@ final class IncomingFamilyCallViewController: UIViewController {
         let slots = savedSlots ?? (try? CallSlots.load()) ?? CallSlots()
         let state = snapshot ?? FamilyCoordinator.shared.state
         callerContact = credential.role == .bedside ? state.flatMap { slots.incomingContact(for: call, in: $0) } : nil
+        // Someone without a keypad number still shows the photo Porch has for them.
+        callerPhoto = callerContact?.photoData ?? (credential.role == .bedside && call.source != "phone"
+            ? FamilyPhotos.shared.data(for: state?.people.first { $0.id == call.from }?.photoID) : nil)
         let name = callerContact?.name ?? call.callerName
         session = FamilyCallSession(credential: credential, call: call, peerName: name, peerContact: callerContact)
         self.audio = audio ?? PorchIncomingAudio(); super.init(nibName: nil, bundle: nil)
@@ -954,8 +1071,8 @@ final class IncomingFamilyCallViewController: UIViewController {
         let hint = keypadHint
         hint.textAlignment = .center
         var identity: [UIView] = [name, countdown, hint]
-        if RecipientAppearance.photo(callerContact?.photoData) != nil {
-            let photo = RecipientAppearance.photoView(callerContact?.photoData)
+        if RecipientAppearance.photo(callerPhoto) != nil {
+            let photo = RecipientAppearance.photoView(callerPhoto)
             let container = UIView()
             photo.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(photo)
