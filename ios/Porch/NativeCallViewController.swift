@@ -397,7 +397,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             try await room.localParticipant.setMicrophone(enabled: microphoneEnabled)
             microphoneButton.configuration?.title = BedsideText.string(microphoneEnabled ? "Mute" : "Unmute")
             try Task.checkCancellation()
-            if call.mode == .video { try await room.localParticipant.setCamera(enabled: true) }
+            // Bedside video calls always start with the camera on; family phones can choose.
+            if call.mode == .video && (familySession?.credential.role != .family || CallPreferences.startVideoWithCamera()) {
+                try await room.localParticipant.setCamera(enabled: true)
+            }
+            cameraButton.configuration?.title = BedsideText.string(room.localParticipant.isCameraEnabled() ? "Camera off" : "Camera on")
             try Task.checkCancellation()
             mediaReady = true
             microphoneButton.isEnabled = true

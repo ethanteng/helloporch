@@ -53,6 +53,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let paired = PorchDevice.credential(for: .family) != nil
         let sheet = UIAlertController(title: "Device settings", message: nil, preferredStyle: .actionSheet)
         if paired {
+            sheet.addAction(UIAlertAction(title: "Call settings", style: .default) { [weak self] _ in self?.navigationController?.pushViewController(FamilyCallSettingsViewController(), animated: true) })
             sheet.addAction(UIAlertAction(title: "Caregiver mode", style: .default) { [weak self] _ in self?.openCaregiverMode() })
             sheet.addAction(UIAlertAction(title: "Join a different family", style: .default) { [weak self] _ in self?.confirmNewFamily() })
         }
@@ -169,6 +170,22 @@ final class FamilyHomeViewController: CaregiverFormViewController {
     }
 }
 
+/// Preferences kept on this phone for its own calls. Changes apply right away.
+final class FamilyCallSettingsViewController: CaregiverFormViewController {
+    private let camera = UISwitch()
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Call settings"
+        camera.isOn = CallPreferences.startVideoWithCamera()
+        camera.accessibilityIdentifier = "family.startVideoWithCamera"
+        camera.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            CallPreferences.saveStartVideoWithCamera(self.camera.isOn)
+        }, for: .valueChanged)
+        form.addArrangedSubview(group("Video calls", footer: "When this is on, your camera turns on as soon as a video call connects. If you answer from the lock screen, it turns on when you open Porch. It never runs while Porch is closed or the screen is locked. You can turn the camera on or off during any call.", rows: [toggleRow("Start with my camera on", camera)]))
+        hideKeyboardControl()
+    }
+}
+
 final class FamilyPairingViewController: CaregiverFormViewController {
     var invitation: URL?
     private let link = UITextField()
@@ -178,7 +195,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
         let replacing = PorchDevice.credential(for: .family) != nil
         super.viewDidLoad(); title = replacing ? "Join a different family" : "Join your family"
         link.text = invitation?.absoluteString; link.keyboardType = .URL
-        form.addArrangedSubview(section("Your Porch invite", detail: "Ask the caregiver to invite you to the family Porch. It can be used once and expires after 15 minutes.", views: [field(link, title: "Porch invitation", placeholder: "Paste the complete invitation link"), join]))
+        form.addArrangedSubview(section("Your Porch invite", detail: "Ask the caregiver to invite you to the family Porch. It can be used once and expires after 24 hours.", views: [field(link, title: "Porch invitation", placeholder: "Paste the complete invitation link"), join]))
         if replacing { form.addArrangedSubview(PorchStyle.label("Joining removes this phone from \(FamilyCoordinator.shared.state?.householdName ?? "your current family").", size: 17, color: PorchStyle.ink)) }
         form.addArrangedSubview(PorchStyle.label("Your invitation sets your name and access. Audio and video drop-in are approved separately by the caregiver. No calling code is needed."))
         join.addTarget(self, action: #selector(pair), for: .touchUpInside)
@@ -325,7 +342,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             row.accessibilityIdentifier = "family.person.\(person.id)"
             return row
         }
-        let time = DateFormatter(); time.dateStyle = .none; time.timeStyle = .short
+        // Invitations last a day, so the expiry needs its day ("Tomorrow, 3:14 PM").
+        let time = DateFormatter(); time.dateStyle = .short; time.timeStyle = .short; time.doesRelativeDateFormatting = true
         rows += (state?.invitations ?? []).map { invitation in
             let name = invitation.name ?? "Invitation"
             let clock = Self.circle(size: 44)
@@ -730,7 +748,7 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     private let inviteHint = PorchStyle.label("", size: 17)
     @objc private func finishedInvite() { navigationController?.popViewController(animated: true) }
     private func shareInvite(_ link: URL) {
-        let share = UIActivityViewController(activityItems: ["Join our Porch. This private invitation works once and expires in 15 minutes.", link], applicationActivities: nil)
+        let share = UIActivityViewController(activityItems: ["Join our Porch. This private invitation works once and expires in 24 hours.", link], applicationActivities: nil)
         share.popoverPresentationController?.sourceView = create
         share.popoverPresentationController?.sourceRect = create.bounds
         present(share, animated: true)

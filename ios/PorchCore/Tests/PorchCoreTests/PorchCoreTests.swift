@@ -275,6 +275,15 @@ final class PorchCoreTests: XCTestCase {
             XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 20)
         }
     }
+    func testFamilyVideoCallsStartWithCameraUnlessTurnedOff() throws {
+        try withDefaults { defaults in
+            XCTAssertTrue(CallPreferences.startVideoWithCamera(in: defaults))
+            CallPreferences.saveStartVideoWithCamera(false, in: defaults)
+            XCTAssertFalse(CallPreferences.startVideoWithCamera(in: defaults))
+            CallPreferences.saveStartVideoWithCamera(true, in: defaults)
+            XCTAssertTrue(CallPreferences.startVideoWithCamera(in: defaults))
+        }
+    }
 
 }
 

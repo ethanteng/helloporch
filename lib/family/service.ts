@@ -17,6 +17,8 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const codePattern = /^[a-f0-9]{64}$/;
 const phonePattern = /^\+[1-9][0-9]{6,14}$/;
+// Family invitations can be claimed for a day after they are created.
+const inviteSeconds = 86400;
 const equal = (a: string, b: string) => timingSafeEqual(Buffer.from(hash(a), "hex"), Buffer.from(hash(b), "hex"));
 function name(value: unknown): string { requireValue(typeof value === "string" && value.trim().length > 0 && value.trim().length <= 80, "Enter a name with 1–80 characters."); return value.trim(); }
 function permissions(value: unknown): Permissions {
@@ -271,7 +273,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           house.invites = house.invites.filter(i => !i.claimedBy && i.expiresAt > now);
           requireValue(house.invites.length < 10, "Cancel an unused invitation before creating another.");
           requireValue(input.caregiver === undefined || typeof input.caregiver === "boolean", "Choose whether they can use caregiver mode.");
-          const invite: Invite = { id: randomUUID(), secretHash: hash(issuedCode!), name: name(input.name), permissions: permissions(input.permissions), ...(input.caregiver ? { caregiver: true } : {}), expiresAt: now + 900 };
+          const invite: Invite = { id: randomUUID(), secretHash: hash(issuedCode!), name: name(input.name), permissions: permissions(input.permissions), ...(input.caregiver ? { caregiver: true } : {}), expiresAt: now + inviteSeconds };
           house.invites.push(invite);
           return { inviteID: invite.id, expiresAt: invite.expiresAt };
         }
@@ -406,7 +408,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
       }
     }
-    if (issuedCode && result) await store.create(`invite:${hash(issuedCode)}`, JSON.stringify({ householdID: house.id, inviteID: result.inviteID }), 900);
+    if (issuedCode && result) await store.create(`invite:${hash(issuedCode)}`, JSON.stringify({ householdID: house.id, inviteID: result.inviteID }), inviteSeconds);
     // Message housekeeping never fails the request it rides on; the next poll retries it.
     if (action === "revoke" && typeof input.memberID === "string") { try { await removeMessagesFrom(store, media, house, input.memberID, now); } catch { /* retried by caregivers */ } }
     if (action === "poll" && me.role === "bedside") { try { await maintainMessages(store, media, house, now); } catch { /* next poll */ } }

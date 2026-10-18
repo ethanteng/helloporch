@@ -45,10 +45,16 @@ test('invitations are single use, caller names come from caregiver, family canno
  assert.equal((await f.send('setDropIn',{enabled:true},family.credential,env.PORCH_CONTACT_SETUP_CODE)).status,403);
  assert.equal((await f.send('createInvite',{name:'Other',permissions:{audio:true,video:true}},bedside.credential)).status,403);
 });
+test('invitations last a day',async()=>{
+ const f=fixture(); const bedside=await f.json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ const invite=await f.json('createInvite',{name:'Ethan',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal(invite.expiresAt-invite.state.serverTime,86400);
+ f.advance(86399); await f.json('claimInvite',{code:invite.code,name:'Ethan'});
+});
 test('expired and cancelled invitations cannot pair',async()=>{
  const f=fixture(); const bedside=await f.json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
  const invite=await f.json('createInvite',{name:'Ethan',permissions:{audio:true,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
- f.advance(901); assert.equal((await f.send('claimInvite',{code:invite.code})).status,410);
+ f.advance(86401); assert.equal((await f.send('claimInvite',{code:invite.code})).status,410);
  const next=await f.json('createInvite',{name:'Ethan',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  await f.json('cancelInvites',{},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.equal((await f.send('claimInvite',{code:next.code})).status,410);
@@ -67,7 +73,7 @@ test('caregivers see pending invitations by name and can cancel one without the 
  assert.equal((await f.send('claimInvite',{code:first.code})).status,410);
  await f.json('cancelInvite',{inviteID:first.invitationID},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.equal((await f.send('cancelInvite',{},bedside.credential,env.PORCH_CONTACT_SETUP_CODE)).status,400);
- f.advance(901);
+ f.advance(86401);
  assert.deepEqual((await f.json('poll',{available:true},bedside.credential)).state.invitations,[]);
 });
 test('drop-in is opt-in by mode and requires a bedside device that is ready',async()=>{

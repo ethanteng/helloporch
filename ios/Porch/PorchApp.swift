@@ -39,6 +39,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
         UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
+        SystemIncomingCalls.shared.resumeCamera()
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
