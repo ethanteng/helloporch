@@ -33,6 +33,9 @@ extension Notification.Name {
     /// Whether this call's camera belongs on while Porch is open. Leaving Porch turns
     /// the camera off; returning turns it back on unless the person turned it off.
     private var wantsCamera = false
+    /// Leaving and returning to Porch change the camera in order, so a quick round
+    /// trip can't leave it off once the earlier shutdown finishes.
+    private var cameraTask: Task<Void, Never>?
     private var inactivity = CallInactivityTimer(timeout: nil)
     private(set) var room: Room?
     private(set) var call: FamilyCallRecord?
@@ -300,13 +303,22 @@ extension Notification.Name {
     }
     /// Starts the camera once Porch is open, when this call wants it.
     func resumeCamera() {
-        guard wantsCamera, let room, !room.localParticipant.isCameraEnabled(),
-              UIApplication.shared.applicationState == .active else { return }
-        Task { try? await setCamera(enabled: true) }
+        guard wantsCamera, room != nil else { return }
+        let previous = cameraTask
+        cameraTask = Task {
+            await previous?.value
+            guard self.wantsCamera, let room = self.room, !room.localParticipant.isCameraEnabled(),
+                  UIApplication.shared.applicationState == .active else { return }
+            try? await self.setCamera(enabled: true)
+        }
     }
     func enterBackground() {
         guard let room else { return }
-        Task { _ = try? await room.localParticipant.setCamera(enabled: false); changed() }
+        let previous = cameraTask
+        cameraTask = Task {
+            await previous?.value
+            _ = try? await room.localParticipant.setCamera(enabled: false); changed()
+        }
     }
     func requestEnd() {
         guard let uuid else { return }
@@ -363,7 +375,7 @@ extension Notification.Name {
             AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = true
             try? AudioManager.shared.setEngineAvailability(.default)
             self.room = nil; call = nil; uuid = nil; credential = nil; answered = false
-            connected = false; audioActive = false; mute = false; wantsCamera = false; mediaTask = nil
+            connected = false; audioActive = false; mute = false; wantsCamera = false; mediaTask = nil; cameraTask = nil
             endBackgroundTask(); changed()
         }
     }
