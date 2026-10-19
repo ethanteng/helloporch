@@ -333,17 +333,23 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     @objc private func save() {
         preferences.save(to: defaults)
         NotificationCenter.default.post(name: .porchBedsideDisplayChanged, object: nil)
+        // Phone voicemail greets callers in the bedside language, so the server keeps a copy.
+        let reportLanguage = PorchDevice.experience == .bedside ? FamilyCoordinator.shared.state?.languageToReport(preferences.language) : nil
         // Natural voice choices belong to the family, so they're saved on the server with the caregiver PIN.
         let changes = naturalDrafts.compactMap { language, draft -> (BedsideLanguage, String?)? in
             guard let choices = natural?.choices(for: language), choices.selected != draft else { return nil }
             return (language, draft)
         }
-        guard !changes.isEmpty, let credential = PorchDevice.credential(for: .bedside) else {
+        guard reportLanguage != nil || !changes.isEmpty, let credential = PorchDevice.credential(for: .bedside) else {
             navigationController?.popViewController(animated: true); return
         }
         navigationItem.rightBarButtonItem?.isEnabled = false
         Task { [weak self] in
             do {
+                if let reportLanguage {
+                    let response = try await FamilyService(credential).send("setBedsideLanguage", ["language": reportLanguage.rawValue], pin: NativeCallSettings.caregiverCode)
+                    FamilyCoordinator.shared.update(response)
+                }
                 for (language, voiceID) in changes {
                     let response = try await FamilyService(credential).send("setSpeechVoice", ["language": language.rawValue, "voiceID": voiceID.map { $0 as Any } ?? NSNull()], pin: NativeCallSettings.caregiverCode)
                     FamilyCoordinator.shared.update(response)

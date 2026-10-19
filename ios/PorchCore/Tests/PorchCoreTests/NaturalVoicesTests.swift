@@ -5,11 +5,12 @@ import XCTest
 /// The bedside's snapshot lists the natural voices a caregiver can choose for each language,
 /// and the family's choice, where null means the iPad's built-in voice.
 final class NaturalVoicesTests: XCTestCase {
-    private func snapshot(speech: Any?) throws -> FamilySnapshot {
+    private func snapshot(speech: Any?, bedsideLanguage: String? = nil) throws -> FamilySnapshot {
         var object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": false,
             "me": ["id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "name": "Pat", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true],
             "people": [], "busy": false, "serverTime": 1]
         object["speech"] = speech
+        object["bedsideLanguage"] = bedsideLanguage
         return try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
     }
 
@@ -29,5 +30,13 @@ final class NaturalVoicesTests: XCTestCase {
 
     func testOlderServersSendNoVoices() throws {
         XCTAssertNil(try snapshot(speech: nil).speech)
+    }
+
+    /// Phone voicemail greets callers in the bedside language, which only the iPad knows until it reports it.
+    func testSavingReportsTheBedsideLanguageOnlyWhenTheServerHasAnother() throws {
+        let english = try snapshot(speech: nil, bedsideLanguage: "en")
+        XCTAssertEqual(english.languageToReport(.cantonese), .cantonese)
+        XCTAssertNil(english.languageToReport(.english), "already known")
+        XCTAssertNil(try snapshot(speech: nil).languageToReport(.spanish), "older servers can't keep it")
     }
 }

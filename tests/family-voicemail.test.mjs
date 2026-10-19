@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHmac, randomUUID, randomBytes } from 'node:crypto';
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, beforeEach, afterEach, mock } from 'node:test';
 import { handleFamily } from '../lib/family/service.ts';
-import { handleTwilioVoice, voicemailMessageID } from '../lib/family/voicemail.ts';
+import { greetings, handleTwilioVoice, voicemailMessageID } from '../lib/family/voicemail.ts';
 
 class MemoryStore {
   values = new Map();
@@ -11,12 +11,12 @@ class MemoryStore {
   async compareAndSet(key, before, after) { if (this.values.get(key) !== before) return false; this.values.set(key,after); return true; }
 }
 class FakeMedia {
-  blobs = new Map(); removed = [];
+  blobs = new Map(); removed = []; failing = false;
   async uploadTarget(pathname, contentType, maximumSizeInBytes, validUntil) { return { url: `https://blob.test/put?pathname=${pathname}`, method: 'PUT', headers: { 'x-content-type': contentType }, expiresAt: validUntil }; }
-  async downloadURL(pathname) { return `https://blob.test/get/${pathname}`; }
+  async downloadURL(pathname, validUntil) { return `https://blob.test/get/${pathname}?until=${validUntil}&sig=test`; }
   async stat(pathname) { return this.blobs.get(pathname) ?? null; }
   async remove(pathnames) { for (const p of pathnames) { this.blobs.delete(p); this.removed.push(p); } }
-  async put(pathname, body, contentType) { this.blobs.set(pathname, { size: body.byteLength, contentType }); }
+  async put(pathname, body, contentType) { if (this.failing) throw new Error('Blob is down.'); this.blobs.set(pathname, { size: body.byteLength, contentType }); }
   upload(target, size = 1000) { const pathname = new URL(target.url).searchParams.get('pathname'); this.blobs.set(pathname, { size, contentType: target.headers['x-content-type'] }); }
 }
 class FakeRecordings {
@@ -27,15 +27,17 @@ class FakeRecordings {
 const account = 'AC' + 'a'.repeat(32), token = 'twilio-test-token-not-real', porchNumber = '+15550001111', caller = '+15557654321';
 const env = { LIVEKIT_URL:'wss://test.livekit.cloud', LIVEKIT_API_KEY:'test-key', LIVEKIT_API_SECRET:'test-secret-not-real', PORCH_CONTACT_SETUP_CODE:'private-test-caregiver-secret', PORCH_CALL_ACCESS_CODE:'private-test-calling-code',
   TWILIO_ACCOUNT_SID: account, TWILIO_AUTH_TOKEN: token, LIVEKIT_SIP_URI: 'sip:test-project.sip.livekit.cloud' };
+// Never the real speech service: tests that want natural voices bring their own.
+const unset = ['ELEVENLABS_API_KEY'];
 let previous;
-beforeEach(() => { previous = Object.fromEntries(Object.keys(env).map(k => [k,process.env[k]])); Object.assign(process.env,env); });
+beforeEach(() => { previous = Object.fromEntries([...Object.keys(env), ...unset].map(k => [k,process.env[k]])); Object.assign(process.env,env); for (const k of unset) delete process.env[k]; });
 afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefined) delete process.env[k]; else process.env[k]=v; } });
 const day = 86400;
 const paths = { incoming: '', dialed: '/dialed', recorded: '/recorded', recording: '/recording' };
 const sid = (prefix, n) => prefix + n.toString(16).padStart(32, '0');
 
-async function fixture() {
-  const store = new MemoryStore(), media = new FakeMedia(), recordings = new FakeRecordings();
+async function fixture({ synthesize } = {}) {
+  const store = new MemoryStore(), media = new FakeMedia(), recordings = new FakeRecordings(), later = [];
   let now = 1_800_000_000;
   const send = (action, values={}, credential, pin) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(pin?{'X-Porch-Setup-Code':pin}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{}});
   const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
@@ -50,7 +52,7 @@ async function fixture() {
     const params = new URLSearchParams({ AccountSid: accountSid, ...values });
     const data = url + [...params.entries()].sort(([a],[b]) => a < b ? -1 : 1).map(([k,v]) => k+v).join('');
     const response = await handleTwilioVoice(new Request(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Twilio-Signature': signature ?? createHmac('sha1', token).update(data).digest('base64') }, body: params.toString() }),
-      step, { store, media, recordings, now: () => now });
+      step, { store, media, recordings, now: () => now, synthesize, afterResponse: task => later.push(task) });
     return { status: response.status, body: await response.text() };
   };
   // An unanswered call: Twilio asks what to do after the dial, then reports the recording.
@@ -64,7 +66,7 @@ async function fixture() {
     return { dialed, recorded, callSid, recordingSid, id: voicemailMessageID(recordingSid) };
   };
   const queue = async () => (await json('poll',{available:true},bedside.credential)).state.messages;
-  return { store, media, recordings, send, json, bedside, ethan, sam, twilio, voicemail, queue, advance: s => now += s };
+  return { store, media, recordings, later, send, json, bedside, ethan, sam, twilio, voicemail, queue, advance: s => now += s };
 }
 
 test('Twilio rings the bedside through LiveKit, and only signed requests are accepted', async () => {
@@ -193,4 +195,130 @@ test('senders replay their own messages while the recording is kept', async () =
   f.advance(91 * day);
   assert.deepEqual(await list(), { [played.id]: false, [unsent.id]: false });
   assert.equal((await f.send('sentMessageMedia', { messageID: played.id }, f.ethan.credential)).status, 404);
+});
+
+// A stand-in for ElevenLabs that remembers what it was asked to read.
+function speaker() {
+  const spoken = [];
+  const synthesize = async (voiceID, code, text, format) => { spoken.push({ voiceID, code, text, format }); return new Uint8Array(2000); };
+  return { spoken, synthesize };
+}
+const voices = { hope: 'OYTbf65OHHFELVut7v2H', sukYee: '7rrBp44bogxpbQBDkenR', luckyChan: 'R5E9sH7cGUEbuu7YE7K7', eva: 'RgXx32WYOGrd7gFNifSf' };
+const plays = body => [...body.matchAll(/<Play>([^<]*)<\/Play>/g)].map(m => m[1]);
+const english = (body, sentence) => body.includes(`<Say language="en-US" voice="Google.en-US-Chirp3-HD-Aoede">${greetings.en[sentence]}</Say>`);
+
+test('callers hear the household\'s natural voice in the bedside\'s language', async () => {
+  const { spoken, synthesize } = speaker();
+  const f = await fixture({ synthesize });
+  assert.equal((await f.json('poll', { available: true }, f.bedside.credential)).state.bedsideLanguage, 'en', 'English until the bedside reports');
+  const first = await f.voicemail();
+  assert.equal(plays(first.dialed.body).length, 2);
+  assert.ok(!first.dialed.body.includes('<Say'));
+  assert.deepEqual(spoken, [
+    { voiceID: voices.hope, code: 'en', text: greetings.en.leaveMessage, format: 'mp3_22050_32' },
+    { voiceID: voices.hope, code: 'en', text: greetings.en.noMessage, format: 'mp3_22050_32' },
+  ], 'small clips for the phone line, in the default English voice');
+
+  await f.json('setBedsideLanguage', { language: 'yue-Hant' }, f.bedside.credential, '123456');
+  spoken.length = 0;
+  const { dialed, callSid } = await f.voicemail();
+  // The greeting, then a goodbye in the same voice if nothing is recorded; each a signed link, escaped for XML.
+  assert.match(dialed.body, /^<\?xml[^>]*><Response><Play>[^<]+<\/Play><Record [^>]+\/><Play>[^<]+<\/Play><Hangup\/><\/Response>$/);
+  const [greeting, goodbye] = plays(dialed.body);
+  assert.match(greeting, new RegExp(`^https://blob\\.test/get/speech/${f.bedside.state.householdID}/[a-f0-9]{64}\\.mp3\\?until=\\d+&amp;sig=test$`));
+  assert.notEqual(greeting, goodbye);
+  assert.deepEqual(spoken.map(s => [s.voiceID, s.code, s.text]), [[voices.sukYee, 'yue', greetings['yue-Hant'].leaveMessage], [voices.sukYee, 'yue', greetings['yue-Hant'].noMessage]]);
+  const thanks = await f.twilio('recorded', { CallSid: callSid, From: caller, To: porchNumber, RecordingDuration: '12' });
+  assert.equal(plays(thanks.body).length, 1);
+  assert.equal(spoken.at(-1).text, greetings['yue-Hant'].thanks);
+  const silent = await f.twilio('recorded', { CallSid: callSid, From: caller, To: porchNumber, RecordingDuration: '0' });
+  assert.deepEqual(plays(silent.body), [goodbye]);
+
+  // Each sentence is recorded once; later callers hear the saved clips.
+  const asked = spoken.length;
+  assert.deepEqual(plays((await f.voicemail('+15559990000')).dialed.body).map(url => url.split('?')[0]), [greeting, goodbye].map(url => url.split('?')[0]));
+  assert.equal(spoken.length, asked);
+  // A different voice or language is recorded anew.
+  await f.json('setSpeechVoice', { language: 'yue-Hant', voiceID: voices.luckyChan }, f.sam.credential, '123456');
+  await f.voicemail('+15559990001');
+  assert.deepEqual(spoken.slice(asked).map(s => s.voiceID), [voices.luckyChan, voices.luckyChan]);
+  await f.json('setBedsideLanguage', { language: 'es' }, f.bedside.credential, '123456');
+  await f.voicemail('+15559990002');
+  assert.deepEqual(spoken.slice(-2).map(s => [s.voiceID, s.code, s.text]), [[voices.eva, 'es', greetings.es.leaveMessage], [voices.eva, 'es', greetings.es.noMessage]]);
+  // Every language has every sentence.
+  for (const language of ['en', 'zh-Hant', 'zh-Hans', 'yue-Hant', 'es']) {
+    assert.deepEqual(Object.keys(greetings[language]).sort(), ['leaveMessage', 'noMessage', 'thanks', 'unavailable']);
+    assert.ok(Object.values(greetings[language]).every(text => text.trim().length > 0 && text.length <= 300));
+  }
+});
+
+test('callers hear Twilio\'s English voice, and can still leave a message, when no natural greeting is available', async () => {
+  // No speech service on this server.
+  const plain = await fixture();
+  await plain.json('setBedsideLanguage', { language: 'zh-Hant' }, plain.bedside.credential, '123456');
+  const unset = await plain.voicemail();
+  assert.ok(english(unset.dialed.body, 'leaveMessage') && english(unset.dialed.body, 'noMessage'));
+  assert.ok(unset.dialed.body.includes('<Record ') && !unset.dialed.body.includes('<Play>'));
+  assert.ok(unset.recorded, 'the message is kept');
+  assert.ok(english((await plain.twilio('recorded', { CallSid: unset.callSid, To: porchNumber, RecordingDuration: '12' })).body, 'thanks'));
+
+  // This family keeps the built-in voice for their language.
+  const { spoken, synthesize } = speaker();
+  const builtIn = await fixture({ synthesize });
+  await builtIn.json('setBedsideLanguage', { language: 'zh-Hant' }, builtIn.bedside.credential, '123456');
+  await builtIn.json('setSpeechVoice', { language: 'zh-Hant', voiceID: null }, builtIn.bedside.credential, '123456');
+  assert.ok(english((await builtIn.voicemail()).dialed.body, 'leaveMessage'));
+  assert.deepEqual(spoken, []);
+
+  // The speech service fails.
+  const failing = await fixture({ synthesize: async () => { throw new Error('ElevenLabs is down.'); } });
+  const failed = await failing.voicemail();
+  assert.ok(english(failed.dialed.body, 'leaveMessage') && english(failed.dialed.body, 'noMessage') && !failed.dialed.body.includes('<Play>'), 'never half natural');
+  assert.ok(failed.recorded);
+  // Storage fails.
+  const storage = await fixture({ synthesize });
+  storage.media.failing = true;
+  assert.ok(english((await storage.twilio('dialed', { CallSid: sid('CA', 500), From: caller, To: porchNumber, DialCallStatus: 'busy' })).body, 'leaveMessage'));
+  // Today's allowance is spent.
+  const tired = await fixture({ synthesize });
+  const raw = JSON.parse(await tired.store.get(`house:${tired.bedside.state.householdID}`));
+  raw.speechUsage = { day: Math.floor(1_800_000_000 / day), characters: 4000 };
+  tired.store.values.set(`house:${raw.id}`, JSON.stringify(raw));
+  assert.ok(english((await tired.voicemail()).dialed.body, 'leaveMessage'));
+  // Callers who can't leave a message hear the apology too.
+  await tired.json('setMessages', { enabled: false }, tired.sam.credential, '123456');
+  assert.ok(english((await tired.voicemail()).dialed.body, 'unavailable'));
+});
+
+test('a greeting that is slow to record the first time is finished after the caller is answered', async () => {
+  let release, asked = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const f = await fixture({ synthesize: async () => { asked++; await pending; return new Uint8Array(2000); } });
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const dialed = f.twilio('dialed', { CallSid: sid('CA', 600), From: caller, To: porchNumber, DialCallStatus: 'no-answer' });
+    while (asked < 2) await new Promise(resolve => setImmediate(resolve));
+    mock.timers.tick(5000);
+    const { body } = await dialed;
+    assert.ok(english(body, 'leaveMessage') && body.includes('<Record '), 'Twilio\'s voice answers in time');
+  } finally { mock.timers.reset(); }
+  assert.equal(f.later.length, 1, 'the recording continues after the response');
+  release();
+  await f.later[0]();
+  const next = await f.twilio('dialed', { CallSid: sid('CA', 601), From: caller, To: porchNumber, DialCallStatus: 'no-answer' });
+  assert.equal(plays(next.body).length, 2, 'the next caller hears the natural voice');
+  assert.equal(asked, 2);
+});
+
+test('only the bedside reports its language, with the caregiver PIN', async () => {
+  const f = await fixture();
+  assert.equal((await f.send('setBedsideLanguage', { language: 'es' }, f.bedside.credential)).status, 403, 'PIN required');
+  assert.equal((await f.send('setBedsideLanguage', { language: 'es' }, f.bedside.credential, '000000')).status, 403, 'wrong PIN');
+  assert.equal((await f.send('setBedsideLanguage', { language: 'es' }, f.sam.credential, '123456')).status, 403, 'family caregivers don\'t choose it');
+  assert.equal((await f.send('setBedsideLanguage', { language: 'es' }, f.ethan.credential, '123456')).status, 403);
+  for (const language of ['fr', 'zh', '', null, 7]) assert.equal((await f.send('setBedsideLanguage', { language }, f.bedside.credential, '123456')).status, 400);
+  const saved = await f.json('setBedsideLanguage', { language: 'zh-Hans' }, f.bedside.credential, '123456');
+  assert.equal(saved.state.bedsideLanguage, 'zh-Hans');
+  assert.equal((await f.json('poll', { available: true }, f.bedside.credential)).state.bedsideLanguage, 'zh-Hans');
+  assert.equal((await f.json('poll', { available: true }, f.sam.credential)).state.bedsideLanguage, undefined, 'only the bedside sees it');
 });

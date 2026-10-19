@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { callRoom, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { bedsideLanguage, callRoom, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -51,7 +51,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto"];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto"];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 // `name` and `photoID` are what Porch shows. Caregiver screens and the member themselves also get the
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
@@ -85,7 +85,8 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false,
     // Family phones ring the bedside this long before offering voicemail.
     ringSeconds: ringSeconds(house),
-    ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [] } : {}),
+    // The bedside language as the server knows it, so the iPad can tell when to report a change.
+    ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], bedsideLanguage: bedsideLanguage(house) } : {}),
     // The bedside's natural announcement voices, when this server can make them.
     ...(me.role === "bedside" && speechConfigured() ? { speech: publicSpeech(house) } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
@@ -291,6 +292,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           `Choose a ringing time from ${ringLimits.minimum} to ${ringLimits.maximum} seconds.`);
         // A call that's already ringing keeps its deadline.
         house.ringSeconds = seconds;
+        return undefined;
+      }
+      if (action === "setBedsideLanguage") {
+        // Chosen on the iPad itself; the server keeps a copy so phone voicemail greets callers in it.
+        requireValue(me.role === "bedside", "Only the bedside can change its language.", 403);
+        requireValue(isBedsideLanguage(input.language), "Choose a bedside language.");
+        house.bedsideLanguage = input.language;
         return undefined;
       }
       if (action === "leaveHousehold") {

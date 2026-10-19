@@ -1,8 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { forwardedVerificationHeader, sipInboundCredentials, verifiedCaller, type InboundRoute } from "./inbound.ts";
-import { ringSeconds, type Household } from "./household.ts";
+import { bedsideLanguage, ringSeconds, type BedsideLanguage, type Household } from "./household.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { messageLimits, receivePhoneVoicemail, voicemailOpen } from "./messages.ts";
+import { speechClip, speechConfigured, speechVoice, type Synthesize } from "./speech.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 
 // Regular phone calls reach Porch through a Twilio voice webhook: Twilio dials LiveKit,
@@ -10,7 +11,8 @@ import { familyStore, type FamilyStore } from "./store.ts";
 // records the caller and tells this server, which stores the recording as a held voicemail.
 export type VoicemailStep = "incoming" | "dialed" | "recorded" | "recording";
 export type TwilioRecordings = { download(recordingSID: string): Promise<Uint8Array>; remove(recordingSID: string): Promise<void> };
-export type VoicemailDependencies = { store?: FamilyStore; media?: MediaStore; now?: () => number; recordings?: TwilioRecordings };
+/** `afterResponse` keeps work going once Twilio has its answer (Next's `after`). */
+export type VoicemailDependencies = { store?: FamilyStore; media?: MediaStore; now?: () => number; recordings?: TwilioRecordings; synthesize?: Synthesize; afterResponse?: (task: () => Promise<unknown>) => void };
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const callSIDPattern = /^CA[0-9a-f]{32}$/;
@@ -24,7 +26,64 @@ type Session = { householdID: string; callerNumber?: string; callerVerified?: bo
 const escape = (value: string) => value.replace(/[<>&"']/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c]!);
 const twiml = (body: string, status = 200) =>
   new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, { status, headers: { "Content-Type": "text/xml", "Cache-Control": "no-store" } });
-const say = (text: string) => `<Say language="en-US">${escape(text)}</Say>`;
+const say = (text: string) => `<Say language="en-US" voice="Google.en-US-Chirp3-HD-Aoede">${escape(text)}</Say>`;
+
+// What callers hear, in the bedside's language and the household's natural voice.
+// Twilio's own English voice reads the English whenever a natural greeting isn't available.
+type Greeting = "unavailable" | "leaveMessage" | "noMessage" | "thanks";
+export const greetings: Record<BedsideLanguage, Record<Greeting, string>> = {
+  en: {
+    unavailable: "Sorry, no one can answer right now. Please try again later. Goodbye.",
+    leaveMessage: "Sorry, no one can come to the phone right now. Please leave a message after the tone, then hang up.",
+    noMessage: "No message was recorded. Goodbye.",
+    thanks: "Thank you. Goodbye.",
+  },
+  "zh-Hant": {
+    unavailable: "抱歉，現在沒有人可以接聽。請稍後再打來。再見。",
+    leaveMessage: "抱歉，現在沒有人可以接電話。請在嗶聲後留言，說完直接掛斷就可以了。",
+    noMessage: "沒有錄到留言。再見。",
+    thanks: "謝謝您。再見。",
+  },
+  "zh-Hans": {
+    unavailable: "抱歉，现在没有人能接听。请稍后再打来。再见。",
+    leaveMessage: "抱歉，现在没有人能接电话。请在嘀声后留言，说完直接挂断就可以了。",
+    noMessage: "没有录到留言。再见。",
+    thanks: "谢谢您。再见。",
+  },
+  "yue-Hant": {
+    unavailable: "唔好意思，而家冇人可以接聽。請遲啲再打嚟。拜拜。",
+    leaveMessage: "唔好意思，而家冇人可以聽電話。請喺嘟一聲之後留言，講完收線就得。",
+    noMessage: "冇錄到留言。拜拜。",
+    thanks: "多謝您。拜拜。",
+  },
+  es: {
+    unavailable: "Lo sentimos, ahora mismo no hay nadie que pueda atender. Vuelva a llamar más tarde, por favor. Adiós.",
+    leaveMessage: "Lo sentimos, ahora mismo no hay nadie que pueda ponerse al teléfono. Deje su mensaje después de la señal y luego cuelgue.",
+    noMessage: "No se ha grabado ningún mensaje. Adiós.",
+    thanks: "Gracias. Adiós.",
+  },
+};
+// Twilio waits 15 seconds for an answer. A greeting heard for the first time is recorded meanwhile;
+// if it takes longer than this, the caller hears Twilio's voice and the next caller hears the natural one.
+const greetingSeconds = 5;
+type GreetingContext = { store: FamilyStore; media: () => MediaStore; now: number; synthesize?: Synthesize; afterResponse?: VoicemailDependencies["afterResponse"] };
+
+/** Each sentence in the household's natural voice, or every one in Twilio's English voice: never a mix. */
+async function greet(house: Household | undefined, sentences: Greeting[], { afterResponse, ...context }: GreetingContext): Promise<string[]> {
+  const fallback = sentences.map(sentence => say(greetings.en[sentence]));
+  const language = house && bedsideLanguage(house);
+  const voiceID = house && language && speechVoice(house, language);
+  if (!house || !language || !voiceID || !(context.synthesize || speechConfigured())) return fallback;
+  const clips = Promise.all(sentences.map(sentence => speechClip({ ...context, house }, voiceID, language, greetings[language][sentence], "phone")));
+  clips.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const ready = await Promise.race([clips, new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), greetingSeconds * 1000); })]);
+    if (ready) return ready.map(clip => `<Play>${escape(clip.url)}</Play>`);
+    afterResponse?.(() => clips.catch(() => undefined));
+  } catch { /* Not set up, over today's allowance, or the speech service or storage failed. */ } finally { clearTimeout(timer); }
+  return fallback;
+}
 
 function settings() {
   const { TWILIO_ACCOUNT_SID: accountSID, TWILIO_AUTH_TOKEN: authToken, LIVEKIT_SIP_URI: sipURI, LIVEKIT_API_SECRET: apiSecret } = process.env;
@@ -91,6 +150,9 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
   const origin = new URL(request.url).origin;
   const store = dependencies.store ?? familyStore();
   const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
+  let mediaStore = dependencies.media;
+  const media = () => mediaStore ??= blobMediaStore();
+  const voice: GreetingContext = { store, media, now, synthesize: dependencies.synthesize, afterResponse: dependencies.afterResponse };
   const callSID = params.get("CallSid") ?? "";
   const from = params.get("From") ?? "";
   const callerNumber = numberPattern.test(from) && !withheld.has(from) ? from : undefined;
@@ -116,19 +178,23 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       if (status === "completed" || status === "answered") return twiml("<Hangup/>");
       const house = await household(store, params.get("To"));
       const storage = !!dependencies.media || !!process.env.BLOB_READ_WRITE_TOKEN;
-      if (!house || !storage || !callSIDPattern.test(callSID) || !voicemailOpen(house, callerNumber, now)) return twiml(`${say("Sorry, no one can answer right now. Please try again later. Goodbye.")}<Hangup/>`);
+      if (!house || !storage || !callSIDPattern.test(callSID) || !voicemailOpen(house, callerNumber, now)) return twiml(`${(await greet(house, ["unavailable"], voice)).join("")}<Hangup/>`);
       const verified = params.get("StirVerstat") === verifiedCaller || !!await store.get(verifiedKey(callSID));
       const session: Session = { householdID: house.id, ...(callerNumber ? { callerNumber } : {}), ...(callerNumber && verified ? { callerVerified: true } : {}) };
       await store.create(sessionKey(callSID), JSON.stringify(session), 3600);
-      return twiml(`${say("Sorry, no one can come to the phone right now. Please leave a message after the tone, then hang up.")}` +
+      // Together, so a caller who says nothing hears the same voice say goodbye.
+      const [greeting, nothingRecorded] = await greet(house, ["leaveMessage", "noMessage"], voice);
+      return twiml(greeting +
         `<Record maxLength="120" timeout="5" playBeep="true" trim="trim-silence" finishOnKey="#" method="POST"` +
         ` action="${escape(`${origin}/api/calls/inbound/voice/recorded`)}"` +
         ` recordingStatusCallback="${escape(`${origin}/api/calls/inbound/voice/recording`)}" recordingStatusCallbackMethod="POST" recordingStatusCallbackEvent="completed absent"/>` +
-        `${say("No message was recorded. Goodbye.")}<Hangup/>`);
+        `${nothingRecorded}<Hangup/>`);
     }
     if (step === "recorded") {
       // Twilio reports how much was recorded; silence trims down to nothing.
-      return twiml(`${say(Number(params.get("RecordingDuration")) >= 1 ? "Thank you. Goodbye." : "No message was recorded. Goodbye.")}<Hangup/>`);
+      const house = await household(store, params.get("To"));
+      const [goodbye] = await greet(house, [Number(params.get("RecordingDuration")) >= 1 ? "thanks" : "noMessage"], voice);
+      return twiml(`${goodbye}<Hangup/>`);
     }
     // step === "recording": Twilio's recording status callback.
     const recordingSID = params.get("RecordingSid") ?? "";
@@ -139,7 +205,7 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
     if (raw && params.get("RecordingStatus") === "completed" && duration >= 1) {
       const session: Session = JSON.parse(raw);
       const audio = await recordings.download(recordingSID);
-      await receivePhoneVoicemail(store, dependencies.media ?? blobMediaStore(), session.householdID,
+      await receivePhoneVoicemail(store, media(), session.householdID,
         { id: voicemailMessageID(recordingSID), callerNumber: session.callerNumber, callerVerified: session.callerVerified, audio, durationSeconds: duration }, now);
     }
     // Porch keeps its own copy; nothing stays with the phone provider.
