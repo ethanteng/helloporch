@@ -11,7 +11,7 @@ value and its Debug auto-enable launch argument do not activate the normal app.
 ## Build and input boundaries
 
 The normal target compiles the tested owner, bridge and parser, embeds
-**PorchCell2JackCallsDriver** (build 6, ABI 2), and includes driver communication
+**PorchCell2JackCallsDriver** (ABI 2), and includes driver communication
 alongside its existing APNs entitlement. The driver identity remains
 `com.ethanteng.helloporch.usbdriver`, preserving the verified installed driver.
 The old experimental real-call target is a historical fixture, not required to
@@ -56,6 +56,9 @@ communication is an iPadOS facility.
 - Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
   disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.
+- Informational clock messages (empty person slot, call/camera key hints, and
+  no waiting messages) clear after five seconds. Each replacement gets its own
+  five seconds; leaving the clock or backgrounding clears the message.
 - Press a saved person's key to call them. Press the configured call-control key
   (currently **0**) to end the call, including while it is ringing. During the
   short interval while the request is starting, that key marks the request for
@@ -65,9 +68,10 @@ communication is an iPadOS facility.
   cancels the drop-in. Message/call-control keys can stop message playback.
 - Keep Porch open. Leaving the foreground stops logs with `/q`, closes the user
   client, invalidates pending callbacks, and cancels a pending outgoing request.
-  Returning reconnects when enabled. After a USB error/replug, use **Retry phone
-  connection** in Advanced, or leave and reopen Porch. Touch call controls remain
-  available when USB is disconnected.
+  Returning reconnects when enabled. Unexpected USB failures automatically retry
+  after 1, 2, 4, 8, then 15 seconds while Porch is active in bedside mode.
+  **Retry phone connection** in Advanced can retry immediately. Touch call
+  controls remain available when USB is disconnected.
 
 Pickup and handset hang-up events are never routed to app actions. The app's
 interface depends only on digit events. The current physical test uses an AT&T
@@ -97,6 +101,31 @@ records in `Documents/cell2jack-call-actions.json`. Build 14 also retains a
 most once every five seconds during normal polling and on cleanup. Diagnostic
 storage failure does not stop input. Health records report packet, byte, and
 primary-digit counts; input gate failures report their reason.
+
+The owner reconnects after unexpected failures only after the previous USB
+client has closed. Retries are cancelled when disabled, backgrounded, or leaving
+bedside mode. Backoff resets after 30 seconds of a responsive session; stale
+client completions cannot clear a replacement connection. Retry scheduling is
+recorded as `usbRetryScheduled`, without displaying diagnostics on the clock.
+
+The driver clears a stalled bulk endpoint with `ClearStall(true)` and retries
+the transfer at most once. Partial reads are retained; partially written serial
+commands are not replayed. Other failures return to the app for reconnection.
+The embedded driver's build number is `$(CURRENT_PROJECT_VERSION)`.
+`PorchCell2JackCallsDriver` follows `PORCH_BUILD_NUMBER`, the same number as
+the Porch app (currently 24), newer than the bedside's installed build 23.
+A command-line
+`CURRENT_PROJECT_VERSION` still overrides both. Reconnect the USB
+cable after installing an updated driver so iPadOS can start the new copy.
+
+Protocol tests exercise bounded stall clearing and partial-transfer behavior.
+`Cell2JackRoutingTests` also covers automatic retry, backoff, cancellation and
+late callbacks; the iPad CI job runs this suite. Recovery support belongs to the
+connection: an unavailable production platform never retries, while injected
+connections can exercise recovery on both the iPhone and family targets.
+The retry scheduler and monotonic clock are injectable so the backoff/reset tests
+run deterministically without timing margins or a 30-second wait. These use injected failures;
+physical unplug/replug and phone-key verification remain device checks.
 
 Routing chooses the current visible receiver; an unknown modal blocks routing
 instead of falling through to the clock. Transitioning screens and callbacks

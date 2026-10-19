@@ -4,9 +4,18 @@
 #include <USBDriverKit/IOUSBHostInterface.h>
 #include <USBDriverKit/USBDriverKitDefs.h>
 #include <USBDriverKit/IOUSBHostPipe.h>
+#include <USBDriverKit/IOUSBHostFamilyDefinitions.h>
 #include <USBDriverKit/AppleUSBDescriptorParsing.h>
 #include "PorchCell2JackDriver.h"
 #include "PorchCell2JackUserClient.h"
+#include "Cell2JackUSBRecovery.h"
+
+static kern_return_t TransferRecoveringStall(IOUSBHostPipe *pipe, IOBufferMemoryDescriptor *buffer,
+    uint32_t length, uint32_t *transferred, uint32_t timeout, bool reading) {
+    return PorchC2JTransferRecoveringStall(reading, *transferred, kUSBHostReturnPipeStalled,
+        [&] { return pipe->IO(buffer, length, transferred, timeout); },
+        [&] { return pipe->ClearStall(true); });
+}
 
 struct PorchCell2JackDriver_IVars {
     IOUSBHostInterface *interface;
@@ -138,7 +147,7 @@ kern_return_t PorchCell2JackDriver::ReadVersion(PorchC2JReply *reply) {
         bytes[0] = '/'; bytes[1] = 'v';
         status = buffer->SetLength(2);
         uint32_t transferred = 0;
-        if (status == kIOReturnSuccess) status = ivars->output->IO(buffer, 2, &transferred, 500);
+        if (status == kIOReturnSuccess) status = TransferRecoveringStall(ivars->output, buffer, 2, &transferred, 500, false);
         if (status == kIOReturnSuccess && transferred != 2) status = kIOReturnUnderrun;
     }
     if (status == kIOReturnSuccess) {
@@ -148,7 +157,7 @@ kern_return_t PorchCell2JackDriver::ReadVersion(PorchC2JReply *reply) {
             uint32_t transferred = 0;
             status = buffer->SetLength(ivars->packetSize);
             if (status != kIOReturnSuccess) break;
-            status = ivars->input->IO(buffer, ivars->packetSize, &transferred, 500);
+            status = TransferRecoveringStall(ivars->input, buffer, ivars->packetSize, &transferred, 500, true);
             if (transferred > ivars->packetSize) { status = kIOReturnOverrun; break; }
             auto available = PorchC2JMaxReply - reply->count;
             auto count = transferred < available ? transferred : available;
@@ -185,7 +194,7 @@ kern_return_t PorchCell2JackDriver::WriteCommand(char command) {
         bytes[0] = '/'; bytes[1] = command;
         uint32_t transferred = 0;
         status = buffer->SetLength(2);
-        if (status == kIOReturnSuccess) status = ivars->output->IO(buffer, 2, &transferred, 500);
+        if (status == kIOReturnSuccess) status = TransferRecoveringStall(ivars->output, buffer, 2, &transferred, 500, false);
         if (status == kIOReturnSuccess && transferred != 2) status = kIOReturnUnderrun;
     }
     buffer->release();
@@ -215,7 +224,7 @@ kern_return_t PorchCell2JackDriver::PollLogs(IOUserClient *owner, PorchC2JReply 
     if (status == kIOReturnSuccess) {
         uint32_t transferred = 0;
         status = buffer->SetLength(ivars->packetSize);
-        if (status == kIOReturnSuccess) status = ivars->input->IO(buffer, ivars->packetSize, &transferred, 250);
+        if (status == kIOReturnSuccess) status = TransferRecoveringStall(ivars->input, buffer, ivars->packetSize, &transferred, 250, true);
         if (transferred > ivars->packetSize) status = kIOReturnOverrun;
         else {
             memcpy(reply->bytes, reinterpret_cast<void *>(memory.address), transferred);

@@ -31,6 +31,7 @@ final class CallViewController: UIViewController {
     private var clockFont = UIFont.monospacedDigitSystemFont(ofSize: 360, weight: .regular)
     private let dateLabel = UILabel()
     private let statusLabel = UILabel()
+    private var statusTimer: Timer?
     private let caregiver = UIButton(type: .system)
     private let callButton = PorchStyle.button("Call someone", symbol: "phone.fill")
     /// A quiet notice when family messages are waiting; tapping it plays them.
@@ -151,6 +152,7 @@ final class CallViewController: UIViewController {
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.adjustsFontForContentSizeCategory = true
+        statusLabel.accessibilityIdentifier = "clock.feedback"
         var messageConfig = messagesButton.configuration!
         messageConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(26, weight: .semibold); return attributes
@@ -218,7 +220,7 @@ final class CallViewController: UIViewController {
         updateDisplay(); resetClock()
     }
 
-    deinit { phoneKeypadStatusTimer?.invalidate(); clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
+    deinit { statusTimer?.invalidate(); phoneKeypadStatusTimer?.invalidate(); clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -263,6 +265,7 @@ final class CallViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         clockTimer?.invalidate(); clockTimer = nil
+        displayStatus(nil)
         // The present that covered us already waited for the camera. A removal just stops it.
         presence.stop()
         notice?.end(); notice = nil
@@ -314,7 +317,7 @@ final class CallViewController: UIViewController {
         // from a caregiver's text field or from an active call.
         guard isViewLoaded, presentedViewController == nil else { return }
         updateDisplay()
-        statusLabel.text = nil
+        displayStatus(nil)
         refreshCallButton()
         resetClock()
         if clockTimer == nil {
@@ -328,6 +331,7 @@ final class CallViewController: UIViewController {
     }
 
     func pause() {
+        displayStatus(nil)
         // Leaving the foreground. Stopping the camera waits on its own queue so this can return.
         presence.stop()
         notice?.end(); notice = nil
@@ -376,7 +380,8 @@ final class CallViewController: UIViewController {
                 callButton.configuration = config
                 messagesButton.configuration?.baseBackgroundColor = config.baseBackgroundColor
                 messagesButton.configuration?.baseForegroundColor = config.baseForegroundColor
-                statusLabel.textColor = palette.controlForeground; statusLabel.backgroundColor = palette.controlBackground
+                statusLabel.textColor = palette.controlForeground
+                statusLabel.backgroundColor = config.baseBackgroundColor
                 statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
                 appliedDisplayStyle = style
             }
@@ -439,8 +444,8 @@ final class CallViewController: UIViewController {
     @objc private func playMessages() {
         guard !presenceSuppressed, presentedViewController == nil, !opening, view.window?.windowScene?.activationState == .foregroundActive else { return }
         let ready = BedsideMessages.shared.ready
-        guard !ready.isEmpty else { statusLabel.text = BedsideText.string("No new messages."); return }
-        statusLabel.text = nil
+        guard !ready.isEmpty else { displayStatus(BedsideText.string("No new messages."), temporary: true); return }
+        displayStatus(nil)
         let player = MessagePlayerViewController(messages: ready, slots: slots)
         player.onFinish = { [weak self, weak player] in
             // Stop leaves what was already waiting. A message that arrived during playback still
@@ -515,7 +520,7 @@ final class CallViewController: UIViewController {
     }
     @objc private func restyleDisplay() { appliedDisplayStyle = nil; updateClock() }
     @objc private func reloadSlots() {
-        do { slots = try CallSlots.load() } catch { statusLabel.text = error.localizedDescription }
+        do { slots = try CallSlots.load() } catch { displayStatus(error.localizedDescription) }
     }
     private func refreshCallButton() { callButton.isEnabled = !opening }
 
@@ -561,17 +566,32 @@ final class CallViewController: UIViewController {
               view.window?.windowScene?.activationState == .foregroundActive else { return }
         if slots.action(for: slot) == .messages { playMessages(); return }
         guard slots.action(for: slot) == .person else {
-            statusLabel.text = BedsideText.string(slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call.")
+            displayStatus(BedsideText.string(slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call."), temporary: true)
             return
         }
         guard let contact = slots.contact(for: slot) else {
-            statusLabel.text = BedsideText.string("No one is assigned to %d.\nPlease choose another number.", slot)
+            displayStatus(BedsideText.string("No one is assigned to %d.\nPlease choose another number.", slot), temporary: true)
             return
         }
         guard let native = contact.nativeCall else {
             showError("Finish Porch setup", message: "Open caregiver mode and invite this person to Porch or add their phone number."); return
         }
         startFamilyCall(contact, memberID: contact.familyMemberID, mode: native.mode)
+    }
+
+    private func displayStatus(_ text: String?, temporary: Bool = false) {
+        statusTimer?.invalidate(); statusTimer = nil
+        statusLabel.text = text
+        guard temporary, text != nil else { return }
+        statusLabel.accessibilityLanguage = BedsideText.language.speechLanguage
+        UIAccessibility.post(notification: .announcement, argument: text)
+        let timer = Timer(timeInterval: 5, repeats: false) { [weak self] timer in
+            guard let self, self.statusTimer === timer else { return }
+            self.statusLabel.text = nil
+            self.statusTimer = nil
+        }
+        statusTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func startFamilyCall(_ contact: CallContact, memberID: String?, mode: NativeCall.Mode) {
@@ -812,7 +832,7 @@ extension CallViewController: Cell2JackDigitReceiving {
         if opening {
             if slots.action(for: digit) == .callControl {
                 cancelOpening = true
-                statusLabel.text = BedsideText.string("Ending call…")
+                displayStatus(BedsideText.string("Ending call…"))
                 return "cancel pending call requested"
             }
             return "call already opening"
