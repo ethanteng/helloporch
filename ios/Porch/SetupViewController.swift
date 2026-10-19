@@ -307,8 +307,12 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
                 button.setContentHuggingPriority(.required, for: .horizontal)
                 button.setContentCompressionResistancePriority(.required, for: .horizontal)
             }
-            let row = UIStackView(arrangedSubviews: [label, primary, remove])
-            row.alignment = .center; row.spacing = 8
+            let actions = UIStackView(arrangedSubviews: [primary, remove])
+            actions.spacing = 8
+            // Not one stack: it would cap the number and the buttons at an equal share of the row, and
+            // keeping the buttons at their width would squeeze the whole form on iPad.
+            let row = listRow(label, trailing: actions)
+            row.directionalLayoutMargins = .zero
             otherNumbersList.addArrangedSubview(row)
         }
     }

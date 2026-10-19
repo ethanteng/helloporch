@@ -774,6 +774,32 @@ final class CaregiverInputTests: XCTestCase {
     }
 
 
+    @MainActor func testContactEditorWithOtherNumbersKeepsFullWidthAndControlsAtTheirSize() throws {
+        let person = try CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .voice), phoneNumber: "+14155550123", otherPhoneNumbers: ["+14155550199"])
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        func all(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(all) }
+        for size in [CGSize(width: 834, height: 1210), CGSize(width: 1210, height: 834), CGSize(width: 402, height: 874)] {
+            let editor = SetupViewController(slot: 1, contact: person)
+            let window = UIWindow(windowScene: scene)
+            window.frame = CGRect(origin: .zero, size: size)
+            window.rootViewController = PorchStyle.navigation(editor)
+            window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            // Drop-in by phone shows only on a paired bedside.
+            for view in all(editor.view) where view.isHidden && all(view).contains(where: { $0.accessibilityLabel == "Audio drop-in when they call this Porch" }) { view.isHidden = false }
+            window.layoutIfNeeded()
+            XCTAssertEqual(editor.form.bounds.width, min(760, size.width - 48), "The other numbers must not squeeze the form at \(size)")
+            let controls = all(editor.form).filter { $0 is UISwitch || ["Make primary", "Remove"].contains(($0 as? UIButton)?.configuration?.title) }
+            XCTAssertEqual(controls.count, 4)
+            for control in controls {
+                let frame = control.convert(control.bounds, to: editor.form)
+                XCTAssertGreaterThanOrEqual(frame.width, control.intrinsicContentSize.width, "\(control.accessibilityLabel ?? "") is squeezed at \(size)")
+                XCTAssertGreaterThanOrEqual(frame.minX, 0)
+                XCTAssertLessThanOrEqual(frame.maxX, editor.form.bounds.width, "\(control.accessibilityLabel ?? "") leaves its card at \(size)")
+            }
+        }
+    }
+
     @MainActor func testContactEditorOnlyOffersPorchDetailsAndPhoneFallback() {
         let editor = SetupViewController(slot: 1, contact: nil)
         editor.loadViewIfNeeded()
