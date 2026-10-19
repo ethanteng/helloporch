@@ -205,6 +205,8 @@ struct FamilyCallSession {
     }
     func pause() {
         isActive = false; task?.cancel(); task = nil; generation = UUID()
+        // An in-flight keypad report belongs to the session that started it.
+        reportingKeypad = false; keypadRetry = nil
         if let credential {
             Task { _ = try? await FamilyService(credential).send("poll", ["available": false]) }
         }
@@ -238,16 +240,22 @@ struct FamilyCallSession {
         let pin = NativeCallSettings.caregiverCode
         guard !pin.isEmpty else { return }
         reportingKeypad = true
+        let generation = self.generation
+        let credentialID = credential.credential
         Task { [weak self] in
             do {
                 let response = try await FamilyService(credential).send("setKeypadNumbers", ["numbers": numbers], pin: pin)
-                self?.keypadRetry = nil; self?.reportingKeypad = false
-                self?.update(response)
+                // Leaving bedside mode, or pairing a different household, starts a new session. Its snapshot
+                // must not be replaced by this one, and its own report must not be cancelled.
+                guard let self, self.generation == generation, self.credential?.credential == credentialID else { return }
+                self.keypadRetry = nil; self.reportingKeypad = false
+                self.update(response)
             } catch {
+                guard let self, self.generation == generation, self.credential?.credential == credentialID else { return }
                 // A wrong PIN or a lockout waits longer, so retries can't use up the caregivers' PIN attempts.
                 let status = (error as? FamilyServiceError)?.status
-                self?.keypadRetry = (numbers, Date().addingTimeInterval(status == 403 || status == 429 ? 600 : 30))
-                self?.reportingKeypad = false
+                self.keypadRetry = (numbers, Date().addingTimeInterval(status == 403 || status == 429 ? 600 : 30))
+                self.reportingKeypad = false
             }
         }
     }
