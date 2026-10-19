@@ -254,8 +254,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         let saved = original ?? session.peerContact ?? FamilyCoordinator.shared.state.flatMap { state in
             ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: session.call, in: state)
         }
+        // Someone without a keypad number still shows the photo Porch has for them.
+        let photo = saved?.photoData ?? (session.credential.role == .bedside && session.call.source != "phone" ? FamilyPhotos.shared.photo(forMember: session.peerID) : nil)
         let contact = try CallContact(name: session.peerName, nativeCall: call, phoneNumber: session.call.source == "phone" ? nil : saved?.phoneNumber,
-            buttonColorHex: saved?.buttonColorHex, photoData: saved?.photoData)
+            buttonColorHex: saved?.buttonColorHex, photoData: photo)
         let server = try NativeCallServer(url: session.credential.origin.absoluteString, accessCode: session.credential.credential)
         let controller = NativeCallViewController(contact: contact, call: call, server: server)
         controller.familySession = session

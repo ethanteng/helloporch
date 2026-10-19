@@ -5,9 +5,23 @@ public struct DropInPermissions: Codable, Equatable {
     public var audio: Bool
     public var video: Bool
 }
+/// A family member's name and photo, as they chose them or as a caregiver chose them for them.
+public struct FamilyProfile: Codable, Equatable {
+    public let name: String?
+    /// The SHA-256 of the photo's JPEG bytes.
+    public let photoID: String?
+    public init(name: String? = nil, photoID: String? = nil) { self.name = name; self.photoID = photoID }
+}
 public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let id: String
+    /// What Porch shows: a caregiver's choice first, then the family member's own, then the invitation's name.
     public let name: String
+    /// The photo Porch shows (the SHA-256 of its JPEG), a caregiver's or the member's own. Older servers don't send it.
+    public let photoID: String?
+    /// Caregiver screens and the member's own snapshot: the parts behind `name` and `photoID`.
+    public let invitedName: String?
+    public let profile: FamilyProfile?
+    public let override: FamilyProfile?
     public let role: PorchExperience
     public let permissions: DropInPermissions
     public let canReceiveCalls: Bool?

@@ -5,7 +5,14 @@ import type { VoIPRegistration } from "./push.ts";
 export type Role = "bedside" | "family";
 export type Mode = "voice" | "video";
 export type Permissions = { audio: boolean; video: boolean };
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean };
+/** A JPEG in the private media store. `id` is the SHA-256 of its bytes, which devices check after downloading. */
+export type ProfilePhoto = { id: string; pathname: string };
+/** How a family member appears on Porch: the name and photo they chose, or ones a caregiver chose for them. */
+export type Profile = { name?: string; photo?: ProfilePhoto };
+/** A photo upload the server signed that hasn't been saved yet; deleted once `expiresAt` passes. */
+export type PendingPhoto = { pathname: string; expiresAt: number };
+/** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's. */
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone };
 export type MessageKind = "message" | "voicemail";
@@ -23,6 +30,11 @@ export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
 export function requireValue(condition: unknown, message: string, status = 400): asserts condition { if (!condition) throw new FamilyError(message, status); }
+// A caregiver's choice comes first, then the member's own, then the invitation's name.
+export function displayName(member: Member): string { return member.override?.name ?? member.profile?.name ?? member.name; }
+export function displayPhoto(member: Member): ProfilePhoto | undefined { return member.override?.photo ?? member.profile?.photo; }
+// The bedside device is always a caregiver; family devices need the caregiver's approval (and the PIN).
+export function isCaregiver(member: Member) { return member.role === "bedside" || member.caregiver === true; }
 export function config(): CallServer {
   const { LIVEKIT_URL: serverUrl, LIVEKIT_API_KEY: apiKey, LIVEKIT_API_SECRET: apiSecret } = process.env;
   requireValue(serverUrl?.startsWith("wss://") && apiKey && apiSecret, "Calling is not configured.", 503);

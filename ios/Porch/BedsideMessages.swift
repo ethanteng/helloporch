@@ -285,8 +285,10 @@ final class MessagePlayerViewController: UIViewController {
         detailLabel.text = BedsideText.string("Sent %@", sent)
         banner.text = "\(nameLabel.text ?? "") · \(detailLabel.text ?? "")"
         identity.arrangedSubviews.forEach { identity.removeArrangedSubview($0); $0.removeFromSuperview() }
-        if RecipientAppearance.photo(contact?.photoData) != nil {
-            photo = RecipientAppearance.photoView(contact?.photoData)
+        // Someone without a keypad number still shows the photo Porch has for them.
+        let photoData = contact?.photoData ?? (message.fromPhone ? nil : FamilyPhotos.shared.photo(forMember: message.from))
+        if RecipientAppearance.photo(photoData) != nil {
+            photo = RecipientAppearance.photoView(photoData)
             photo.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([photo.widthAnchor.constraint(equalToConstant: 240), photo.heightAnchor.constraint(equalToConstant: 240)])
             identity.addArrangedSubview(photo)

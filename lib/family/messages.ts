@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { FamilyError, mutate, requireValue, type Household, type InboxEntry, type Member, type MessageKind, type MessageMode } from "./household.ts";
+import { displayName, FamilyError, mutate, requireValue, type Household, type InboxEntry, type Member, type MessageKind, type MessageMode } from "./household.ts";
 import type { MediaStore } from "./media.ts";
 import type { FamilyStore } from "./store.ts";
 
@@ -35,9 +35,10 @@ export function publicRecord(record: MessageRecord, now: number) {
   return stale(record, now) ? { ...rest, state: "failed" as const, replayable: false } : { ...rest, replayable: replayable(record, now) };
 }
 export function publicInbox(house: Household, now: number) {
-  return (house.inbox ?? []).filter(entry => live(entry, now)).map(({ pathname: _pathname, deliveredAt, held, ...entry }) => ({
-    ...entry, fromName: house.members.find(m => m.id === entry.from && !m.revoked)?.name ?? entry.fromName, delivered: deliveredAt !== undefined, held: held === true,
-  }));
+  return (house.inbox ?? []).filter(entry => live(entry, now)).map(({ pathname: _pathname, deliveredAt, held, ...entry }) => {
+    const sender = house.members.find(m => m.id === entry.from && !m.revoked);
+    return { ...entry, fromName: sender ? displayName(sender) : entry.fromName, delivered: deliveredAt !== undefined, held: held === true };
+  });
 }
 /** Phone voicemails waiting for a caregiver; approved caregivers see the count on their phones. */
 export const heldCount = (house: Household, now: number) => (house.inbox ?? []).filter(entry => entry.held && live(entry, now)).length;
@@ -83,6 +84,14 @@ async function schedulePurge(store: FamilyStore, householdID: string, pathnames:
   await update(store, purgeKey(householdID), () => ({ items: [] as { pathname: string; at: number }[] }), doc => {
     for (const pathname of pathnames) if (!doc.items.some(item => item.pathname === pathname)) doc.items.push({ pathname, at });
   });
+}
+
+/** Deletes media no longer needed, or leaves it for the bedside's purge pass if storage can't be reached. */
+export async function discardMedia(store: FamilyStore, media: () => MediaStore, householdID: string, pathnames: string[], now: number) {
+  if (!pathnames.length) return;
+  try { await media().remove(pathnames); return; } catch { /* the purge pass retries */ }
+  await schedulePurge(store, householdID, pathnames, now);
+  await mutate(store, householdID, house => { house.purgeAt = Math.min(house.purgeAt ?? now, now); });
 }
 
 // The sender's record changes first, then the shared queue; a retry finishes whatever is left.
@@ -235,7 +244,7 @@ export async function handleMessageAction(action: string, { store, media, now, h
       // The bedside's limit is per family member: one who never opens Porch doesn't block messages for the others.
       const waiting = recipient ? records.filter(r => r.to === recipient.id && (r.state === "uploading" || (r.state === "queued" && kept(r, now))))
         : records.filter(r => r.state === "uploading" || r.state === "queued");
-      requireValue(waiting.length < messageLimits.pendingPerSender, recipient ? `${recipient.name} has 10 messages they haven't played yet.` : "You have 10 messages waiting. Send more once some are played.", 409);
+      requireValue(waiting.length < messageLimits.pendingPerSender, recipient ? `${displayName(recipient)} has 10 messages they haven't played yet.` : "You have 10 messages waiting. Send more once some are played.", 409);
       records.push(record);
       return abandoned.map(r => r.pathname);
     });
@@ -285,7 +294,7 @@ export async function handleMessageAction(action: string, { store, media, now, h
       current.inbox ??= [];
       if (current.inbox.some(entry => entry.id === id)) return;
       requireValue(current.inbox.length < messageLimits.inbox, "This Porch has 30 messages waiting. Try again after some are played.", 409);
-      current.inbox.push({ id, from: me.id, fromName: me.name, kind: record.kind, mode: record.mode, contentType: record.contentType, pathname: record.pathname, durationSeconds: record.durationSeconds, sentAt: now });
+      current.inbox.push({ id, from: me.id, fromName: displayName(me), kind: record.kind, mode: record.mode, contentType: record.contentType, pathname: record.pathname, durationSeconds: record.durationSeconds, sentAt: now });
     });
     const sent = await updateSent(store, house.id, me.id, records => {
       const r = records.find(r => r.id === id)!;

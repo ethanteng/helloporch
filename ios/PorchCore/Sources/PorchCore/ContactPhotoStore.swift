@@ -9,6 +9,11 @@ public struct ContactPhotoStore: Equatable {
     public static let standard = ContactPhotoStore(directoryURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Porch/ContactPhotos", isDirectory: true))
     static let codingKey = CodingUserInfoKey(rawValue: "porch.contactPhotoStore")!
+    /// Paired family members' own photos, downloaded from Porch. A separate folder, so saving the
+    /// keypad never prunes them.
+    public var familyMembers: ContactPhotoStore { ContactPhotoStore(directoryURL: directoryURL.appendingPathComponent("Family", isDirectory: true)) }
+    /// A photo's identifier: the SHA-256 of its bytes, which Porch also uses for family members' photos.
+    public static func id(for data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
     static func validID(_ id: String) -> Bool {
         id.count == 64 && id.allSatisfy { ("0"..."9").contains($0) || ("a"..."f").contains($0) }
@@ -20,6 +25,13 @@ public struct ContactPhotoStore: Equatable {
               size > 0, size <= 1_000_000,
               let data = try? Data(contentsOf: url(for: id)), data.count <= 1_000_000 else { return nil }
         return data
+    }
+    /// Whether a photo is saved, without reading it.
+    public func contains(_ id: String) -> Bool { Self.validID(id) && FileManager.default.fileExists(atPath: url(for: id).path) }
+    /// Saves a photo under its content identifier.
+    public func add(_ data: Data) throws {
+        guard !data.isEmpty, data.count <= 1_000_000 else { throw CallContact.ValidationError.invalidAppearance }
+        try save(data, id: Self.id(for: data))
     }
     func save(_ data: Data, id: String) throws {
         guard Self.validID(id) else { throw CallContact.ValidationError.invalidAppearance }
@@ -33,7 +45,7 @@ public struct ContactPhotoStore: Equatable {
 
     /// Keep recently written files available to in-flight edits. Prune old,
     /// unreferenced files only after a successful settings save.
-    func prune(keeping ids: Set<String>, olderThan cutoff: Date = Date().addingTimeInterval(-86_400)) {
+    public func prune(keeping ids: Set<String>, olderThan cutoff: Date = Date().addingTimeInterval(-86_400)) {
         guard let files = try? FileManager.default.contentsOfDirectory(at: directoryURL,
             includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
         for file in files where file.pathExtension == "jpg" {
@@ -54,7 +66,7 @@ struct ContactPhoto: Equatable {
 
     init(data: Data, store: ContactPhotoStore = .standard) throws {
         guard !data.isEmpty, data.count <= 1_000_000 else { throw CallContact.ValidationError.invalidAppearance }
-        id = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        id = ContactPhotoStore.id(for: data)
         inlineData = data; self.store = store
     }
     init(id: String, store: ContactPhotoStore) throws {

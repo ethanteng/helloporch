@@ -1,7 +1,14 @@
 import Foundation
 
 public struct CallContact: Codable, Equatable {
-    public let name: String
+    /// The name the caregiver typed. Empty for a Porch contact that goes by its family member's name.
+    public let customName: String
+    /// What Porch shows and speaks: the caregiver's name, or else the paired family member's.
+    public var name: String { customName.isEmpty ? memberName ?? "" : customName }
+    /// The paired family member's name and photo as Porch shows them: their own, or what a caregiver chose
+    /// for them. `CallSlots.reconcile` keeps these current; the caregiver's keypad name and photo come first.
+    public private(set) var memberName: String?
+    private var memberPhoto: ContactPhoto?
     public let address: String
     public let shortcutName: String?
     public let nativeCall: NativeCall?
@@ -10,14 +17,25 @@ public struct CallContact: Codable, Equatable {
     public let invitationID: String?
     public let buttonColorHex: String?
     private var photo: ContactPhoto?
+    /// The keypad photo the caregiver chose.
     public var photoID: String? { photo?.id }
-    public var photoData: Data? { photo?.data }
+    public var customPhotoData: Data? { photo?.data }
+    public var memberPhotoID: String? { memberPhoto?.id }
+    /// What Porch shows: the caregiver's keypad photo, or else the family member's.
+    public var photoData: Data? { photo?.data ?? memberPhoto?.data }
     var hasInlinePhoto: Bool { photo?.inlineData != nil }
 
     // Metadata validation and pairing must preserve the reference without
     // reading the image file on the main actor.
     func preservingPhoto(from original: Self) -> Self {
-        var result = self; result.photo = original.photo; return result
+        var result = self; result.photo = original.photo; result.memberPhoto = original.memberPhoto; return result
+    }
+    /// The same contact showing its family member's current name and photo, which must be in `photos`.
+    func showingMember(name: String?, photoID: String?, photos: ContactPhotoStore) -> Self {
+        var result = self
+        result.memberName = name
+        result.memberPhoto = photoID.flatMap { try? ContactPhoto(id: $0, store: photos) }
+        return result
     }
 
     public init(name: String, address: String = "", shortcutName: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
@@ -27,6 +45,7 @@ public struct CallContact: Codable, Equatable {
         self.invitationID = nil
         self.nativeCall = nil
         self.phoneNumber = nil
+        self.memberName = nil
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
@@ -34,7 +53,7 @@ public struct CallContact: Codable, Equatable {
         if let shortcutName {
             let shortcutName = shortcutName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !shortcutName.isEmpty else { throw ValidationError.missingShortcutName }
-            self.name = name
+            self.customName = name
             self.address = ""
             self.shortcutName = shortcutName
             return
@@ -60,21 +79,24 @@ public struct CallContact: Codable, Equatable {
             }
             self.address = normalized
         }
-        self.name = name
+        self.customName = name
         self.shortcutName = nil
     }
 
-    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
+    /// `name` may be empty for a family member invited or paired with Porch, who then goes by `memberName`.
+    public init(name: String, nativeCall: NativeCall, phoneNumber: String? = nil, familyMemberID: String? = nil, invitationID: String? = nil, memberName: String? = nil, buttonColorHex: String? = nil, photoData: Data? = nil) throws {
         self.buttonColorHex = try Self.validatedColor(buttonColorHex)
         self.photo = try photoData.map { try ContactPhoto(data: $0) }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw ValidationError.missingName }
+        let memberName = memberName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.memberName = memberName?.isEmpty == false ? memberName : nil
+        guard !name.isEmpty || (self.memberName != nil && (familyMemberID != nil || invitationID != nil)) else { throw ValidationError.missingName }
         guard name.count <= 80 else { throw ValidationError.nameTooLong }
         if let familyMemberID, UUID(uuidString: familyMemberID) == nil { throw ValidationError.invalidFamilyMember }
         if let invitationID, UUID(uuidString: invitationID) == nil { throw ValidationError.invalidFamilyMember }
         self.invitationID = invitationID
         self.familyMemberID = familyMemberID
-        self.name = name
+        self.customName = name
         self.address = ""
         self.shortcutName = nil
         self.nativeCall = try NativeCall(room: nativeCall.room, mode: nativeCall.mode)
@@ -88,11 +110,14 @@ public struct CallContact: Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, address, shortcutName, nativeCall, phoneNumber, familyMemberID, invitationID, buttonColorHex, photoID, photoData
+        case name, customName, memberName, memberPhotoID, address, shortcutName, nativeCall, phoneNumber, familyMemberID, invitationID, buttonColorHex, photoID, photoData
     }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        name = try values.decode(String.self, forKey: .name)
+        let shown = try values.decode(String.self, forKey: .name)
+        // Earlier records have only `name`, which was always the caregiver's.
+        customName = try values.decodeIfPresent(String.self, forKey: .customName) ?? shown
+        memberName = try values.decodeIfPresent(String.self, forKey: .memberName)
         address = try values.decode(String.self, forKey: .address)
         shortcutName = try values.decodeIfPresent(String.self, forKey: .shortcutName)
         nativeCall = try values.decodeIfPresent(NativeCall.self, forKey: .nativeCall)
@@ -107,12 +132,17 @@ public struct CallContact: Codable, Equatable {
         } else if let id = try values.decodeIfPresent(String.self, forKey: .photoID) {
             photo = try ContactPhoto(id: id, store: store)
         }
+        memberPhoto = try values.decodeIfPresent(String.self, forKey: .memberPhotoID).flatMap { try? ContactPhoto(id: $0, store: store.familyMembers) }
     }
     public func encode(to encoder: Encoder) throws {
         let store = encoder.userInfo[ContactPhotoStore.codingKey] as? ContactPhotoStore ?? photo?.store ?? .standard
         try photo?.persist(to: store)
         var values = encoder.container(keyedBy: CodingKeys.self)
+        // `name` is what Porch shows, so an earlier build reading these settings still has a name for everyone.
         try values.encode(name, forKey: .name)
+        try values.encode(customName, forKey: .customName)
+        try values.encodeIfPresent(memberName, forKey: .memberName)
+        try values.encodeIfPresent(memberPhoto?.id, forKey: .memberPhotoID)
         try values.encode(address, forKey: .address)
         try values.encodeIfPresent(shortcutName, forKey: .shortcutName)
         try values.encodeIfPresent(nativeCall, forKey: .nativeCall)

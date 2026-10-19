@@ -45,7 +45,7 @@
 		</dict>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Porch uses the camera for video calls and video messages with your people. Voice calls keep the camera off. If a caregiver turns it on, the bedside Porch also notices someone in front of it to play waiting messages; nothing is recorded or sent.</string>
+	<string>Porch uses the camera for video calls and video messages with your people, and to take your profile photo if you choose. Voice calls keep the camera off. If a caregiver turns it on, the bedside Porch also notices someone in front of it to play waiting messages; nothing is recorded or sent.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Porch uses the microphone so you can talk with your people and record messages for them.</string>
 	<key>UIApplicationSceneManifest</key>
