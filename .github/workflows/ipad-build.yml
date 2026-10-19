@@ -2,6 +2,7 @@ name: iPhone and iPad build
 
 on:
   push:
+    branches: [main]
     paths: ['ios/**', '.github/workflows/ipad-build.yml']
   pull_request:
     paths: ['ios/**', '.github/workflows/ipad-build.yml']
@@ -14,51 +15,53 @@ concurrency:
   group: ipad-build-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
+# The jobs run in parallel. Each simulator job starts booting its simulator
+# right after checkout, because a first boot takes minutes on a fresh runner,
+# and builds its scheme once for arm64 with build-for-testing so the test runs
+# do not recompile anything.
+#
+# DriverKit extensions cannot run in Simulator and require development
+# certificates. SimulatorCI.xcconfig keeps the app/tests ad-hoc signed, but
+# does not sign the driver-only SDK dependency on this certificate-free runner.
 jobs:
-  build:
+  ipad:
+    name: iPad tests and screenshots
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Check Xcode
-        run: xcodebuild -version
-      - name: Test contact validation and keypad handling
-        run: swift test --package-path ios/PorchCore
-      - name: Test Cell2Jack protocol, preview, and distribution checks
-        run: |
-          bash ios/scripts/test-cell2jack.sh
-          python3 ios/scripts/check-keypad-preview.py
-          python3 -m unittest discover -s ios/scripts -p test_distribution_profiles.py
-          python3 ios/scripts/check-build-variants.py
-      # DriverKit extensions cannot run in Simulator and require development
-      # certificates. Keep the app/tests ad-hoc signed, but do not sign the
-      # driver-only SDK dependency on this certificate-free CI runner.
-      - name: Build universal simulator app
-        run: >-
-          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
-          -configuration Debug -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath ios/build/simulator -xcconfig ios/SimulatorCI.xcconfig build
-      - name: Build release app for iPhone and iPad
-        run: >-
-          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
-          -configuration Release -destination 'generic/platform=iOS'
-          -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
-      - name: Test caregiver keyboard and focus on an iPad simulator
-        shell: bash
+      - name: Start booting an iPad simulator
         run: |
           device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPad" in d["name"]))')"
           echo "PORCH_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
-          xcrun simctl boot "$device_id"
-          xcrun simctl bootstatus "$device_id" -b
-          xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
-            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
-            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES -xcconfig ios/SimulatorCI.xcconfig test
+          xcrun simctl boot "$device_id" > "$RUNNER_TEMP/simulator-boot.log" 2>&1 &
+      - name: Check Xcode
+        run: xcodebuild -version
+      - name: Build the app and tests for an arm64 simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/build/simulator -xcconfig ios/SimulatorCI.xcconfig
+          ARCHS=arm64 build-for-testing
+      - name: Build Cell2Jack routing tests for an arm64 simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme PorchCell2JackCalls
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/build/simulator -xcconfig ios/SimulatorCI.xcconfig
+          ARCHS=arm64 build-for-testing
+      - name: Wait for the iPad simulator
+        run: xcrun simctl bootstatus "$PORCH_SIMULATOR_ID" -b
+      - name: Test caregiver keyboard and focus on an iPad simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
+          -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
       - name: Test Cell2Jack routing and automatic USB recovery
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme PorchCell2JackCalls -configuration Debug
           -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
-          -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES -xcconfig ios/SimulatorCI.xcconfig
-          -only-testing:Cell2JackCallsTests/Cell2JackRoutingTests test
+          -parallel-testing-enabled NO -collect-test-diagnostics never
+          -only-testing:Cell2JackCallsTests/Cell2JackRoutingTests test-without-building
       - name: Launch on an iPad simulator and capture the screens
         timeout-minutes: 10
         shell: bash
@@ -85,16 +88,45 @@ jobs:
           name: Porch-iPad-screenshots
           path: ios/build/screenshots/*.png
           retention-days: 7
+      - name: Save simulator app for local testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: Porch-simulator
+          path: ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
+          retention-days: 7
+  iphone:
+    name: iPhone tests and screenshot
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start booting an iPhone simulator
+        run: |
+          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPhone" in d["name"]))')"
+          echo "PORCH_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device_id" > "$RUNNER_TEMP/simulator-boot.log" 2>&1 &
+      - name: Check Xcode
+        run: xcodebuild -version
+      - name: Build the app and tests for an arm64 simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/build/simulator -xcconfig ios/SimulatorCI.xcconfig
+          ARCHS=arm64 build-for-testing
+      - name: Wait for the iPhone simulator
+        run: xcrun simctl bootstatus "$PORCH_SIMULATOR_ID" -b
       - name: Test layouts and keyboard on an iPhone simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
+          -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
+      - name: Launch on an iPhone simulator and capture the screen
+        timeout-minutes: 10
         shell: bash
         run: |
-          xcrun simctl shutdown "$PORCH_SIMULATOR_ID"
-          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPhone" in d["name"]))')"
-          xcrun simctl boot "$device_id"
-          xcrun simctl bootstatus "$device_id" -b
-          xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
-            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
-            -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES -xcconfig ios/SimulatorCI.xcconfig test
+          device_id="$PORCH_SIMULATOR_ID"
+          xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
+          mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png
       - name: Save the iPhone screenshot
         uses: actions/upload-artifact@v4
@@ -102,33 +134,60 @@ jobs:
           name: Porch-iPhone-screenshot
           path: ios/build/screenshots/family-iphone.png
           retention-days: 7
-      - name: Save simulator app for local testing
-        uses: actions/upload-artifact@v4
-        with:
-          name: Porch-simulator
-          path: ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
-          retention-days: 7
-  family:
+  release:
+    name: Release builds and checks
     runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Check Xcode
+        run: xcodebuild -version
+      - name: Test contact validation and keypad handling
+        run: swift test --package-path ios/PorchCore
+      - name: Test Cell2Jack protocol, preview, and distribution checks
+        run: |
+          bash ios/scripts/test-cell2jack.sh
+          python3 ios/scripts/check-keypad-preview.py
+          python3 -m unittest discover -s ios/scripts -p test_distribution_profiles.py
       - name: Check shared feature sources and driver exclusion
         run: python3 ios/scripts/check-build-variants.py
+      # Both variants share one derived data folder so the Swift packages are
+      # compiled for Release once.
+      - name: Build release app for iPhone and iPad
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme Porch
+          -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
       - name: Build family TestFlight variant without the Cell2Jack driver
         run: |
           xcodebuild -project ios/Porch.xcodeproj -scheme PorchFamily \
             -configuration Release -destination 'generic/platform=iOS' \
-            -derivedDataPath ios/build/family CODE_SIGNING_ALLOWED=NO build
-          test ! -d ios/build/family/Build/Products/Release-iphoneos/PorchFamily.app/SystemExtensions
-          test ! -d ios/build/family/Build/Products/Release-iphoneos/PorchFamily.app/Settings.bundle
-      - name: Test family app controls on an iPhone simulator
-        shell: bash
+            -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
+          test ! -d ios/build/device/Build/Products/Release-iphoneos/PorchFamily.app/SystemExtensions
+          test ! -d ios/build/device/Build/Products/Release-iphoneos/PorchFamily.app/Settings.bundle
+  family:
+    name: Family app tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start booting an iPhone simulator
         run: |
           device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for group in devices.values() for d in group if "iPhone" in d["name"]))')"
-          xcrun simctl boot "$device_id"
-          xcrun simctl bootstatus "$device_id" -b
-          xcodebuild -project ios/Porch.xcodeproj -scheme PorchFamily -configuration Debug \
-            -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/family \
-            -parallel-testing-enabled NO -collect-test-diagnostics never \
-            ONLY_ACTIVE_ARCH=YES -xcconfig ios/SimulatorCI.xcconfig test
+          echo "PORCH_SIMULATOR_ID=$device_id" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device_id" > "$RUNNER_TEMP/simulator-boot.log" 2>&1 &
+      - name: Check Xcode
+        run: xcodebuild -version
+      - name: Build the family app and tests for an arm64 simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme PorchFamily
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/build/family -xcconfig ios/SimulatorCI.xcconfig
+          ARCHS=arm64 build-for-testing
+      - name: Wait for the iPhone simulator
+        run: xcrun simctl bootstatus "$PORCH_SIMULATOR_ID" -b
+      - name: Test family app controls on an iPhone simulator
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme PorchFamily -configuration Debug
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/family
+          -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
