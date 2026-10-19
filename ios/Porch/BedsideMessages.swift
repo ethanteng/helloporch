@@ -641,6 +641,8 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
 /// does: a spoken prompt, a beep, then up to two minutes of audio or video, matching the call.
 /// Finishing (the button, the hang-up key or the time limit) sends it. Saying nothing sends nothing.
 final class BedsideVoicemailViewController: UIViewController {
+    /// What the bedside says once a message is recorded for this person.
+    static func sentConfirmation(to name: String) -> String { BedsideText.string("Your message is on its way to %@.", name) }
     enum Reason: CaseIterable {
         case unanswered, unavailable
         /// What the bedside says before recording a message for this person.
@@ -880,7 +882,7 @@ final class BedsideVoicemailViewController: UIViewController {
         guard let recording else { complete(BedsideText.string("No message was recorded.")); return }
         do {
             try BedsideOutbox.shared.add(recording, to: memberID)
-            complete(BedsideText.string("Your message is on its way to %@.", contact.name), speak: true)
+            complete(Self.sentConfirmation(to: contact.name), speak: true)
         } catch {
             try? FileManager.default.removeItem(at: recording.file)
             complete(BedsideText.string("Couldn't record a message."))
@@ -1084,8 +1086,12 @@ final class MessageNoticeView: UIView {
     private var ended = false
     private static let warm = UIColor(red: 1, green: 0.74, blue: 0.32, alpha: 1)
 
+    /// What the bedside says when messages are waiting.
+    static func text(count: Int) -> String {
+        count == 1 ? BedsideText.string("You have 1 new message.") : BedsideText.string("You have %d new messages.", count)
+    }
     init(count: Int) {
-        text = count == 1 ? BedsideText.string("You have 1 new message.") : BedsideText.string("You have %d new messages.", count)
+        text = Self.text(count: count)
         super.init(frame: .zero)
         backgroundColor = UIColor.black.withAlphaComponent(0.45)
         accessibilityViewIsModal = true

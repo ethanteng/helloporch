@@ -155,7 +155,8 @@ import PorchCore
     private static var attempted: [URL: Date] = [:]
     private static var prefetching: Task<Void, Never>?
     /// Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone
-    /// who may drop in, prompts for leaving family a message, and announcements for waiting messages.
+    /// who may drop in, prompts and confirmations for leaving family a message, and the notice and
+    /// announcements for waiting messages.
     /// A drop-in never waits for a clip, so this is how its announcement gets the natural voice.
     /// A sentence that couldn't be prepared is tried again after ten minutes.
     static func prefetch(_ state: FamilySnapshot, slots: CallSlots) {
@@ -177,8 +178,11 @@ import PorchCore
         if state.messagesEnabled != false {
             for contact in contacts where contact.familyMemberID != nil {
                 texts += BedsideVoicemailViewController.Reason.allCases.map { $0.prompt(for: contact.name) }
+                texts.append(BedsideVoicemailViewController.sentConfirmation(to: contact.name))
             }
-            for message in state.messages ?? [] where message.held != true { texts.append(MessagePlayerViewController.announcement(for: message, slots: slots)) }
+            let waiting = (state.messages ?? []).filter { $0.held != true }
+            if !waiting.isEmpty { texts.append(MessageNoticeView.text(count: waiting.count)) }
+            for message in waiting { texts.append(MessagePlayerViewController.announcement(for: message, slots: slots)) }
         }
         let now = Date()
         var seen = Set<String>()

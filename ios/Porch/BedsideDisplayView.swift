@@ -287,8 +287,9 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         } else {
             announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children: actions)
         }
-        if naturalChoice != nil {
-            voiceStatus.text = "A natural voice for \(language.displayName), saved for this family. Each announcement is prepared over the internet the first time; until it's ready, this iPad's built-in voice speaks. Tap Save to keep your choice."
+        if let naturalChoice {
+            let saved = choices?.selected == naturalChoice.id
+            voiceStatus.text = "A natural voice for \(language.displayName)\(saved ? ", saved for this family" : ""). Each announcement is prepared over the internet the first time; until it's ready, this iPad's built-in voice speaks.\(saved ? "" : " Tap Save to use it for this family.")"
         } else if PorchAnnouncementVoice.resolve(for: language, identifier: identifier) == nil {
             voiceStatus.text = "No voice is available for \(language.displayName). Download a matching voice in the iPad's Accessibility speech settings. Drop-ins will require manual acceptance until speech is available."
         } else if identifier != nil && selected == nil {
