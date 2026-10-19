@@ -21,6 +21,8 @@ check_preview() {
 }
 # Poll every 2 s for about 10 s per launch instead of sleeping 10 s. Keep the
 # screenshot only when two polls in a row pass, so a mid-launch frame is not kept.
+# A single pass on the last poll still gets one confirmation before relaunch;
+# otherwise a scene that first becomes valid at the old 10 s mark never counts.
 for attempt in {1..18}; do
   xcrun simctl launch --terminate-running-process "$device_id" com.ethanteng.helloporch "$@"
   passes=0
@@ -37,6 +39,14 @@ for attempt in {1..18}; do
       passes=0
     fi
   done
+  if [[ "$passes" == 1 ]]; then
+    sleep 2
+    xcrun simctl io "$device_id" screenshot "$output"
+    if check_preview; then
+      echo "Porch is visible: $output"
+      exit 0
+    fi
+  fi
 done
 echo 'The simulator never displayed Porch; screenshot verification failed.' >&2
 exit 1
