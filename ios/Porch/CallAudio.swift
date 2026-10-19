@@ -267,16 +267,24 @@ import PorchCore
                 if let ready, self.clip.play(ready, completion: { [weak self] success in
                     guard let self, self.announcement == announcement else { return }
                     if success { self.finish(true) } else { PorchNaturalVoice.discard(ready); self.speakBuiltIn() }
-                }) { return }
+                }) { self.armWatchdog(); return }
                 if let ready { PorchNaturalVoice.discard(ready) }
                 self.speakBuiltIn()
             }
         }
-        // A failed speech service must never silently start an automatic video call.
+        // Until speech starts. A preview may spend several seconds fetching a clip; that wait must not
+        // come out of the time allowed for the sentence itself. A stuck speech service still cannot
+        // silently start an automatic video call.
+        armWatchdog()
+    }
+    /// 15 seconds from when speech starts, or from the announcement if it never does.
+    private func armWatchdog() {
+        timeout?.invalidate()
         timeout = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish(false) } }
     }
     private func speakBuiltIn() {
         guard let utterance else { finish(false); return }
+        armWatchdog()
         speech.speak(utterance)
     }
     func stop() {

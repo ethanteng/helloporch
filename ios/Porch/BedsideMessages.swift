@@ -134,6 +134,7 @@ extension Notification.Name {
     private var announcement: UUID?
     private var completion: (() -> Void)?
     private var timers: [Timer] = []
+    private var watchdog: Timer?
 
     override init() { super.init(); speech.delegate = self; speech.usesApplicationAudioSession = true }
     func announce(_ text: String, completion: @escaping () -> Void) {
@@ -163,21 +164,29 @@ extension Notification.Name {
                 if let ready, self.clip.play(ready, completion: { [weak self] success in
                     guard let self, self.announcement == announcement else { return }
                     if success { self.finish() } else { PorchNaturalVoice.discard(ready); self.speakBuiltIn() }
-                }) { return }
+                }) { self.armWatchdog(); return }
                 if let ready { PorchNaturalVoice.discard(ready) }
                 self.speakBuiltIn()
             }
         })
-        // A stuck speech service must not hold up the message.
-        timers.append(Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } })
+        // Until speech starts. Fetching a clip must not shorten the sentence, and a stuck speech
+        // service must not hold up the message.
+        armWatchdog()
+    }
+    /// 15 seconds from when speech starts, or from the announcement if it never does.
+    private func armWatchdog() {
+        watchdog?.invalidate()
+        watchdog = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } }
     }
     private func speakBuiltIn() {
         guard let utterance else { finish(); return }
+        armWatchdog()
         speech.speak(utterance)
     }
     func stop() {
         completion = nil; utterance = nil; announcement = nil
         timers.forEach { $0.invalidate() }; timers = []
+        watchdog?.invalidate(); watchdog = nil
         speech.stopSpeaking(at: .immediate); clip.stop(); tone.stop()
     }
     private func finish() { let callback = completion; stop(); callback?() }
