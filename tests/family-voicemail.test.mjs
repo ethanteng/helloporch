@@ -179,7 +179,7 @@ test('with unknown callers blocked, only known numbers ring and the rest wait in
   const f = await fixture();
   const keypad = '+15551230001', stranger = '+15559876543';
   const ring = async (from, n) => (await f.twilio('incoming', { CallSid: sid('CA', n), From: from, To: porchNumber })).body;
-  const rings = body => /<Dial answerOnBridge/.test(body), busy = /^<\?xml[^>]*><Response><Reject reason="busy"\/><\/Response>$/;
+  const rings = body => /<Dial answerOnBridge/.test(body), rejected = /^<\?xml[^>]*><Response><Reject reason="rejected"\/><\/Response>$/;
   const screening = async () => (await f.json('verifyPIN', {}, f.sam.credential, '123456')).admin.callScreening;
   // Until the iPad reports its keypad, turning it on would block the people saved there.
   assert.equal((await f.send('setBlockUnknownCallers', { enabled: true }, f.sam.credential, '123456')).status, 409);
@@ -188,11 +188,11 @@ test('with unknown callers blocked, only known numbers ring and the rest wait in
   assert.equal((await f.json('setBlockUnknownCallers', { enabled: true }, f.sam.credential, '123456')).admin.callScreening.enabled, true);
   assert.ok(rings(await ring(keypad, 2)), 'keypad contacts ring');
   // A blocked caller never reaches LiveKit. A repeated webhook counts once; calling again counts again.
-  assert.match(await ring(stranger, 3), busy);
+  assert.match(await ring(stranger, 3), rejected);
   await ring(stranger, 3); f.advance(60); await ring(stranger, 4);
   // Withheld caller ID is blocked, but there's no number to allow, so it isn't listed.
-  assert.match(await ring('+266696687', 5), busy);
-  assert.match(await ring('anonymous', 6), busy);
+  assert.match(await ring('+266696687', 5), rejected);
+  assert.match(await ring('anonymous', 6), rejected);
   const [listed] = (await screening()).blocked;
   assert.deepEqual(listed, { number: stranger, firstCallAt: listed.lastCallAt - 60, lastCallAt: listed.lastCallAt, calls: 2 });
   assert.equal((await screening()).blocked.length, 1);
@@ -205,10 +205,10 @@ test('with unknown callers blocked, only known numbers ring and the rest wait in
   const removed = await f.json('setCallerAllowed', { number: stranger, allowed: false }, f.bedside.credential, '123456');
   assert.deepEqual(removed.state.callScreening.allowed, []);
   assert.equal(removed.state.callScreening.blocked[0].calls, 2);
-  assert.match(await ring(stranger, 8), busy);
+  assert.match(await ring(stranger, 8), rejected);
   // A number taken off the keypad is blocked; one approved for phone drop-in rings.
   await f.json('setKeypadNumbers', { numbers: [] }, f.bedside.credential, '123456');
-  assert.match(await ring(keypad, 9), busy);
+  assert.match(await ring(keypad, 9), rejected);
   await f.json('setPhoneDropIn', { number: keypad, name: 'David', enabled: true }, f.sam.credential, '123456');
   assert.ok(rings(await ring(keypad, 10)));
   assert.deepEqual((await screening()).blocked.map(c => c.number), [stranger]);
@@ -239,7 +239,7 @@ test('only PIN-checked caregivers screen callers, only the bedside reports its k
   assert.equal((await report(['+15551230001'], f.bedside.credential, null)).status, 403);
   assert.equal((await report(['5551230001'])).status, 400);
   assert.equal((await report('+15551230001')).status, 400);
-  assert.equal((await report(Array.from({ length: 11 }, (_, n) => `+1555123${String(n).padStart(4, '0')}`))).status, 400);
+  assert.equal((await report(Array.from({ length: 51 }, (_, n) => `+1555123${String(n).padStart(4, '0')}`))).status, 400);
   const saved = await f.json('setKeypadNumbers', { numbers: ['+15551230002', '+15551230001', '+15551230002'] }, f.bedside.credential, '123456');
   assert.deepEqual(saved.state.callScreening.keypadNumbers, ['+15551230001', '+15551230002']);
   for (const [action, values] of [['setBlockUnknownCallers', { enabled: true }], ['setCallerAllowed', { number: caller, allowed: true }], ['clearBlockedCallers', {}]]) {

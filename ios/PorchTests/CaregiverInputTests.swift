@@ -783,7 +783,8 @@ final class CaregiverInputTests: XCTestCase {
         let text = labels(editor.view)
         XCTAssertTrue(text.contains("Their details"))
         XCTAssertTrue(text.contains("Default calling mode"))
-        XCTAssertTrue(text.contains("Phone number"))
+        XCTAssertTrue(text.contains("Primary number"))
+        XCTAssertTrue(text.contains("Other numbers"))
         for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
         let settings = SlotsViewController(slots: CallSlots())
         settings.loadViewIfNeeded()

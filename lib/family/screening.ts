@@ -5,8 +5,8 @@ import type { FamilyStore } from "./store.ts";
 // caller ID is saved on the keypad, approved for phone drop-in, or allowed by a caregiver. Every other number
 // that calls is listed as blocked until a caregiver allows it. Caller ID alone decides, so a faked number gets through.
 export const screeningActions = new Set(["setKeypadNumbers", "setBlockUnknownCallers", "setCallerAllowed", "clearBlockedCallers"]);
-/** The keypad has ten keys. Blocked callers past the limit drop off oldest first. */
-export const callerLimits = { keypad: 10, allowed: 50, blocked: 30 };
+/** Ten keys with up to five numbers each (`CallContact.maximumPhoneNumbers`). Blocked callers past the limit drop off oldest first. */
+export const callerLimits = { keypad: 50, allowed: 50, blocked: 30 };
 export type ScreeningContext = { store: FamilyStore; now: number; house: Household; me: Member; input: Record<string, unknown> };
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 

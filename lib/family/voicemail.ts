@@ -168,11 +168,11 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       if (!configured.sipHost || !configured.sip) return twiml("<Reject/>");
       const house = await household(store, calledNumber);
       if (!house) return twiml("<Reject/>");
-      // With unknown callers blocked, other numbers hear a busy signal and wait in the caregiver's blocked list.
-      // Rejected before LiveKit is dialed, so the bedside never rings.
+      // With unknown callers blocked, other numbers hear their phone company's standard "can't be completed" message
+      // and wait in the caregiver's blocked list. Rejected unanswered, so there's no voicemail and the bedside never rings.
       if (!callerAllowed(house, callerNumber)) {
         if (callSIDPattern.test(callSID)) { try { await blockCall(store, house.id, callSID, callerNumber, now); } catch { /* blocked either way */ } }
-        return twiml('<Reject reason="busy"/>');
+        return twiml('<Reject reason="rejected"/>');
       }
       // LiveKit keeps this leg ringing until the bedside answers; answerOnBridge lets the caller hear it.
       // Porch stops the ringing after the household's ring time; Twilio's timeout is only a backstop,

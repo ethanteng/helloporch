@@ -56,7 +56,7 @@ final class SlotsViewController: UITableViewController {
             content.secondaryText = person.map { contact in
                 if let call = contact.nativeCall {
                     let dropIn = contact.phoneNumber.map { number in FamilyCoordinator.shared.state?.phoneDropIns?.contains { $0.number == number } == true } == true
-                    return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on") + (dropIn ? " · Phone drop-in on" : "")
+                    return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on") + (contact.otherPhoneNumbers.isEmpty ? "" : " · \(contact.phoneNumbers.count) numbers") + (dropIn ? " · Phone drop-in on" : "")
                 }
                 return "Finish Porch setup"
             } ?? "Assign keypad number \(number)"
@@ -148,6 +148,11 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     private let modeControl = UISegmentedControl(items: ["Voice-only", "Video"])
     private let phoneFallbackSwitch = UISwitch()
     private let phoneField = UITextField()
+    /// Their numbers besides the primary one. They can call in, but Porch never dials them.
+    private var otherNumbers: [String] = []
+    private let otherField = UITextField()
+    private let otherNumbersList = UIStackView()
+    private var otherGroup = UIView()
     private var selectedFamilyID: String?
     private var invitationID: String?
     /// The paired (or invited) family member's own name, which this key uses when Name is left empty.
@@ -231,8 +236,21 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneFallbackSwitch.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
         let phoneToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Call their phone", size: 18, color: PorchStyle.ink, weight: .medium), phoneFallbackSwitch])
         phoneToggle.alignment = .center; phoneToggle.spacing = 16
-        phoneGroup = field(phoneField, title: "Phone number", placeholder: "+14158676937", helper: "Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). Internet is needed to save a phone number.")
-        fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their phone. If their app is unavailable, try their phone right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply. This number can also ring Porch while unknown callers are blocked.", views: [phoneToggle, phoneGroup])
+        phoneGroup = field(phoneField, title: "Primary number", placeholder: "+14158676937", helper: "The number Porch calls. Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). Internet is needed to save a phone number.")
+        otherNumbers = initialContact?.otherPhoneNumbers ?? []
+        otherField.keyboardType = .phonePad
+        otherField.textContentType = .telephoneNumber
+        otherField.accessibilityIdentifier = "contact.otherNumber"
+        otherNumbersList.axis = .vertical; otherNumbersList.spacing = 8
+        let addOther = PorchStyle.button("Add number", symbol: "plus", filled: false)
+        addOther.addAction(UIAction { [weak self] _ in self?.addOtherNumber() }, for: .touchUpInside)
+        let otherHeading = PorchStyle.label("Other numbers", size: 16, color: PorchStyle.ink, weight: .semibold)
+        let otherStack = UIStackView(arrangedSubviews: [otherHeading, otherNumbersList,
+            field(otherField, title: "Add another number", placeholder: "+14155550123", helper: "Such as their home or mobile. These can call this Porch too, but Porch only ever calls the primary number."), addOther])
+        otherStack.axis = .vertical; otherStack.spacing = 8
+        otherGroup = otherStack
+        renderOtherNumbers()
+        fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their primary number. If their app is unavailable, try it right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply. All of their numbers can ring Porch while unknown callers are blocked.", views: [phoneToggle, phoneGroup, otherGroup])
         form.addArrangedSubview(fallbackGroup)
         refreshPhoneDropIn()
         phoneDropInSwitch.addAction(UIAction { [weak self] _ in self?.phoneDropInTouched = true }, for: .valueChanged)
@@ -240,7 +258,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneDropInSwitch.accessibilityLabel = "Audio drop-in when they call this Porch"
         let dropInToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Audio drop-in when they call", size: 18, color: PorchStyle.ink, weight: .medium), phoneDropInSwitch])
         dropInToggle.alignment = .center; dropInToggle.spacing = 16
-        phoneDropInGroup = section("Drop-in by phone", detail: "Calls from this number to this Porch's phone number connect with audio after the announcement, once Allow approved drop-ins is on in Family & drop-in. Only calls their phone company verifies drop in; others ring for a normal answer.", views: [dropInToggle])
+        phoneDropInGroup = section("Drop-in by phone", detail: "Calls from their primary number to this Porch's phone number connect with audio after the announcement, once Allow approved drop-ins is on in Family & drop-in. Only calls their phone company verifies drop in; others ring for a normal answer.", views: [dropInToggle])
         form.addArrangedSubview(phoneDropInGroup)
         if initialContact != nil {
             let remove = PorchStyle.button("Remove person", symbol: "person.crop.circle.badge.minus", filled: false)
@@ -268,7 +286,53 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     @objc private func updateMethod() {
         view.endEditing(true)
         phoneGroup.isHidden = !phoneFallbackSwitch.isOn
+        otherGroup.isHidden = !phoneFallbackSwitch.isOn
         updatePhoneDropIn()
+    }
+    /// One row per other number: Make primary swaps it with the primary number, which is the one Porch calls.
+    private func renderOtherNumbers() {
+        otherNumbersList.arrangedSubviews.forEach { otherNumbersList.removeArrangedSubview($0); $0.removeFromSuperview() }
+        if otherNumbers.isEmpty { otherNumbersList.addArrangedSubview(PorchStyle.label("None", size: 15)) }
+        for number in otherNumbers {
+            let shown = PhoneNumberNormalization.display(number)
+            let label = PorchStyle.label(shown, size: 18, color: PorchStyle.ink)
+            let primary = PorchStyle.button("Make primary", filled: false)
+            primary.accessibilityLabel = "Make \(shown) the primary number"
+            primary.addAction(UIAction { [weak self] _ in self?.makePrimary(number) }, for: .touchUpInside)
+            let remove = PorchStyle.button("Remove", filled: false)
+            remove.configuration?.baseForegroundColor = .systemRed
+            remove.accessibilityLabel = "Remove \(shown)"
+            remove.addAction(UIAction { [weak self] _ in self?.otherNumbers.removeAll { $0 == number }; self?.renderOtherNumbers() }, for: .touchUpInside)
+            for button in [primary, remove] {
+                button.setContentHuggingPriority(.required, for: .horizontal)
+                button.setContentCompressionResistancePriority(.required, for: .horizontal)
+            }
+            let row = UIStackView(arrangedSubviews: [label, primary, remove])
+            row.alignment = .center; row.spacing = 8
+            otherNumbersList.addArrangedSubview(row)
+        }
+    }
+    /// Adds what's typed in Add another number. Throws if it isn't a phone number, is already saved, or is one too many.
+    private func takeOtherNumber() throws {
+        let typed = otherField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !typed.isEmpty else { return }
+        let number = try PhoneNumberNormalization.e164(typed)
+        let primary = try? PhoneNumberNormalization.e164(phoneField.text ?? "")
+        guard number != primary, !otherNumbers.contains(number) else { throw FamilyServiceError(message: "That number is already saved for them.", status: 400) }
+        guard otherNumbers.count + 1 < CallContact.maximumPhoneNumbers else { throw CallContact.ValidationError.tooManyPhoneNumbers }
+        otherNumbers.append(number); otherField.text = nil
+        renderOtherNumbers()
+    }
+    private func addOtherNumber() {
+        view.endEditing(true)
+        do { try takeOtherNumber() } catch { showContactError(error) }
+    }
+    private func makePrimary(_ number: String) {
+        view.endEditing(true)
+        let previous = try? PhoneNumberNormalization.e164(phoneField.text ?? "")
+        otherNumbers = otherNumbers.compactMap { $0 == number ? previous : $0 }
+        phoneField.text = number
+        renderOtherNumbers()
     }
     /// Follows the server's approvals (which may load or change while editing) until the caregiver flips the switch.
     @objc private func refreshPhoneDropIn() {
@@ -295,7 +359,15 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         nameField.text = CNContactFormatter.string(from: property.contact, style: .fullName)
         guard let phone = property.value as? CNPhoneNumber else { return }
         do {
-            phoneField.text = try PhoneNumberNormalization.e164(phone.stringValue)
+            let primary = try PhoneNumberNormalization.e164(phone.stringValue)
+            phoneField.text = primary
+            // Their other numbers from Contacts, such as home and mobile, can call in too.
+            if property.contact.isKeyAvailable(CNContactPhoneNumbersKey) {
+                let others = property.contact.phoneNumbers.compactMap { try? PhoneNumberNormalization.e164($0.value.stringValue) }
+                otherNumbers = []
+                for number in others where number != primary && !otherNumbers.contains(number) && otherNumbers.count + 1 < CallContact.maximumPhoneNumbers { otherNumbers.append(number) }
+                renderOtherNumbers()
+            }
             phoneFallbackSwitch.isOn = true; updateMethod()
         } catch { picker.dismiss(animated: true) { [weak self] in self?.showContactError(error) } }
     }
@@ -445,14 +517,18 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
                 return
             }
             configureFamilyLinks()
+            // A number typed in Add another number counts even if Add number wasn't tapped.
+            if phoneFallbackSwitch.isOn { try takeOtherNumber() }
             guard selectedFamilyID != nil || invitationID != nil || phoneFallbackSwitch.isOn else {
                 throw FamilyServiceError(message: "Invite them to Porch or add a phone number so Porch can reach this person.", status: 400)
             }
             let call = try NativeCall(room: initialContact?.nativeCall?.room ?? "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
             let contact = try CallContact(name: nameField.text ?? "", nativeCall: call,
-                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil, familyMemberID: selectedFamilyID, invitationID: invitationID,
+                phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil,
+                otherPhoneNumbers: phoneFallbackSwitch.isOn ? otherNumbers : [], familyMemberID: selectedFamilyID, invitationID: invitationID,
                 memberName: linkedPerson?.name ?? memberName, buttonColorHex: buttonColorHex, photoData: photoData)
             phoneField.text = contact.phoneNumber
+            otherNumbers = contact.otherPhoneNumbers; renderOtherNumbers()
             view.isUserInteractionEnabled = false
             navigationItem.rightBarButtonItem?.isEnabled = false
             navigationItem.rightBarButtonItem?.title = "Saving…"

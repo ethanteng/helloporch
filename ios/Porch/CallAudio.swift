@@ -175,7 +175,7 @@ import PorchCore
                 if person.permissions.audio { texts.append(PorchIncomingAudio.message(name: name, video: false, language: language)) }
             }
             for approval in state.phoneDropIns ?? [] {
-                let name = contacts.first { $0.nativeCall != nil && $0.phoneNumber == approval.number }?.name ?? approval.name
+                let name = contacts.first { $0.nativeCall != nil && $0.phoneNumbers.contains(approval.number) }?.name ?? approval.name
                 texts.append(PorchIncomingAudio.message(name: name, video: false, language: language))
             }
         }

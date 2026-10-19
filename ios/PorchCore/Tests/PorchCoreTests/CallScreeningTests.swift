@@ -23,6 +23,35 @@ final class CallScreeningTests: XCTestCase {
         XCTAssertEqual(slots.phoneNumbers, ["+14155550200"])
     }
 
+    func testOtherNumbersCallInButOnlyThePrimaryIsTheFallback() throws {
+        let call = try NativeCall(room: "mom", mode: .voice)
+        let mom = try CallContact(name: "Mom", nativeCall: call, phoneNumber: "+1 (415) 555-0100",
+                                  otherPhoneNumbers: [" +14155550101 ", "+14155550100", "+14155550101", "+1 415 555 0102"])
+        // Normalized; repeats and the primary listed again are dropped.
+        XCTAssertEqual(mom.phoneNumber, "+14155550100")
+        XCTAssertEqual(mom.otherPhoneNumbers, ["+14155550101", "+14155550102"])
+        XCTAssertEqual(mom.phoneNumbers, ["+14155550100", "+14155550101", "+14155550102"])
+        XCTAssertThrowsError(try CallContact(name: "Mom", nativeCall: call, otherPhoneNumbers: ["+14155550101"]), "Other numbers need a primary one")
+        XCTAssertThrowsError(try CallContact(name: "Mom", nativeCall: call, phoneNumber: "+14155550100", otherPhoneNumbers: ["415-555"]))
+        let five = (1...4).map { "+1415555010\($0)" }
+        XCTAssertNoThrow(try CallContact(name: "Mom", nativeCall: call, phoneNumber: "+14155550100", otherPhoneNumbers: five))
+        XCTAssertThrowsError(try CallContact(name: "Mom", nativeCall: call, phoneNumber: "+14155550100", otherPhoneNumbers: five + ["+14155550109"]))
+        // Saved and reloaded, and kept when the keypad revalidates the contact.
+        let decoded = try JSONDecoder().decode(CallContact.self, from: JSONEncoder().encode(mom))
+        XCTAssertEqual(decoded, mom)
+        var slots = CallSlots()
+        try slots.setContact(decoded, for: 1)
+        XCTAssertEqual(slots.contact(for: 1)?.otherPhoneNumbers, ["+14155550101", "+14155550102"])
+        // Every number names a phone voicemail and can ring while unknown callers are blocked.
+        XCTAssertEqual(slots.contact(forPhoneNumber: "+14155550102")?.name, "Mom")
+        XCTAssertNil(slots.contact(forPhoneNumber: "+14155550199"))
+        XCTAssertEqual(slots.phoneNumbers, ["+14155550100", "+14155550101", "+14155550102"])
+        // Older saved contacts have no other numbers.
+        let older = try JSONDecoder().decode(CallContact.self, from: Data(#"{"name":"David","address":"","phoneNumber":"+14155550123","nativeCall":{"room":"family-david","mode":"voice"}}"#.utf8))
+        XCTAssertEqual(older.otherPhoneNumbers, [])
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(older), as: UTF8.self).contains("otherPhoneNumbers"))
+    }
+
     func testKeypadIsReportedOnlyWhenTheServerCopyDiffers() throws {
         var slots = CallSlots()
         try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "david", mode: .voice), phoneNumber: "+14155550200"), for: 1)

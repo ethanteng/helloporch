@@ -491,7 +491,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let list = PorchListRow([listText, Self.singleLine(count)], label: blocked.isEmpty ? "Blocked numbers, none" : "Blocked numbers, \(blocked.count)") { [weak self] in self?.showBlockedCallers() }
         list.accessibilityIdentifier = "calls.blockedNumbers"
         list.isEnabled = screening != nil
-        let footer = "While it's on, other callers hear a busy signal and can't leave voicemail, and their numbers wait in Blocked numbers until you allow them. Keypad contacts with a phone number and numbers approved for phone drop-in can always ring. Withheld numbers are always blocked. Calls are matched by caller ID, which can be faked. Calls from the Porch app aren't affected."
+        let footer = "While it's on, other callers hear their phone company's message that the call can't be completed, and can't leave voicemail, and their numbers wait in Blocked numbers until you allow them. Keypad contacts with a phone number and numbers approved for phone drop-in can always ring. Withheld numbers are always blocked. Calls are matched by caller ID, which can be faked. Calls from the Porch app aren't affected."
         return group("Phone calls", footer: footer, rows: [toggleRow("Block unknown callers", detail: detail, block), list])
     }
     private func messagesGroup(_ state: FamilyAdminState?) -> UIView {
