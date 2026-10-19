@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { forwardedVerificationHeader, sipInboundCredentials, verifiedCaller, type InboundRoute } from "./inbound.ts";
 import { bedsideLanguage, ringSeconds, type BedsideLanguage, type Household } from "./household.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
+import { blockCall, callerAllowed } from "./screening.ts";
 import { messageLimits, receivePhoneVoicemail, voicemailOpen } from "./messages.ts";
 import { speechClip, speechConfigured, speechVoice, type Synthesize } from "./speech.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
@@ -167,6 +168,12 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       if (!configured.sipHost || !configured.sip) return twiml("<Reject/>");
       const house = await household(store, calledNumber);
       if (!house) return twiml("<Reject/>");
+      // With unknown callers blocked, other numbers hear a busy signal and wait in the caregiver's blocked list.
+      // Rejected before LiveKit is dialed, so the bedside never rings.
+      if (!callerAllowed(house, callerNumber)) {
+        if (callSIDPattern.test(callSID)) { try { await blockCall(store, house.id, callSID, callerNumber, now); } catch { /* blocked either way */ } }
+        return twiml('<Reject reason="busy"/>');
+      }
       // LiveKit keeps this leg ringing until the bedside answers; answerOnBridge lets the caller hear it.
       // Porch stops the ringing after the household's ring time; Twilio's timeout is only a backstop,
       // long enough for an approved phone drop-in, which isn't known until LiveKit reports the call.
@@ -182,6 +189,8 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const status = params.get("DialCallStatus");
       if (status === "completed" || status === "answered") return twiml("<Hangup/>");
       const house = await household(store, params.get("To"));
+      // Blocked while it rang: no voicemail either.
+      if (house && !callerAllowed(house, callerNumber)) return twiml("<Hangup/>");
       const storage = !!dependencies.media || !!process.env.BLOB_READ_WRITE_TOKEN;
       if (!house || !storage || !callSIDPattern.test(callSID) || !voicemailOpen(house, callerNumber, now)) return twiml(`${(await greet(house, ["unavailable"], voice)).join("")}<Hangup/>`);
       const verified = params.get("StirVerstat") === verifiedCaller || !!await store.get(verifiedKey(callSID));

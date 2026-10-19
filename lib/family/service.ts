@@ -10,6 +10,7 @@ import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
+import { handleScreeningAction, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize };
@@ -51,7 +52,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto"];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", ...screeningActions];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 // `name` and `photoID` are what Porch shows. Caregiver screens and the member themselves also get the
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
@@ -68,7 +69,7 @@ function pendingInvites(house: Household, now: number) {
 // Family devices only see the bedside in their snapshot, so caregiver screens get every
 // family device here. It is returned only after a PIN check.
 function adminState(house: Household, now: number, pushEnabled: boolean) {
-  return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [],
+  return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], callScreening: publicCallScreening(house),
     people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled, true)), invitations: pendingInvites(house, now) };
 }
 function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
@@ -87,6 +88,8 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ringSeconds: ringSeconds(house),
     // The bedside language as the server knows it, so the iPad can tell when to report a change.
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], bedsideLanguage: bedsideLanguage(house) } : {}),
+    // Who can ring by phone, and the keypad numbers as the server knows them, so the iPad can tell when to report a change.
+    ...(me.role === "bedside" ? { callScreening: publicCallScreening(house) } : {}),
     // The bedside's natural announcement voices, when this server can make them.
     ...(me.role === "bedside" && speechConfigured() ? { speech: publicSpeech(house) } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
@@ -258,6 +261,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handleSpeechAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, synthesize: dependencies.synthesize });
       if (!caregiverAction) return callJSON(result);
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
+    }
+    if (screeningActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handleScreeningAction(String(action), { store, now, house, me: memberFor(house, auth), input });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
     }

@@ -232,7 +232,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         let phoneToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Call their phone", size: 18, color: PorchStyle.ink, weight: .medium), phoneFallbackSwitch])
         phoneToggle.alignment = .center; phoneToggle.spacing = 16
         phoneGroup = field(phoneField, title: "Phone number", placeholder: "+14158676937", helper: "Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). Internet is needed to save a phone number.")
-        fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their phone. If their app is unavailable, try their phone right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply.", views: [phoneToggle, phoneGroup])
+        fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their phone. If their app is unavailable, try their phone right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply. This number can also ring Porch while unknown callers are blocked.", views: [phoneToggle, phoneGroup])
         form.addArrangedSubview(fallbackGroup)
         refreshPhoneDropIn()
         phoneDropInSwitch.addAction(UIAction { [weak self] _ in self?.phoneDropInTouched = true }, for: .valueChanged)

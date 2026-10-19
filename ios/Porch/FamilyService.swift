@@ -173,6 +173,8 @@ struct FamilyCallSession {
     private var task: Task<Void, Never>?
     private var generation = UUID()
     var isActive = false
+    private var reportingKeypad = false
+    private var keypadRetry: (numbers: [String], after: Date)?
 
     func start() {
         pause()
@@ -221,9 +223,33 @@ struct FamilyCallSession {
                 try slots.reconcile(with: state)
                 if slots != previous { try slots.save() }
                 PorchNaturalVoice.prefetch(state, slots: slots)
+                reportKeypad(slots)
             } catch { self.error = error.localizedDescription }
         }
         NotificationCenter.default.post(name: .porchFamilyChanged, object: self)
+    }
+    /// Keypad contacts live on this iPad. The server needs their numbers to let them ring while unknown callers are blocked,
+    /// so they're reported whenever they differ from its copy.
+    func reportKeypad(_ slots: CallSlots) {
+        guard !reportingKeypad, let state, state.me.role == .bedside, let credential,
+              let numbers = state.callScreening?.keypadNumbersToReport(slots) else { return }
+        if let retry = keypadRetry, retry.numbers == numbers, retry.after > Date() { return }
+        // Readable only while the iPad is unlocked; the next poll tries again.
+        let pin = NativeCallSettings.caregiverCode
+        guard !pin.isEmpty else { return }
+        reportingKeypad = true
+        Task { [weak self] in
+            do {
+                let response = try await FamilyService(credential).send("setKeypadNumbers", ["numbers": numbers], pin: pin)
+                self?.keypadRetry = nil; self?.reportingKeypad = false
+                self?.update(response)
+            } catch {
+                // A wrong PIN or a lockout waits longer, so retries can't use up the caregivers' PIN attempts.
+                let status = (error as? FamilyServiceError)?.status
+                self?.keypadRetry = (numbers, Date().addingTimeInterval(status == 403 || status == 429 ? 600 : 30))
+                self?.reportingKeypad = false
+            }
+        }
     }
     func startCall(to person: FamilyPerson, mode: NativeCall.Mode, dropIn: Bool) async throws -> FamilyCallSession {
         try await startCall(targetID: person.id, name: person.name, mode: mode, dropIn: dropIn)

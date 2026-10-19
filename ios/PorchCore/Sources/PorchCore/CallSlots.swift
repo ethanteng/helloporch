@@ -79,6 +79,8 @@ public struct CallSlots: Equatable {
     public func incomingCallerName(for call: FamilyCallRecord, in state: FamilySnapshot) -> String {
         incomingContact(for: call, in: state)?.name ?? call.callerName
     }
+    /// Every keypad contact's phone number, sorted and without repeats. These can ring while unknown callers are blocked.
+    public var phoneNumbers: [String] { Array(Set(contacts.compactMap { $0?.phoneNumber })).sorted() }
     /// The keypad contact saved with this phone number, which names (and releases) a phone voicemail.
     public func contact(forPhoneNumber number: String?) -> CallContact? {
         guard let number, !number.isEmpty else { return nil }

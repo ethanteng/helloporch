@@ -8,7 +8,7 @@ Each household has its own number. Managed Redis stores `phone-number:<E.164 num
 
 - With the updated app, microphone permission, and APNs configured, incoming calls can ring a backgrounded or locked bedside iPad through PushKit and Apple's CallKit screen. Open Porch once after installing the update to migrate its saved credential and register the bedside push token. Without push registration, keep Porch open and unlocked on the bedside clock. Foreground iPads poll every two seconds while idle and every second while ringing.
 - The screen shows the caller's telephone number, or “Phone caller” when caller ID is unavailable. The number is display information, not authentication. There is no shared-number menu or caller recognition for routing.
-- All callers reaching the assigned number can ring it; callers don't need to be paired app members. Calls require a manual answer, except [approved, verified drop-ins](#audio-drop-in-by-phone).
+- By default, all callers reaching the assigned number can ring it; callers don't need to be paired app members. A caregiver can [block unknown callers](#blocking-unknown-callers) so only keypad contacts and numbers they allow get through. Calls require a manual answer, except [approved, verified drop-ins](#audio-drop-in-by-phone).
 - Answer connects two-way audio. The camera stays off. Mute, keypad hangup, either person's hangup, and automatic silence hangup work with the existing call controls.
 - A call reserves the same household slot as ordinary Porch calls and drop-ins. A second caller cannot interrupt or join the first call. There is no call waiting. With [voicemail](#voicemail) set up, callers who aren't answered, are declined, or find Porch busy or offline can leave a message. Without it they are disconnected, and the provider decides which tone or message they hear.
 - LiveKit keeps the telephone caller ringing until the iPad joins and publishes audio. Ringing stops after the caregiver's **Call preferences → Ring before voicemail** time (15 seconds to 2 minutes, 45 by default; approved drop-ins always get 45) and the SIP call is limited to 30 minutes. Decline and room deletion release the telephone leg.
@@ -33,6 +33,20 @@ Approving on the bedside iPad asks for microphone access. Approvals are stored p
 Why verification matters: caller ID is easy to fake. Without it, anyone who knew an approved number and the household's Porch number could open the microphone in the room. Twilio's verification is read from LiveKit's own record of the SIP participant, never from the webhook body. The header reaches LiveKit only on the restricted inbound trunk, which accepts SIP from Twilio's signaling gateways alone. This doesn't defend against a compromised carrier or a stolen phone. The spoken announcement and countdown are the last safeguard, and the caregiver should approve only people who are welcome to listen in without an answer.
 
 Removing a number, or turning off **Allow approved drop-ins**, ends that phone drop-in immediately, whether it is still announcing or already connected, and hangs up the telephone leg. On an ordinary phone call the bedside screen shows the number, never a saved person's name, so a faked caller ID can't borrow a family member's name or photo. A verified drop-in shows the matching keypad person's name and photo, if there is one, or the approval's name.
+
+## Blocking unknown callers
+
+A caregiver can turn on **Family & drop-in → Phone calls → Block unknown callers**, on the bedside iPad or from caregiver mode on a family phone. While it's on, a regular phone call rings the bedside only if its caller ID is:
+
+- saved on a keypad person with **Call their phone** on,
+- approved for [audio drop-in by phone](#audio-drop-in-by-phone), or
+- on the caregiver's **Allowed** list.
+
+Every other caller hears a busy signal and can't leave voicemail. Porch rejects the call before dialing LiveKit, so the bedside never rings. The number is added to **Blocked numbers**, newest first, with how many times it called. It stays blocked until a caregiver taps **Allow**, which moves it to **Allowed**. **Remove** on an allowed number blocks it again, and its earlier calls reappear. **Clear this list** forgets the blocked numbers; they stay blocked, and one that calls again is listed again. The list keeps the 30 most recent numbers. Up to 50 numbers can be allowed. Withheld caller ID is always blocked and isn't listed, since there's no number to allow. Calls from the Porch app aren't affected.
+
+Keypad contacts live on the bedside iPad, so the iPad reports their phone numbers to the server with the caregiver PIN whenever they change. Until it has reported them once, blocking can't be turned on, so the people saved there are never turned away. If a report fails, it is retried after 30 seconds, or after 10 minutes for a rejected PIN, so a stale PIN can't use up the caregivers' PIN attempts.
+
+This is caller ID matching, the same check most phones use for blocking. It stops robocalls and strangers. It doesn't stop someone who fakes a saved number. Carrier verification isn't required, because many landlines, VoIP services and international callers never get it. The check runs in the voice webhook before LiveKit is dialed. It runs again when LiveKit reports the caller, for numbers routed straight to the SIP trunk, and before voicemail, for a number blocked while it was ringing.
 
 ## Configure the existing number
 

@@ -286,11 +286,12 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     private var locked = false
     private var displayed: FamilyAdminState?
     private weak var personScreen: FamilyPersonViewController?
+    private weak var blockedScreen: BlockedCallersViewController?
     private var credential: FamilyCredential? { remote ?? PorchDevice.credential(for: .bedside) }
     fileprivate var myID: String? { credential?.credential.split(separator: ".").first.map { String($0) } }
     fileprivate var current: FamilyAdminState? {
         if remote != nil { return remoteState }
-        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people, messagesEnabled: $0.messagesEnabled, messages: $0.messages, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations) }
+        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people, messagesEnabled: $0.messagesEnabled, messages: $0.messages, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations, callScreening: $0.callScreening) }
     }
     init(remote: FamilyCredential? = nil, state: FamilyAdminState? = nil) {
         self.remote = remote; remoteState = state; super.init(nibName: nil, bundle: nil)
@@ -365,9 +366,11 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         details.addArrangedSubview(group("Who is this Porch for?", footer: "Family members see this name when calling or dropping in.", rows: [nameRow]))
         details.addArrangedSubview(familyGroup(state))
         details.addArrangedSubview(dropInGroup(state))
+        details.addArrangedSubview(phoneCallsGroup(state))
         details.addArrangedSubview(messagesGroup(state))
         details.addArrangedSubview(caregiverGroup(state))
         personScreen?.render()
+        blockedScreen?.render()
         #if DEBUG
         if !previewedPerson, ProcessInfo.processInfo.arguments.contains("--preview-family-person"), let person = state?.people.first {
             previewedPerson = true
@@ -467,6 +470,29 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         rows.append(actionRow("Approve a phone number", symbol: "phone.badge.plus") { [weak self] in self?.showPhoneDropIn() })
         let footer = "Only the people and numbers listed here connect without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls always ring for Answer. Phone drop-ins work while Porch is open on the bedside iPad, for calls their phone company verifies."
         return group("Drop-in", footer: remote == nil ? footer : footer + " Drop-ins connect only if the bedside iPad allows microphone and camera access.", rows: rows)
+    }
+    /// Who can ring this Porch from a regular phone, beside the numbers that were turned away.
+    private func phoneCallsGroup(_ state: FamilyAdminState?) -> UIView {
+        let screening = state?.callScreening
+        let block = UISwitch(); block.isOn = screening?.enabled == true
+        block.isEnabled = screening != nil
+        block.accessibilityIdentifier = "calls.blockUnknown"
+        block.addAction(UIAction { [weak self, weak block] _ in
+            guard let self, let block else { return }
+            Task { await self.perform("setBlockUnknownCallers", ["enabled": block.isOn]) }
+        }, for: .valueChanged)
+        let detail = screening == nil ? "Not available on this Porch's server yet."
+            : screening?.enabled == true ? "Only keypad contacts and numbers you allow can ring." : "Anyone with this Porch's phone number can ring it."
+        let blocked = screening?.blocked ?? [], allowed = screening?.allowed ?? []
+        let listText = UIStackView(arrangedSubviews: [PorchStyle.label("Blocked numbers", size: 18, color: PorchStyle.ink)])
+        listText.axis = .vertical; listText.spacing = 2
+        if !allowed.isEmpty { listText.addArrangedSubview(PorchStyle.label("\(allowed.count) allowed", size: 15)) }
+        let count = PorchStyle.label(blocked.isEmpty ? "None" : "\(blocked.count)", size: 18)
+        let list = PorchListRow([listText, Self.singleLine(count)], label: blocked.isEmpty ? "Blocked numbers, none" : "Blocked numbers, \(blocked.count)") { [weak self] in self?.showBlockedCallers() }
+        list.accessibilityIdentifier = "calls.blockedNumbers"
+        list.isEnabled = screening != nil
+        let footer = "While it's on, other callers hear a busy signal and can't leave voicemail, and their numbers wait in Blocked numbers until you allow them. Keypad contacts with a phone number and numbers approved for phone drop-in can always ring. Withheld numbers are always blocked. Calls are matched by caller ID, which can be faked. Calls from the Porch app aren't affected."
+        return group("Phone calls", footer: footer, rows: [toggleRow("Block unknown callers", detail: detail, block), list])
     }
     private func messagesGroup(_ state: FamilyAdminState?) -> UIView {
         let messagesOn = UISwitch(); messagesOn.isOn = state?.messagesEnabled != false
@@ -660,6 +686,11 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         approve.onSaved = { [weak self] admin in if self?.remote != nil, let admin { self?.remoteState = admin }; self?.refresh() }
         navigationController?.pushViewController(approve, animated: true)
     }
+    private func showBlockedCallers() {
+        let screen = BlockedCallersViewController(admin: self)
+        blockedScreen = screen
+        navigationController?.pushViewController(screen, animated: true)
+    }
     private func showPerson(_ id: String) {
         let screen = FamilyPersonViewController(personID: id, admin: self)
         personScreen = screen
@@ -806,6 +837,71 @@ final class FamilyPersonViewController: CaregiverFormViewController {
         button.configuration?.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
         return button
+    }
+}
+
+/// The numbers turned away while unknown callers are blocked, and the ones a caregiver allowed, opened from Family & drop-in.
+final class BlockedCallersViewController: CaregiverFormViewController {
+    private weak var admin: FamilyAdminViewController?
+    private let content = UIStackView()
+    init(admin: FamilyAdminViewController) { self.admin = admin; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError("Use init(admin:)") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Blocked numbers"
+        hideKeyboardControl()
+        content.axis = .vertical; content.spacing = 24
+        form.addArrangedSubview(content)
+        render()
+    }
+    /// Redrawn after every change, including calls blocked meanwhile and changes another caregiver made.
+    func render() {
+        guard isViewLoaded else { return }
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        guard let admin, let screening = admin.current?.callScreening else { return }
+        let time = DateFormatter(); time.dateStyle = .short; time.timeStyle = .short; time.doesRelativeDateFormatting = true
+        let when = { (seconds: TimeInterval) in time.string(from: Date(timeIntervalSince1970: seconds)) }
+        var blocked: [UIView] = screening.blocked.map { caller in
+            let number = PhoneNumberNormalization.display(caller.number)
+            let calls = caller.calls == 1 ? "Called \(when(caller.lastCallAt))" : "Called \(caller.calls) times · last \(when(caller.lastCallAt))"
+            let allow = PorchStyle.button("Allow", symbol: "checkmark.circle", filled: false)
+            allow.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 4)
+            allow.accessibilityLabel = "Allow \(number)"
+            allow.addAction(UIAction { [weak admin] _ in Task { await admin?.perform("setCallerAllowed", ["number": caller.number, "allowed": true]) } }, for: .touchUpInside)
+            return listRow(Self.text(number, calls), trailing: FamilyAdminViewController.singleLine(allow))
+        }
+        if blocked.isEmpty {
+            blocked.append(listRow([PorchStyle.label(screening.enabled ? "No blocked calls." : "Turn on Block unknown callers to block numbers that aren't on the keypad.", size: 16)]))
+        } else {
+            let clear = PorchStyle.button("Clear this list", symbol: "trash", filled: false)
+            clear.configuration?.baseForegroundColor = .systemRed
+            clear.contentHorizontalAlignment = .leading
+            clear.configuration?.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+            clear.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+            clear.addAction(UIAction { [weak self, weak admin] _ in
+                let alert = UIAlertController(title: "Clear blocked numbers?", message: "They stay blocked. A number that calls again is listed again.", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                alert.addAction(UIAlertAction(title: "Clear", style: .destructive) { _ in Task { await admin?.perform("clearBlockedCallers") } })
+                self?.present(alert, animated: true)
+            }, for: .touchUpInside)
+            blocked.append(clear)
+        }
+        content.addArrangedSubview(group("Blocked", footer: "Newest first. An allowed number rings Porch like a keypad contact, and can leave voicemail for your review.", rows: blocked))
+        var allowed: [UIView] = screening.allowed.map { caller in
+            let number = PhoneNumberNormalization.display(caller.number)
+            let remove = PorchStyle.button("Remove", symbol: "minus.circle", filled: false)
+            remove.configuration?.baseForegroundColor = .systemRed
+            remove.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 4)
+            remove.accessibilityLabel = "Remove \(number) from allowed numbers"
+            remove.addAction(UIAction { [weak admin] _ in Task { await admin?.perform("setCallerAllowed", ["number": caller.number, "allowed": false]) } }, for: .touchUpInside)
+            return listRow(Self.text(number, "Allowed \(when(caller.allowedAt))"), trailing: FamilyAdminViewController.singleLine(remove))
+        }
+        if allowed.isEmpty { allowed.append(listRow([PorchStyle.label("None yet. Allow a blocked number to let it ring.", size: 16)])) }
+        content.addArrangedSubview(group("Allowed", footer: "These numbers can ring although they aren't on the keypad. A removed number is blocked again.", rows: allowed))
+    }
+    private static func text(_ title: String, _ detail: String) -> UIView {
+        let text = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink), PorchStyle.label(detail, size: 15)])
+        text.axis = .vertical; text.spacing = 2
+        return text
     }
 }
 

@@ -56,6 +56,33 @@ public struct PhoneDropInApproval: Codable, Equatable {
     public let name: String
     public init(number: String, name: String) { self.number = number; self.name = name }
 }
+/// A caller ID that tried to ring the bedside while unknown callers were blocked.
+public struct BlockedCaller: Codable, Equatable {
+    public let number: String
+    public let firstCallAt: TimeInterval
+    public let lastCallAt: TimeInterval
+    public let calls: Int
+}
+/// A number a caregiver allowed to ring the bedside although it isn't saved on the keypad.
+public struct AllowedCaller: Codable, Equatable {
+    public let number: String
+    public let allowedAt: TimeInterval
+}
+/// Who can ring the bedside from a regular phone. Calls are matched by caller ID, which can be faked.
+public struct CallScreening: Codable, Equatable {
+    /// Only keypad contacts, approved phone drop-ins and allowed numbers ring; other numbers are listed in `blocked`.
+    public let enabled: Bool
+    /// The keypad's phone numbers as the server last heard them; nil until the bedside first reports them.
+    public let keypadNumbers: [String]?
+    public let allowed: [AllowedCaller]
+    /// Newest first. Numbers saved or allowed since they called aren't listed.
+    public let blocked: [BlockedCaller]
+    /// The keypad's numbers to report, or nil when the server already has them.
+    public func keypadNumbersToReport(_ slots: CallSlots) -> [String]? {
+        let numbers = slots.phoneNumbers
+        return keypadNumbers == numbers ? nil : numbers
+    }
+}
 /// A message waiting on the bedside device (only the bedside's snapshot carries the queue).
 public struct FamilyMessage: Codable, Equatable, Identifiable {
     public let id: String
@@ -144,6 +171,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let speech: NaturalVoices?
     /// Bedside only: the bedside language as the server last heard it; phone voicemail greets callers in it. Older servers don't send it.
     public let bedsideLanguage: String?
+    /// Bedside only: who can ring by phone. Older servers don't send it.
+    public let callScreening: CallScreening?
 
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {
@@ -181,9 +210,12 @@ public struct FamilyAdminState: Codable, Equatable {
     public let phoneDropIns: [PhoneDropInApproval]?
     /// Unclaimed invitations, so a caregiver can see who hasn't joined yet and cancel one.
     public let invitations: [PendingFamilyInvitation]?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil) {
+    /// Who can ring by phone. Older servers don't send it.
+    public let callScreening: CallScreening?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
         self.messagesEnabled = messagesEnabled; self.messages = messages; self.phoneDropIns = phoneDropIns; self.invitations = invitations
+        self.callScreening = callScreening
     }
 }
 public struct FamilyCredential: Codable {

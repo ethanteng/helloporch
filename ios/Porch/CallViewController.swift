@@ -664,6 +664,7 @@ final class CallViewController: UIViewController {
         setup.onSave = { [weak self] updated in
             try updated.save()
             self?.slots = updated
+            FamilyCoordinator.shared.reportKeypad(updated)
         }
         present(PorchStyle.navigation(setup), animated: true)
     }
