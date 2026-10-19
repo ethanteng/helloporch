@@ -140,6 +140,26 @@ public struct FamilySnapshot: Codable, Equatable {
     public let ringSeconds: Int?
     /// Family devices: messages the bedside left for this device that haven't been played.
     public let newMessages: Int?
+    /// Bedside only: natural announcement voices. Older servers, and ones without a speech service, don't send them.
+    public let speech: NaturalVoices?
+}
+/// The natural voices a caregiver can choose for each bedside language, and the household's choice.
+public struct NaturalVoices: Codable, Equatable {
+    public struct Voice: Codable, Equatable, Identifiable {
+        public let id: String
+        public let name: String
+        /// How it sounds, such as "Steady, calm and grounded · female".
+        public let detail: String
+    }
+    public struct Choices: Codable, Equatable {
+        /// The household's voice for this language; nil means the iPad's built-in voice.
+        public let selected: String?
+        public let defaultVoice: String
+        public let voices: [Voice]
+    }
+    /// Keyed by `BedsideLanguage.rawValue`.
+    public let languages: [String: Choices]
+    public func choices(for language: BedsideLanguage) -> Choices? { languages[language.rawValue] }
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
 /// family device's own snapshot doesn't include.

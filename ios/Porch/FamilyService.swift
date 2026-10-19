@@ -87,7 +87,11 @@ struct FamilyResponse: Decodable {
     let pathname: String?
     /// A family member's photo (`profilePhoto`, `caregiverProfilePhoto`).
     let photo: ProfilePhotoURL?
+    /// A sentence read in the household's natural voice (`speech`).
+    let clip: SpeechClip?
 }
+/// A short-lived link to an announcement clip, and the voice that read it.
+struct SpeechClip: Decodable { let voiceID: String; let url: String; let expiresAt: TimeInterval }
 /// A presigned upload: send the file as the body with exactly these headers.
 struct MessageUploadTarget: Decodable { let url: String; let method: String; let headers: [String: String]; let expiresAt: TimeInterval }
 /// A short-lived link to one message's audio or video.
@@ -99,10 +103,10 @@ struct FamilyService {
     init(_ credential: FamilyCredential) { origin = credential.origin; self.credential = credential.credential }
     init(origin: URL) { self.origin = origin; credential = nil }
 
-    func send(_ action: String, _ values: [String: Any] = [:], pin: String? = nil) async throws -> FamilyResponse {
+    func send(_ action: String, _ values: [String: Any] = [:], pin: String? = nil, timeout: TimeInterval = 12) async throws -> FamilyResponse {
         var body = values; body["action"] = action
         var request = URLRequest(url: origin.appendingPathComponent("api/family"))
-        request.httpMethod = "POST"; request.timeoutInterval = 12
+        request.httpMethod = "POST"; request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let credential { request.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization") }
         if let pin { request.setValue(pin, forHTTPHeaderField: "X-Porch-Setup-Code") }
@@ -216,6 +220,7 @@ struct FamilyCallSession {
                 let previous = slots
                 try slots.reconcile(with: state)
                 if slots != previous { try slots.save() }
+                PorchNaturalVoice.prefetch(state, slots: slots)
             } catch { self.error = error.localizedDescription }
         }
         NotificationCenter.default.post(name: .porchFamilyChanged, object: self)
