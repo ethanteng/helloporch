@@ -365,6 +365,40 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(reopenedPicker.accessibilityValue, "System default")
         XCTAssertEqual(BedsidePreferences.load(from: defaults), preferences, "Leaving a draft must preserve the saved choices")
     }
+    @MainActor func testVoicePickerOffersTheFamilysNaturalVoicesAboveBuiltInOnes() throws {
+        let suite = "natural-voice-picker-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        BedsidePreferences().save(to: defaults)
+        let natural = try JSONDecoder().decode(NaturalVoices.self, from: Data("""
+            {"languages": {
+              "en": {"selected": "hope", "defaultVoice": "hope", "voices": [{"id": "hope", "name": "Hope", "detail": "Natural, clear and calm · female"}, {"id": "jon", "name": "Jon", "detail": "Warm and grounded · male"}]},
+              "es": {"selected": null, "defaultVoice": "eva", "voices": [{"id": "eva", "name": "Eva Dorado", "detail": "Warm and soft · female"}]}
+            }}
+            """.utf8))
+        let settings = BedsideDisplaySettingsViewController(defaults: defaults, naturalVoices: { natural })
+        settings.loadViewIfNeeded()
+        let picker = try XCTUnwrap(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.announcementVoice" })
+        XCTAssertEqual(picker.accessibilityValue, "Hope · Natural")
+        let sections = try XCTUnwrap(picker.menu).children.compactMap { $0 as? UIMenu }
+        XCTAssertEqual(sections.map(\.title), ["Natural voices", "Built-in voices on this iPad"])
+        let naturals = sections[0].children.compactMap { $0 as? UIAction }
+        XCTAssertEqual(naturals.map(\.title), ["Hope · Natural, clear and calm · female", "Jon · Warm and grounded · male"])
+        XCTAssertEqual(naturals.filter { $0.state == .on }.map(\.title), [naturals[0].title])
+        XCTAssertTrue(sections[1].children.compactMap { $0 as? UIAction }.allSatisfy { $0.state == .off }, "The built-in voice is only the fallback")
+        settings.selectNaturalVoice("jon")
+        XCTAssertEqual(picker.accessibilityValue, "Jon · Natural")
+        settings.selectAnnouncementVoice(nil)
+        XCTAssertEqual(picker.accessibilityValue, "System default")
+        // This family keeps the built-in voice for Spanish.
+        try XCTUnwrap(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.language.es" }).sendActions(for: .touchUpInside)
+        XCTAssertFalse(picker.accessibilityValue?.hasSuffix("· Natural") ?? false)
+        XCTAssertEqual(try XCTUnwrap(picker.menu).children.compactMap { $0 as? UIMenu }.count, 2)
+        // A language without natural voices keeps the plain list.
+        try XCTUnwrap(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.language.yue-Hant" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue(try XCTUnwrap(picker.menu).children.allSatisfy { $0 is UIAction })
+        XCTAssertTrue(BedsidePreferences.load(from: defaults).announcementVoiceIdentifiers.isEmpty, "Draft choices must not be saved")
+    }
     @MainActor func testNewLanguagesReachClockContactsIncomingCallsAndAnnouncements() throws {
         for language in [BedsideLanguage.simplifiedChinese, .cantonese, .spanish] {
             let restore = localizedBedside(language); defer { restore() }

@@ -151,6 +151,10 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private let voiceStatus = PorchStyle.label("", size: 16)
     private let voicePreviewStatus = PorchStyle.label("", size: 16)
     private let voicePreview = PorchIncomingAudio()
+    /// Natural voices this family can use, from the server, and unsaved choices among them (nil: the built-in voice).
+    private let naturalVoices: @MainActor () -> NaturalVoices?
+    private var natural: NaturalVoices? { naturalVoices() }
+    private var naturalDrafts: [BedsideLanguage: String?] = [:]
     private let appearance = UISegmentedControl(items: ["Default", "Dynamic"])
     private let hemisphere = UISegmentedControl(items: ["Northern", "Southern"])
     private var languageButtons: [BedsideLanguage: UIButton] = [:]
@@ -159,8 +163,10 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private let nightLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let example = BedsideSceneView()
     private let previewClock = PorchStyle.label("", size: 24, color: PorchStyle.ink, weight: .semibold)
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard,
+         naturalVoices: @escaping @MainActor () -> NaturalVoices? = { PorchDevice.experience == .bedside ? FamilyCoordinator.shared.state?.speech : nil }) {
         self.defaults = defaults
+        self.naturalVoices = naturalVoices
         preferences = BedsidePreferences.load(from: defaults)
         super.init(nibName: nil, bundle: nil)
     }
@@ -208,8 +214,9 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         let previewVoice = PorchStyle.button("Preview announcement", symbol: "speaker.wave.2", filled: false)
         previewVoice.accessibilityIdentifier = "bedside.previewAnnouncement"
         previewVoice.addTarget(self, action: #selector(previewAnnouncement), for: .touchUpInside)
-        form.addArrangedSubview(section("Announcement voice", detail: "Choose a voice for the bedside language. Each language remembers its own choice on this iPad. English and Spanish include regional accents; Taiwan Mandarin, mainland Mandarin and Cantonese have separate choices. Download more voices in the iPad's Accessibility speech settings, then return here. Preview before saving; no call is placed.", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
+        form.addArrangedSubview(section("Announcement voice", detail: "Choose a voice for the bedside language. Natural voices sound like a person; the choice is saved for this family and each announcement is prepared over the internet. Built-in voices stay on this iPad, and speak whenever a natural announcement isn't ready. Each language remembers its own choice. English and Spanish include regional accents; Taiwan Mandarin, mainland Mandarin and Cantonese have separate choices. Download more built-in voices in the iPad's Accessibility speech settings, then return here. Preview before saving; no call is placed.", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
         NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: .porchFamilyChanged, object: nil)
         day.minimumValue = 0; day.maximumValue = 11; day.value = Double(preferences.dayStart)
         night.minimumValue = 12; night.maximumValue = 23; night.value = Double(preferences.nightStart)
         day.accessibilityLabel = "Day begins"; night.accessibilityLabel = "Night begins"
@@ -236,26 +243,53 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     func selectAnnouncementVoice(_ identifier: String?) {
         stopVoicePreview()
         preferences.setAnnouncementVoiceIdentifier(identifier, for: preferences.language)
+        if natural?.choices(for: preferences.language) != nil { naturalDrafts[preferences.language] = .some(nil) }
         refreshAnnouncementVoices()
+    }
+    /// The built-in voice stays saved on this iPad; it speaks while a natural announcement isn't ready.
+    func selectNaturalVoice(_ id: String) {
+        stopVoicePreview()
+        naturalDrafts[preferences.language] = .some(id)
+        refreshAnnouncementVoices()
+    }
+    private func naturalVoice(for language: BedsideLanguage) -> String? {
+        if let draft = naturalDrafts[language] { return draft }
+        return natural?.choices(for: language)?.selected
     }
     @objc private func refreshAnnouncementVoices() {
         let language = preferences.language
         let voices = PorchAnnouncementVoice.available(for: language)
         let identifier = preferences.announcementVoiceIdentifier(for: language)
         let selected = voices.first { $0.identifier == identifier }
-        let title = selected.map(PorchAnnouncementVoice.label) ?? "System default"
+        let choices = natural?.choices(for: language)
+        let naturalChoice = naturalVoice(for: language).flatMap { id in choices?.voices.first { $0.id == id } }
+        let title = naturalChoice.map { "\($0.name) · Natural" } ?? selected.map(PorchAnnouncementVoice.label) ?? "System default"
         announcementVoice.configuration?.title = title
         announcementVoice.accessibilityValue = title
-        var actions = [UIAction(title: "System default", state: selected == nil ? .on : .off) { [weak self] _ in
+        let builtIn = naturalChoice == nil
+        var actions = [UIAction(title: "System default", state: builtIn && selected == nil ? .on : .off) { [weak self] _ in
             self?.selectAnnouncementVoice(nil)
         }]
         actions += voices.map { voice in
-            UIAction(title: PorchAnnouncementVoice.label(voice), state: voice.identifier == selected?.identifier ? .on : .off) { [weak self] _ in
+            UIAction(title: PorchAnnouncementVoice.label(voice), state: builtIn && voice.identifier == selected?.identifier ? .on : .off) { [weak self] _ in
                 self?.selectAnnouncementVoice(voice.identifier)
             }
         }
-        announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children: actions)
-        if PorchAnnouncementVoice.resolve(for: language, identifier: identifier) == nil {
+        if let choices {
+            let naturals = choices.voices.map { voice in
+                UIAction(title: "\(voice.name) · \(voice.detail)", state: voice.id == naturalChoice?.id ? .on : .off) { [weak self] _ in
+                    self?.selectNaturalVoice(voice.id)
+                }
+            }
+            announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children: [
+                UIMenu(title: "Natural voices", options: .displayInline, children: naturals),
+                UIMenu(title: "Built-in voices on this iPad", options: .displayInline, children: actions)])
+        } else {
+            announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children: actions)
+        }
+        if naturalChoice != nil {
+            voiceStatus.text = "A natural voice for \(language.displayName), saved for this family. Each announcement is prepared over the internet the first time; until it's ready, this iPad's built-in voice speaks. Tap Save to keep your choice."
+        } else if PorchAnnouncementVoice.resolve(for: language, identifier: identifier) == nil {
             voiceStatus.text = "No voice is available for \(language.displayName). Download a matching voice in the iPad's Accessibility speech settings. Drop-ins will require manual acceptance until speech is available."
         } else if identifier != nil && selected == nil {
             voiceStatus.text = "The saved voice is unavailable. Announcements will use the system default for \(language.displayName) until it is available again or you save another choice."
@@ -268,7 +302,8 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         let language = preferences.language
         voicePreviewStatus.text = "Playing the selected voice. No call is placed."
         voicePreview.announce(name: language.text("A family member"), video: true, language: language,
-                              voiceIdentifier: preferences.announcementVoiceIdentifier(for: language)) { [weak self] success in
+                              voiceIdentifier: preferences.announcementVoiceIdentifier(for: language),
+                              naturalVoice: naturalVoice(for: language), naturalWait: 8) { [weak self] success in
             self?.voicePreviewStatus.text = success ? "Preview completed. Tap Save to keep your choice." : "Couldn't play the preview. Check the iPad's audio output, media volume and installed voices."
         }
     }
@@ -298,7 +333,29 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     @objc private func save() {
         preferences.save(to: defaults)
         NotificationCenter.default.post(name: .porchBedsideDisplayChanged, object: nil)
-        navigationController?.popViewController(animated: true)
+        // Natural voice choices belong to the family, so they're saved on the server with the caregiver PIN.
+        let changes = naturalDrafts.compactMap { language, draft -> (BedsideLanguage, String?)? in
+            guard let choices = natural?.choices(for: language), choices.selected != draft else { return nil }
+            return (language, draft)
+        }
+        guard !changes.isEmpty, let credential = PorchDevice.credential(for: .bedside) else {
+            navigationController?.popViewController(animated: true); return
+        }
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        Task { [weak self] in
+            do {
+                for (language, voiceID) in changes {
+                    let response = try await FamilyService(credential).send("setSpeechVoice", ["language": language.rawValue, "voiceID": voiceID.map { $0 as Any } ?? NSNull()], pin: NativeCallSettings.caregiverCode)
+                    FamilyCoordinator.shared.update(response)
+                }
+                self?.naturalDrafts = [:]
+                self?.navigationController?.popViewController(animated: true)
+            } catch {
+                guard let self else { return }
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
+                showPorchError(error, on: self)
+            }
+        }
     }
 }
 extension Notification.Name { static let porchBedsideDisplayChanged = Notification.Name("porchBedsideDisplayChanged") }

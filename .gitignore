@@ -19,3 +19,6 @@ ios/build/
 *.ipa
 .env*
 !.env.example
+
+# Local voice listening samples (scripts/voice-samples.mjs)
+/.voice-samples/

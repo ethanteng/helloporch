@@ -87,7 +87,11 @@ struct FamilyResponse: Decodable {
     let pathname: String?
     /// A family member's photo (`profilePhoto`, `caregiverProfilePhoto`).
     let photo: ProfilePhotoURL?
+    /// A sentence read in the household's natural voice (`speech`).
+    let clip: SpeechClip?
 }
+/// A short-lived link to an announcement clip, and the voice that read it.
+struct SpeechClip: Decodable { let voiceID: String; let url: String; let expiresAt: TimeInterval }
 /// A presigned upload: send the file as the body with exactly these headers.
 struct MessageUploadTarget: Decodable { let url: String; let method: String; let headers: [String: String]; let expiresAt: TimeInterval }
 /// A short-lived link to one message's audio or video.
@@ -216,6 +220,7 @@ struct FamilyCallSession {
                 let previous = slots
                 try slots.reconcile(with: state)
                 if slots != previous { try slots.save() }
+                PorchNaturalVoice.prefetch(state, slots: slots)
             } catch { self.error = error.localizedDescription }
         }
         NotificationCenter.default.post(name: .porchFamilyChanged, object: self)

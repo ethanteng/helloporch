@@ -10,8 +10,9 @@ import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
+import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
-export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult> };
+export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -50,7 +51,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto"];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto"];
 function publicCall(call: Call) { const { phone: _phone, ...result } = call; return result; }
 // `name` and `photoID` are what Porch shows. Caregiver screens and the member themselves also get the
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
@@ -85,6 +86,8 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     // Family phones ring the bedside this long before offering voicemail.
     ringSeconds: ringSeconds(house),
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [] } : {}),
+    // The bedside's natural announcement voices, when this server can make them.
+    ...(me.role === "bedside" && speechConfigured() ? { speech: publicSpeech(house) } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
     ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}),
     // Messages the bedside left for this family member when they missed its call.
@@ -247,6 +250,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const result = await handleProfileAction(String(action), { store, media, now, house, me: memberFor(house, auth), input });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), ...(caregiverAction ? { admin: adminState(current, now, pushEnabled) } : {}) });
+    }
+    if (speechActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handleSpeechAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, synthesize: dependencies.synthesize });
+      if (!caregiverAction) return callJSON(result);
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
     }
     if (["poll", "acceptCall", "joinCall", "startCall"].includes(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);

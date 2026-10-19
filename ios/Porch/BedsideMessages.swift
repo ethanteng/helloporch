@@ -124,11 +124,14 @@ extension Notification.Name {
     }
 }
 
-/// A chime, then who the message is from and when, in the bedside language and voice.
+/// A chime, then who the message is from and when, in the bedside language and voice. A natural clip
+/// gets a few seconds to arrive, since nothing is counting down; otherwise the built-in voice speaks.
 @MainActor final class MessageAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
     private let tone = PorchTonePlayer()
+    private let clip = PorchClipPlayer()
     private let speech = AVSpeechSynthesizer()
     private var utterance: AVSpeechUtterance?
+    private var announcement: UUID?
     private var completion: (() -> Void)?
     private var timers: [Timer] = []
 
@@ -139,24 +142,43 @@ extension Notification.Name {
         if PorchTonePlayer.isSilentPreview { finish(); return }
         tone.play(.announcement)
         let language = BedsideText.language
-        guard let voice = PorchAnnouncementVoice.resolve(for: language, identifier: BedsidePreferences.load().announcementVoiceIdentifier(for: language)) else {
+        let naturalVoice = PorchNaturalVoice.selected(for: language)
+        let voice = PorchAnnouncementVoice.resolve(for: language, identifier: BedsidePreferences.load().announcementVoiceIdentifier(for: language))
+        guard voice != nil || naturalVoice != nil else {
             // No voice for this language: the screen still shows who it's from.
             timers.append(Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } })
             return
         }
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = voice; utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        self.utterance = utterance
+        utterance = voice.map { voice in
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.voice = voice; utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+            return utterance
+        }
+        let announcement = UUID(); self.announcement = announcement
         timers.append(Timer.scheduledTimer(withTimeInterval: CallTone.announcement.duration, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in guard let self, let utterance = self.utterance else { return }; self.speech.speak(utterance) }
+            Task { @MainActor [weak self] in
+                var ready: URL?
+                if let naturalVoice { ready = await PorchNaturalVoice.clip(text, language: language, voiceID: naturalVoice, within: 3) }
+                guard let self, self.announcement == announcement else { return }
+                if let ready, self.clip.play(ready, completion: { [weak self] success in
+                    guard let self, self.announcement == announcement else { return }
+                    if success { self.finish() } else { PorchNaturalVoice.discard(ready); self.speakBuiltIn() }
+                }) { return }
+                if let ready { PorchNaturalVoice.discard(ready) }
+                self.speakBuiltIn()
+            }
         })
         // A stuck speech service must not hold up the message.
         timers.append(Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } })
     }
+    private func speakBuiltIn() {
+        guard let utterance else { finish(); return }
+        speech.speak(utterance)
+    }
     func stop() {
-        completion = nil; utterance = nil
+        completion = nil; utterance = nil; announcement = nil
         timers.forEach { $0.invalidate() }; timers = []
-        speech.stopSpeaking(at: .immediate); tone.stop()
+        speech.stopSpeaking(at: .immediate); clip.stop(); tone.stop()
     }
     private func finish() { let callback = completion; stop(); callback?() }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
@@ -296,7 +318,7 @@ final class MessagePlayerViewController: UIViewController {
         identity.addArrangedSubview(nameLabel); identity.addArrangedSubview(detailLabel)
         identity.isHidden = false; videoView.isHidden = true; bannerView.isHidden = true
         BedsideText.applyAccessibilityLanguage(to: view)
-        announcer.announce(BedsideText.string(message.kind == "voicemail" ? "Voicemail from %@. Sent %@." : "Message from %@. Sent %@.", name, sent)) { [weak self] in
+        announcer.announce(Self.announcement(for: message, slots: slots)) { [weak self] in
             self?.play(message, file: file)
         }
     }
@@ -321,6 +343,10 @@ final class MessagePlayerViewController: UIViewController {
         current = nil
         BedsideMessages.shared.markPlayed(message)
         playNext()
+    }
+    /// What the bedside says before playing a message.
+    static func announcement(for message: FamilyMessage, slots: CallSlots) -> String {
+        BedsideText.string(message.kind == "voicemail" ? "Voicemail from %@. Sent %@." : "Message from %@. Sent %@.", BedsideMessages.sender(of: message, slots: slots).name, sentText(message.sentAt))
     }
     static func sentText(_ sentAt: TimeInterval) -> String {
         let formatter = DateFormatter()
@@ -606,7 +632,13 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
 /// does: a spoken prompt, a beep, then up to two minutes of audio or video, matching the call.
 /// Finishing (the button, the hang-up key or the time limit) sends it. Saying nothing sends nothing.
 final class BedsideVoicemailViewController: UIViewController {
-    enum Reason { case unanswered, unavailable }
+    enum Reason: CaseIterable {
+        case unanswered, unavailable
+        /// What the bedside says before recording a message for this person.
+        func prompt(for name: String) -> String {
+            BedsideText.string(self == .unanswered ? "%@ didn't answer. Please leave a message after the beep." : "%@ isn't available right now. Please leave a message after the beep.", name)
+        }
+    }
     var onFinish: (() -> Void)?
     private let contact: CallContact
     private let memberID: String
@@ -789,8 +821,7 @@ final class BedsideVoicemailViewController: UIViewController {
             guard self.phase == .starting else { self.recorder.cancel(); return }
             if self.recorder.video { self.showCamera() }
             self.phase = .prompting
-            let prompt = self.reason == .unanswered ? "%@ didn't answer. Please leave a message after the beep." : "%@ isn't available right now. Please leave a message after the beep."
-            self.announcer.announce(BedsideText.string(prompt, self.contact.name)) { [weak self] in self?.beepThenRecord() }
+            self.announcer.announce(self.reason.prompt(for: self.contact.name)) { [weak self] in self?.beepThenRecord() }
         }
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); resignFirstResponder() }
