@@ -227,6 +227,8 @@ test('a caller blocked while the bedside rings can\'t leave voicemail', async ()
   await f.json('setBlockUnknownCallers', { enabled: true }, f.bedside.credential, '123456');
   const dialed = await f.twilio('dialed', { CallSid, From: caller, To: porchNumber, DialCallStatus: 'no-answer' });
   assert.match(dialed.body, /^<\?xml[^>]*><Response><Hangup\/><\/Response>$/);
+  // The call already rang, then blocking was turned on: it still shows up so a caregiver can allow it.
+  assert.deepEqual((await f.json('verifyPIN', {}, f.sam.credential, '123456')).admin.callScreening.blocked.map(c => c.number), [caller]);
   // Allowed again, the next unanswered call can leave a message.
   await f.json('setCallerAllowed', { number: caller, allowed: true }, f.bedside.credential, '123456');
   assert.ok((await f.voicemail(caller)).recorded);
@@ -249,12 +251,25 @@ test('only PIN-checked caregivers screen callers, only the bedside reports its k
   assert.equal((await f.send('setBlockUnknownCallers', { enabled: 'yes' }, f.sam.credential, '123456')).status, 400);
   assert.equal((await f.send('setCallerAllowed', { number: '5559876543', allowed: true }, f.sam.credential, '123456')).status, 400);
   assert.equal((await f.send('setCallerAllowed', { number: caller }, f.sam.credential, '123456')).status, 400);
+  assert.equal((await f.send('setCallerAllowed', { number: '+266696687', allowed: true }, f.sam.credential, '123456')).status, 400, 'withheld caller ID can\'t be allowed');
   await f.json('setBlockUnknownCallers', { enabled: true }, f.sam.credential, '123456');
   // The list keeps the 30 most recent callers.
   for (let n = 0; n < 32; n++) { f.advance(1); await f.twilio('incoming', { CallSid: sid('CA', 100 + n), From: `+1555000${String(n).padStart(4, '0')}`, To: porchNumber }); }
   const blocked = (await f.json('poll', { available: true }, f.bedside.credential)).state.callScreening.blocked;
   assert.equal(blocked.length, 30);
   assert.deepEqual([blocked[0].number, blocked[29].number], ['+15550000031', '+15550000002']);
+  // Allowing a recent caller must not spend one of those 30 slots.
+  const oldest = blocked[29].number, recent = blocked[0].number;
+  await f.json('setCallerAllowed', { number: recent, allowed: true }, f.sam.credential, '123456');
+  f.advance(1);
+  await f.twilio('incoming', { CallSid: sid('CA', 200), From: '+15550009999', To: porchNumber });
+  const after = (await f.json('poll', { available: true }, f.bedside.credential)).state.callScreening.blocked;
+  assert.equal(after.length, 30);
+  assert.equal(after[0].number, '+15550009999');
+  assert.ok(after.some(c => c.number === oldest), 'an older blocked number stays listed');
+  const restored = await f.json('setCallerAllowed', { number: recent, allowed: false }, f.sam.credential, '123456');
+  assert.equal(restored.admin.callScreening.blocked.length, 30);
+  assert.equal(restored.admin.callScreening.blocked.find(c => c.number === recent)?.calls, blocked[0].calls);
   for (let n = 0; n < 50; n++) await f.json('setCallerAllowed', { number: `+1555999${String(n).padStart(4, '0')}`, allowed: true }, f.sam.credential, '123456');
   assert.equal((await f.send('setCallerAllowed', { number: caller, allowed: true }, f.sam.credential, '123456')).status, 400);
   assert.equal((await f.send('setCallerAllowed', { number: '+15559990000', allowed: true }, f.sam.credential, '123456')).status, 200, 'allowing again is harmless');

@@ -10,7 +10,7 @@ import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
-import { handleScreeningAction, publicCallScreening, screeningActions } from "./screening.ts";
+import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize };
@@ -375,6 +375,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             others.push({ number, name: name(input.name) });
           }
           house.phoneDropIns = others;
+          pruneBlockedCallers(house);
         } else {
           const target = house.members.find(m => m.id === input.memberID && m.role === "family" && !m.revoked);
           requireValue(target, "This family member was not found.", 404);

@@ -376,6 +376,16 @@ test('with unknown callers blocked, direct SIP calls from other numbers never ri
   await f.webhook(f.call());
   assert.equal((await f.poll(bedside)).state.call.kind, 'call');
   assert.ok(!JSON.stringify(await f.poll(family)).includes('+14155550300'));
+  // The line is free again. Twilio's withheld placeholder still must not ring, even when it is saved on the keypad.
+  f.advance(120); await f.poll(bedside);
+  assert.equal(f.house(bedside).call.state, 'ended');
+  await f.json('setKeypadNumbers', { numbers: ['+266696687', '+14155550300'] }, bedside.credential, pin);
+  assert.equal((await f.send('setCallerAllowed', { number: '+266696687', allowed: true }, bedside.credential, pin)).status, 400);
+  const placeholder = f.call(undefined, { 'sip.phoneNumber': '+266696687' });
+  await f.webhook(placeholder);
+  assert.ok(f.ended.includes(placeholder.room.name));
+  assert.equal(f.house(bedside).call.state, 'ended');
+  assert.ok(!(f.house(bedside).blockedCallers ?? []).some(c => c.number === '+266696687'));
 });
 
 test('carrier verification is read from LiveKit, not trusted from the webhook body', async () => {
