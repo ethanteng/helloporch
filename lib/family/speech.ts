@@ -5,8 +5,8 @@ import type { FamilyStore } from "./store.ts";
 
 // Natural announcement voices. Each bedside language offers a few ElevenLabs voices the family listened to
 // (scripts/voice-samples.mjs); a caregiver picks one per language, or keeps the iPad's built-in voice.
-// The server reads the bedside's sentences aloud and keeps each clip in the private media store, so a
-// sentence is paid for once. The bedside uses its built-in voice whenever a clip isn't ready.
+// The server reads the bedside's sentences, and phone voicemail's greetings, aloud and keeps each clip in the
+// private media store, so a sentence is paid for once. The bedside uses its built-in voice whenever a clip isn't ready.
 export type SpeechVoice = { id: string; name: string; detail: string };
 /** Keyed by the bedside's language codes; `code` is ElevenLabs' language. Each language's first voice is its default. */
 export const speechCatalog: Record<string, { code: string; voices: SpeechVoice[] }> = {
@@ -42,8 +42,12 @@ export const speechModel = "eleven_v4";
 // several times over, while keeping one device from spending the whole plan.
 export const speechLimits = { textCharacters: 300, dailyCharacters: 4000, audioBytes: 2_000_000, downloadSeconds: 3600 };
 export const speechActions = new Set(["speech", "setSpeechVoice"]);
-export type Synthesize = (voiceID: string, languageCode: string, text: string) => Promise<Uint8Array>;
-export type SpeechContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; me: Member; input: Record<string, unknown>; synthesize?: Synthesize };
+// The bedside plays clips at full quality; a phone line carries 8 kHz, so phone voicemail greetings are small.
+export const speechFormats = { bedside: "mp3_44100_128", phone: "mp3_22050_32" } as const;
+export type SpeechFormat = keyof typeof speechFormats;
+export type Synthesize = (voiceID: string, languageCode: string, text: string, outputFormat: string) => Promise<Uint8Array>;
+export type ClipContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; synthesize?: Synthesize };
+export type SpeechContext = ClipContext & { me: Member; input: Record<string, unknown> };
 
 export function speechConfigured() { return !!process.env.ELEVENLABS_API_KEY; }
 /** The household's voice for a language: unset is the default, null is the iPad's built-in voice. */
@@ -59,12 +63,12 @@ export function publicSpeech(house: Household) {
     [language, { selected: speechVoice(house, language), defaultVoice: voices[0].id, voices }])) };
 }
 
-async function elevenLabs(voiceID: string, languageCode: string, text: string): Promise<Uint8Array> {
+async function elevenLabs(voiceID: string, languageCode: string, text: string, outputFormat: string): Promise<Uint8Array> {
   const key = process.env.ELEVENLABS_API_KEY;
   requireValue(key, "Natural voices aren't set up on this server.", 503);
   let response: Response;
   try {
-    response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceID}?output_format=mp3_44100_128`, {
+    response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceID}?output_format=${outputFormat}`, {
       method: "POST", headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" },
       body: JSON.stringify({ text, model_id: speechModel, language_code: languageCode }), signal: AbortSignal.timeout(15_000) });
   } catch { throw new FamilyError("Natural voices aren't available right now.", 503); }
@@ -95,8 +99,14 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   requireValue(requested === undefined || (typeof requested === "string" && speechCatalog[language].voices.some(v => v.id === requested)), "Choose one of the listed voices.");
   const voiceID = requested ?? speechVoice(house, language);
   requireValue(voiceID, "This language uses the iPad's built-in voice.", 409);
+  return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
+}
+
+/** A sentence read in a listed voice, and a short-lived link to it. Kept in the media store, so it's paid for once. */
+export async function speechClip({ store, media, now, house, synthesize }: ClipContext, voiceID: string, language: string, text: string, format: SpeechFormat = "bedside") {
   // The same sentence in the same voice is the same clip; names stay out of the path.
-  const pathname = `speech/${house.id}/${createHash("sha256").update(JSON.stringify([speechModel, voiceID, language, text])).digest("hex")}.mp3`;
+  const key = [speechModel, voiceID, language, text, ...(format === "bedside" ? [] : [format])];
+  const pathname = `speech/${house.id}/${createHash("sha256").update(JSON.stringify(key)).digest("hex")}.mp3`;
   if (!await media().stat(pathname)) {
     // Counted before asking, so failing requests can't run up the plan either.
     const day = Math.floor(now / 86400);
@@ -105,10 +115,10 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
       requireValue(used + text.length <= speechLimits.dailyCharacters, "Natural voices are resting until tomorrow. The built-in voice is used meanwhile.", 429);
       latest.speechUsage = { day, characters: used + text.length };
     });
-    const audio = await (synthesize ?? elevenLabs)(voiceID, speechCatalog[language].code, text);
+    const audio = await (synthesize ?? elevenLabs)(voiceID, speechCatalog[language].code, text, speechFormats[format]);
     requireValue(audio.length > 0 && audio.length <= speechLimits.audioBytes, "Natural voices aren't available right now.", 503);
     await media().put(pathname, audio, "audio/mpeg");
   }
   const expiresAt = now + speechLimits.downloadSeconds;
-  return { clip: { voiceID, url: await media().downloadURL(pathname, expiresAt), expiresAt } };
+  return { voiceID, url: await media().downloadURL(pathname, expiresAt), expiresAt };
 }
