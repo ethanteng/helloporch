@@ -168,6 +168,72 @@ final class Cell2JackRoutingTests: XCTestCase {
         keypad.setEnabled(false)
     }
 
+    @MainActor func testUnexpectedUsbFailureReconnectsAndIgnoresOldClientCompletion() async throws {
+        let name = "cell2jack-recovery-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connections: [Connection] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let connection = Connection(update); connections.append(connection); return connection
+        }
+        keypad.setEnabled(true); keypad.activate()
+        connections[0].update(.ready)
+        connections[0].update(.finished("USB device not responding"))
+        XCTAssertEqual(connections.count, 1, "Recovery must wait instead of looping on the main thread")
+        try await Task.sleep(nanoseconds: 1_200_000_000)
+        XCTAssertEqual(connections.count, 2)
+        connections[1].update(.ready)
+        connections[0].update(.finished("late old-client completion"))
+        connections[0].update(.ready)
+        XCTAssertEqual(keypad.status, "Phone keypad ready")
+        keypad.refresh()
+        XCTAssertEqual(connections.count, 2, "A stale completion must not clear the current client")
+        keypad.setEnabled(false)
+        XCTAssertEqual(connections[1].stops, 1)
+        connections[1].update(.finished("stopped"))
+    }
+
+    @MainActor func testRecoveryBacksOffWhenAdapterKeepsFailing() async throws {
+        let name = "cell2jack-backoff-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connections: [Connection] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let connection = Connection(update); connections.append(connection); return connection
+        }
+        keypad.setEnabled(true); keypad.activate()
+        connections[0].update(.finished("adapter absent"))
+        try await Task.sleep(nanoseconds: 1_200_000_000)
+        XCTAssertEqual(connections.count, 2)
+        connections[1].update(.ready) // A momentary response must not reset backoff.
+        connections[1].update(.finished("USB stalled again"))
+        try await Task.sleep(nanoseconds: 1_200_000_000)
+        XCTAssertEqual(connections.count, 2)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        XCTAssertEqual(connections.count, 3)
+        keypad.setEnabled(false); connections[2].update(.finished("stopped"))
+    }
+
+    @MainActor func testPendingRecoveryIsCancelledWhenPausedDisabledOrLeavingBedside() async throws {
+        for change in ["pause", "disable", "family"] {
+            let name = "cell2jack-cancel-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+            defer { defaults.removePersistentDomain(forName: name) }
+            var bedside = true
+            var connections: [Connection] = []
+            let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { bedside }) { update in
+                let connection = Connection(update); connections.append(connection); return connection
+            }
+            keypad.setEnabled(true); keypad.activate()
+            connections[0].update(.finished("USB disconnected"))
+            if change == "pause" { keypad.pause() }
+            else if change == "disable" { keypad.setEnabled(false) }
+            else { bedside = false; keypad.refresh() }
+            try await Task.sleep(nanoseconds: 1_200_000_000)
+            XCTAssertEqual(connections.count, 1, "Cancelled recovery must not open USB after \(change)")
+        }
+    }
+
     @MainActor func testUsbHangupReachesFullScreenReceiverWhenClockViewIsDetached() throws {
         let name = "cell2jack-fullscreen-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))

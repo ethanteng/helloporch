@@ -48,6 +48,11 @@ final class Cell2JackKeypad {
     private var wanted = false
     private var sceneActive = false
     private var generation = UUID()
+    // Unlike generation, this identity survives stop() until that client finishes cleanup.
+    private var connectionID: UUID?
+    private var retryWork: DispatchWorkItem?
+    private var retryID = UUID()
+    private var nextRetryDelay: TimeInterval = 1
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var records: [[String: Any]] = []
     private let reportQueue = DispatchQueue(label: "porch.cell2jack.actions")
@@ -93,7 +98,9 @@ final class Cell2JackKeypad {
         wanted = enabled && isBedside() && sceneActive
         if !wanted { stop(); return }
         guard worker == nil else { return }
-        let token = UUID(); generation = token
+        cancelRetry()
+        let token = UUID(); generation = token; connectionID = token
+        let startedAt = ProcessInfo.processInfo.systemUptime
         changeStatus("Connecting phone keypad…")
         record(["kind": "usbStartRequested"])
         let worker = makeConnection { [weak self] update in
@@ -130,15 +137,20 @@ final class Cell2JackKeypad {
                 }
             case .health(let bytes, let packets, let primaryDigits):
                 guard self.generation == token, self.wanted, !self.stopping else { return }
+                // A briefly responsive but faulty adapter must not reset the backoff on every attempt.
+                if bytes > 0, ProcessInfo.processInfo.systemUptime - startedAt >= 30 { self.nextRetryDelay = 1 }
                 self.record(["kind": "usbHealth", "bytes": bytes, "packets": packets,
                              "primaryDigits": primaryDigits,
                              "sceneState": self.windowScene?.activationState.rawValue ?? -99])
             case .finished(let message):
+                guard self.connectionID == token else { return }
                 let restart = self.stopping && self.wanted
-                self.worker = nil; self.stopping = false
+                self.worker = nil; self.connectionID = nil; self.stopping = false
+                self.generation = UUID()
                 self.changeStatus(message); self.record(["kind": "usbStopped", "result": message])
                 if self.backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(self.backgroundTask); self.backgroundTask = .invalid }
                 if restart { self.refresh() }
+                else if self.wanted { self.scheduleRetry() }
             }
         }
         self.worker = worker; worker.start()
@@ -149,6 +161,7 @@ final class Cell2JackKeypad {
         stop()
     }
     private func stop() {
+        cancelRetry(); nextRetryDelay = 1
         generation = UUID()
         guard let worker else { changeStatus(enabled ? "Phone keypad paused" : "Phone keypad off"); return }
         guard !stopping else { return }
@@ -160,6 +173,23 @@ final class Cell2JackKeypad {
             }
         }
         worker.stop()
+    }
+    private func cancelRetry() {
+        retryID = UUID(); retryWork?.cancel(); retryWork = nil
+    }
+    private func scheduleRetry() {
+        guard Self.supportsDriverPlatform, wanted, enabled, sceneActive, isBedside(), worker == nil, retryWork == nil else { return }
+        let delay = nextRetryDelay
+        nextRetryDelay = min(delay * 2, 15)
+        let token = UUID(); retryID = token
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.retryID == token else { return }
+            self.retryWork = nil
+            self.refresh() // Recheck foreground, preference and bedside mode before opening USB.
+        }
+        retryWork = work
+        record(["kind": "usbRetryScheduled", "delaySeconds": delay])
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
     private func changeStatus(_ text: String) {
         status = text

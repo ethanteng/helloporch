@@ -53,6 +53,12 @@ jobs:
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug \
             -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ios/build/simulator \
             -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES -xcconfig ios/SimulatorCI.xcconfig test
+      - name: Test Cell2Jack routing and automatic USB recovery
+        run: >-
+          xcodebuild -project ios/Porch.xcodeproj -scheme PorchCell2JackCalls -configuration Debug
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
+          -parallel-testing-enabled NO ONLY_ACTIVE_ARCH=YES -xcconfig ios/SimulatorCI.xcconfig
+          -only-testing:Cell2JackCallsTests/Cell2JackRoutingTests test
       - name: Launch on an iPad simulator and capture the screens
         timeout-minutes: 10
         shell: bash
