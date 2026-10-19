@@ -25,7 +25,7 @@ final class ContactPhotoStoreTests: XCTestCase {
             XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("photoData"))
             let restored = try CallSlots.load(from: defaults, photoStore: store)
             XCTAssertEqual(restored, slots, "Inline and file-backed contacts compare by stable photo identity")
-            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.directoryURL.path).count, 10)
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.directoryURL.path).count, CallSlots.count)
             XCTAssertEqual(restored.contact(for: 1)?.photoData?.count, 900_000)
 
             let moved = store.directoryURL.appendingPathExtension("unavailable")

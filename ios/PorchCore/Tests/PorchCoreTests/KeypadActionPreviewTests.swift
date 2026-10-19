@@ -14,18 +14,22 @@ final class KeypadActionPreviewTests: XCTestCase {
         XCTAssertEqual(preview.receive("2").title, "Would call Sam")
         XCTAssertTrue(preview.receive("2").detail.hasPrefix("Video"))
         XCTAssertEqual(preview.receive("3").kind, .unassigned)
-        for key in ["*", "#", "A", "D", "12", "", "١"] { XCTAssertEqual(preview.receive(key).kind, .unmapped) }
+        for key in ["*", "#"] { XCTAssertEqual(preview.receive(key).kind, .unassigned) }
+        for key in ["A", "D", "10", "12", "", "١"] { XCTAssertEqual(preview.receive(key).kind, .unmapped) }
         XCTAssertEqual(preview.slots, slots, "Preview must not edit the saved mapping")
     }
     func testSavedRemappingsAndSimulatedStates() throws {
         var slots = try configured()
         let person = try XCTUnwrap(slots.contact(for: 1))
         try slots.setContact(person, for: 0)
+        try slots.setContact(person, for: CallSlots.star)
         try slots.setAction(.callControl, for: 4)
         try slots.setAction(.toggleVideo, for: 7)
         try slots.setAction(.messages, for: 8)
         var preview = KeypadActionPreview(slots: slots)
         XCTAssertEqual(preview.receive("0").kind, .person)
+        XCTAssertEqual(preview.receive("*").kind, .person)
+        XCTAssertEqual(preview.receive("*").selectedDigit, CallSlots.star)
         XCTAssertEqual(preview.receive("4").kind, .ignored)
         XCTAssertEqual(preview.receive("8").kind, .playMessages)
         preview.setContext(.incoming)

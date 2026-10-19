@@ -415,9 +415,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         var unhandled = Set<UIPress>()
         let slots = (try? CallSlots.load()) ?? CallSlots()
         for press in presses {
-            guard PorchDevice.experience == .bedside, let key = press.key,
-                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
-                  let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)) else { unhandled.insert(press); continue }
+            guard PorchDevice.experience == .bedside, let key = press.key, let digit = key.keypadDigit else { unhandled.insert(press); continue }
             let action = slots.action(for: digit)
             guard action == .callControl || action == .toggleVideo else { unhandled.insert(press); continue }
             guard keypad.keyDown(Int(key.keyCode.rawValue)) else { continue }

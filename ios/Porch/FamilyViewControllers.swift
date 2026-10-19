@@ -1012,8 +1012,7 @@ final class IncomingFamilyCallViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
-                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
+            guard let key = press.key, let digit = key.keypadDigit,
                   (try? CallSlots.load())?.action(for: digit) == .callControl else { unhandled.insert(press); continue }
             let code = Int(key.keyCode.rawValue)
             guard keypad.keyDown(code), !answering else { continue }
@@ -1137,8 +1136,8 @@ final class IncomingFamilyCallViewController: UIViewController {
         if remaining <= 0 { timer?.invalidate(); accept() }
     }
     private func updateKeypadHint() {
-        let digit = ((try? CallSlots.load()) ?? CallSlots()).digit(for: .callControl)
-        keypadHint.text = digit.map { call.kind == "dropIn" && !requiresManualAnswer ? BedsideText.string("Press %d to stop this drop-in.", $0) : BedsideText.string("Tap %d to answer. Hold %d to decline.", $0, $0) } ?? ""
+        let key = ((try? CallSlots.load()) ?? CallSlots()).digit(for: .callControl).map(CallSlots.symbol(for:))
+        keypadHint.text = key.map { call.kind == "dropIn" && !requiresManualAnswer ? BedsideText.string("Press %@ to stop this drop-in.", $0) : BedsideText.string("Tap %@ to answer. Hold %@ to decline.", $0, $0) } ?? ""
     }
     private func updateCountdown() {
         if call.kind == "dropIn" {

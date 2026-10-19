@@ -84,8 +84,8 @@ phone.
 USB transports keypad input only. Call audio uses the existing iPad audio route.
 This integration does not add a USB audio device or automatically route audio to
 the phone. DTMF logs provide no trustworthy down/up duration, so hold-to-decline
-is not synthesized. `*`, `#`, and A–D have no saved digit assignments and are
-ignored. Secondary Double DTMF diagnostic reports do not trigger actions;
+is not synthesized. `*` and `#` act on whatever their keys are assigned, like
+digits; both start as empty person keys. A–D have no keys and are ignored. Secondary Double DTMF diagnostic reports do not trigger actions;
 separate primary reports, including repeated digits, remain separate inputs.
 
 ## Lifecycle and diagnostics

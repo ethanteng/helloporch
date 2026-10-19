@@ -71,8 +71,8 @@ final class BedsideLanguageTests: XCTestCase {
                 XCTAssertNotEqual(text, key, "\(language): \(key)")
                 XCTAssertEqual(arguments(in: text), arguments(in: key), "\(language): \(key)")
             }
-            XCTAssertTrue(language.format("Call %@, key %d", arguments: ["María 陳", 8]).contains("María 陳"))
-            XCTAssertTrue(language.format("Call %@, key %d", arguments: ["María 陳", 8]).contains("8"))
+            XCTAssertTrue(language.format("Call %@, key %@", arguments: ["María 陳", "#"]).contains("María 陳"))
+            XCTAssertTrue(language.format("Call %@, key %@", arguments: ["María 陳", "#"]).contains("#"))
         }
     }
     func testNewLanguagesUseDistinctTranslationsAndAnnouncementVoices() {
@@ -84,7 +84,7 @@ final class BedsideLanguageTests: XCTestCase {
         XCTAssertEqual(BedsideLanguage.spanish.speechLanguage, "es-ES")
         XCTAssertEqual(BedsideLanguage.cantonese.format("%@ is dropping in with video. Connecting in five seconds.", arguments: ["陳先生"]), "陳先生想同您視像通話，五秒後接通。")
         XCTAssertEqual(BedsideLanguage.simplifiedChinese.format("Video drop-in\nConnecting in %d…", arguments: [5]), "视频自动接听\n5 秒后接通…")
-        XCTAssertEqual(BedsideLanguage.spanish.format("Tap %d to answer. Hold %d to decline.", arguments: [0, 0]), "Pulse 0 para contestar. Mantenga pulsado 0 para rechazar.")
+        XCTAssertEqual(BedsideLanguage.spanish.format("Tap %@ to answer. Hold %@ to decline.", arguments: ["#", "#"]), "Pulse # para contestar. Mantenga pulsado # para rechazar.")
         XCTAssertEqual(BedsideLanguage.english.text("End call"), "End call")
     }
     func testNewLanguageDatesKeepTheLocalDateAndWeekday() {
@@ -106,7 +106,7 @@ final class BedsideLanguageTests: XCTestCase {
         for key in ["Morning", "Afternoon", "Evening", "Night", "Spring", "Summer", "Fall", "Winter", "Call someone", "Who would you like to call?", "Answer video call", "Don't connect", "End call", "Back to clock"] {
             XCTAssertNotEqual(language.text(key), key)
         }
-        XCTAssertEqual(language.format("Call %@, key %d", arguments: ["家人", 8]), "打給家人，按 8")
+        XCTAssertEqual(language.format("Call %@, key %@", arguments: ["家人", "8"]), "打給家人，按 8")
         XCTAssertEqual(language.format("Video drop-in\nConnecting in %d…", arguments: [5]), "視訊自動接聽\n5 秒後接通…")
         XCTAssertEqual(language.speechLanguage, "zh-TW", "Use Mandarin, not a Cantonese voice")
         XCTAssertTrue(language.format("%@ is dropping in with video. Connecting in five seconds.", arguments: ["家人"]).contains("視訊"))

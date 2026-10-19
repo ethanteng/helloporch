@@ -136,7 +136,7 @@ final class KeypadPreviewViewController: UIViewController {
             preview = KeypadActionPreview(slots: slots)
             for symbol in keyButtons.keys {
                 guard let button = keyButtons[symbol] else { continue }
-                let digit = Int(symbol)
+                let digit = CallSlots.digit(forSymbol: symbol)
                 let action = digit.flatMap { slots.action(for: $0) }
                 let person = digit.flatMap { slots.contact(for: $0) }
                 button.configuration?.subtitle = person?.name ?? (action == .person ? "Unassigned" : action?.title ?? "No action")
@@ -246,9 +246,9 @@ final class KeypadPreviewViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var other = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
-                  let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)) else { other.insert(press); continue }
-            if keyboard.keyDown(Int(key.keyCode.rawValue)) { receive(String(digit), source: "Keyboard") }
+            guard let key = press.key, key.modifierFlags.isDisjoint(with: [.command, .control, .alternate]),
+                  let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue), characters: key.characters, shift: key.modifierFlags.contains(.shift)) else { other.insert(press); continue }
+            if keyboard.keyDown(Int(key.keyCode.rawValue)) { receive(CallSlots.symbol(for: digit), source: "Keyboard") }
         }
         if !other.isEmpty { super.pressesBegan(other, with: event) }
     }

@@ -394,8 +394,7 @@ final class MessagePlayerViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
-                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            guard let key = press.key, let digit = key.keypadDigit else { unhandled.insert(press); continue }
             // The messages key stops playback, and so does the hang-up key people already know.
             let action = (try? CallSlots.load())?.action(for: digit)
             if keypad.keyDown(Int(key.keyCode.rawValue)), action == .messages || action == .callControl { stop() }
@@ -758,7 +757,7 @@ final class BedsideVoicemailViewController: UIViewController {
         controls.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(controls)
         let slots = (try? CallSlots.load()) ?? CallSlots()
-        hintLabel.text = slots.digit(for: .callControl).map { BedsideText.string("Press %d when you're finished.", $0) }
+        hintLabel.text = slots.digit(for: .callControl).map { BedsideText.string("Press %@ when you're finished.", CallSlots.symbol(for: $0)) }
         hintLabel.isHidden = hintLabel.text == nil
 
         let guide = view.safeAreaLayoutGuide
@@ -940,8 +939,7 @@ final class BedsideVoicemailViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
-                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            guard let key = press.key, let digit = key.keypadDigit else { unhandled.insert(press); continue }
             if keypad.keyDown(Int(key.keyCode.rawValue)), (try? CallSlots.load())?.action(for: digit) == .callControl { finishFromKeypad() }
         }
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
