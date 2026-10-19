@@ -186,6 +186,7 @@ D00000000000000000000002 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask"
 				CLANG_ENABLE_MODULES = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PORCH_BUILD_NUMBER = 17;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
                 ENABLE_TESTABILITY = YES;
@@ -199,6 +200,7 @@ D00000000000000000000002 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask"
 				CLANG_ENABLE_MODULES = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PORCH_BUILD_NUMBER = 17;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
@@ -210,7 +212,7 @@ D00000000000000000000002 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask"
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = "$(PORCH_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 7U9T57JPF7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Porch/Info.plist;
@@ -241,7 +243,7 @@ D00000000000000000000002 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask"
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = "$(PORCH_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 7U9T57JPF7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Porch/Info.plist;
@@ -403,8 +405,8 @@ C9ADB4636DBB901AD6A5950E = { "isa" = "XCBuildConfiguration"; "name" = "Release";
 233A7CA1A0297B4DC78E7928 = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "3C65EDFA4D02D1B27370E718", "C9ADB4636DBB901AD6A5950E",  ); "defaultConfigurationIsVisible" = 0; "defaultConfigurationName" = "Debug"; };
 8BA32E7DAAE5C042A5A8F79B = { "isa" = "PBXNativeTarget"; "name" = "Cell2JackCallsTests"; "productName" = "Cell2JackCallsTests"; "productReference" = "550DE4C420E436AEA658BE39"; "productType" = "com.apple.product-type.bundle.unit-test"; "buildConfigurationList" = "233A7CA1A0297B4DC78E7928"; "buildPhases" = ( "09E2EB1A0407B88A854E55DB", "B9F9374A9F346E4271D4ACF1",  ); "buildRules" = (  ); "dependencies" = ( "D99C3A87654404F0A34F9671",  ); };
 
-B6ED9F9204100946854C2977 = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "OTHER_LDFLAGS" = ( "$(inherited)", "-framework", "DriverKit", "-framework", "USBDriverKit",  ); "HEADER_SEARCH_PATHS" = ( "$(inherited)", "$(SRCROOT)/Cell2JackDriver",  ); "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "MARKETING_VERSION" = "0.1.0"; "INFOPLIST_FILE" = "Cell2JackDriver/Info.plist"; "SKIP_INSTALL" = "YES"; "PROVISIONING_PROFILE_SPECIFIER" = "$(PORCH_CELL2JACK_CALLS_DRIVER_PROFILE)"; "CLANG_CXX_LANGUAGE_STANDARD" = "gnu++17"; "GENERATE_INFOPLIST_FILE" = "NO"; "ENABLE_USER_SCRIPT_SANDBOXING" = "YES"; "CODE_SIGN_ENTITLEMENTS" = "Cell2JackDriver/Cell2JackDriver.Development.entitlements"; "PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)"; "CODE_SIGN_STYLE" = "Automatic"; "SDKROOT" = "driverkit"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.usbdriver"; "CURRENT_PROJECT_VERSION" = "6"; "DRIVERKIT_DEPLOYMENT_TARGET" = "22.0"; }; };
-BBF4DE45F5BA915859719F92 = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "OTHER_LDFLAGS" = ( "$(inherited)", "-framework", "DriverKit", "-framework", "USBDriverKit",  ); "HEADER_SEARCH_PATHS" = ( "$(inherited)", "$(SRCROOT)/Cell2JackDriver",  ); "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "MARKETING_VERSION" = "0.1.0"; "INFOPLIST_FILE" = "Cell2JackDriver/Info.plist"; "SKIP_INSTALL" = "YES"; "PROVISIONING_PROFILE_SPECIFIER" = "$(PORCH_CELL2JACK_CALLS_DRIVER_PROFILE)"; "CLANG_CXX_LANGUAGE_STANDARD" = "gnu++17"; "GENERATE_INFOPLIST_FILE" = "NO"; "ENABLE_USER_SCRIPT_SANDBOXING" = "YES"; "CODE_SIGN_ENTITLEMENTS" = "Cell2JackDriver/Cell2JackDriver.entitlements"; "PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)"; "CODE_SIGN_STYLE" = "Automatic"; "SDKROOT" = "driverkit"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.usbdriver"; "CURRENT_PROJECT_VERSION" = "6"; "DRIVERKIT_DEPLOYMENT_TARGET" = "22.0"; }; };
+B6ED9F9204100946854C2977 = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "OTHER_LDFLAGS" = ( "$(inherited)", "-framework", "DriverKit", "-framework", "USBDriverKit",  ); "HEADER_SEARCH_PATHS" = ( "$(inherited)", "$(SRCROOT)/Cell2JackDriver",  ); "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "MARKETING_VERSION" = "0.1.0"; "INFOPLIST_FILE" = "Cell2JackDriver/Info.plist"; "SKIP_INSTALL" = "YES"; "PROVISIONING_PROFILE_SPECIFIER" = "$(PORCH_CELL2JACK_CALLS_DRIVER_PROFILE)"; "CLANG_CXX_LANGUAGE_STANDARD" = "gnu++17"; "GENERATE_INFOPLIST_FILE" = "NO"; "ENABLE_USER_SCRIPT_SANDBOXING" = "YES"; "CODE_SIGN_ENTITLEMENTS" = "Cell2JackDriver/Cell2JackDriver.Development.entitlements"; "PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)"; "CODE_SIGN_STYLE" = "Automatic"; "SDKROOT" = "driverkit"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.usbdriver"; "CURRENT_PROJECT_VERSION" = "$(PORCH_BUILD_NUMBER)"; "DRIVERKIT_DEPLOYMENT_TARGET" = "22.0"; }; };
+BBF4DE45F5BA915859719F92 = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "OTHER_LDFLAGS" = ( "$(inherited)", "-framework", "DriverKit", "-framework", "USBDriverKit",  ); "HEADER_SEARCH_PATHS" = ( "$(inherited)", "$(SRCROOT)/Cell2JackDriver",  ); "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "MARKETING_VERSION" = "0.1.0"; "INFOPLIST_FILE" = "Cell2JackDriver/Info.plist"; "SKIP_INSTALL" = "YES"; "PROVISIONING_PROFILE_SPECIFIER" = "$(PORCH_CELL2JACK_CALLS_DRIVER_PROFILE)"; "CLANG_CXX_LANGUAGE_STANDARD" = "gnu++17"; "GENERATE_INFOPLIST_FILE" = "NO"; "ENABLE_USER_SCRIPT_SANDBOXING" = "YES"; "CODE_SIGN_ENTITLEMENTS" = "Cell2JackDriver/Cell2JackDriver.entitlements"; "PRODUCT_NAME" = "$(PRODUCT_BUNDLE_IDENTIFIER)"; "CODE_SIGN_STYLE" = "Automatic"; "SDKROOT" = "driverkit"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.usbdriver"; "CURRENT_PROJECT_VERSION" = "$(PORCH_BUILD_NUMBER)"; "DRIVERKIT_DEPLOYMENT_TARGET" = "22.0"; }; };
 9D7323BD24F6469D59EC6EFA = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "B6ED9F9204100946854C2977", "BBF4DE45F5BA915859719F92",  ); "defaultConfigurationIsVisible" = 0; "defaultConfigurationName" = "Debug"; };
 E993ECC28174F28EECD7A529 = { "path" = "com.ethanteng.helloporch.usbdriver.dext"; "isa" = "PBXFileReference"; "includeInIndex" = "0"; "explicitFileType" = "wrapper.driver-extension"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
 09B8B30F902CC5A8B0E617FC = { "productReference" = "E993ECC28174F28EECD7A529"; "productType" = "com.apple.product-type.driver-extension"; "buildConfigurationList" = "9D7323BD24F6469D59EC6EFA"; "productName" = "PorchCell2JackCallsDriver"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "3C54D5BFE229C00322B2A2DF", "0EA8046D96741C562C7F5941",  ); "dependencies" = (  ); "name" = "PorchCell2JackCallsDriver"; "buildRules" = (  ); };

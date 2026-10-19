@@ -38,4 +38,19 @@ for config in objects[family["buildConfigurationList"]]["buildConfigurations"]:
     assert "Cell2JackLogCapture.swift" in settings["EXCLUDED_SOURCE_FILE_NAMES"]
     entitlements = plistlib.loads((ios / settings["CODE_SIGN_ENTITLEMENTS"]).read_bytes())
     assert entitlements == {"aps-environment": "$(APS_ENVIRONMENT)"}
+
+def build_setting(target_name, key):
+    values = [objects[config]["buildSettings"].get(key)
+              for config in objects[targets[target_name]["buildConfigurationList"]]["buildConfigurations"]]
+    assert len({str(value) for value in values}) == 1, (target_name, key, values)
+    return values[0]
+
+# A frozen driver build number matches the already-installed dext, so iPadOS keeps the old copy.
+assert str(build_setting("Porch", "CURRENT_PROJECT_VERSION")) == "$(PORCH_BUILD_NUMBER)"
+assert str(build_setting("PorchCell2JackCallsDriver", "CURRENT_PROJECT_VERSION")) == "$(PORCH_BUILD_NUMBER)"
+project = next(obj for obj in objects.values() if obj.get("isa") == "PBXProject")
+build_numbers = [objects[config]["buildSettings"].get("PORCH_BUILD_NUMBER")
+                 for config in objects[project["buildConfigurationList"]]["buildConfigurations"]]
+assert len({str(number) for number in build_numbers}) == 1, build_numbers
+assert str(build_numbers[0]).isdigit() and int(build_numbers[0]) > 6, build_numbers
 print("Shared feature sources, family driver exclusion, and Cell2Jack development build checks passed")

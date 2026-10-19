@@ -108,8 +108,11 @@ recorded as `usbRetryScheduled`, without displaying diagnostics on the clock.
 The driver clears a stalled bulk endpoint with `ClearStall(true)` and retries
 the transfer at most once. Partial reads are retained; partially written serial
 commands are not replayed. Other failures return to the app for reconnection.
-The embedded driver's build number now uses `CURRENT_PROJECT_VERSION`, ensuring
-a new development installation can replace the older driver. Reconnect the USB
+The embedded driver's build number is `$(CURRENT_PROJECT_VERSION)`.
+`PorchCell2JackCallsDriver` follows `PORCH_BUILD_NUMBER`, the same number as
+the Porch app (currently 17), so a documented development install is newer than
+the previous driver build 6 and iPadOS replaces that copy. A command-line
+`CURRENT_PROJECT_VERSION` still overrides both. Reconnect the USB
 cable after installing an updated driver so iPadOS can start the new copy.
 
 Protocol tests exercise bounded stall clearing and partial-transfer behavior.
