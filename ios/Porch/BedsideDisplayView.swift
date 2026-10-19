@@ -207,7 +207,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         example.addSubview(previewClock)
         NSLayoutConstraint.activate([previewClock.centerYAnchor.constraint(equalTo: example.centerYAnchor), previewClock.leadingAnchor.constraint(equalTo: example.leadingAnchor, constant: 20), previewClock.trailingAnchor.constraint(equalTo: example.trailingAnchor, constant: -20)])
         form.addArrangedSubview(example)
-        form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens and spoken drop-in announcements. Caregiver settings and family mode stay in English. 繁體中文 and 简体中文 use Mandarin; 廣東話 uses Cantonese.", views: [languages]))
+        form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens, spoken drop-in announcements and the voicemail greeting phone callers hear. The phone greeting changes when you tap Save on this iPad. Caregiver settings and family mode stay in English. 繁體中文 and 简体中文 use Mandarin; 廣東話 uses Cantonese.", views: [languages]))
         announcementVoice.accessibilityIdentifier = "bedside.announcementVoice"
         announcementVoice.accessibilityLabel = "Announcement voice"
         announcementVoice.showsMenuAsPrimaryAction = true

@@ -68,18 +68,23 @@ export const greetings: Record<BedsideLanguage, Record<Greeting, string>> = {
 const greetingSeconds = 5;
 type GreetingContext = { store: FamilyStore; media: () => MediaStore; now: number; synthesize?: Synthesize; afterResponse?: VoicemailDependencies["afterResponse"] };
 
-/** Each sentence in the household's natural voice, or every one in Twilio's English voice: never a mix. */
-async function greet(house: Household | undefined, sentences: Greeting[], { afterResponse, ...context }: GreetingContext): Promise<string[]> {
+/** Each sentence in the household's natural voice, or every one in Twilio's English voice: never a mix.
+ * When the natural voice plays, `next` sentences are recorded after Twilio has its answer, ready for the next step. */
+async function greet(house: Household | undefined, sentences: Greeting[], { afterResponse, ...context }: GreetingContext, next: Greeting[] = []): Promise<string[]> {
   const fallback = sentences.map(sentence => say(greetings.en[sentence]));
   const language = house && bedsideLanguage(house);
   const voiceID = house && language && speechVoice(house, language);
   if (!house || !language || !voiceID || !(context.synthesize || speechConfigured())) return fallback;
-  const clips = Promise.all(sentences.map(sentence => speechClip({ ...context, house }, voiceID, language, greetings[language][sentence], "phone")));
+  const clip = (sentence: Greeting) => speechClip({ ...context, house }, voiceID, language, greetings[language][sentence], "phone");
+  const clips = Promise.all(sentences.map(clip));
   clips.catch(() => undefined);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const ready = await Promise.race([clips, new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), greetingSeconds * 1000); })]);
-    if (ready) return ready.map(clip => `<Play>${escape(clip.url)}</Play>`);
+    if (ready) {
+      if (next.length) afterResponse?.(() => Promise.all(next.map(clip)).catch(() => undefined));
+      return ready.map(({ url }) => `<Play>${escape(url)}</Play>`);
+    }
     afterResponse?.(() => clips.catch(() => undefined));
   } catch { /* Not set up, over today's allowance, or the speech service or storage failed. */ } finally { clearTimeout(timer); }
   return fallback;
@@ -182,8 +187,8 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const verified = params.get("StirVerstat") === verifiedCaller || !!await store.get(verifiedKey(callSID));
       const session: Session = { householdID: house.id, ...(callerNumber ? { callerNumber } : {}), ...(callerNumber && verified ? { callerVerified: true } : {}) };
       await store.create(sessionKey(callSID), JSON.stringify(session), 3600);
-      // Together, so a caller who says nothing hears the same voice say goodbye.
-      const [greeting, nothingRecorded] = await greet(house, ["leaveMessage", "noMessage"], voice);
+      // Together, so a caller who says nothing hears the same voice say goodbye; the thank-you is ready by the time they finish.
+      const [greeting, nothingRecorded] = await greet(house, ["leaveMessage", "noMessage"], voice, ["thanks"]);
       return twiml(greeting +
         `<Record maxLength="120" timeout="5" playBeep="true" trim="trim-silence" finishOnKey="#" method="POST"` +
         ` action="${escape(`${origin}/api/calls/inbound/voice/recorded`)}"` +

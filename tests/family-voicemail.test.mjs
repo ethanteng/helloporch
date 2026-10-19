@@ -220,7 +220,7 @@ test('callers hear the household\'s natural voice in the bedside\'s language', a
   ], 'small clips for the phone line, in the default English voice');
 
   await f.json('setBedsideLanguage', { language: 'yue-Hant' }, f.bedside.credential, '123456');
-  spoken.length = 0;
+  spoken.length = 0; f.later.length = 0;
   const { dialed, callSid } = await f.voicemail();
   // The greeting, then a goodbye in the same voice if nothing is recorded; each a signed link, escaped for XML.
   assert.match(dialed.body, /^<\?xml[^>]*><Response><Play>[^<]+<\/Play><Record [^>]+\/><Play>[^<]+<\/Play><Hangup\/><\/Response>$/);
@@ -228,9 +228,13 @@ test('callers hear the household\'s natural voice in the bedside\'s language', a
   assert.match(greeting, new RegExp(`^https://blob\\.test/get/speech/${f.bedside.state.householdID}/[a-f0-9]{64}\\.mp3\\?until=\\d+&amp;sig=test$`));
   assert.notEqual(greeting, goodbye);
   assert.deepEqual(spoken.map(s => [s.voiceID, s.code, s.text]), [[voices.sukYee, 'yue', greetings['yue-Hant'].leaveMessage], [voices.sukYee, 'yue', greetings['yue-Hant'].noMessage]]);
+  // The thank-you is recorded after Twilio has the greeting, so it's ready when the caller finishes.
+  assert.equal(f.later.length, 1);
+  await f.later[0]();
+  assert.deepEqual(spoken.slice(2).map(s => [s.voiceID, s.text]), [[voices.sukYee, greetings['yue-Hant'].thanks]]);
   const thanks = await f.twilio('recorded', { CallSid: callSid, From: caller, To: porchNumber, RecordingDuration: '12' });
   assert.equal(plays(thanks.body).length, 1);
-  assert.equal(spoken.at(-1).text, greetings['yue-Hant'].thanks);
+  assert.equal(spoken.length, 3, 'played from the saved clip');
   const silent = await f.twilio('recorded', { CallSid: callSid, From: caller, To: porchNumber, RecordingDuration: '0' });
   assert.deepEqual(plays(silent.body), [goodbye]);
 
