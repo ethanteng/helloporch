@@ -84,12 +84,29 @@ final class ContactPhotoStoreTests: XCTestCase {
         try fixture { defaults, store in
             try CallSlots().save(to: defaults, photoStore: store)
             let original = defaults.data(forKey: "porch.slots.v2")
+            let originalSymbols = defaults.data(forKey: "porch.slots.v2.symbols")
             // A file in place of the directory simulates an unwritable store.
             try Data([1]).write(to: store.directoryURL)
             var changed = CallSlots()
             try changed.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), photoData: Data([1, 2, 3])), for: 1)
             XCTAssertThrowsError(try changed.save(to: defaults, photoStore: store))
             XCTAssertEqual(defaults.data(forKey: "porch.slots.v2"), original)
+            XCTAssertEqual(defaults.data(forKey: "porch.slots.v2.symbols"), originalSymbols)
+        }
+    }
+
+    func testFailedStarPhotoDoesNotCommitDigitEditsInTheSameSave() throws {
+        try fixture { defaults, store in
+            try CallSlots().save(to: defaults, photoStore: store)
+            let original = defaults.data(forKey: "porch.slots.v2")
+            let originalSymbols = defaults.data(forKey: "porch.slots.v2.symbols")
+            try Data([1]).write(to: store.directoryURL)
+            var changed = CallSlots()
+            try changed.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice)), for: 1)
+            try changed.setContact(CallContact(name: "Mei", nativeCall: NativeCall(room: "star", mode: .voice), photoData: Data([1, 2, 3])), for: CallSlots.star)
+            XCTAssertThrowsError(try changed.save(to: defaults, photoStore: store))
+            XCTAssertEqual(defaults.data(forKey: "porch.slots.v2"), original, "A photo failure on * must not commit the other keys")
+            XCTAssertEqual(defaults.data(forKey: "porch.slots.v2.symbols"), originalSymbols)
         }
     }
 

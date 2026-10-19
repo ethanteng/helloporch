@@ -159,8 +159,12 @@ public struct CallSlots: Equatable {
     public func save(to defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) throws {
         let encoder = JSONEncoder()
         encoder.userInfo[ContactPhotoStore.codingKey] = photoStore
-        defaults.set(try encoder.encode(Array(slots.prefix(Self.digitSlots))), forKey: Self.storageKey)
-        defaults.set(try encoder.encode(Array(slots.dropFirst(Self.digitSlots))), forKey: Self.symbolsStorageKey)
+        // Encoding stores new photos. Finish both halves before either write, so a photo on * or #
+        // that cannot be stored does not leave the ten digits already replaced.
+        let digits = try encoder.encode(Array(slots.prefix(Self.digitSlots)))
+        let symbols = try encoder.encode(Array(slots.dropFirst(Self.digitSlots)))
+        defaults.set(digits, forKey: Self.storageKey)
+        defaults.set(symbols, forKey: Self.symbolsStorageKey)
         defaults.removeObject(forKey: "porch.slots.v1")
         defaults.removeObject(forKey: "porch.contact.v1")
         photoStore.prune(keeping: Set(contacts.compactMap { $0?.photoID }))
