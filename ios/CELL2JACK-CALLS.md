@@ -56,6 +56,9 @@ communication is an iPadOS facility.
 - Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
   disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.
+- Informational clock messages (empty person slot, call/camera key hints, and
+  no waiting messages) clear after five seconds. Each replacement gets its own
+  five seconds; leaving the clock or backgrounding clears the message.
 - Press a saved person's key to call them. Press the configured call-control key
   (currently **0**) to end the call, including while it is ringing. During the
   short interval while the request is starting, that key marks the request for
