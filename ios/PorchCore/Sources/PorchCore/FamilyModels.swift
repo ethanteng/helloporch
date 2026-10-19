@@ -142,6 +142,14 @@ public struct FamilySnapshot: Codable, Equatable {
     public let newMessages: Int?
     /// Bedside only: natural announcement voices. Older servers, and ones without a speech service, don't send them.
     public let speech: NaturalVoices?
+    /// Bedside only: the bedside language as the server last heard it; phone voicemail greets callers in it. Older servers don't send it.
+    public let bedsideLanguage: String?
+
+    /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
+    public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {
+        guard let bedsideLanguage, bedsideLanguage != language.rawValue else { return nil }
+        return language
+    }
 }
 /// The natural voices a caregiver can choose for each bedside language, and the household's choice.
 public struct NaturalVoices: Codable, Equatable {
