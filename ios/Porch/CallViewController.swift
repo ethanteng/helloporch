@@ -380,7 +380,8 @@ final class CallViewController: UIViewController {
                 callButton.configuration = config
                 messagesButton.configuration?.baseBackgroundColor = config.baseBackgroundColor
                 messagesButton.configuration?.baseForegroundColor = config.baseForegroundColor
-                statusLabel.textColor = palette.controlForeground; statusLabel.backgroundColor = palette.controlBackground
+                statusLabel.textColor = palette.controlForeground
+                statusLabel.backgroundColor = config.baseBackgroundColor
                 statusLabel.layer.cornerRadius = 10; statusLabel.clipsToBounds = true
                 appliedDisplayStyle = style
             }
