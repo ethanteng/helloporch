@@ -174,7 +174,8 @@ struct FamilyCallSession {
     private var generation = UUID()
     var isActive = false
     private var reportingKeypad = false
-    private var keypadRetry: (numbers: [String], after: Date)?
+    /// When a failed report may be retried, for that device and those numbers.
+    private var keypadRetry: (credential: String, numbers: [String], after: Date)?
 
     func start() {
         pause()
@@ -205,8 +206,9 @@ struct FamilyCallSession {
     }
     func pause() {
         isActive = false; task?.cancel(); task = nil; generation = UUID()
-        // An in-flight keypad report belongs to the session that started it.
-        reportingKeypad = false; keypadRetry = nil
+        // An in-flight keypad report belongs to the session that started it. A failed report's wait is kept:
+        // Porch pauses whenever it stops being active, and a wrong PIN mustn't be retried on every return.
+        reportingKeypad = false
         if let credential {
             Task { _ = try? await FamilyService(credential).send("poll", ["available": false]) }
         }
@@ -235,7 +237,7 @@ struct FamilyCallSession {
     func reportKeypad(_ slots: CallSlots) {
         guard !reportingKeypad, let state, state.me.role == .bedside, let credential,
               let numbers = state.callScreening?.keypadNumbersToReport(slots) else { return }
-        if let retry = keypadRetry, retry.numbers == numbers, retry.after > Date() { return }
+        if let retry = keypadRetry, retry.credential == credential.credential, retry.numbers == numbers, retry.after > Date() { return }
         // Readable only while the iPad is unlocked; the next poll tries again.
         let pin = NativeCallSettings.caregiverCode
         guard !pin.isEmpty else { return }
@@ -251,11 +253,12 @@ struct FamilyCallSession {
                 self.keypadRetry = nil; self.reportingKeypad = false
                 self.update(response)
             } catch {
-                guard let self, self.generation == generation, self.credential?.credential == credentialID else { return }
+                guard let self else { return }
                 // A wrong PIN or a lockout waits longer, so retries can't use up the caregivers' PIN attempts.
+                // The wait is kept even if Porch paused meanwhile; it only applies to this device's credential.
                 let status = (error as? FamilyServiceError)?.status
-                self.keypadRetry = (numbers, Date().addingTimeInterval(status == 403 || status == 429 ? 600 : 30))
-                self.reportingKeypad = false
+                self.keypadRetry = (credentialID, numbers, Date().addingTimeInterval(status == 403 || status == 429 ? 600 : 30))
+                if self.generation == generation { self.reportingKeypad = false }
             }
         }
     }
