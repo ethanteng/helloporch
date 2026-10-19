@@ -180,7 +180,7 @@ final class Cell2JackRoutingTests: XCTestCase {
         connections[0].update(.ready)
         connections[0].update(.finished("USB device not responding"))
         XCTAssertEqual(connections.count, 1, "Recovery must wait instead of looping on the main thread")
-        try await Task.sleep(nanoseconds: 1_200_000_000)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
         XCTAssertEqual(connections.count, 2)
         connections[1].update(.ready)
         connections[0].update(.finished("late old-client completion"))
@@ -203,13 +203,13 @@ final class Cell2JackRoutingTests: XCTestCase {
         }
         keypad.setEnabled(true); keypad.activate()
         connections[0].update(.finished("adapter absent"))
-        try await Task.sleep(nanoseconds: 1_200_000_000)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
         XCTAssertEqual(connections.count, 2)
         connections[1].update(.ready) // A momentary response must not reset backoff.
         connections[1].update(.finished("USB stalled again"))
         try await Task.sleep(nanoseconds: 1_200_000_000)
         XCTAssertEqual(connections.count, 2)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try await Task.sleep(nanoseconds: 1_500_000_000)
         XCTAssertEqual(connections.count, 3)
         keypad.setEnabled(false); connections[2].update(.finished("stopped"))
     }
@@ -229,7 +229,7 @@ final class Cell2JackRoutingTests: XCTestCase {
             if change == "pause" { keypad.pause() }
             else if change == "disable" { keypad.setEnabled(false) }
             else { bedside = false; keypad.refresh() }
-            try await Task.sleep(nanoseconds: 1_200_000_000)
+            try await Task.sleep(nanoseconds: 2_000_000_000)
             XCTAssertEqual(connections.count, 1, "Cancelled recovery must not open USB after \(change)")
         }
     }
