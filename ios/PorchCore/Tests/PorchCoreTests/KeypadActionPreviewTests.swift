@@ -60,10 +60,14 @@ final class KeypadActionPreviewTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
         var slots = try configured()
         try slots.setAction(.messages, for: 5)
+        try slots.setAction(.callControl, for: CallSlots.pound)
         try slots.save(to: defaults)
         let bytes = try XCTUnwrap(defaults.data(forKey: "porch.slots.v2"))
-        let snapshot = try CallSlots.snapshot(from: bytes)
+        let symbols = try XCTUnwrap(defaults.data(forKey: "porch.slots.v2.symbols"))
+        let snapshot = try CallSlots.snapshot(from: bytes, symbols: symbols)
         XCTAssertEqual(snapshot, slots)
+        XCTAssertEqual(snapshot.action(for: CallSlots.pound), .callControl)
+        XCTAssertEqual(try CallSlots.snapshot(from: bytes).action(for: CallSlots.pound), .person, "A snapshot from before * and # leaves them empty")
         XCTAssertEqual(defaults.data(forKey: "porch.slots.v2"), bytes)
         XCTAssertThrowsError(try CallSlots.snapshot(from: Data("[]".utf8)))
     }

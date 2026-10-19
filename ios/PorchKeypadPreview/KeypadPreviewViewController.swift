@@ -117,6 +117,12 @@ final class KeypadPreviewViewController: UIViewController {
         do {
             let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let file = documents.appendingPathComponent("porch-preview-slots.json")
+            // * and # are saved beside the ten digits. A snapshot from before those keys has no such file.
+            let symbolsFile = documents.appendingPathComponent("porch-preview-symbol-slots.json")
+            func savedSetup() throws -> CallSlots {
+                let symbols = FileManager.default.fileExists(atPath: symbolsFile.path) ? try Data(contentsOf: symbolsFile) : nil
+                return try CallSlots.snapshot(from: Data(contentsOf: file), symbols: symbols, photoStore: photoStore)
+            }
             let photoStore = ContactPhotoStore(directoryURL: documents.appendingPathComponent("porch-preview-photos", isDirectory: true))
             let slots: CallSlots
             #if targetEnvironment(simulator)
@@ -126,11 +132,11 @@ final class KeypadPreviewViewController: UIViewController {
                 try sample.setContact(CallContact(name: "Sample Sam", nativeCall: NativeCall(room: "preview-sam", mode: .video), buttonColorHex: "E9E0D0"), for: 2)
                 slots = sample; setup.text = "Sample contacts · simulator only"
             } else {
-                slots = try CallSlots.snapshot(from: Data(contentsOf: file), photoStore: photoStore)
+                slots = try savedSetup()
                 setup.text = "Saved HelloPorch setup · read-only snapshot"
             }
             #else
-            slots = try CallSlots.snapshot(from: Data(contentsOf: file), photoStore: photoStore)
+            slots = try savedSetup()
             setup.text = "Saved HelloPorch setup · \(slots.contacts.compactMap { $0 }.count) people · read-only snapshot"
             #endif
             preview = KeypadActionPreview(slots: slots)

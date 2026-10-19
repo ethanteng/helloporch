@@ -136,10 +136,13 @@ public struct CallSlots: Equatable {
     }
     /// Read a v2 setup snapshot for a preview without migrations, preferences
     /// writes, photo persistence, or pruning the original app's photo store.
-    public static func snapshot(from data: Data, photoStore: ContactPhotoStore = .standard) throws -> Self {
+    /// `symbols` is the * and # data saved beside it, which a setup from before those keys doesn't have.
+    public static func snapshot(from data: Data, symbols: Data? = nil, photoStore: ContactPhotoStore = .standard) throws -> Self {
         let decoder = JSONDecoder()
         decoder.userInfo[ContactPhotoStore.codingKey] = photoStore
-        return try restoring(decoder.decode([Slot].self, from: data))
+        var saved = try decoder.decode([Slot].self, from: data)
+        if let symbols { saved += try decoder.decode([Slot].self, from: symbols) }
+        return try restoring(saved)
     }
     /// Saved slots in `digits` order. Setups from before * and # have only the ten digits,
     /// and those two keys keep their defaults.
