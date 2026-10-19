@@ -154,6 +154,8 @@ import PorchCore
     }
     private static var attempted: [URL: Date] = [:]
     private static var prefetching: Task<Void, Never>?
+    /// Set when a newer snapshot arrives while a pass is already reading sentences, so that pass runs once more.
+    private static var prefetchAgain = false
     /// Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone
     /// who may drop in, prompts and confirmations for leaving family a message, and the notice and
     /// announcements for waiting messages.
@@ -161,7 +163,9 @@ import PorchCore
     /// A sentence that couldn't be prepared is tried again after ten minutes.
     static func prefetch(_ state: FamilySnapshot, slots: CallSlots) {
         let language = BedsideText.language
-        guard prefetching == nil, let voiceID = state.speech?.choices(for: language)?.selected else { return }
+        guard let voiceID = state.speech?.choices(for: language)?.selected else { return }
+        // A poll starts this before the download queue updates. Keep the newer count instead of dropping it.
+        if prefetching != nil { prefetchAgain = true; return }
         let contacts = slots.contacts.compactMap { $0 }
         var texts: [String] = []
         if state.dropInEnabled {
@@ -181,7 +185,13 @@ import PorchCore
                 texts.append(BedsideVoicemailViewController.sentConfirmation(to: contact.name))
             }
             let waiting = (state.messages ?? []).filter { $0.held != true }
-            if !waiting.isEmpty { texts.append(MessageNoticeView.text(count: waiting.count)) }
+            // The notice speaks `ready` (downloaded and unplayed), which is below the inbox count while a
+            // message is still downloading or was played here before the server drops it. That count goes first.
+            var noticeCounts: [Int] = []
+            let readyCount = BedsideMessages.shared.ready.count
+            if waiting.count > 1, (1..<waiting.count).contains(readyCount) { noticeCounts.append(readyCount) }
+            if !waiting.isEmpty { noticeCounts.append(waiting.count) }
+            for count in noticeCounts { texts.append(MessageNoticeView.text(count: count)) }
             for message in waiting { texts.append(MessagePlayerViewController.announcement(for: message, slots: slots)) }
         }
         let now = Date()
@@ -195,6 +205,9 @@ import PorchCore
         prefetching = Task {
             for text in pending { _ = await load(text, language: language, voiceID: voiceID) }
             prefetching = nil
+            guard prefetchAgain, let latest = FamilyCoordinator.shared.state else { prefetchAgain = false; return }
+            prefetchAgain = false
+            prefetch(latest, slots: (try? CallSlots.load()) ?? slots)
         }
     }
 }

@@ -53,7 +53,14 @@ extension Notification.Name {
             try? FileManager.default.removeItem(at: file)
         }
         let nowReady = queue.filter { FileManager.default.fileExists(atPath: file(for: $0).path) }
-        if nowReady != ready { ready = nowReady; NotificationCenter.default.post(name: .porchMessagesReady, object: self) }
+        if nowReady != ready {
+            ready = nowReady
+            // Prepare "You have N new messages" for this count before presence can speak it.
+            if let state = FamilyCoordinator.shared.state, let slots = try? CallSlots.load() {
+                PorchNaturalVoice.prefetch(state, slots: slots)
+            }
+            NotificationCenter.default.post(name: .porchMessagesReady, object: self)
+        }
         for id in unreported { report(id, credential: credential) }
         // Don't compete with a call for bandwidth.
         guard !state.busy else { return }
