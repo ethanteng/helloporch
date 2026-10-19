@@ -126,12 +126,28 @@ import PorchCore
         if let cached = cached(text, language: language, voiceID: voiceID) { return cached }
         let pending = Task { await load(text, language: language, voiceID: voiceID) }
         guard seconds > 0 else { return nil }
-        return await withTaskGroup(of: URL?.self) { group in
-            group.addTask { await pending.value }
-            group.addTask { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)); return nil }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        return await first(of: pending, within: seconds)
+    }
+    /// A task's result if it finishes within `seconds`, otherwise nil right at the deadline.
+    /// The task keeps running either way. (A task group would wait for it to finish.)
+    static func first<Value: Sendable>(of task: Task<Value?, Never>, within seconds: TimeInterval) async -> Value? {
+        let race = Race<Value>()
+        return await withCheckedContinuation { continuation in
+            race.continuation = continuation
+            race.deadline = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                race.finish(nil)
+            }
+            Task { @MainActor in race.finish(await task.value) }
+        }
+    }
+    /// Resumes its waiter once, with whichever result arrives first.
+    @MainActor private final class Race<Value: Sendable> {
+        var continuation: CheckedContinuation<Value?, Never>?
+        var deadline: Task<Void, Never>?
+        func finish(_ value: Value?) {
+            deadline?.cancel(); deadline = nil
+            continuation?.resume(returning: value); continuation = nil
         }
     }
     private static var attempted: [URL: Date] = [:]

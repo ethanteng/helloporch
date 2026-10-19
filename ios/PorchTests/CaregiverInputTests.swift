@@ -399,6 +399,17 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(picker.menu).children.allSatisfy { $0 is UIAction })
         XCTAssertTrue(BedsidePreferences.load(from: defaults).announcementVoiceIdentifiers.isEmpty, "Draft choices must not be saved")
     }
+    @MainActor func testNaturalClipDeadlineDoesNotWaitForASlowDownload() async {
+        let slow = Task<URL?, Never> { try? await Task.sleep(nanoseconds: 3_000_000_000); return URL(fileURLWithPath: "/late.mp3") }
+        let started = Date()
+        let result = await PorchNaturalVoice.first(of: slow, within: 0.2)
+        XCTAssertNil(result)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1, "The built-in voice must not wait for the download")
+        let quick = Task<URL?, Never> { URL(fileURLWithPath: "/ready.mp3") }
+        let ready = await PorchNaturalVoice.first(of: quick, within: 5)
+        XCTAssertEqual(ready?.path, "/ready.mp3")
+        slow.cancel()
+    }
     @MainActor func testNewLanguagesReachClockContactsIncomingCallsAndAnnouncements() throws {
         for language in [BedsideLanguage.simplifiedChinese, .cantonese, .spanish] {
             let restore = localizedBedside(language); defer { restore() }
