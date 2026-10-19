@@ -122,6 +122,39 @@ final class Cell2JackRoutingTests: XCTestCase {
         func start() { starts += 1 }
         func stop() { stops += 1 }
     }
+    @MainActor func testClockKeypadHintsExpireAndReplacementGetsFiveSeconds() async throws {
+        let defaults = UserDefaults.standard
+        let keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try CallSlots().save(photoStore: ContactPhotoStore(directoryURL: folder))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let window = UIWindow(windowScene: scene), clock = CallViewController()
+        window.rootViewController = clock; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let label = try XCTUnwrap(clock.view.subviews.first { $0.accessibilityIdentifier == "clock.feedback" } as? UILabel)
+        _ = clock.receiveCell2JackDigit(3)
+        let empty = BedsideText.string("No one is assigned to %d.\nPlease choose another number.", 3)
+        XCTAssertEqual(label.text, empty)
+        try await Task.sleep(nanoseconds: 5_200_000_000)
+        XCTAssertNil(label.text)
+        _ = clock.receiveCell2JackDigit(0)
+        XCTAssertEqual(label.text, BedsideText.string("Use this key to answer or end a call."))
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        _ = clock.receiveCell2JackDigit(3)
+        try await Task.sleep(nanoseconds: 3_200_000_000)
+        XCTAssertEqual(label.text, empty, "The previous hint's timer must not dismiss its replacement")
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        XCTAssertNil(label.text)
+        _ = clock.receiveCell2JackDigit(9)
+        XCTAssertEqual(label.text, BedsideText.string("Use this key to turn your camera off or on during a video call."))
+        clock.pause()
+        XCTAssertNil(label.text)
+    }
     @MainActor func testEnabledBeforeSceneActivationConnectsAndForegroundReturnWaitsForCleanup() throws {
         let name = "cell2jack-lifecycle-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
