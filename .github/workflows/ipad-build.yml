@@ -18,7 +18,9 @@ concurrency:
 # The jobs run in parallel. Each simulator job starts booting its simulator
 # right after checkout, because a first boot takes minutes on a fresh runner,
 # and builds its scheme once for arm64 with build-for-testing so the test runs
-# do not recompile anything.
+# do not recompile anything. Test destinations pin arch=arm64: each simulator
+# also matches x86_64, and test-without-building follows whichever
+# architecture xcodebuild lists first.
 #
 # DriverKit extensions cannot run in Simulator and require development
 # certificates. SimulatorCI.xcconfig keeps the app/tests ad-hoc signed, but
@@ -54,12 +56,12 @@ jobs:
       - name: Test caregiver keyboard and focus on an iPad simulator
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug
-          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID,arch=arm64" -derivedDataPath ios/build/simulator
           -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
       - name: Test Cell2Jack routing and automatic USB recovery
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme PorchCell2JackCalls -configuration Debug
-          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID,arch=arm64" -derivedDataPath ios/build/simulator
           -parallel-testing-enabled NO -collect-test-diagnostics never
           -only-testing:Cell2JackCallsTests/Cell2JackRoutingTests test-without-building
       - name: Launch on an iPad simulator and capture the screens
@@ -118,7 +120,7 @@ jobs:
       - name: Test layouts and keyboard on an iPhone simulator
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme Porch -configuration Debug
-          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/simulator
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID,arch=arm64" -derivedDataPath ios/build/simulator
           -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
       - name: Launch on an iPhone simulator and capture the screen
         timeout-minutes: 10
@@ -189,5 +191,5 @@ jobs:
       - name: Test family app controls on an iPhone simulator
         run: >-
           xcodebuild -project ios/Porch.xcodeproj -scheme PorchFamily -configuration Debug
-          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID" -derivedDataPath ios/build/family
+          -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID,arch=arm64" -derivedDataPath ios/build/family
           -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
