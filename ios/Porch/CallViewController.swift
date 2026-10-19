@@ -583,6 +583,8 @@ final class CallViewController: UIViewController {
         statusTimer?.invalidate(); statusTimer = nil
         statusLabel.text = text
         guard temporary, text != nil else { return }
+        statusLabel.accessibilityLanguage = BedsideText.language.speechLanguage
+        UIAccessibility.post(notification: .announcement, argument: text)
         let timer = Timer(timeInterval: 5, repeats: false) { [weak self] timer in
             guard let self, self.statusTimer === timer else { return }
             self.statusLabel.text = nil

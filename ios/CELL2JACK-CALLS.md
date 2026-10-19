@@ -113,14 +113,18 @@ the transfer at most once. Partial reads are retained; partially written serial
 commands are not replayed. Other failures return to the app for reconnection.
 The embedded driver's build number is `$(CURRENT_PROJECT_VERSION)`.
 `PorchCell2JackCallsDriver` follows `PORCH_BUILD_NUMBER`, the same number as
-the Porch app (currently 17), so a documented development install is newer than
-the previous driver build 6 and iPadOS replaces that copy. A command-line
+the Porch app (currently 24), newer than the bedside's installed build 23.
+A command-line
 `CURRENT_PROJECT_VERSION` still overrides both. Reconnect the USB
 cable after installing an updated driver so iPadOS can start the new copy.
 
 Protocol tests exercise bounded stall clearing and partial-transfer behavior.
 `Cell2JackRoutingTests` also covers automatic retry, backoff, cancellation and
-late callbacks; the iPad CI job runs this suite. These use injected failures;
+late callbacks; the iPad CI job runs this suite. Recovery support belongs to the
+connection: an unavailable production platform never retries, while injected
+connections can exercise recovery on both the iPhone and family targets.
+The retry scheduler and monotonic clock are injectable so the backoff/reset tests
+run deterministically without timing margins or a 30-second wait. These use injected failures;
 physical unplug/replug and phone-key verification remain device checks.
 
 Routing chooses the current visible receiver; an unknown modal blocks routing
