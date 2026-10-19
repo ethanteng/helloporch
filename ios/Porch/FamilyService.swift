@@ -103,10 +103,10 @@ struct FamilyService {
     init(_ credential: FamilyCredential) { origin = credential.origin; self.credential = credential.credential }
     init(origin: URL) { self.origin = origin; credential = nil }
 
-    func send(_ action: String, _ values: [String: Any] = [:], pin: String? = nil) async throws -> FamilyResponse {
+    func send(_ action: String, _ values: [String: Any] = [:], pin: String? = nil, timeout: TimeInterval = 12) async throws -> FamilyResponse {
         var body = values; body["action"] = action
         var request = URLRequest(url: origin.appendingPathComponent("api/family"))
-        request.httpMethod = "POST"; request.timeoutInterval = 12
+        request.httpMethod = "POST"; request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let credential { request.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization") }
         if let pin { request.setValue(pin, forHTTPHeaderField: "X-Porch-Setup-Code") }

@@ -104,8 +104,10 @@ import PorchCore
         guard let credential = PorchDevice.credential(for: .bedside) else { return nil }
         let task = Task<URL?, Never> {
             do {
-                let response = try await FamilyService(credential).send("speech", ["language": language.rawValue, "text": text, "voiceID": voiceID])
-                guard let clip = response.clip, clip.voiceID == voiceID, let url = URL(string: clip.url) else { return nil }
+                // The server waits up to 15s for ElevenLabs, then stores the clip. The shared 12s limit
+                // would drop that response, and prefetch would not try the sentence again for ten minutes.
+                let response = try await FamilyService(credential).send("speech", ["language": language.rawValue, "text": text, "voiceID": voiceID], timeout: 30)
+                guard let clip = response.clip, clip.voiceID == voiceID, let url = URL(string: clip.url), url.scheme == "https" else { return nil }
                 let session = URLSession(configuration: .ephemeral)
                 defer { session.invalidateAndCancel() }
                 var request = URLRequest(url: url); request.timeoutInterval = 15
