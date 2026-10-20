@@ -25,14 +25,21 @@ export type InboxEntry = { id: string; from: string; fromName: string; kind: Mes
 export type OutboxEntry = { id: string; to: string; sentAt: number };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
+/** A caller ID that tried to ring the bedside while unknown callers were blocked, until a caregiver allows or clears it. */
+export type BlockedCaller = { number: string; firstCallAt: number; lastCallAt: number; calls: number };
+/** A number a caregiver allowed to ring the bedside although it isn't saved on the keypad. */
+export type AllowedCaller = { number: string; allowedAt: number };
 /** Characters sent to the speech service on one UTC day (days since 1970), to cap what a household spends. */
 export type SpeechUsage = { day: number; characters: number };
 /** The bedside's languages: `BedsideLanguage` raw values in the iPad app. */
 export const bedsideLanguages = ["en", "zh-Hant", "zh-Hans", "yue-Hant", "es"] as const;
 export type BedsideLanguage = (typeof bedsideLanguages)[number];
 /** `speechVoices`: the caregiver's natural voice per bedside language, or null for the iPad's built-in voice; unset is the language's default.
- * `bedsideLanguage`: the language chosen on the iPad, as it last reported it; unset is English. */
-export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage };
+ * `bedsideLanguage`: the language chosen on the iPad, as it last reported it; unset is English.
+ * `blockUnknownCallers`: only known callers' phone calls ring the bedside (see screening.ts); unset is off.
+ * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does. */
+export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
+  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[] };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }

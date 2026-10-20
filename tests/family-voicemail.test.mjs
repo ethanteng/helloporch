@@ -175,6 +175,111 @@ test('callers get an apology instead of a recording when voicemail is off, full 
   assert.match((await f.voicemail('+15556665555')).dialed.body, /please try again later/i);
 });
 
+test('with unknown callers blocked, only known numbers ring and the rest wait in the blocked list', async () => {
+  const f = await fixture();
+  const keypad = '+15551230001', stranger = '+15559876543';
+  const ring = async (from, n) => (await f.twilio('incoming', { CallSid: sid('CA', n), From: from, To: porchNumber })).body;
+  const rings = body => /<Dial answerOnBridge/.test(body), rejected = /^<\?xml[^>]*><Response><Reject reason="rejected"\/><\/Response>$/;
+  const screening = async () => (await f.json('verifyPIN', {}, f.sam.credential, '123456')).admin.callScreening;
+  // Until the iPad reports its keypad, turning it on would block the people saved there.
+  assert.equal((await f.send('setBlockUnknownCallers', { enabled: true }, f.sam.credential, '123456')).status, 409);
+  assert.ok(rings(await ring(stranger, 1)), 'off: anyone can ring');
+  await f.json('setKeypadNumbers', { numbers: [keypad] }, f.bedside.credential, '123456');
+  assert.equal((await f.json('setBlockUnknownCallers', { enabled: true }, f.sam.credential, '123456')).admin.callScreening.enabled, true);
+  assert.ok(rings(await ring(keypad, 2)), 'keypad contacts ring');
+  // A blocked caller never reaches LiveKit. A repeated webhook counts once; calling again counts again.
+  assert.match(await ring(stranger, 3), rejected);
+  await ring(stranger, 3); f.advance(60); await ring(stranger, 4);
+  // Withheld caller ID is blocked, but there's no number to allow, so it isn't listed.
+  assert.match(await ring('+266696687', 5), rejected);
+  assert.match(await ring('anonymous', 6), rejected);
+  const [listed] = (await screening()).blocked;
+  assert.deepEqual(listed, { number: stranger, firstCallAt: listed.lastCallAt - 60, lastCallAt: listed.lastCallAt, calls: 2 });
+  assert.equal((await screening()).blocked.length, 1);
+  // A caregiver allows it: it rings, and leaves the blocked list.
+  const allowed = await f.json('setCallerAllowed', { number: stranger, allowed: true }, f.sam.credential, '123456');
+  assert.deepEqual(allowed.admin.callScreening.blocked, []);
+  assert.deepEqual(allowed.admin.callScreening.allowed.map(c => c.number), [stranger]);
+  assert.ok(rings(await ring(stranger, 7)));
+  // Removing it blocks it again, and its earlier calls come back to the list.
+  const removed = await f.json('setCallerAllowed', { number: stranger, allowed: false }, f.bedside.credential, '123456');
+  assert.deepEqual(removed.state.callScreening.allowed, []);
+  assert.equal(removed.state.callScreening.blocked[0].calls, 2);
+  assert.match(await ring(stranger, 8), rejected);
+  // A number taken off the keypad is blocked; one approved for phone drop-in rings.
+  await f.json('setKeypadNumbers', { numbers: [] }, f.bedside.credential, '123456');
+  assert.match(await ring(keypad, 9), rejected);
+  await f.json('setPhoneDropIn', { number: keypad, name: 'David', enabled: true }, f.sam.credential, '123456');
+  assert.ok(rings(await ring(keypad, 10)));
+  assert.deepEqual((await screening()).blocked.map(c => c.number), [stranger]);
+  assert.deepEqual((await f.json('clearBlockedCallers', {}, f.sam.credential, '123456')).admin.callScreening.blocked, []);
+  // Turned off, anyone rings again and nothing more is listed.
+  await f.json('setBlockUnknownCallers', { enabled: false }, f.bedside.credential, '123456');
+  assert.ok(rings(await ring(stranger, 11)));
+  assert.deepEqual((await screening()).blocked, []);
+});
+
+test('a caller blocked while the bedside rings can\'t leave voicemail', async () => {
+  const f = await fixture();
+  await f.json('setKeypadNumbers', { numbers: [] }, f.bedside.credential, '123456');
+  const CallSid = sid('CA', 1);
+  assert.match((await f.twilio('incoming', { CallSid, From: caller, To: porchNumber })).body, /<Dial /);
+  await f.json('setBlockUnknownCallers', { enabled: true }, f.bedside.credential, '123456');
+  const dialed = await f.twilio('dialed', { CallSid, From: caller, To: porchNumber, DialCallStatus: 'no-answer' });
+  assert.match(dialed.body, /^<\?xml[^>]*><Response><Hangup\/><\/Response>$/);
+  // The call already rang, then blocking was turned on: it still shows up so a caregiver can allow it.
+  assert.deepEqual((await f.json('verifyPIN', {}, f.sam.credential, '123456')).admin.callScreening.blocked.map(c => c.number), [caller]);
+  // Allowed again, the next unanswered call can leave a message.
+  await f.json('setCallerAllowed', { number: caller, allowed: true }, f.bedside.credential, '123456');
+  assert.ok((await f.voicemail(caller)).recorded);
+});
+
+test('only PIN-checked caregivers screen callers, only the bedside reports its keypad, and family phones never see numbers', async () => {
+  const f = await fixture();
+  const report = (numbers, credential = f.bedside.credential, pin = '123456') => f.send('setKeypadNumbers', { numbers }, credential, pin);
+  assert.equal((await report(['+15551230001'], f.sam.credential)).status, 403, 'a family caregiver can\'t change the keypad');
+  assert.equal((await report(['+15551230001'], f.bedside.credential, null)).status, 403);
+  assert.equal((await report(['5551230001'])).status, 400);
+  assert.equal((await report('+15551230001')).status, 400);
+  assert.equal((await report(Array.from({ length: 51 }, (_, n) => `+1555123${String(n).padStart(4, '0')}`))).status, 400);
+  const saved = await f.json('setKeypadNumbers', { numbers: ['+15551230002', '+15551230001', '+15551230002'] }, f.bedside.credential, '123456');
+  assert.deepEqual(saved.state.callScreening.keypadNumbers, ['+15551230001', '+15551230002']);
+  for (const [action, values] of [['setBlockUnknownCallers', { enabled: true }], ['setCallerAllowed', { number: caller, allowed: true }], ['clearBlockedCallers', {}]]) {
+    assert.equal((await f.send(action, values, f.ethan.credential, '123456')).status, 403, `${action}: not a caregiver`);
+    assert.equal((await f.send(action, values, f.sam.credential)).status, 403, `${action}: no PIN`);
+  }
+  assert.equal((await f.send('setBlockUnknownCallers', { enabled: 'yes' }, f.sam.credential, '123456')).status, 400);
+  assert.equal((await f.send('setCallerAllowed', { number: '5559876543', allowed: true }, f.sam.credential, '123456')).status, 400);
+  assert.equal((await f.send('setCallerAllowed', { number: caller }, f.sam.credential, '123456')).status, 400);
+  assert.equal((await f.send('setCallerAllowed', { number: '+266696687', allowed: true }, f.sam.credential, '123456')).status, 400, 'withheld caller ID can\'t be allowed');
+  await f.json('setBlockUnknownCallers', { enabled: true }, f.sam.credential, '123456');
+  // The list keeps the 30 most recent callers.
+  for (let n = 0; n < 32; n++) { f.advance(1); await f.twilio('incoming', { CallSid: sid('CA', 100 + n), From: `+1555000${String(n).padStart(4, '0')}`, To: porchNumber }); }
+  const blocked = (await f.json('poll', { available: true }, f.bedside.credential)).state.callScreening.blocked;
+  assert.equal(blocked.length, 30);
+  assert.deepEqual([blocked[0].number, blocked[29].number], ['+15550000031', '+15550000002']);
+  // Allowing a recent caller must not spend one of those 30 slots.
+  const oldest = blocked[29].number, recent = blocked[0].number;
+  await f.json('setCallerAllowed', { number: recent, allowed: true }, f.sam.credential, '123456');
+  f.advance(1);
+  await f.twilio('incoming', { CallSid: sid('CA', 200), From: '+15550009999', To: porchNumber });
+  const after = (await f.json('poll', { available: true }, f.bedside.credential)).state.callScreening.blocked;
+  assert.equal(after.length, 30);
+  assert.equal(after[0].number, '+15550009999');
+  assert.ok(after.some(c => c.number === oldest), 'an older blocked number stays listed');
+  const restored = await f.json('setCallerAllowed', { number: recent, allowed: false }, f.sam.credential, '123456');
+  assert.equal(restored.admin.callScreening.blocked.length, 30);
+  assert.equal(restored.admin.callScreening.blocked.find(c => c.number === recent)?.calls, blocked[0].calls);
+  for (let n = 0; n < 50; n++) await f.json('setCallerAllowed', { number: `+1555999${String(n).padStart(4, '0')}`, allowed: true }, f.sam.credential, '123456');
+  assert.equal((await f.send('setCallerAllowed', { number: caller, allowed: true }, f.sam.credential, '123456')).status, 400);
+  assert.equal((await f.send('setCallerAllowed', { number: '+15559990000', allowed: true }, f.sam.credential, '123456')).status, 200, 'allowing again is harmless');
+  for (const member of [f.ethan, f.sam]) {
+    const seen = await f.json('poll', { available: true }, member.credential);
+    assert.equal(seen.state.callScreening, undefined);
+    assert.ok(!JSON.stringify(seen).includes('+1555'));
+  }
+});
+
 test('senders replay their own messages while the recording is kept', async () => {
   const f = await fixture();
   const send = async () => {

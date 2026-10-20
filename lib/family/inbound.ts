@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callRoom, config, expire, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
+import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
@@ -126,6 +127,13 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   const actual = await participant(phone, dependencies);
   if (!matches(phone, actual)) {
     await store.create(endedKey(room.sid), "1", 86400);
+    await deleteRoom(room.name, dependencies); return;
+  }
+  // Direct SIP trunking skips the voice webhook, so blocked callers are turned away here too.
+  const screened: Household | null = JSON.parse((await store.get(`house:${route.householdID}`)) ?? "null");
+  if (screened && !callerAllowed(screened, phone.callerNumber)) {
+    await store.create(endedKey(room.sid), "1", 86400);
+    try { await blockCall(store, route.householdID, room.sid, phone.callerNumber, now); } catch { /* blocked either way */ }
     await deleteRoom(room.name, dependencies); return;
   }
   // Read from LiveKit's own participant record, never the webhook payload.

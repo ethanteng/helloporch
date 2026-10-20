@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { forwardedVerificationHeader, sipInboundCredentials, verifiedCaller, type InboundRoute } from "./inbound.ts";
 import { bedsideLanguage, ringSeconds, type BedsideLanguage, type Household } from "./household.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
+import { blockCall, callerAllowed, withheldCallerNumbers } from "./screening.ts";
 import { messageLimits, receivePhoneVoicemail, voicemailOpen } from "./messages.ts";
 import { speechClip, speechConfigured, speechVoice, type Synthesize } from "./speech.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
@@ -17,8 +18,6 @@ export type VoicemailDependencies = { store?: FamilyStore; media?: MediaStore; n
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const callSIDPattern = /^CA[0-9a-f]{32}$/;
 const recordingSIDPattern = /^RE[0-9a-f]{32}$/;
-// Twilio's stand-ins for withheld, restricted and unavailable caller ID.
-const withheld = new Set(["+266696687", "+7378742833", "+2562533", "+8656696", "+86282452253"]);
 const sessionKey = (callSID: string) => `voicemail-call:${callSID}`;
 const verifiedKey = (callSID: string) => `voicemail-verified:${callSID}`;
 type Session = { householdID: string; callerNumber?: string; callerVerified?: boolean };
@@ -160,13 +159,19 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
   const voice: GreetingContext = { store, media, now, synthesize: dependencies.synthesize, afterResponse: dependencies.afterResponse };
   const callSID = params.get("CallSid") ?? "";
   const from = params.get("From") ?? "";
-  const callerNumber = numberPattern.test(from) && !withheld.has(from) ? from : undefined;
+  const callerNumber = numberPattern.test(from) && !withheldCallerNumbers.has(from) ? from : undefined;
   try {
     if (step === "incoming") {
       const calledNumber = params.get("To");
       if (!configured.sipHost || !configured.sip) return twiml("<Reject/>");
       const house = await household(store, calledNumber);
       if (!house) return twiml("<Reject/>");
+      // With unknown callers blocked, other numbers hear their phone company's standard "can't be completed" message
+      // and wait in the caregiver's blocked list. Rejected unanswered, so there's no voicemail and the bedside never rings.
+      if (!callerAllowed(house, callerNumber)) {
+        if (callSIDPattern.test(callSID)) { try { await blockCall(store, house.id, callSID, callerNumber, now); } catch { /* blocked either way */ } }
+        return twiml('<Reject reason="rejected"/>');
+      }
       // LiveKit keeps this leg ringing until the bedside answers; answerOnBridge lets the caller hear it.
       // Porch stops the ringing after the household's ring time; Twilio's timeout is only a backstop,
       // long enough for an approved phone drop-in, which isn't known until LiveKit reports the call.
@@ -182,6 +187,11 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       const status = params.get("DialCallStatus");
       if (status === "completed" || status === "answered") return twiml("<Hangup/>");
       const house = await household(store, params.get("To"));
+      // Blocked while it rang: no voicemail either, and the number is listed like any other rejected call.
+      if (house && !callerAllowed(house, callerNumber)) {
+        if (callSIDPattern.test(callSID)) { try { await blockCall(store, house.id, callSID, callerNumber, now); } catch { /* blocked either way */ } }
+        return twiml("<Hangup/>");
+      }
       const storage = !!dependencies.media || !!process.env.BLOB_READ_WRITE_TOKEN;
       if (!house || !storage || !callSIDPattern.test(callSID) || !voicemailOpen(house, callerNumber, now)) return twiml(`${(await greet(house, ["unavailable"], voice)).join("")}<Hangup/>`);
       const verified = params.get("StirVerstat") === verifiedCaller || !!await store.get(verifiedKey(callSID));

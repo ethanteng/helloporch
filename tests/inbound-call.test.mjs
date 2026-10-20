@@ -356,6 +356,38 @@ test('caller ID without full carrier attestation, an unapproved number, or pause
   }
 });
 
+test('with unknown callers blocked, direct SIP calls from other numbers never ring and are listed once', async () => {
+  const f = fixture(), { bedside, family } = await f.setup(), pin = env.PORCH_CONTACT_SETUP_CODE;
+  await f.json('setKeypadNumbers', { numbers: ['+14155550300'] }, bedside.credential, pin);
+  await f.json('setBlockUnknownCallers', { enabled: true }, bedside.credential, pin);
+  const event = f.call();
+  assert.equal((await f.webhook(event)).status, 200);
+  assert.equal((await f.webhook(event)).status, 200, 'a repeated delivery');
+  assert.equal((await f.poll(bedside)).state.call, null);
+  assert.ok(f.ended.includes(event.room.name));
+  assert.deepEqual(f.house(bedside).blockedCallers.map(c => [c.number, c.calls]), [['+14155550200', 1]]);
+  // Withheld caller ID is turned away without being listed.
+  const withheld = f.call(undefined, { 'sip.phoneNumber': 'anonymous' });
+  await f.webhook(withheld);
+  assert.ok(f.ended.includes(withheld.room.name));
+  assert.equal(f.house(bedside).blockedCallers.length, 1);
+  // Once it's saved on the keypad, the same number rings for an answer, and only the bedside saw it.
+  await f.json('setKeypadNumbers', { numbers: ['+14155550200', '+14155550300'] }, bedside.credential, pin);
+  await f.webhook(f.call());
+  assert.equal((await f.poll(bedside)).state.call.kind, 'call');
+  assert.ok(!JSON.stringify(await f.poll(family)).includes('+14155550300'));
+  // The line is free again. Twilio's withheld placeholder still must not ring, even when it is saved on the keypad.
+  f.advance(120); await f.poll(bedside);
+  assert.equal(f.house(bedside).call.state, 'ended');
+  await f.json('setKeypadNumbers', { numbers: ['+266696687', '+14155550300'] }, bedside.credential, pin);
+  assert.equal((await f.send('setCallerAllowed', { number: '+266696687', allowed: true }, bedside.credential, pin)).status, 400);
+  const placeholder = f.call(undefined, { 'sip.phoneNumber': '+266696687' });
+  await f.webhook(placeholder);
+  assert.ok(f.ended.includes(placeholder.room.name));
+  assert.equal(f.house(bedside).call.state, 'ended');
+  assert.ok(!(f.house(bedside).blockedCallers ?? []).some(c => c.number === '+266696687'));
+});
+
 test('carrier verification is read from LiveKit, not trusted from the webhook body', async () => {
   const f = fixture(), { bedside } = await f.setup();
   await allowDropIns(f, bedside); await approve(f, bedside);

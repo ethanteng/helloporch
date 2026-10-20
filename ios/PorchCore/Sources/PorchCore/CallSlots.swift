@@ -52,10 +52,10 @@ public struct CallSlots: Equatable {
         let validated = try contact.map { contact in
             if let native = contact.nativeCall {
                 guard contact.shortcutName == nil, contact.address.isEmpty else { throw ValidationError.invalidSavedSlots }
-                return try CallContact(name: contact.customName, nativeCall: native, phoneNumber: contact.phoneNumber,
+                return try CallContact(name: contact.customName, nativeCall: native, phoneNumber: contact.phoneNumber, otherPhoneNumbers: contact.otherPhoneNumbers,
                     familyMemberID: contact.familyMemberID, invitationID: contact.invitationID, memberName: contact.memberName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
             }
-            guard contact.phoneNumber == nil, contact.familyMemberID == nil, contact.invitationID == nil else { throw ValidationError.invalidSavedSlots }
+            guard contact.phoneNumber == nil, contact.otherPhoneNumbers.isEmpty, contact.familyMemberID == nil, contact.invitationID == nil else { throw ValidationError.invalidSavedSlots }
             return try CallContact(name: contact.customName, address: contact.address, shortcutName: contact.shortcutName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
         }
         slots[index] = Slot(action: .person, contact: validated)
@@ -78,7 +78,7 @@ public struct CallSlots: Equatable {
                 photoID = member.photoID.flatMap { memberPhotos.contains($0) ? $0 : contact.memberPhotoID }
             }
             if member?.id != contact.familyMemberID || name != contact.memberName || photoID != contact.memberPhotoID {
-                try setContact(CallContact(name: contact.customName, nativeCall: native, phoneNumber: contact.phoneNumber,
+                try setContact(CallContact(name: contact.customName, nativeCall: native, phoneNumber: contact.phoneNumber, otherPhoneNumbers: contact.otherPhoneNumbers,
                     familyMemberID: member?.id, invitationID: contact.invitationID, memberName: name, buttonColorHex: contact.buttonColorHex)
                     .preservingPhoto(from: contact).showingMember(name: name, photoID: photoID, photos: memberPhotos), for: digit)
             }
@@ -89,10 +89,12 @@ public struct CallSlots: Equatable {
     public func incomingCallerName(for call: FamilyCallRecord, in state: FamilySnapshot) -> String {
         incomingContact(for: call, in: state)?.name ?? call.callerName
     }
-    /// The keypad contact saved with this phone number, which names (and releases) a phone voicemail.
+    /// Every keypad contact's phone numbers, sorted and without repeats. These can ring while unknown callers are blocked.
+    public var phoneNumbers: [String] { Array(Set(contacts.flatMap { $0?.phoneNumbers ?? [] })).sorted() }
+    /// The keypad contact saved with this phone number, primary or not, which names (and releases) a phone voicemail.
     public func contact(forPhoneNumber number: String?) -> CallContact? {
         guard let number, !number.isEmpty else { return nil }
-        return contacts.compactMap { $0 }.first { $0.phoneNumber == number }
+        return contacts.compactMap { $0 }.first { $0.phoneNumbers.contains(number) }
     }
     public func incomingContact(for call: FamilyCallRecord, in state: FamilySnapshot) -> CallContact? {
         guard state.me.role == .bedside, call.to == state.me.id else { return nil }
@@ -100,7 +102,7 @@ public struct CallSlots: Equatable {
             // Only a server-verified telephone drop-in borrows a saved person's name and photo;
             // an ordinary phone call keeps showing its number, which anyone can fake.
             guard call.kind == "dropIn", let number = call.callerNumber else { return nil }
-            return contacts.compactMap { $0 }.first { $0.nativeCall != nil && $0.phoneNumber == number }
+            return contacts.compactMap { $0 }.first { $0.nativeCall != nil && $0.phoneNumbers.contains(number) }
         }
         return contacts.compactMap { $0 }.first {
             $0.nativeCall != nil && Self.member(for: $0, in: state)?.id == call.from

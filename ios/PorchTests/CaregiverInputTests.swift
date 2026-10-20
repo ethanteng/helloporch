@@ -775,6 +775,35 @@ final class CaregiverInputTests: XCTestCase {
     }
 
 
+    @MainActor func testContactEditorWithOtherNumbersKeepsFullWidthAndControlsAtTheirSize() throws {
+        let person = try CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .voice), phoneNumber: "+14155550123", otherPhoneNumbers: ["+14155550199"])
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        func all(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(all) }
+        for size in [CGSize(width: 834, height: 1210), CGSize(width: 1210, height: 834), CGSize(width: 402, height: 874)] {
+            let editor = SetupViewController(slot: 1, contact: person)
+            let window = UIWindow(windowScene: scene)
+            window.frame = CGRect(origin: .zero, size: size)
+            window.rootViewController = PorchStyle.navigation(editor)
+            window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            // Drop-in by phone shows only on a paired bedside.
+            for view in all(editor.view) where view.isHidden && all(view).contains(where: { $0.accessibilityLabel == "Audio drop-in when they call this Porch" }) { view.isHidden = false }
+            window.layoutIfNeeded()
+            XCTAssertEqual(editor.form.bounds.width, min(760, size.width - 48), "The other numbers must not squeeze the form at \(size)")
+            let controls = all(editor.form).filter { $0 is UISwitch || ["Make primary", "Remove"].contains(($0 as? UIButton)?.configuration?.title) }
+            XCTAssertEqual(controls.count, 4)
+            // Converting between views leaves rounding noise (143.66666666666663 against 143.66666666666666);
+            // a squeezed control is short by whole points.
+            let tolerance: CGFloat = 0.5
+            for control in controls {
+                let frame = control.convert(control.bounds, to: editor.form)
+                XCTAssertGreaterThanOrEqual(frame.width, control.intrinsicContentSize.width - tolerance, "\(control.accessibilityLabel ?? "") is squeezed at \(size)")
+                XCTAssertGreaterThanOrEqual(frame.minX, -tolerance)
+                XCTAssertLessThanOrEqual(frame.maxX, editor.form.bounds.width + tolerance, "\(control.accessibilityLabel ?? "") leaves its card at \(size)")
+            }
+        }
+    }
+
     @MainActor func testContactEditorOnlyOffersPorchDetailsAndPhoneFallback() {
         let editor = SetupViewController(slot: 1, contact: nil)
         editor.loadViewIfNeeded()
@@ -784,7 +813,8 @@ final class CaregiverInputTests: XCTestCase {
         let text = labels(editor.view)
         XCTAssertTrue(text.contains("Their details"))
         XCTAssertTrue(text.contains("Default calling mode"))
-        XCTAssertTrue(text.contains("Phone number"))
+        XCTAssertTrue(text.contains("Primary number"))
+        XCTAssertTrue(text.contains("Other numbers"))
         for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
         let settings = SlotsViewController(slots: CallSlots())
         settings.loadViewIfNeeded()
@@ -854,6 +884,33 @@ final class CaregiverInputTests: XCTestCase {
         let titles = buttons(in: admin.view).compactMap { $0.configuration?.title }
         XCTAssertTrue(titles.contains("Approve a phone number"))
         XCTAssertEqual(buttons(in: admin.view).filter { $0.accessibilityLabel == "Remove phone drop-in for David" }.count, 1)
+    }
+
+    @MainActor func testCaregiverModeBlocksUnknownCallersAndListsBlockedNumbersSeparately() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": false, "people": [],
+            "callScreening": ["enabled": true, "keypadNumbers": ["+14155550100"],
+                "allowed": [["number": "+14155550300", "allowedAt": 1_800_000_000]],
+                "blocked": [["number": "+14155550999", "firstCallAt": 1_800_000_000, "lastCallAt": 1_800_000_060, "calls": 2]]]])
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: state)
+        let navigation = UINavigationController(rootViewController: admin); admin.loadViewIfNeeded()
+        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
+        let block = try XCTUnwrap(switches(admin.view).first { $0.accessibilityIdentifier == "calls.blockUnknown" })
+        XCTAssertTrue(block.isOn); XCTAssertTrue(block.isEnabled)
+        let list = try XCTUnwrap(rows(in: admin.view).first { $0.accessibilityIdentifier == "calls.blockedNumbers" })
+        XCTAssertEqual(list.accessibilityLabel, "Blocked numbers, 1")
+        list.sendActions(for: .touchUpInside)
+        let blocked = try XCTUnwrap(navigation.topViewController as? BlockedCallersViewController)
+        blocked.loadViewIfNeeded()
+        let labels = buttons(in: blocked.view).compactMap(\.accessibilityLabel)
+        XCTAssertEqual(labels.filter { $0.hasPrefix("Allow ") }.count, 1)
+        XCTAssertEqual(labels.filter { $0.hasPrefix("Remove ") && $0.hasSuffix(" from allowed numbers") }.count, 1)
+        XCTAssertTrue(buttons(in: blocked.view).contains { $0.configuration?.title == "Clear this list" })
+        // A server without call screening can't turn it on.
+        let older = FamilyAdminViewController(remote: remote, state: try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": false, "people": []])))
+        older.loadViewIfNeeded()
+        XCTAssertEqual(switches(older.view).first { $0.accessibilityIdentifier == "calls.blockUnknown" }?.isEnabled, false)
     }
 
     @MainActor func testPendingInvitationsAreListedByNameAndCancelledOneAtATime() throws {
