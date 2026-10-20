@@ -117,6 +117,12 @@ final class KeypadPreviewViewController: UIViewController {
         do {
             let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let file = documents.appendingPathComponent("porch-preview-slots.json")
+            // * and # are saved beside the ten digits. A snapshot from before those keys has no such file.
+            let symbolsFile = documents.appendingPathComponent("porch-preview-symbol-slots.json")
+            func savedSetup() throws -> CallSlots {
+                let symbols = FileManager.default.fileExists(atPath: symbolsFile.path) ? try Data(contentsOf: symbolsFile) : nil
+                return try CallSlots.snapshot(from: Data(contentsOf: file), symbols: symbols, photoStore: photoStore)
+            }
             let photoStore = ContactPhotoStore(directoryURL: documents.appendingPathComponent("porch-preview-photos", isDirectory: true))
             let slots: CallSlots
             #if targetEnvironment(simulator)
@@ -126,17 +132,17 @@ final class KeypadPreviewViewController: UIViewController {
                 try sample.setContact(CallContact(name: "Sample Sam", nativeCall: NativeCall(room: "preview-sam", mode: .video), buttonColorHex: "E9E0D0"), for: 2)
                 slots = sample; setup.text = "Sample contacts · simulator only"
             } else {
-                slots = try CallSlots.snapshot(from: Data(contentsOf: file), photoStore: photoStore)
+                slots = try savedSetup()
                 setup.text = "Saved HelloPorch setup · read-only snapshot"
             }
             #else
-            slots = try CallSlots.snapshot(from: Data(contentsOf: file), photoStore: photoStore)
+            slots = try savedSetup()
             setup.text = "Saved HelloPorch setup · \(slots.contacts.compactMap { $0 }.count) people · read-only snapshot"
             #endif
             preview = KeypadActionPreview(slots: slots)
             for symbol in keyButtons.keys {
                 guard let button = keyButtons[symbol] else { continue }
-                let digit = Int(symbol)
+                let digit = CallSlots.digit(forSymbol: symbol)
                 let action = digit.flatMap { slots.action(for: $0) }
                 let person = digit.flatMap { slots.contact(for: $0) }
                 button.configuration?.subtitle = person?.name ?? (action == .person ? "Unassigned" : action?.title ?? "No action")
@@ -246,9 +252,9 @@ final class KeypadPreviewViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var other = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty,
-                  let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)) else { other.insert(press); continue }
-            if keyboard.keyDown(Int(key.keyCode.rawValue)) { receive(String(digit), source: "Keyboard") }
+            guard let key = press.key, key.modifierFlags.isDisjoint(with: [.command, .control, .alternate]),
+                  let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue), characters: key.characters, shift: key.modifierFlags.contains(.shift)) else { other.insert(press); continue }
+            if keyboard.keyDown(Int(key.keyCode.rawValue)) { receive(CallSlots.symbol(for: digit), source: "Keyboard") }
         }
         if !other.isEmpty { super.pressesBegan(other, with: event) }
     }

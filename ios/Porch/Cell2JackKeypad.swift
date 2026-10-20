@@ -8,7 +8,7 @@ protocol Cell2JackDigitReceiving: AnyObject {
 
 enum Cell2JackDigitRouter {
     static func route(_ symbol: String, root: UIViewController) -> String {
-        guard symbol.utf8.count == 1, let byte = symbol.utf8.first, (48...57).contains(byte) else { return "unassigned symbol" }
+        guard let digit = CallSlots.digit(forSymbol: symbol) else { return "unassigned symbol" }
         var screen = root
         while true {
             guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return "screen transitioning" }
@@ -20,7 +20,7 @@ enum Cell2JackDigitRouter {
         }
         // An unknown modal (PIN, settings, alert, permission UI) blocks input.
         guard let receiver = screen as? Cell2JackDigitReceiving else { return "screen does not accept phone keys" }
-        return receiver.receiveCell2JackDigit(Int(byte - 48))
+        return receiver.receiveCell2JackDigit(digit)
     }
 }
 

@@ -43,15 +43,17 @@ final class SlotsViewController: UITableViewController {
         content.imageToTextPadding = 18
         if indexPath.section == 0 {
             let number = CallSlots.digits[indexPath.row]
+            let key = CallSlots.symbol(for: number)
             let person = slots.contact(for: number)
             let action = slots.action(for: number) ?? .person
             content.text = action == .person ? (person?.name ?? "Add a person") : action.title
-            content.image = UIImage(systemName: "\(number).circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 32))
+            let badge = number == CallSlots.star ? "asterisk" : number == CallSlots.pound ? "number" : key
+            content.image = UIImage(systemName: "\(badge).circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 32))
             if let photo = RecipientAppearance.photo(person?.photoData) {
                 content.image = photo
                 content.imageProperties.maximumSize = CGSize(width: 64, height: 64)
                 content.imageProperties.cornerRadius = 12
-                content.text = "\(number) · \(person?.name ?? "")"
+                content.text = "\(key) · \(person?.name ?? "")"
             }
             content.secondaryText = person.map { contact in
                 if let call = contact.nativeCall {
@@ -59,14 +61,14 @@ final class SlotsViewController: UITableViewController {
                     return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on") + (dropIn ? " · Phone drop-in on" : "")
                 }
                 return "Finish Porch setup"
-            } ?? "Assign keypad number \(number)"
+            } ?? "Assign key \(key)"
             switch action {
             case .person: break
             case .callControl: content.secondaryText = "Tap to answer or hang up. Hold to decline a ringing call."
             case .toggleVideo: content.secondaryText = "Toggle your camera during a video call."
             case .messages: content.secondaryText = "Play or stop family messages."
             }
-            cell.accessibilityLabel = "Key \(number), \(content.text ?? "")"
+            cell.accessibilityLabel = "Key \(key), \(content.text ?? "")"
         } else if indexPath.section == 1, indexPath.row == 0 {
             content.text = "Family & drop-in"
             content.secondaryText = "Pair devices, invite people, and approve access"
@@ -97,7 +99,7 @@ final class SlotsViewController: UITableViewController {
         ["Keypad · people & controls", "Settings", "Device mode"][section]
     }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0 ? "Ten digits, each with its own action. By default 1–8 call people, 9 toggles video, and 0 answers or hangs up. Any digit can be reassigned. Saving never places a call." : nil
+        section == 0 ? "Twelve keys, each with its own action. By default 1–8 call people, 9 toggles video, 0 answers or hangs up, and * and # are free. Any key can be reassigned. Saving never places a call." : nil
     }
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = PorchStyle.secondary
@@ -169,6 +171,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     private let resetColorButton = PorchStyle.button("Use default color", filled: false)
     private let initialContact: CallContact?
     private let slot: Int
+    /// The slot as the keypad labels it: a digit, * or #.
+    private var key: String { CallSlots.symbol(for: slot) }
     private var saveTask: Task<Void, Never>?
     init(slot: Int, contact: CallContact?, action: KeypadAction = .person) {
         self.slot = slot; initialContact = contact; initialAction = action
@@ -177,10 +181,10 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     required init?(coder: NSCoder) { fatalError("Use init(slot:contact:)") }
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = initialAction != .person ? "Key \(slot)" : initialContact == nil ? "Add a person" : "Edit person"
+        title = initialAction != .person ? "Key \(key)" : initialContact == nil ? "Add a person" : "Edit person"
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
-        let badge = PorchStyle.label("KEYPAD NUMBER \(slot)", size: 14, color: PorchStyle.accent, weight: .semibold)
+        let badge = PorchStyle.label("KEYPAD KEY \(key)", size: 14, color: PorchStyle.accent, weight: .semibold)
         form.addArrangedSubview(badge)
         actionControl.selectedSegmentIndex = KeypadAction.allCases.firstIndex(of: initialAction) ?? 0
         actionControl.accessibilityLabel = "Keypad action"
@@ -515,7 +519,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     }
 
     @objc private func removePerson() {
-        let alert = UIAlertController(title: "Remove \(initialContact?.name ?? "this person")?", message: "Key \(slot) will be unassigned. Your other people will keep their numbers.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Remove \(initialContact?.name ?? "this person")?", message: "Key \(key) will be unassigned. Your other people will keep their numbers.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
             guard let self else { return }

@@ -1,6 +1,14 @@
 import UIKit
 import PorchCore
 
+extension UIKey {
+    /// The keypad key this press means, if any: a digit, * or #. Command, Control and Option presses never are.
+    var keypadDigit: Int? {
+        guard modifierFlags.isDisjoint(with: [.command, .control, .alternate]) else { return nil }
+        return CallTrigger.slot(for: Int(keyCode.rawValue), characters: characters, shift: modifierFlags.contains(.shift))
+    }
+}
+
 final class CallViewController: UIViewController {
     private var slots = CallSlots()
     private var trigger = CallTrigger()
@@ -527,9 +535,7 @@ final class CallViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard presentedViewController == nil, let key = press.key,
-                  let slot = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
-                  key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else {
+            guard presentedViewController == nil, let key = press.key, let slot = key.keypadDigit else {
                 unhandled.insert(press); continue
             }
             if trigger.keyDown(Int(key.keyCode.rawValue)) { call(slot: slot) }
@@ -570,7 +576,7 @@ final class CallViewController: UIViewController {
             return
         }
         guard let contact = slots.contact(for: slot) else {
-            displayStatus(BedsideText.string("No one is assigned to %d.\nPlease choose another number.", slot), temporary: true)
+            displayStatus(BedsideText.string("No one is assigned to %@.\nPlease choose another number.", CallSlots.symbol(for: slot)), temporary: true)
             return
         }
         guard let native = contact.nativeCall else {
@@ -751,7 +757,7 @@ final class PeoplePickerViewController: UIViewController {
             for index in start..<min(start + columns, people.count) {
                 let (number, person) = people[index]
                 let button = PorchStyle.button(person.name)
-                button.configuration?.subtitle = BedsideText.string("Press %d", number)
+                button.configuration?.subtitle = BedsideText.string("Press %@", CallSlots.symbol(for: number))
                 button.configuration?.image = RecipientAppearance.cardPhoto(person.photoData, width: cardWidth - 40)
                 button.configuration?.imagePlacement = .top
                 button.configuration?.imagePadding = 20
@@ -772,9 +778,9 @@ final class PeoplePickerViewController: UIViewController {
                 button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
                     var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = foreground; return attributes
                 }
-                button.accessibilityIdentifier = "people.person.\(number)"
+                button.accessibilityIdentifier = "people.person.\(CallSlots.symbol(for: number))"
                 button.accessibilityLanguage = BedsideText.language.speechLanguage
-                button.accessibilityLabel = BedsideText.string("Call %@, key %d", person.name, number)
+                button.accessibilityLabel = BedsideText.string("Call %@, key %@", person.name, CallSlots.symbol(for: number))
                 button.heightAnchor.constraint(greaterThanOrEqualToConstant: max(200, nameSize * 3.5)).isActive = true
                 button.addAction(UIAction { [weak self] _ in self?.choose(number) }, for: .touchUpInside)
                 row.addArrangedSubview(button)
@@ -790,8 +796,7 @@ final class PeoplePickerViewController: UIViewController {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let number = CallTrigger.slot(for: Int(key.keyCode.rawValue)),
-                key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            guard let key = press.key, let number = key.keypadDigit else { unhandled.insert(press); continue }
             if trigger.keyDown(Int(key.keyCode.rawValue)) { choose(number) }
         }
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }

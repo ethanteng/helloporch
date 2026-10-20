@@ -229,7 +229,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let digit = CallTrigger.slot(for: Int(key.keyCode.rawValue)), key.modifierFlags.intersection([.command, .control, .alternate, .shift]).isEmpty else { unhandled.insert(press); continue }
+            guard let key = press.key, let digit = key.keypadDigit else { unhandled.insert(press); continue }
             if keypad.keyDown(Int(key.keyCode.rawValue)) { performKeypadDigit(digit) }
         }
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
@@ -445,7 +445,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     private func updateKeypadHint() {
         let slots = (try? CallSlots.load()) ?? CallSlots()
-        keypadHint.text = [slots.digit(for: .callControl).map { BedsideText.string("Key %d: hang up", $0) }, call.mode == .video && !isPhoneCall && !beginWithPhoneFallback ? slots.digit(for: .toggleVideo).map { BedsideText.string("Key %d: video off / on", $0) } : nil].compactMap { $0 }.joined(separator: " · ")
+        keypadHint.text = [slots.digit(for: .callControl).map { BedsideText.string("Key %@: hang up", CallSlots.symbol(for: $0)) }, call.mode == .video && !isPhoneCall && !beginWithPhoneFallback ? slots.digit(for: .toggleVideo).map { BedsideText.string("Key %@: video off / on", CallSlots.symbol(for: $0)) } : nil].compactMap { $0 }.joined(separator: " · ")
         keypadHint.isHidden = keypadHint.text?.isEmpty != false
     }
     private func refresh(source: Room? = nil) {

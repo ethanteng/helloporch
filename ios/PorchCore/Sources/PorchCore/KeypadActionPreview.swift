@@ -44,11 +44,9 @@ public struct KeypadActionPreview {
             Result(symbol: symbol, context: context, action: action, kind: kind,
                    title: title, detail: detail, contactName: name, selectedDigit: selected, cameraOn: camera)
         }
-        guard symbol.utf8.count == 1, let byte = symbol.utf8.first, (48...57).contains(byte),
-              let action = slots.action(for: Int(byte - 48)) else {
-            return result(.unmapped, "No action assigned to \(symbol)", "Only saved digit assignments are previewed. No action was performed.")
+        guard let digit = CallSlots.digit(forSymbol: symbol), let action = slots.action(for: digit) else {
+            return result(.unmapped, "No action assigned to \(symbol)", "Only saved key assignments are previewed. No action was performed.")
         }
-        let digit = Int(byte - 48)
         if action == .callControl {
             switch context {
             case .incoming: return result(.answer, "Would answer the incoming call", "Tap behavior only. These digit reports do not provide hold/release timing for declining.", action: action)

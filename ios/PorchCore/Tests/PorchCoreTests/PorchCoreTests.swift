@@ -68,7 +68,7 @@ final class PorchCoreTests: XCTestCase {
         XCTAssertFalse(trigger.keyDown(0x59))
         trigger.keyUp(0x59)
         XCTAssertTrue(trigger.keyDown(0x59))
-        XCTAssertFalse(trigger.keyDown(0x58)) // keypad Enter must not call
+        XCTAssertNil(CallTrigger.slot(for: 0x58, characters: "\r", shift: false)) // keypad Enter must not call
     }
 
     func testKeypadAndKeyboardRouteToAllTenDigits() {
@@ -85,7 +85,57 @@ final class PorchCoreTests: XCTestCase {
         XCTAssertEqual(CallTrigger.slot(for: 0x27), 0)
         for code in [0x58, 0x63, 0x28, 0x04] {
             XCTAssertNil(CallTrigger.slot(for: code))
-            XCTAssertFalse(trigger.keyDown(code))
+        }
+    }
+
+    func testStarAndPoundRouteFromKeypadsAndKeyboardsOfAnyLayout() {
+        XCTAssertEqual(CallTrigger.slot(for: 0x55), CallSlots.star) // keypad *
+        XCTAssertEqual(CallTrigger.slot(for: 0xCC), CallSlots.pound) // keypad #
+        XCTAssertEqual(CallTrigger.slot(for: 0x55, characters: "*", shift: false), CallSlots.star)
+        // Keyboards type them with Shift: 8 and 3 on a US layout, and # has its own key on a UK one.
+        XCTAssertEqual(CallTrigger.slot(for: 0x25, characters: "*", shift: true), CallSlots.star)
+        XCTAssertEqual(CallTrigger.slot(for: 0x20, characters: "#", shift: true), CallSlots.pound)
+        XCTAssertEqual(CallTrigger.slot(for: 0x32, characters: "#", shift: false), CallSlots.pound)
+        XCTAssertEqual(CallTrigger.slot(for: 0x1E, characters: "1", shift: false), 1)
+        XCTAssertNil(CallTrigger.slot(for: 0x1E, characters: "!", shift: true), "Shift never turns a digit key into that digit")
+        XCTAssertNil(CallTrigger.slot(for: 0x20, characters: "£", shift: true))
+        var trigger = CallTrigger()
+        XCTAssertTrue(trigger.keyDown(0x32))
+        XCTAssertFalse(trigger.keyDown(0x32))
+        trigger.keyUp(0x32)
+        XCTAssertTrue(trigger.keyDown(0x32))
+    }
+
+    func testKeysAreTheDigitsThenStarAndPound() {
+        XCTAssertEqual(CallSlots.digits.map(CallSlots.symbol(for:)).joined(), "1234567890*#")
+        for digit in CallSlots.digits { XCTAssertEqual(CallSlots.digit(forSymbol: CallSlots.symbol(for: digit)), digit) }
+        for symbol in ["10", "11", "A", "D", "", "١", "**", " 1"] { XCTAssertNil(CallSlots.digit(forSymbol: symbol), symbol) }
+        let slots = CallSlots()
+        XCTAssertEqual(slots.action(for: CallSlots.star), .person); XCTAssertNil(slots.contact(for: CallSlots.star))
+        XCTAssertEqual(slots.action(for: CallSlots.pound), .person); XCTAssertNil(slots.contact(for: CallSlots.pound))
+    }
+
+    func testStarAndPoundSaveBesideTheTenDigitsSoEarlierBuildsCanStillReadThem() throws {
+        try withDefaults { defaults in
+            var slots = CallSlots()
+            try slots.setContact(CallContact(name: "David", shortcutName: "Call David"), for: 1)
+            try slots.save(to: defaults)
+            // As a build from before * and # saved it: ten slots and nothing beside them.
+            defaults.removeObject(forKey: "porch.slots.v2.symbols")
+            var loaded = try CallSlots.load(from: defaults)
+            XCTAssertEqual(loaded, slots)
+            try loaded.setContact(CallContact(name: "Mei", shortcutName: "Call Mei"), for: CallSlots.star)
+            try loaded.setAction(.callControl, for: CallSlots.pound)
+            try loaded.save(to: defaults)
+            let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(defaults.data(forKey: "porch.slots.v2"))) as? [Any])
+            XCTAssertEqual(saved.count, 10, "A build from before * and # reads exactly ten")
+            let reloaded = try CallSlots.load(from: defaults)
+            XCTAssertEqual(reloaded, loaded)
+            XCTAssertEqual(reloaded.contact(for: CallSlots.star)?.name, "Mei")
+            XCTAssertEqual(reloaded.action(for: CallSlots.pound), .callControl)
+            XCTAssertEqual(reloaded.contact(for: 1)?.name, "David")
+            defaults.set(Data("[null]".utf8), forKey: "porch.slots.v2.symbols")
+            XCTAssertThrowsError(try CallSlots.load(from: defaults))
         }
     }
 
@@ -108,7 +158,7 @@ final class PorchCoreTests: XCTestCase {
             try slots.setContact(nil, for: 2)
             try slots.save(to: defaults)
             let loaded = try CallSlots.load(from: defaults)
-            XCTAssertEqual(loaded.contacts.count, 10)
+            XCTAssertEqual(loaded.contacts.count, 12)
             XCTAssertNil(loaded.contact(for: 2))
             XCTAssertEqual(loaded.contact(for: 3)?.shortcutName, "Call person 3")
             XCTAssertEqual(loaded.contact(for: 6), sixth)
@@ -141,7 +191,7 @@ final class PorchCoreTests: XCTestCase {
         for number in [-1, 0, 1, 2, 3, 4, 5, 7, 8, 9, 10] {
             XCTAssertNil(slots.contact(for: number))
         }
-        for number in [-1, 10] {
+        for number in [-1, 12] {
             XCTAssertThrowsError(try slots.setContact(contact, for: number))
         }
         XCTAssertEqual(slots.contact(for: 6), contact)
@@ -447,7 +497,7 @@ final class BedsideAndKeypadTests: XCTestCase {
         let prefs = defaults(); var slots = CallSlots()
         let person = try CallContact(name: "Pat", nativeCall: NativeCall(room: "pat", mode: .video))
         for digit in CallSlots.digits { try slots.setContact(person, for: digit) }
-        XCTAssertEqual(slots.contacts.compactMap { $0 }.count, 10)
+        XCTAssertEqual(slots.contacts.compactMap { $0 }.count, 12)
         try slots.setAction(.callControl, for: 4); try slots.setAction(.toggleVideo, for: 7)
         try slots.save(to: prefs)
         let loaded = try CallSlots.load(from: prefs)

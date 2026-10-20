@@ -12,12 +12,22 @@ public enum KeypadAction: String, Codable, CaseIterable {
     }
 }
 
-/// Stable physical digits, in telephone order. Older six-person setups migrate
-/// without moving anyone; 9 and 0 are initially reserved for call controls.
+/// Stable physical keys: the digits in telephone order, then * and #, numbered 10 and 11 as DTMF
+/// events are. Older six-person setups migrate without moving anyone; 9 and 0 are initially
+/// reserved for call controls, and * and # start as empty person keys.
 public struct CallSlots: Equatable {
-    public static let digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+    public static let star = 10, pound = 11
+    public static let digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, star, pound]
     public static let count = digits.count
+    /// The key as the keypad labels it.
+    public static func symbol(for digit: Int) -> String { digit == star ? "*" : digit == pound ? "#" : String(digit) }
+    /// The key a keypad or phone symbol names: "0" to "9", "*" or "#".
+    public static func digit(forSymbol symbol: String) -> Int? { digits.first { self.symbol(for: $0) == symbol } }
     private static let storageKey = "porch.slots.v2"
+    /// 0–9 stay under `storageKey` as ten slots, and * and # go beside them, so a build from before
+    /// those two keys can still read the keypad.
+    private static let digitSlots = 10
+    private static let symbolsStorageKey = "porch.slots.v2.symbols"
     private struct Slot: Codable, Equatable { var action: KeypadAction; var contact: CallContact? }
     private var slots: [Slot]
     public var contacts: [CallContact?] { slots.map { $0.action == .person ? $0.contact : nil } }
@@ -105,13 +115,9 @@ public struct CallSlots: Equatable {
         let decoder = JSONDecoder()
         decoder.userInfo[ContactPhotoStore.codingKey] = photoStore
         if let data = defaults.data(forKey: storageKey) {
-            let saved = try decoder.decode([Slot].self, from: data)
-            guard saved.count == count else { throw ValidationError.invalidSavedSlots }
-            for (digit, slot) in zip(digits, saved) {
-                guard slot.action == .person || slot.contact == nil else { throw ValidationError.invalidSavedSlots }
-                try result.setContact(slot.contact, for: digit)
-                try result.setAction(slot.action, for: digit)
-            }
+            var saved = try decoder.decode([Slot].self, from: data)
+            if let symbols = defaults.data(forKey: symbolsStorageKey) { saved += try decoder.decode([Slot].self, from: symbols) }
+            result = try restoring(saved)
             if result.contacts.contains(where: { $0?.hasInlinePhoto == true }) {
                 // An unavailable filesystem must not make existing contacts
                 // unusable. Keep the inline record and retry migration later.
@@ -130,11 +136,18 @@ public struct CallSlots: Equatable {
     }
     /// Read a v2 setup snapshot for a preview without migrations, preferences
     /// writes, photo persistence, or pruning the original app's photo store.
-    public static func snapshot(from data: Data, photoStore: ContactPhotoStore = .standard) throws -> Self {
+    /// `symbols` is the * and # data saved beside it, which a setup from before those keys doesn't have.
+    public static func snapshot(from data: Data, symbols: Data? = nil, photoStore: ContactPhotoStore = .standard) throws -> Self {
         let decoder = JSONDecoder()
         decoder.userInfo[ContactPhotoStore.codingKey] = photoStore
-        let saved = try decoder.decode([Slot].self, from: data)
-        guard saved.count == count else { throw ValidationError.invalidSavedSlots }
+        var saved = try decoder.decode([Slot].self, from: data)
+        if let symbols { saved += try decoder.decode([Slot].self, from: symbols) }
+        return try restoring(saved)
+    }
+    /// Saved slots in `digits` order. Setups from before * and # have only the ten digits,
+    /// and those two keys keep their defaults.
+    private static func restoring(_ saved: [Slot]) throws -> Self {
+        guard saved.count == count || saved.count == digitSlots else { throw ValidationError.invalidSavedSlots }
         var result = Self()
         for (digit, slot) in zip(digits, saved) {
             guard slot.action == .person || slot.contact == nil else { throw ValidationError.invalidSavedSlots }
@@ -146,7 +159,12 @@ public struct CallSlots: Equatable {
     public func save(to defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) throws {
         let encoder = JSONEncoder()
         encoder.userInfo[ContactPhotoStore.codingKey] = photoStore
-        defaults.set(try encoder.encode(slots), forKey: Self.storageKey)
+        // Encoding stores new photos. Finish both halves before either write, so a photo on * or #
+        // that cannot be stored does not leave the ten digits already replaced.
+        let digits = try encoder.encode(Array(slots.prefix(Self.digitSlots)))
+        let symbols = try encoder.encode(Array(slots.dropFirst(Self.digitSlots)))
+        defaults.set(digits, forKey: Self.storageKey)
+        defaults.set(symbols, forKey: Self.symbolsStorageKey)
         defaults.removeObject(forKey: "porch.slots.v1")
         defaults.removeObject(forKey: "porch.contact.v1")
         photoStore.prune(keeping: Set(contacts.compactMap { $0?.photoID }))
@@ -155,7 +173,7 @@ public struct CallSlots: Equatable {
         case invalidSlot, invalidSavedSlots
         public var errorDescription: String? {
             switch self {
-            case .invalidSlot: return "Choose a keypad digit from 0 to 9."
+            case .invalidSlot: return "Choose a keypad key: 0 to 9, * or #."
             case .invalidSavedSlots: return "The saved keypad settings could not be read. Please check them in caregiver mode."
             }
         }

@@ -22,12 +22,12 @@ final class Cell2JackRoutingTests: XCTestCase {
     }
     @MainActor func testNoHookOrNonDigitInputAndSeparateRepeatedPresses() {
         let screen = Receiver()
-        for symbol in ["*", "#", "A", "OFF_HOOK", "ON_HOOK", "١", "10", ""] {
+        for symbol in ["A", "OFF_HOOK", "ON_HOOK", "١", "10", "11", ""] {
             XCTAssertEqual(Cell2JackDigitRouter.route(symbol, root: screen), "unassigned symbol")
         }
         XCTAssertTrue(screen.received.isEmpty)
-        for symbol in ["5", "5", "0"] { _ = Cell2JackDigitRouter.route(symbol, root: screen) }
-        XCTAssertEqual(screen.received, [5, 5, 0])
+        for symbol in ["5", "5", "0", "*", "#"] { _ = Cell2JackDigitRouter.route(symbol, root: screen) }
+        XCTAssertEqual(screen.received, [5, 5, 0, CallSlots.star, CallSlots.pound])
     }
     @MainActor func testNavigationRoutesOnlyToVisibleReceiver() {
         let screen = Receiver(), nav = UINavigationController(rootViewController: screen)
@@ -47,7 +47,7 @@ final class Cell2JackRoutingTests: XCTestCase {
     }
     @MainActor func testRealCallScreenUsesSavedHangupAssignmentWithoutConnecting() throws {
         let defaults = UserDefaults.standard
-        let keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let keys = ["porch.slots.v2", "porch.slots.v2.symbols", "porch.slots.v1", "porch.contact.v1"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
         var slots = CallSlots()
@@ -125,7 +125,7 @@ final class Cell2JackRoutingTests: XCTestCase {
     }
     @MainActor func testClockKeypadHintsExpireAndReplacementGetsFiveSeconds() async throws {
         let defaults = UserDefaults.standard
-        let keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let keys = ["porch.slots.v2", "porch.slots.v2.symbols", "porch.slots.v1", "porch.contact.v1"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -139,7 +139,7 @@ final class Cell2JackRoutingTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
         let label = try XCTUnwrap(clock.view.subviews.first { $0.accessibilityIdentifier == "clock.feedback" } as? UILabel)
         _ = clock.receiveCell2JackDigit(3)
-        let empty = BedsideText.string("No one is assigned to %d.\nPlease choose another number.", 3)
+        let empty = BedsideText.string("No one is assigned to %@.\nPlease choose another number.", "3")
         XCTAssertEqual(label.text, empty)
         try await Task.sleep(nanoseconds: 6_000_000_000)
         XCTAssertNil(label.text)
@@ -153,6 +153,8 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertNil(label.text)
         _ = clock.receiveCell2JackDigit(9)
         XCTAssertEqual(label.text, BedsideText.string("Use this key to turn your camera off or on during a video call."))
+        _ = clock.receiveCell2JackDigit(CallSlots.pound)
+        XCTAssertEqual(label.text, BedsideText.string("No one is assigned to %@.\nPlease choose another number.", "#"))
         clock.pause()
         XCTAssertNil(label.text)
     }
@@ -357,9 +359,11 @@ final class Cell2JackRoutingTests: XCTestCase {
     }
     private final class HardwareKey: UIKey {
         var code: UIKeyboardHIDUsage = .keypad0
+        var typed: String?
+        var flags: UIKeyModifierFlags = []
         override var keyCode: UIKeyboardHIDUsage { code }
-        override var modifierFlags: UIKeyModifierFlags { [] }
-        override var characters: String { code == .keypad0 ? "0" : "1" }
+        override var modifierFlags: UIKeyModifierFlags { flags }
+        override var characters: String { typed ?? (code == .keypad0 ? "0" : "1") }
         override var charactersIgnoringModifiers: String { characters }
     }
     private final class HardwarePress: UIPress {
@@ -368,7 +372,7 @@ final class Cell2JackRoutingTests: XCTestCase {
     }
     @MainActor func testStandardKeypadStillSelectsPeopleAndHangsUpWithCell2JackOffReadyOrDisconnected() throws {
         let defaults = UserDefaults.standard
-        let keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let keys = ["porch.slots.v2", "porch.slots.v2.symbols", "porch.slots.v1", "porch.contact.v1"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -403,6 +407,36 @@ final class Cell2JackRoutingTests: XCTestCase {
             XCTAssertTrue(screen.isEnding, "\(mode): standard HID 0 must still hang up")
             keypad.pause(); connection?.update(.finished("/q sent"))
         }
+    }
+    @MainActor func testStarAndPoundKeysSelectPeopleAndHangUpLikeDigits() throws {
+        let defaults = UserDefaults.standard
+        let keys = ["porch.slots.v2", "porch.slots.v2.symbols", "porch.slots.v1", "porch.contact.v1"]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let call = try NativeCall(room: "star-pound-keys", mode: .voice)
+        let person = try CallContact(name: "Star key fixture", nativeCall: call)
+        var slots = CallSlots()
+        try slots.setContact(person, for: CallSlots.star)
+        try slots.setAction(.person, for: 0); try slots.setAction(.callControl, for: CallSlots.pound)
+        try slots.save(photoStore: ContactPhotoStore(directoryURL: folder))
+        let picker = PeoplePickerViewController(slots: slots)
+        var chosen: [Int] = []; picker.onCall = { chosen.append($0) }
+        let star = HardwarePress(); star.hardwareKey.code = .keypadAsterisk; star.hardwareKey.typed = "*"
+        picker.pressesBegan([star], with: nil)
+        XCTAssertEqual(chosen, [CallSlots.star])
+        let server = try NativeCallServer(url: "https://example.invalid", accessCode: "local-fixture-only-access-code")
+        let screen = NativeCallViewController(contact: person, call: call, server: server)
+        screen.pressesBegan([HardwarePress()], with: nil)
+        XCTAssertFalse(screen.isEnding, "0 is a person key now")
+        let sterling = HardwarePress(); sterling.hardwareKey.code = .keyboard3; sterling.hardwareKey.typed = "£"; sterling.hardwareKey.flags = .shift
+        screen.pressesBegan([sterling], with: nil)
+        XCTAssertFalse(screen.isEnding, "Shift-3 is only # where the keyboard types #")
+        let pound = HardwarePress(); pound.hardwareKey.code = .keyboard3; pound.hardwareKey.typed = "#"; pound.hardwareKey.flags = .shift
+        screen.pressesBegan([pound], with: nil)
+        XCTAssertTrue(screen.isEnding, "A keyboard's Shift-3 # must hang up")
     }
     @MainActor func testTouchCallSomeoneStillOpensPeopleWithCell2JackOff() throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })

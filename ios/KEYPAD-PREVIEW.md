@@ -41,7 +41,9 @@ contacts require an explicit simulator-only launch option.
 
 Snapshot files in the preview's Documents directory:
 
-- `porch-preview-slots.json`: the existing `porch.slots.v2` data.
+- `porch-preview-slots.json`: the existing `porch.slots.v2` data (keys 0–9).
+- `porch-preview-symbol-slots.json`: the `porch.slots.v2.symbols` data (keys * and #),
+  when the setup has it. Without it, * and # preview as empty person keys.
 - `porch-preview-photos/`: the referenced contact photo files.
 
 `CallSlots.snapshot` decodes without migration, preference writes, photo writes,

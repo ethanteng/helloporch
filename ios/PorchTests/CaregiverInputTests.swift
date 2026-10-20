@@ -192,7 +192,7 @@ final class CaregiverInputTests: XCTestCase {
     }
     @MainActor func testRenamedContactIsShownAndAnnouncedForIncomingVoiceVideoAndDropIn() throws {
         let restoreLanguage = localizedBedside(); defer { restoreLanguage() }
-        let defaults = UserDefaults.standard, keys = ["porch.slots.v2", "porch.slots.v1", "porch.contact.v1"]
+        let defaults = UserDefaults.standard, keys = ["porch.slots.v2", "porch.slots.v2.symbols", "porch.slots.v1", "porch.contact.v1"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
         let caller = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -247,7 +247,8 @@ final class CaregiverInputTests: XCTestCase {
             picker.view.frame = CGRect(origin: .zero, size: size); picker.view.layoutIfNeeded(); picker.viewDidLayoutSubviews(); picker.view.layoutIfNeeded()
             XCTAssertTrue(labels(in: picker.view).contains { $0.text == "您想打給誰？" })
             let people = buttons(in: picker.view).filter { $0.accessibilityIdentifier?.hasPrefix("people.person.") == true }
-            XCTAssertEqual(people.count, 10)
+            XCTAssertEqual(people.count, CallSlots.count)
+            XCTAssertEqual(people.compactMap { $0.configuration?.subtitle }.suffix(2), ["按 *", "按 #"])
             for person in people {
                 person.layoutIfNeeded()
                 XCTAssertNil(person.configuration?.image)
@@ -424,7 +425,7 @@ final class CaregiverInputTests: XCTestCase {
                 XCTAssertTrue(labels(in: picker.view).contains { $0.text == language.text("Who would you like to call?") })
                 let person = buttons(in: picker.view).first { $0.accessibilityIdentifier == "people.person.1" }!
                 XCTAssertEqual(person.configuration?.title, "María 陳")
-                XCTAssertEqual(person.configuration?.subtitle, language.format("Press %d", arguments: [1]))
+                XCTAssertEqual(person.configuration?.subtitle, language.format("Press %@", arguments: ["1"]))
                 XCTAssertEqual(person.accessibilityLanguage, language.speechLanguage)
             }
             for mode in [NativeCall.Mode.voice, .video] {
@@ -890,7 +891,7 @@ final class CaregiverInputTests: XCTestCase {
 
     @MainActor func testAllTenKeypadRowsIncludeDefaultControlsAndCanBeRemapped() throws {
         let settings = SlotsViewController(slots: CallSlots()); settings.loadViewIfNeeded()
-        XCTAssertEqual(settings.tableView(settings.tableView, numberOfRowsInSection: 0), 10)
+        XCTAssertEqual(settings.tableView(settings.tableView, numberOfRowsInSection: 0), 12)
         let nine = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 8, section: 0))
         let zero = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 9, section: 0))
         XCTAssertEqual(nine.accessibilityLabel, "Key 9, Turn video off / on")

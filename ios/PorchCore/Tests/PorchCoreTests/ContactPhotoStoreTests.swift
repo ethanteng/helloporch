@@ -25,7 +25,7 @@ final class ContactPhotoStoreTests: XCTestCase {
             XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("photoData"))
             let restored = try CallSlots.load(from: defaults, photoStore: store)
             XCTAssertEqual(restored, slots, "Inline and file-backed contacts compare by stable photo identity")
-            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.directoryURL.path).count, 10)
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.directoryURL.path).count, CallSlots.count)
             XCTAssertEqual(restored.contact(for: 1)?.photoData?.count, 900_000)
 
             let moved = store.directoryURL.appendingPathExtension("unavailable")
@@ -84,12 +84,29 @@ final class ContactPhotoStoreTests: XCTestCase {
         try fixture { defaults, store in
             try CallSlots().save(to: defaults, photoStore: store)
             let original = defaults.data(forKey: "porch.slots.v2")
+            let originalSymbols = defaults.data(forKey: "porch.slots.v2.symbols")
             // A file in place of the directory simulates an unwritable store.
             try Data([1]).write(to: store.directoryURL)
             var changed = CallSlots()
             try changed.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), photoData: Data([1, 2, 3])), for: 1)
             XCTAssertThrowsError(try changed.save(to: defaults, photoStore: store))
             XCTAssertEqual(defaults.data(forKey: "porch.slots.v2"), original)
+            XCTAssertEqual(defaults.data(forKey: "porch.slots.v2.symbols"), originalSymbols)
+        }
+    }
+
+    func testFailedStarPhotoDoesNotCommitDigitEditsInTheSameSave() throws {
+        try fixture { defaults, store in
+            try CallSlots().save(to: defaults, photoStore: store)
+            let original = defaults.data(forKey: "porch.slots.v2")
+            let originalSymbols = defaults.data(forKey: "porch.slots.v2.symbols")
+            try Data([1]).write(to: store.directoryURL)
+            var changed = CallSlots()
+            try changed.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice)), for: 1)
+            try changed.setContact(CallContact(name: "Mei", nativeCall: NativeCall(room: "star", mode: .voice), photoData: Data([1, 2, 3])), for: CallSlots.star)
+            XCTAssertThrowsError(try changed.save(to: defaults, photoStore: store))
+            XCTAssertEqual(defaults.data(forKey: "porch.slots.v2"), original, "A photo failure on * must not commit the other keys")
+            XCTAssertEqual(defaults.data(forKey: "porch.slots.v2.symbols"), originalSymbols)
         }
     }
 
