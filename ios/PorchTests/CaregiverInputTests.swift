@@ -791,11 +791,14 @@ final class CaregiverInputTests: XCTestCase {
             XCTAssertEqual(editor.form.bounds.width, min(760, size.width - 48), "The other numbers must not squeeze the form at \(size)")
             let controls = all(editor.form).filter { $0 is UISwitch || ["Make primary", "Remove"].contains(($0 as? UIButton)?.configuration?.title) }
             XCTAssertEqual(controls.count, 4)
+            // Converting between views leaves rounding noise (143.66666666666663 against 143.66666666666666);
+            // a squeezed control is short by whole points.
+            let tolerance: CGFloat = 0.5
             for control in controls {
                 let frame = control.convert(control.bounds, to: editor.form)
-                XCTAssertGreaterThanOrEqual(frame.width, control.intrinsicContentSize.width, "\(control.accessibilityLabel ?? "") is squeezed at \(size)")
-                XCTAssertGreaterThanOrEqual(frame.minX, 0)
-                XCTAssertLessThanOrEqual(frame.maxX, editor.form.bounds.width, "\(control.accessibilityLabel ?? "") leaves its card at \(size)")
+                XCTAssertGreaterThanOrEqual(frame.width, control.intrinsicContentSize.width - tolerance, "\(control.accessibilityLabel ?? "") is squeezed at \(size)")
+                XCTAssertGreaterThanOrEqual(frame.minX, -tolerance)
+                XCTAssertLessThanOrEqual(frame.maxX, editor.form.bounds.width + tolerance, "\(control.accessibilityLabel ?? "") leaves its card at \(size)")
             }
         }
     }
