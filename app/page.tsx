@@ -1,8 +1,8 @@
 import DemoVideo from "@/components/DemoVideo";
 import PorchFace from "@/components/PorchFace";
 import PorchKeypad, { ScreenKey } from "@/components/PorchKeypad";
-import PorchLogo from "@/components/PorchLogo";
-import SocialLinks from "@/components/SocialLinks";
+import SiteNav from "@/components/SiteNav";
+import SiteFooter from "@/components/SiteFooter";
 import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 
 const PHONE_STEPS = ["Unlock the phone", "Find the video app", "Scroll to Sarah", "Tap the tiny camera icon"];
@@ -11,17 +11,7 @@ export default function Home() {
   return (
     <WaitlistProvider>
       <div className="page">
-        <nav className="nav">
-          <a href="#" className="logo" aria-label="Porch home">
-            <PorchLogo />
-          </a>
-          <div className="nav__actions">
-            <SocialLinks />
-            <a href="#join" className="nav__cta">
-              Join the waitlist
-            </a>
-          </div>
-        </nav>
+        <SiteNav />
 
         <header className="hero">
           <div className="hero__badge">
@@ -167,10 +157,7 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="footer">
-          <div>© 2026 Porch</div>
-          <div>Made for families, by a family.</div>
-        </footer>
+        <SiteFooter />
       </div>
     </WaitlistProvider>
   );
