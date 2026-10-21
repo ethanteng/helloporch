@@ -211,7 +211,7 @@ export default function CallPrototype() {
 
   return (
     <main className={styles.page}>
-      <a className="logo" href="/" aria-label="Porch home"><PorchLogo /></a>
+      <a className="logo" href="/" aria-label="HelloPorch home"><PorchLogo /></a>
       <p className={styles.eyebrow}>Calling prototype</p>
       <h1>A familiar voice.<br />A familiar face.</h1>
       <p className={styles.intro}>Join someone on Porch. Use the same room name and call mode on both devices.</p>
