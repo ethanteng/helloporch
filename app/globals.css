@@ -61,6 +61,8 @@ input::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
   padding: 28px 64px;
 }
 .logo {
@@ -93,7 +95,23 @@ input::placeholder {
 .nav__actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-left: auto;
+}
+.nav__story {
+  padding: 10px 0;
+  color: var(--ink);
+  font: 500 15px var(--sans);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav__story:hover,
+.nav__story[aria-current="page"] {
+  color: var(--tomato-deep);
+  text-decoration: underline;
+  text-underline-offset: 5px;
 }
 .social {
   display: flex;
@@ -820,11 +838,18 @@ input::placeholder {
 /* ---------- Footer ---------- */
 .footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 8px 64px 40px;
   font: 400 15px var(--sans);
   color: oklch(0.48 0.03 55);
+}
+.footer__copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
 }
 
 /* ---------- Responsive ---------- */
@@ -952,12 +977,15 @@ input::placeholder {
   .footer {
     padding: 8px 16px 32px;
     flex-direction: column;
+    align-items: flex-start;
+  }
+  .footer__copy {
+    flex-direction: column;
   }
 }
 
-/* Not enough room for both on phones; the waitlist button wins. */
-@media (max-width: 480px) {
-  .social {
-    display: none;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }

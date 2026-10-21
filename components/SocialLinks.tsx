@@ -1,4 +1,4 @@
-/* Icon links to Porch elsewhere, shown in the nav. Brand glyphs are from Simple Icons (CC0). */
+/* Icon links to Porch elsewhere, shown in the footer. Brand glyphs are from Simple Icons (CC0). */
 const LINKS = [
   {
     label: "Porch on X",
