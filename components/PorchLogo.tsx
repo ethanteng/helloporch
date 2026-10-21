@@ -1,4 +1,4 @@
-/* The Porch logo: a smiling "p" mark beside the "porch" wordmark. The parent's
+/* The HelloPorch logo: a smiling "p" mark beside the "HelloPorch" wordmark. The parent's
    `.logo`-style rule sets the font and size; `.logo__mark` colors the mark. */
 export default function PorchLogo() {
   return (
@@ -10,7 +10,7 @@ export default function PorchLogo() {
           <path d="M36 42 Q52 60 68 42" />
         </g>
       </svg>
-      porch
+      HelloPorch
     </>
   );
 }
