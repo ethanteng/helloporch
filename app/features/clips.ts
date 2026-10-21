@@ -37,4 +37,22 @@ export const calling: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Video%20drop-in%20compressed.mp4",
     poster: "/features/video-drop-in.jpg",
   },
+  {
+    id: "send-a-message",
+    title: "Send a hello, any time.",
+    description:
+      "Record a short video or voice message on your phone, whether it’s a reminder about Tuesday’s appointment or just “I love you.” It shows up on their Porch right away, and you’ll see when they’ve played it.",
+    duration: "26 sec",
+    src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Send%20a%20message%20compressed.mp4",
+    poster: "/features/send-a-message.jpg",
+  },
+  {
+    id: "auto-play-messages",
+    title: "Your message finds them.",
+    description:
+      "When they’re there to see it, Porch plays your message on its own. They don’t have to remember to check or figure out how to open it, so nothing you send goes unseen.",
+    duration: "16 sec",
+    src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Auto-play%20messages%20compressed.mp4",
+    poster: "/features/auto-play-messages.jpg",
+  },
 ];
