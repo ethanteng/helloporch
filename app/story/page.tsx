@@ -26,9 +26,9 @@ export const metadata: Metadata = {
 export default function StoryPage() {
   return (
     <WaitlistProvider>
-      <div className={`page ${styles.page}`} data-story-page>
+      <div className={`page ${styles.page}`}>
         <a href="#story" className={styles.skip}>Skip to our story</a>
-        <SiteNav story />
+        <SiteNav current="story" />
 
         <main id="story">
           <header className={styles.hero}>
