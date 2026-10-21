@@ -10,7 +10,7 @@ import styles from "./features.module.css";
 export const metadata: Metadata = {
   title: "See Porch in Action | HelloPorch",
   description:
-    "Short clips of the Porch prototype: one press starts a video call, calls fall back to your phone, and family can drop in.",
+    "Short clips of the Porch prototype: one press starts a video call, calls fall back to your phone, family can drop in, and messages play on their own.",
 };
 
 export default function FeaturesPage() {

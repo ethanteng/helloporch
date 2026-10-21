@@ -76,13 +76,17 @@
   width: 100%;
 }
 
+/* Three to a row, with a short last row centered. */
 .clips {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
 }
 
 .clip {
+  flex: 0 1 calc((100% - 32px) / 3);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -196,10 +200,13 @@
 
 @media (max-width: 900px) {
   .clips {
-    grid-template-columns: minmax(0, 1fr);
     max-width: 440px;
     margin-inline: auto;
     gap: 24px;
+  }
+
+  .clip {
+    flex-basis: 100%;
   }
 }
 
