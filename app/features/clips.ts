@@ -67,4 +67,13 @@ export const accessibility: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Multi-language%20support%20compressed.mp4",
     poster: "/features/multi-language.jpg",
   },
+  {
+    id: "choosing-the-keypad",
+    title: "A phone they already know how to use.",
+    description:
+      "Big buttons, each with the face of someone they love, on a phone like the landline they’ve had for years. They can see who they’re calling, with no numbers to memorize and no cheat sheet to lose. See the other keypads we tried, and why this one won.",
+    duration: "4 min 24 sec",
+    src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Form%20factor%20selection%20with%20closing%20card%20compressed.mp4",
+    poster: "/features/choosing-the-keypad.jpg",
+  },
 ];
