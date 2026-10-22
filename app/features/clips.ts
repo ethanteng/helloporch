@@ -1,5 +1,5 @@
 // Short portrait clips of the Porch prototype, grouped by tab on the features page.
-// Posters are caption-free frames from the clips, so the player controls don't cover burned-in text.
+// Posters are caption-free frames (or crops) from the clips, so the player controls don't cover burned-in text.
 export type Clip = {
   id: string;
   title: string;
@@ -54,5 +54,17 @@ export const calling: Clip[] = [
     duration: "16 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Auto-play%20messages%20compressed.mp4",
     poster: "/features/auto-play-messages.jpg",
+  },
+];
+
+export const accessibility: Clip[] = [
+  {
+    id: "multi-language",
+    title: "In the language they grew up with.",
+    description:
+      "Set Porch to Mandarin, Cantonese, Spanish, or English. The clock and call screens switch over, and Porch speaks its announcements in that language too, so everything they see and hear feels familiar.",
+    duration: "17 sec",
+    src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Multi-language%20support%20compressed.mp4",
+    poster: "/features/multi-language.jpg",
   },
 ];
