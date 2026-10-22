@@ -4,13 +4,13 @@ import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
 import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 import FeatureTabs from "./FeatureTabs";
-import { calling, type Clip } from "./clips";
+import { accessibility, calling, type Clip } from "./clips";
 import styles from "./features.module.css";
 
 export const metadata: Metadata = {
   title: "See Porch in Action | HelloPorch",
   description:
-    "Short clips of the Porch prototype: one press starts a video call, calls fall back to your phone, family can drop in, and messages play on their own.",
+    "Short clips of the Porch prototype: one press starts a video call, calls fall back to your phone, family can drop in, messages play on their own, and it speaks their language.",
 };
 
 export default function FeaturesPage() {
@@ -32,7 +32,7 @@ export default function FeaturesPage() {
           <FeatureTabs
             tabs={[
               { id: "calling", label: "Calling", content: <Clips clips={calling} /> },
-              { id: "accessibility", label: "Accessibility", content: <ComingSoon /> },
+              { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
               { id: "safety", label: "Safety", content: <ComingSoon /> },
             ]}
           />
