@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PorchLogo from "@/components/PorchLogo";
 
-export default function SiteNav({ current }: { current?: "features" | "story" }) {
+export default function SiteNav({ current }: { current?: "pilot" | "features" | "story" }) {
   return (
     <nav className="nav" aria-label="Main navigation">
       <Link href="/" className="logo" aria-label="HelloPorch home">
@@ -9,6 +9,9 @@ export default function SiteNav({ current }: { current?: "features" | "story" })
       </Link>
       <div className="nav__actions">
         <div className="nav__links">
+          <Link href="/pilot" className="nav__link" aria-current={current === "pilot" ? "page" : undefined}>
+            Pilot program
+          </Link>
           <Link href="/features" className="nav__link" aria-current={current === "features" ? "page" : undefined}>
             See Porch in action
           </Link>

@@ -887,9 +887,11 @@ input::placeholder {
   .nav__cta {
     margin-left: auto;
   }
+  /* A narrower gap keeps all three links on one row on a 375px-wide phone. */
   .nav__links {
     order: 1;
     width: 100%;
+    column-gap: 20px;
   }
   .logo {
     font-size: 28px;
