@@ -567,6 +567,31 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(sent.calls.first?.1, "+18005550123")
     }
 
+    @MainActor func testTwoPeopleShareTheCallScreenSideBySideWhenWideAndStackedWhenTall() throws {
+        let stage = CallVideoStage()
+        func labels(_ text: String, in view: UIView) -> [UILabel] {
+            ((view as? UILabel)?.text == text ? [view as! UILabel] : []) + view.subviews.flatMap { labels(text, in: $0) }
+        }
+        func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
+        stage.show([CallVideoStage.Tile(name: "Mom", track: nil)])
+        XCTAssertFalse(stage.isSplit)
+        XCTAssertFalse(labels("Mom", in: stage).contains(where: visible), "with one person, the call screen shows its own photo and name")
+
+        stage.show([CallVideoStage.Tile(name: "Mom", track: nil, photo: UIImage(data: portraitData())), CallVideoStage.Tile(name: "David", track: nil)])
+        XCTAssertTrue(stage.isSplit)
+        for (size, sideBySide) in [(CGSize(width: 1032, height: 768), true), (CGSize(width: 390, height: 844), false)] {
+            stage.frame = CGRect(origin: .zero, size: size); stage.setNeedsLayout(); stage.layoutIfNeeded()
+            let mom = try XCTUnwrap(labels("Mom", in: stage).first(where: visible)), david = try XCTUnwrap(labels("David", in: stage).first(where: visible))
+            let momFrame = mom.convert(mom.bounds, to: stage), davidFrame = david.convert(david.bounds, to: stage)
+            XCTAssertTrue(stage.bounds.contains(momFrame) && stage.bounds.contains(davidFrame), "\(size)")
+            if sideBySide { XCTAssertLessThan(momFrame.maxX, size.width / 2); XCTAssertGreaterThan(davidFrame.minX, size.width / 2) }
+            else { XCTAssertLessThan(momFrame.maxY, size.height / 2); XCTAssertGreaterThan(davidFrame.minY, size.height / 2) }
+        }
+        stage.show([])
+        XCTAssertFalse(stage.isSplit)
+        XCTAssertFalse(labels("David", in: stage).contains(where: visible))
+    }
+
     @MainActor private func buttons(in view: UIView) -> [UIButton] {
         (view as? UIButton).map { [$0] } ?? view.subviews.flatMap { buttons(in: $0) }
     }

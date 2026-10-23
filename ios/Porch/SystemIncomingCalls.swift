@@ -42,7 +42,7 @@ extension Notification.Name {
     private(set) var answered = false
     private(set) var pushReady = false
     private(set) var status = "Incoming Porch call"
-    /// Family caregivers: this call can add a regular phone, such as a bank (see PhoneGuests.swift).
+    /// Family caregivers: this call can add a regular phone, such as a bank (see CallGuests.swift).
     private(set) var canAddPhoneGuests = false
     var familyCredential: FamilyCredential? { credential }
     var hasCall: Bool { uuid != nil }
@@ -409,7 +409,7 @@ extension Notification.Name {
 /// this screen never disconnects its room.
 final class SystemCallViewController: UIViewController, RoomDelegate {
     private let status = UILabel()
-    private let video = VideoView()
+    private let stage = CallVideoStage()
     private let placeholder = UILabel()
     private lazy var personPhoto = RecipientAppearance.photoView(SystemIncomingCalls.shared.callerContact?.photoData)
     private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
@@ -417,7 +417,9 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private var cameraEnabled = false
     private weak var observedRoom: Room?
     private var keypad = CallTrigger()
-    private var phoneGuests: PhoneGuestControls?
+    private var guests: CallGuestControls?
+    private var leftNotice: String?
+    private var leftNoticeTask: Task<Void, Never>?
     override var canBecomeFirstResponder: Bool { true }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
@@ -469,39 +471,49 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }, for: .touchUpInside)
         placeholder.text = "Voice call"; placeholder.textColor = .white; placeholder.textAlignment = .center
         placeholder.font = PorchStyle.font(28)
-        // Family caregivers can add a regular phone, such as a bank, to the bedside's call.
+        // On the bedside's call, family can ring in another family member and caregivers can add a phone. Someone
+        // who was rung in themselves can't add anyone.
         let calls = SystemIncomingCalls.shared
-        if let credential = calls.familyCredential, credential.role == .family, let call = calls.call, call.source == "porch" {
-            phoneGuests = PhoneGuestControls(host: self, credential: credential, callID: call.id, room: { SystemIncomingCalls.shared.room }) {
-                (SystemIncomingCalls.shared.call, SystemIncomingCalls.shared.canAddPhoneGuests)
+        if let credential = calls.familyCredential, credential.role == .family, let call = calls.call, call.source == "porch", call.guest != true {
+            guests = CallGuestControls(host: self, credential: credential, callID: call.id, room: { SystemIncomingCalls.shared.room }) {
+                .init(call: SystemIncomingCalls.shared.call, canAddPhone: SystemIncomingCalls.shared.canAddPhoneGuests, family: FamilyCoordinator.shared.state?.family ?? [])
             }
         }
-        CallScreenLayout.install(in: view, video: video, placeholder: placeholder, title: title, status: status,
-                                 photo: personPhoto.image == nil ? nil : personPhoto, accessory: phoneGuests?.bar,
-                                 buttons: [microphone, camera] + (phoneGuests.map { [$0.addButton] } ?? []) + [end])
+        CallScreenLayout.install(in: view, video: stage, placeholder: placeholder, title: title, status: status,
+                                 photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
+                                 buttons: [microphone, camera] + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
-        guard calls.hasCall else { video.track = nil; dismiss(animated: true); return }
+        guard calls.hasCall else { stage.show([]); dismiss(animated: true); return }
         if let room = calls.room, room !== observedRoom {
             room.add(delegate: self); observedRoom = room
         }
         status.text = calls.status
-        phoneGuests?.refresh()
+        guests?.refresh()
         let peers = calls.room?.remoteParticipants.values.map { $0 } ?? []
-        if phoneGuests != nil, peers.contains(where: { $0.kind == .sip }), !peers.contains(where: { $0.kind != .sip }) {
-            status.text = "\(calls.callerName) left the call."
+        let bedside = PorchDevice.experience == .bedside
+        // Family see Mom first. The bedside sees whoever called it first.
+        let mom = FamilyCoordinator.shared.state?.people.first { $0.role == .bedside }
+        if calls.call?.source == "porch", calls.answered {
+            if bedside {
+                let lines = CallPeople.bedsideLines(peers, call: calls.call) + (leftNotice.map { [$0] } ?? [])
+                if !lines.isEmpty { status.text = ([status.text ?? ""] + lines).joined(separator: "\n") }
+            } else if let mom, !peers.isEmpty, !peers.contains(where: { $0.identity?.stringValue == mom.id }) {
+                status.text = "\(mom.name) left the call."
+            }
         }
         cameraEnabled = calls.room?.localParticipant.isCameraEnabled() == true
         camera.configuration?.title = cameraEnabled ? "Camera off" : "Camera on"
         microphone.configuration?.title = calls.room?.localParticipant.isMicrophoneEnabled() == true ? "Mute" : "Unmute"
-        // An added phone has no video, so show whoever does.
-        video.track = peers.lazy.compactMap { $0.videoTracks.first?.track as? VideoTrack }.first
-        personPhoto.isHidden = video.track != nil
-        placeholder.isHidden = video.track != nil
+        let tiles = CallPeople.tiles(peers, first: bedside ? calls.call?.from : mom?.id)
+        stage.show(tiles)
+        let showing = stage.isSplit || tiles.first?.track != nil
+        personPhoto.isHidden = showing
+        placeholder.isHidden = showing
         placeholder.text = calls.isVideo ? "Waiting for video" : "Voice call"
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
@@ -509,6 +521,20 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     }
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
         Task { @MainActor [weak self] in self?.refresh() }
+    }
+    /// The bedside says when someone leaves a call that goes on, such as Ethan leaving Mom and David talking.
+    nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
+        let name = participant.name, kind = participant.kind
+        Task { @MainActor [weak self] in
+            guard let self, PorchDevice.experience == .bedside, kind != .sip, let name, !name.isEmpty,
+                  SystemIncomingCalls.shared.room?.remoteParticipants.isEmpty == false else { return }
+            self.leftNotice = BedsideText.string("%@ left the call", name); self.leftNoticeTask?.cancel()
+            self.leftNoticeTask = Task { [weak self] in
+                do { try await Task.sleep(nanoseconds: 6_000_000_000) } catch { return }
+                self?.leftNotice = nil; self?.refresh()
+            }
+            self.refresh()
+        }
     }
     nonisolated func room(_ room: Room, participant: Participant, didUpdateAttributes attributes: [String: String]) {
         Task { @MainActor [weak self] in self?.refresh() }

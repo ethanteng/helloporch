@@ -51,8 +51,28 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let reason: String?
     /// A regular phone a family caregiver added to this call, such as a bank. Older servers don't send it.
     public let phoneGuest: FamilyPhoneGuest?
-    /// Family devices: the bedside hung up while a phone guest was on, so the call continues without it.
+    /// Family devices: the bedside hung up while the call went on without it.
     public let bedsideLeft: Bool?
+    /// The family member rung into this call, as the call's two ends see them. Older servers don't send it.
+    public let porchGuest: FamilyPorchGuest?
+    /// This device was rung into someone else's call with the bedside: `from` rang it in, and `id` is its invitation.
+    public let guest: Bool?
+}
+/// A family member rung into a call with the bedside, and how their invitation went.
+public struct FamilyPorchGuest: Codable, Equatable {
+    public let id: String
+    public let memberID: String
+    public let name: String
+    /// "ringing", "joined", "declined", "missed" or "left".
+    public let state: String
+    public var isActive: Bool { state == "ringing" || state == "joined" }
+}
+/// Another family member on this Porch, who can be rung into a call with the bedside.
+public struct FamilyRelative: Codable, Equatable, Identifiable {
+    public let id: String
+    public let name: String
+    /// Their Porch is open, or can ring while it's closed.
+    public let canReceiveCalls: Bool
 }
 /// A regular phone on a Porch call. Its telephone leg joins the call's LiveKit room as `identity`.
 public struct FamilyPhoneGuest: Codable, Equatable {
@@ -189,6 +209,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let callScreening: CallScreening?
     /// Family caregivers: this phone can add a regular phone number to its calls with the bedside.
     public let canAddPhoneGuests: Bool?
+    /// Family devices: the rest of the family on this Porch, who can be rung into a call. Older servers don't send it.
+    public let family: [FamilyRelative]?
 
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {
