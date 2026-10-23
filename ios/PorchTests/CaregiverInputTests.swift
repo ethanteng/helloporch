@@ -3,6 +3,7 @@ import UIKit
 import GameController
 import AVFoundation
 import Security
+import SafariServices
 import PorchCore
 @testable import Porch
 @testable import LiveKit
@@ -879,7 +880,30 @@ final class CaregiverInputTests: XCTestCase {
         let settings = SlotsViewController(slots: CallSlots())
         settings.loadViewIfNeeded()
         let headings = (0..<settings.numberOfSections(in: settings.tableView)).compactMap { settings.tableView(settings.tableView, titleForHeaderInSection: $0) }
-        XCTAssertEqual(headings, ["Keypad · people & controls", "Settings", "Device mode"])
+        XCTAssertEqual(headings, ["Keypad · people & controls", "Settings", "Device mode", "About"])
+    }
+
+    @MainActor func testCaregiverMenuOpensPrivacyPolicy() throws {
+        let slots = SlotsViewController(slots: CallSlots())
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 820, height: 1180))
+        window.rootViewController = slots; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let path = IndexPath(row: 0, section: 3)
+        let cell = slots.tableView(slots.tableView, cellForRowAt: path)
+        XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Privacy policy")
+        slots.tableView(slots.tableView, didSelectRowAt: path)
+        XCTAssertTrue(slots.presentedViewController is SFSafariViewController)
+        XCTAssertEqual(privacyPolicyURL.absoluteString, "https://helloporch.store/privacy")
+    }
+
+    @MainActor func testCaregiverPINScreenLinksPrivacyPolicy() {
+        let setup = CaregiverPINViewController(profile: nil)
+        setup.loadViewIfNeeded()
+        func find(_ view: UIView) -> UIButton? {
+            if view.accessibilityIdentifier == "caregiver.privacy" { return view as? UIButton }
+            return view.subviews.compactMap(find).first
+        }
+        XCTAssertEqual(find(setup.view)?.configuration?.title, "Privacy policy")
     }
 
     @MainActor func testFirstCaregiverEntryAsksForChosenPINAndConfirmation() {

@@ -1,8 +1,14 @@
 import UIKit
 import AVFoundation
 import ContactsUI
+import SafariServices
 import PorchCore
 
+/// On the website, so the policy can change without an app update.
+let privacyPolicyURL = URL(string: "https://helloporch.store/privacy")!
+func showPrivacyPolicy(on controller: UIViewController) {
+    controller.present(SFSafariViewController(url: privacyPolicyURL), animated: true)
+}
 func showPorchError(_ error: Error, on controller: UIViewController) {
     let alert = UIAlertController(title: "Couldn't complete that", message: error.localizedDescription, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -87,10 +93,12 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             sheet.addAction(UIAlertAction(title: "Join a different family", style: .default) { [weak self] _ in self?.confirmNewFamily() })
         }
         sheet.addAction(UIAlertAction(title: "Use as the bedside Porch", style: .default) { [weak self] _ in self?.confirmBedside() })
+        sheet.addAction(UIAlertAction(title: "Privacy policy", style: .default) { [weak self] _ in self?.openPrivacyPolicy() })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
         present(sheet, animated: true)
     }
+    private func openPrivacyPolicy() { showPrivacyPolicy(on: self) }
     private func openCaregiverMode() {
         guard FamilyCoordinator.shared.state?.me.caregiver == true else {
             let alert = UIAlertController(title: "Caregiver mode isn't on for you", message: "Ask the caregiver to turn on Caregiver mode for you in Family & drop-in.", preferredStyle: .alert)
