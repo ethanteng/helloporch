@@ -847,8 +847,10 @@ extension CallViewController: Cell2JackDigitReceiving {
         return "clock key dispatched"
     }
     func receiveCell2JackHangUp() -> String {
-        guard presentedViewController == nil, opening else { return "no call to end" }
-        return cancelPendingCall()
+        guard presentedViewController == nil else { return "no call to end" }
+        if opening { return cancelPendingCall() }
+        // A new call screen waits for the presence camera to stop before it appears.
+        return cameraReleaseWaiters.isEmpty ? "no call to end" : Cell2JackDigitRouter.transitioning
     }
     private func cancelPendingCall() -> String {
         cancelOpening = true

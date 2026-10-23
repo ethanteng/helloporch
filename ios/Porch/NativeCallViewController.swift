@@ -694,7 +694,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         endedByCaller = true; finish()
     }
 
-    private func finish(message: String? = nil) {
+    func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
         skipUnansweredHandoff = false

@@ -404,12 +404,20 @@ Porch routes `hangUp` like a key, to the visible screen only, recording each as
 | Outgoing, connected or phone-fallback call | Ends it, as the call-control key does |
 | Answered system (CallKit) call | Ends it |
 | Clock while a call request is starting | Cancels the request |
-| Call screen already saying they didn't answer | Skips the message. The receiver is down, so that hang-up cannot be pressed again on the message screen |
+| Call screen already saying they didn't answer | Skips the message screen that would follow, as hanging up does on a phone |
 | Leaving a message after no answer | Finishes it; before the beep nothing is sent |
 | Incoming call still ringing, drop-in countdown, message playback, clock, people picker | Nothing |
 
-Lifting and replacing the receiver while a call rings does not decline it. A
-hang-up that arrives while a call screen is still animating in is dropped, like
-a key press then. Saved captures replay as expected: the pickup tests' two
-hang-ups and the full-keypad test's final hang-up are found, and three
-plug-in starts produce none.
+Lifting and replacing the receiver while a call rings does not decline it.
+
+A key pressed while a screen opens or closes is dropped and can be pressed
+again, but a hang-up can't be repeated without lifting the receiver. So a
+hang-up that finds a screen transitioning is tried again every 0.4 seconds,
+up to six tries (about two seconds), and each try is recorded with its
+`attempt`. That covers a call screen animating in, and the clock's wait for
+the presence camera to stop before a new call screen appears (it reports that
+wait as a transition too). Leaving Porch drops a waiting retry.
+
+Saved captures replay as expected: the pickup tests' two hang-ups and the
+full-keypad test's final hang-up are found, and three plug-in starts produce
+none.

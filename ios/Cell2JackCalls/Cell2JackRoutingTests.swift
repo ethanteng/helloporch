@@ -8,7 +8,9 @@ final class Cell2JackRoutingTests: XCTestCase {
         var received: [Int] = []
         var hangUps = 0
         var overlay: UIViewController?
+        var appearing = false
         override var presentedViewController: UIViewController? { overlay }
+        override var isBeingPresented: Bool { appearing }
         func receiveCell2JackDigit(_ digit: Int) -> String { received.append(digit); return "handled" }
         func receiveCell2JackHangUp() -> String { hangUps += 1; return "hung up" }
     }
@@ -97,6 +99,21 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertTrue(screen.isEnding)
         XCTAssertEqual(screen.receiveCell2JackHangUp(), "call ending")
         XCTAssertFalse(screen.isViewLoaded)
+    }
+    @MainActor func testPuttingReceiverBackWhileSayingTheyDidntAnswerSkipsTheMessage() throws {
+        let call = try NativeCall(room: "local-test", mode: .voice)
+        let person = try CallContact(name: "Local fixture", nativeCall: call)
+        let server = try NativeCallServer(url: "https://example.invalid", accessCode: "local-fixture-only-access-code")
+        // Deliberately do not load their views: no media or connection task starts.
+        let unanswered = NativeCallViewController(contact: person, call: call, server: server)
+        unanswered.onUnanswered = {}
+        unanswered.finish(message: "No one joined. Returning to the clock…")
+        XCTAssertEqual(unanswered.receiveCell2JackHangUp(), "unanswered message cancelled")
+        XCTAssertEqual(unanswered.receiveCell2JackHangUp(), "call ending")
+        let noMessage = NativeCallViewController(contact: person, call: call, server: server)
+        noMessage.finish(message: "No one joined. Returning to the clock…")
+        XCTAssertEqual(noMessage.receiveCell2JackHangUp(), "call ending")
+        XCTAssertFalse(unanswered.isViewLoaded || noMessage.isViewLoaded)
     }
     @MainActor func testPhoneStatusFitsBelowCallButton() throws {
         func find(_ id: String, in view: UIView) -> UIView? {
@@ -405,6 +422,47 @@ final class Cell2JackRoutingTests: XCTestCase {
         keypad.pause()
         transport.update(.digits(parser.append(Data("L1L2 OFF_HOOK \r\nH1H2 ON_HOOK \r\n".utf8)), ProcessInfo.processInfo.systemUptime))
         XCTAssertEqual(call.hangUps, 1, "Input must still stop when the scene becomes inactive")
+        transport.update(.finished("/q sent"))
+    }
+
+    @MainActor func testHangUpWhileACallScreenAppearsIsTriedAgain() throws {
+        let name = "cell2jack-hangup-retry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        var retries: [DispatchWorkItem] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }, enqueueRetry: { _, work in retries.append(work) }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver(), call = Receiver()
+        clock.overlay = call; call.appearing = true
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.setEnabled(true); keypad.activate()
+        let transport = try XCTUnwrap(connection)
+        var parser = Cell2JackDTMFParser()
+        func hangUp() { transport.update(.digits(parser.append(Data("L1L2 OFF_HOOK \r\nH1H2 ON_HOOK \r\n".utf8)), ProcessInfo.processInfo.systemUptime)) }
+        hangUp()
+        XCTAssertEqual(call.hangUps, 0)
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, Cell2JackDigitRouter.transitioning)
+        retries.removeFirst().perform()
+        XCTAssertEqual(retries.count, 1, "Still appearing, so it waits again")
+        call.appearing = false
+        retries.removeFirst().perform()
+        XCTAssertEqual(call.hangUps, 1); XCTAssertTrue(retries.isEmpty)
+        XCTAssertEqual(keypad.records.last?["attempt"] as? Int, 3)
+        // A screen that never settles: give up after six tries.
+        call.appearing = true
+        hangUp()
+        while !retries.isEmpty { retries.removeFirst().perform() }
+        XCTAssertEqual(call.hangUps, 1)
+        XCTAssertEqual(keypad.records.last?["attempt"] as? Int, 6)
+        // Leaving Porch drops a waiting retry.
+        hangUp()
+        keypad.pause()
+        call.appearing = false
+        retries.removeFirst().perform()
+        XCTAssertEqual(call.hangUps, 1)
         transport.update(.finished("/q sent"))
     }
 

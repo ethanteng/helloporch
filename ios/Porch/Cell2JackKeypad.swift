@@ -12,6 +12,7 @@ extension Cell2JackDigitReceiving {
 }
 
 enum Cell2JackDigitRouter {
+    static let transitioning = "screen transitioning"
     static func route(_ symbol: String, root: UIViewController) -> String {
         guard let digit = CallSlots.digit(forSymbol: symbol) else { return "unassigned symbol" }
         return deliver(root: root) { $0.receiveCell2JackDigit(digit) }
@@ -22,7 +23,7 @@ enum Cell2JackDigitRouter {
     private static func deliver(root: UIViewController, _ action: (Cell2JackDigitReceiving) -> String) -> String {
         var screen = root
         while true {
-            guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return "screen transitioning" }
+            guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return transitioning }
             if let presented = screen.presentedViewController { screen = presented }
             else if let nav = screen as? UINavigationController, let top = nav.topViewController { screen = top }
             else if let tabs = screen as? UITabBarController, let selected = tabs.selectedViewController { screen = selected }
@@ -159,10 +160,7 @@ final class Cell2JackKeypad {
                     if event.kind == .pulse {
                         self.record(["kind": "pulseDigitIgnored", "symbol": event.digit, "rawLine": event.line])
                     }
-                    if event.kind == .hangUp {
-                        let outcome = self.receiverHangUp ? Cell2JackDigitRouter.routeHangUp(root: root) : "receiver hang-up off"
-                        self.record(["kind": "hangUp", "outcome": outcome, "rawLine": event.line])
-                    }
+                    if event.kind == .hangUp { self.deliverHangUp(event.line, root: root, token: token) }
                     guard event.kind == .digit else { continue }
                     let outcome = Cell2JackDigitRouter.route(event.digit, root: root)
                     self.record(["kind": "digit", "symbol": event.digit, "outcome": outcome,
@@ -225,6 +223,18 @@ final class Cell2JackKeypad {
         retryWork = work
         record(["kind": "usbRetryScheduled", "delaySeconds": delay])
         enqueueRetry(delay, work)
+    }
+    /// The receiver can't repeat a hang-up the way a key can be pressed again, so one that
+    /// lands while a screen is opening or closing is tried again for about two seconds.
+    private func deliverHangUp(_ line: String, root: UIViewController, token: UUID, attempt: Int = 1) {
+        let outcome = receiverHangUp ? Cell2JackDigitRouter.routeHangUp(root: root) : "receiver hang-up off"
+        record(["kind": "hangUp", "outcome": outcome, "rawLine": line, "attempt": attempt])
+        guard outcome == Cell2JackDigitRouter.transitioning, attempt < 6 else { return }
+        enqueueRetry(0.4, DispatchWorkItem { [weak self, weak root] in
+            guard let self, let root, self.generation == token, self.wanted, !self.stopping, self.sceneActive,
+                  self.windowScene?.activationState == .foregroundActive else { return }
+            self.deliverHangUp(line, root: root, token: token, attempt: attempt + 1)
+        })
     }
     private func changeStatus(_ text: String) {
         status = text
