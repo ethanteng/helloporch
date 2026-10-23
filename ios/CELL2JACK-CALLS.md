@@ -100,7 +100,9 @@ records in `Documents/cell2jack-call-actions.json`. Build 14 also retains a
 64 KiB maximum raw USB tail in `Documents/cell2jack-usb-tail.bin`, written at
 most once every five seconds during normal polling and on cleanup. Diagnostic
 storage failure does not stop input. Health records report packet, byte, and
-primary-digit counts; input gate failures report their reason.
+primary-digit counts; each replaces the previous health record so the five-second
+reports cannot push key and call history out of the 200 records (before, the
+trace covered only about 17 minutes). Input gate failures report their reason.
 
 The owner reconnects after unexpected failures only after the previous USB
 client has closed. Retries are cancelled when disabled, backgrounded, or leaving
@@ -335,3 +337,37 @@ and DriverKit signature entitlements. The TestFlight workflow defaults to this
 family variant and needs only the app profile. The earlier distribution blocker
 above applies to `variant=cell2jack`; it does not prevent family-only TestFlight
 updates. Continue using the `Porch` development scheme on the bedside iPad.
+
+## Picture phone pickup pulse 2026-10-22
+
+The bedside now uses a big-button picture phone (photo keys, STORE, MEMORY,
+REDIAL/P, FLASH, MUTE, SOS) instead of the AT&T 210. Its keys work only with the
+handset off the cradle. That is the phone, not Porch: an analog phone's keypad is
+powered by line current and joined to the line by the hook switch, and Cell2Jack
+also enables tone detection only after it reports `OFF_HOOK`
+(`MIC gain=45, dtmfis=1`). Nothing reaches USB from an on-cradle press.
+
+The user reported that the first pickup after Cell2Jack had been disconnected
+sometimes called the person on 1 without any key press, and reproduced it with
+logging on. The raw USB tail shows:
+
+```
+L1L2 OFF_HOOK
+H1H2L1L2 FLASH
+.. Get PULSE 1 1
+ Stop Playing Dialtone
+ DTMF 1 :0 20: 2
+```
+
+Cell2Jack saw one brief line break right after pickup and counted it as a
+pulse-dialed 1 (one pulse), then reported it as an ordinary DTMF record. A later
+pickup with a real 0 press shows `OFF_HOOK`, `Stop Playing Audio`,
+` DTMF 0 :0 20: 2`, with no FLASH or PULSE line, so the photo keys send tones.
+
+The parser now classifies the DTMF record that follows `Get PULSE` as `pulse`,
+which Porch, Preview and the test app never act on. An `ON_HOOK`/`OFF_HOOK` line
+clears a pulse that produced no record, so it cannot swallow a later key press.
+Porch records each one as `pulseDigitIgnored` with its raw line. Pulse (rotary)
+dialing is therefore not an input; a phone with a tone/pulse switch must stay on
+tone. Parser tests replay this capture at every split point, and a routing test
+sends it through the owner to the clock, which receives only the 0.

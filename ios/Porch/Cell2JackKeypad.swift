@@ -138,6 +138,9 @@ final class Cell2JackKeypad {
                     return
                 }
                 for event in digits {
+                    if event.kind == .pulse {
+                        self.record(["kind": "pulseDigitIgnored", "symbol": event.digit, "rawLine": event.line])
+                    }
                     guard event.kind == .digit else { continue }
                     let outcome = Cell2JackDigitRouter.route(event.digit, root: root)
                     self.record(["kind": "digit", "symbol": event.digit, "outcome": outcome,
@@ -208,6 +211,9 @@ final class Cell2JackKeypad {
     func record(_ values: [String: Any]) {
         guard enabled || worker != nil else { return }
         var values = values; values["utc"] = ISO8601DateFormatter().string(from: Date())
+        // Health repeats every five seconds and its counts are cumulative; keeping only the
+        // latest one stops it pushing key and call history out of the 200 records.
+        if values["kind"] as? String == "usbHealth", records.last?["kind"] as? String == "usbHealth" { records.removeLast() }
         records.append(values); records = Array(records.suffix(200))
         guard let data = try? JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys]) else { return }
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("cell2jack-call-actions.json")
