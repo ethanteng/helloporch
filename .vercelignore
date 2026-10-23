@@ -5,6 +5,7 @@ tests/
 scripts/
 .env*
 !.env.example
+.app-review/
 node_modules/
 .next/
 .git/
