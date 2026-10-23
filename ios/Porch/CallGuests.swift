@@ -72,9 +72,10 @@ import PorchCore
             if (legSeen && leg == nil) || callStatus == "hangup" || neverJoined { legEnded(guest) }
         }
         let porch = updatePorch(call?.porchGuest)
-        // Someone can be added only while Mom herself is on the call, not just anyone on Porch.
-        let mom = FamilyCoordinator.shared.state?.people.first { $0.role == .bedside }?.id
-        let bedsideHere = peers.contains { $0.kind != .sip && (mom == nil || $0.identity?.stringValue == mom) }
+        // Mom is the other end of this call, and her LiveKit identity is that member id. The household
+        // snapshot isn't loaded on the CallKit screen, so it can't be what decides she's still here.
+        let bedsideID: String? = call?.guest == true ? nil : (call?.from == myID ? call?.to : (call?.to == myID ? call?.from : nil))
+        let bedsideHere = bedsideID.map { id in peers.contains { $0.kind != .sip && $0.identity?.stringValue == id } } ?? false
         let canRing = porch?.isActive != true && current.family.contains { $0.canReceiveCalls }
         let canDial = current.canAddPhone && guest == nil
         addButton.isHidden = !(call?.state == "accepted" && call?.bedsideLeft != true && call?.guest != true && bedsideHere && (canRing || canDial))
