@@ -33,6 +33,10 @@ extension Notification.Name {
     /// Whether this call's camera belongs on while Porch is open. Leaving Porch turns
     /// the camera off; returning turns it back on unless the person turned it off.
     private var wantsCamera = false
+    /// An answered video call owns the front camera, including the moment before its
+    /// screen is up. Message presence must not start then: the two cannot share the
+    /// camera, and a failed start leaves the bedside off-camera.
+    var reservesFrontCamera: Bool { wantsCamera && !ending }
     /// Leaving and returning to Porch change the camera in order, so a quick round
     /// trip can't leave it off once the earlier shutdown finishes.
     private var cameraTask: Task<Void, Never>?
@@ -307,14 +311,32 @@ extension Notification.Name {
         changed()
     }
     /// Starts the camera once Porch is open, when this call wants it.
+    /// On the bedside, waits until the message-presence camera has stopped.
     func resumeCamera() {
         guard wantsCamera, room != nil else { return }
         let previous = cameraTask
         cameraTask = Task {
             await previous?.value
-            guard self.wantsCamera, let room = self.room, !room.localParticipant.isCameraEnabled(),
+            if PorchDevice.experience == .bedside { await Self.frontCameraIsFree() }
+            guard self.wantsCamera, !self.ending, let room = self.room, !room.localParticipant.isCameraEnabled(),
                   UIApplication.shared.applicationState == .active else { return }
             try? await self.setCamera(enabled: true)
+        }
+    }
+    /// Presence and a call cannot use the front camera together. Returns after that session
+    /// has stopped. An already-stopped session continues on the next turn of the main queue.
+    private static func frontCameraIsFree() async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            let container = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first { $0.isKeyWindow }?
+                .rootViewController as? PorchContainerViewController
+            if let container {
+                container.performWhenFrontCameraIsFree { done.resume() }
+            } else {
+                DispatchQueue.main.async { done.resume() }
+            }
         }
     }
     func enterBackground() {

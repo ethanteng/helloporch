@@ -64,6 +64,14 @@ final class PorchContainerViewController: UIViewController {
     /// A call that arrived while the camera was stopping. Safe to call when nothing is pending.
     func reevaluateIncoming() { familyChanged(); systemCallChanged() }
     func resume() { (content as? CallViewController)?.resume(); FamilyCoordinator.shared.start(); systemCallChanged() }
+    /// Calls `done` on the main queue once the bedside presence camera has stopped, so a Porch
+    /// call can use the front camera. With no bedside clock, `done` runs on the next turn.
+    func performWhenFrontCameraIsFree(_ done: @escaping () -> Void) {
+        guard let clock = content as? CallViewController, SystemIncomingCalls.shared.hasCall else {
+            DispatchQueue.main.async(execute: done); return
+        }
+        clock.stopPresenceCamera(then: done)
+    }
     func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
     @objc private func familyChanged() {
         let coordinator = FamilyCoordinator.shared
