@@ -72,7 +72,9 @@ import PorchCore
             if (legSeen && leg == nil) || callStatus == "hangup" || neverJoined { legEnded(guest) }
         }
         let porch = updatePorch(call?.porchGuest)
-        let bedsideHere = peers.contains { $0.kind != .sip }
+        // Someone can be added only while Mom herself is on the call, not just anyone on Porch.
+        let mom = FamilyCoordinator.shared.state?.people.first { $0.role == .bedside }?.id
+        let bedsideHere = peers.contains { $0.kind != .sip && (mom == nil || $0.identity?.stringValue == mom) }
         let canRing = porch?.isActive != true && current.family.contains { $0.canReceiveCalls }
         let canDial = current.canAddPhone && guest == nil
         addButton.isHidden = !(call?.state == "accepted" && call?.bedsideLeft != true && call?.guest != true && bedsideHere && (canRing || canDial))
@@ -100,6 +102,7 @@ import PorchCore
             case "declined": showPorch("\(porch.name) declined.")
             case "missed": showPorch("\(porch.name) didn't answer.")
             case "left": showPorch("\(porch.name) left the call.")
+            case "cancelled": showPorch("Stopped ringing \(porch.name).")
             default: break
             }
         }
