@@ -151,6 +151,7 @@ final class Cell2JackKeypad {
                 // its window. The owning scene, not that view, stays active.
                 guard let root = self.root, self.windowScene?.activationState == .foregroundActive else {
                     self.record(["kind": "digitIgnored", "reason": "window scene inactive or root missing",
+                                 "hangUp": digits.contains { $0.kind == .hangUp },
                                  "sceneState": self.windowScene?.activationState.rawValue ?? -99])
                     return
                 }
