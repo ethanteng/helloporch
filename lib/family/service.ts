@@ -8,7 +8,7 @@ import { activePhoneGuest, bedsideLanguage, callRoom, phoneGuestIdentity, config
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
-import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, phoneGuestActions, phoneGuestServices, publicPhoneGuest, type PhoneGuestServices } from "./phone-guests.ts";
+import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, phoneGuestActions, phoneGuestReapSeconds, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
@@ -539,6 +539,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (ended?.state === "ended" && activePhoneGuest(ended) && callRoom(ended) === cleanupRoom) {
         try { await endPhoneGuests(store, house.id, ended.id, now); } catch { /* deleting the room again is harmless */ }
       }
+    }
+    // A dial that timed out can connect after its guest was replaced or hung up. Drop that leg while the call is still up.
+    if (house.call?.state !== "ended" && house.call?.guests?.some(guest => guest.endedAt !== undefined && now - guest.endedAt <= phoneGuestReapSeconds)) {
+      try {
+        const raw = await store.get(`house:${house.id}`);
+        const live = raw ? (JSON.parse(raw) as Household).call : undefined;
+        if (live) await reapEndedPhoneGuests((dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms, live, now);
+      } catch { /* the next poll tries again */ }
     }
     if (action === "joinCall") {
       const call = house.call!;

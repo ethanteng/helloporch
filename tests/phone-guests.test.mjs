@@ -255,6 +255,31 @@ test('a timed-out dial stays tracked, so a leg that arrives late is still hung u
   await g.json('addPhoneGuest',{callID:other.callID,phoneNumber:bank,label:'Bank'},other.family.credential);
 });
 
+test('a leg that connects after its dial timed out is removed, including once another number is on the call',async()=>{
+  const f=fixture(),{family,callID,room}=await f.connected();
+  f.livekit.state.dialError=Object.assign(new Error('timeout'),{code:'deadline_exceeded'});
+  assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,502);
+  const stale=(await f.json('poll',{available:true},family.credential)).state.call.phoneGuest.id;
+  delete f.livekit.state.dialError;
+  // It connects while the next number is dialed.
+  f.livekit.state.onDial=async()=>{ f.livekit.join(room,`phone-guest-${stale}`,{'sip.callStatus':'active'}); };
+  const next=(await f.json('addPhoneGuest',{callID,phoneNumber:'+14155550123',label:'Pharmacy'},family.credential)).phoneGuest;
+  assert.equal(f.livekit.rooms.get(room)?.has(`phone-guest-${stale}`),false,'the late leg is dropped before the new number is left on the call');
+  assert.equal(f.livekit.rooms.get(room)?.has(`phone-guest-${next.id}`),true);
+
+  // And if it connects only after that request returned, the next check-in drops it.
+  const g=fixture(),other=await g.connected();
+  g.livekit.state.dialError=Object.assign(new Error('timeout'),{code:'deadline_exceeded'});
+  assert.equal((await g.send('addPhoneGuest',{callID:other.callID,phoneNumber:bank,label:'Bank'},other.family.credential)).status,502);
+  const late=(await g.json('poll',{available:true},other.family.credential)).state.call.phoneGuest.id;
+  delete g.livekit.state.dialError;
+  const pharmacy=(await g.json('addPhoneGuest',{callID:other.callID,phoneNumber:'+14155550123',label:'Pharmacy'},other.family.credential)).phoneGuest;
+  g.livekit.join(other.room,`phone-guest-${late}`,{'sip.callStatus':'active'});
+  await g.json('poll',{available:true},other.family.credential);
+  assert.equal(g.livekit.rooms.get(other.room)?.has(`phone-guest-${late}`),false);
+  assert.equal(g.livekit.rooms.get(other.room)?.has(`phone-guest-${pharmacy.id}`),true);
+});
+
 test('a call that ends while the number is dialing does not keep its telephone leg',async()=>{
   const f=fixture(),{family,callID,room}=await f.connected();
   f.livekit.state.onDial=async()=>{ await f.json('endCall',{callID},family.credential); };

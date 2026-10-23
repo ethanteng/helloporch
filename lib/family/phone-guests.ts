@@ -67,6 +67,24 @@ export async function endPhoneGuests(store: FamilyStore, householdID: string, ca
     if (house.call?.id === callID) for (const guest of house.call.guests ?? []) guest.endedAt ??= now;
   });
 }
+/** A dial that already failed can still create its leg until ringing gives up, plus a little slack. */
+export const phoneGuestReapSeconds = phoneGuestLimits.ringSeconds + 30;
+/** Drop a leg that connects after its guest was already ended, so it can't sit on the call untracked.
+ * A missing participant is the usual case. Anything else is left for the next poll. */
+export async function reapEndedPhoneGuests(rooms: PhoneGuestServices["rooms"], call: Call, now: number) {
+  if (call.state === "ended") return;
+  const room = callRoom(call);
+  for (const guest of call.guests ?? []) {
+    if (guest.endedAt === undefined || now - guest.endedAt > phoneGuestReapSeconds) continue;
+    try { await rooms.removeParticipant(room, phoneGuestIdentity(guest)); }
+    catch (error) { if (!notFound(error)) return; }
+  }
+}
+async function reapStoredPhoneGuests(context: PhoneGuestContext) {
+  const raw = await context.store.get(`house:${context.house.id}`);
+  const live = raw ? (JSON.parse(raw) as Household).call : undefined;
+  if (live) await reapEndedPhoneGuests(context.services.rooms, live, context.now);
+}
 
 export async function handlePhoneGuestAction(action: string, context: PhoneGuestContext) {
   const { store, now, house, me, input, services } = context;
@@ -98,8 +116,15 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   requireValue(await inRoom(services.rooms, room, bedside.id) && await inRoom(services.rooms, room, me.id),
     `Porch can add a phone number once you and ${displayName(bedside)} are both connected.`, 409);
   // A guest that hung up (busy, no answer, or the far end ended the call) makes way for another number.
+  // `inRoom` treats a hang-up status as already gone, so remove the leg too; a timed-out dial can
+  // still connect after this, and reapEndedPhoneGuests drops that late leg on a later poll.
   const previous = activePhoneGuest(call);
-  if (previous) requireValue(!await inRoom(services.rooms, room, phoneGuestIdentity(previous)), `Hang up ${previous.label} before adding another number.`, 409);
+  if (previous) {
+    const previousIdentity = phoneGuestIdentity(previous);
+    requireValue(!await inRoom(services.rooms, room, previousIdentity), `Hang up ${previous.label} before adding another number.`, 409);
+    try { await services.rooms.removeParticipant(room, previousIdentity); }
+    catch (error) { if (!notFound(error)) throw new FamilyError("Couldn't hang up the phone. Check your connection and try again.", 502); }
+  }
 
   const { result: guest } = await mutate(store, house.id, current => {
     expire(current, now);
@@ -131,6 +156,7 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
     try { await services.rooms.removeParticipant(room, identity); } catch { /* usually it doesn't exist */ }
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (refusedDial.has(code)) await endGuest(store, house.id, call.id, guest.id, now);
+    try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
     throw new FamilyError("Couldn't call that number. Check it and try again.", 502);
   }
   // Ending the call or hanging up the guest can race with dialing. Release a leg that arrived too late.
@@ -143,7 +169,10 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   }
   if (live.guests?.find(g => g.id === guest.id)?.endedAt) {
     try { await services.rooms.removeParticipant(room, identity); } catch { /* the room's call limit ends it */ }
+    try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
     throw new FamilyError("That phone number was hung up.", 409);
   }
+  // The number this one replaced may have connected while it was dialing.
+  try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
   return { phoneGuest: { id: guest.id, label, addedBy: me.id, number: guest.number } };
 }
