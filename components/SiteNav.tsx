@@ -1,7 +1,8 @@
 import Link from "next/link";
 import PorchLogo from "@/components/PorchLogo";
 
-export default function SiteNav({ current }: { current?: "pilot" | "features" | "story" }) {
+// Pages without their own waitlist section send the button to the home page's.
+export default function SiteNav({ current, joinHref = "#join" }: { current?: "pilot" | "features" | "story"; joinHref?: string }) {
   return (
     <nav className="nav" aria-label="Main navigation">
       <Link href="/" className="logo" aria-label="HelloPorch home">
@@ -19,7 +20,7 @@ export default function SiteNav({ current }: { current?: "pilot" | "features" | 
             Our story
           </Link>
         </div>
-        <a href="#join" className="nav__cta">
+        <a href={joinHref} className="nav__cta">
           Join the waitlist
         </a>
       </div>
