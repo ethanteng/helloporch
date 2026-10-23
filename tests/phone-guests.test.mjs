@@ -308,10 +308,10 @@ test('a room deletion that fails while the number is dialing is retried',async()
   assert.deepEqual(f.livekit.deleted,[room],'once the room is gone, it is not deleted again');
 });
 
-test('rooms make space for one phone guest, and only caregivers can send its keypad tones',async()=>{
+test('rooms make space for a phone and a family guest, and only caregivers can send keypad tones',async()=>{
   const f=fixture(),{bedside,family,callID}=await f.connected();
   const verify=async credential=>new TokenVerifier(env.LIVEKIT_API_KEY,env.LIVEKIT_API_SECRET).verify((await f.json('joinCall',{callID},credential)).token);
   const ethan=await verify(family.credential), mom=await verify(bedside.credential);
   assert.equal(ethan.video.canPublishData,true); assert.equal(mom.video.canPublishData,false);
-  assert.equal(ethan.roomConfig.maxParticipants,3);
+  assert.equal(ethan.roomConfig.maxParticipants,4);
 });

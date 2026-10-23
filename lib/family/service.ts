@@ -4,11 +4,12 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, bedsideLanguage, callRoom, phoneGuestIdentity, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callRoom, carriesOn, leaveCall, phoneGuestIdentity, presentMembers, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, phoneGuestActions, phoneGuestReapSeconds, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
+import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
@@ -56,10 +57,12 @@ function memberFor(house: Household, auth: Auth): Member {
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
 const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", ...screeningActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
-function publicCall(call: Call, me: Member) {
-  const { phone: _phone, guests: _guests, bedsideLeftAt, ...result } = call;
-  const phoneGuest = publicPhoneGuest(call, me);
-  return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(bedsideLeftAt ? { bedsideLeft: true } : {}) };
+function publicCall(call: Call, me: Member, house: Household) {
+  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, ...result } = call;
+  const phoneGuest = publicPhoneGuest(call, me), porchGuest = publicPorchGuest(house, call);
+  const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
+  return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(porchGuest ? { porchGuest } : {}),
+    ...(bedside && left?.[bedside.id] !== undefined ? { bedsideLeft: true } : {}) };
 }
 // `name` and `photoID` are what Porch shows. Caregiver screens and the member themselves also get the
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
@@ -83,6 +86,7 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
   // The bedside is a caregiver device; a family member edits their own profile.
   const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled, me.role === "bedside" || m.id === me.id), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
+  const invited = call && ![call.from, call.to].includes(me.id) ? call.porchGuests?.filter(g => g.memberID === me.id).at(-1) : undefined;
   // A telephone drop-in is announced with the caregiver's name for that approved number.
   const callerName = (call: Call) => {
     if (call.phone) return (call.kind === "dropIn" ? phoneDropIn(house, call.phone.callerNumber)?.name : undefined) ?? call.phone.callerNumber ?? "Phone caller";
@@ -105,10 +109,15 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
+    // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only.
+    ...(me.role === "family" ? { family: house.members.filter(m => !m.revoked && m.role === "family" && m.id !== me.id)
+      .map(m => ({ id: m.id, name: displayName(m), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled) })) } : {}),
     invitations: me.role === "bedside" ? pendingInvites(house, now) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
-    // Once the bedside has left a call, it can't rejoin it; the household stays busy until the family member hangs up.
-    call: call && (call.from === me.id || call.to === me.id) && !(me.role === "bedside" && call.bedsideLeftAt) ? { ...publicCall(call, me), source: call.phone ? "phone" : "porch", callerName: callerName(call),
+    // A family member rung into the call sees an incoming call of their own. Someone who left a call that went on
+    // can't rejoin it; the household stays busy until it ends.
+    call: call && invited ? guestCall(house, call, invited)
+      : call && [call.from, call.to].includes(me.id) && call.left?.[me.id] === undefined ? { ...publicCall(call, me, house), source: call.phone ? "phone" : "porch", callerName: callerName(call),
       ...(call.phone?.callerNumber ? { callerNumber: call.phone.callerNumber } : {}) } : null,
     busy: !!call && call.state !== "ended", serverTime: now };
 }
@@ -291,20 +300,55 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled) });
     }
-    // The bedside hanging up while a phone guest is on leaves only the bedside, as long as the family member who
-    // added the guest is still there to talk with it. Otherwise it ends the call and the guest's telephone leg.
-    let bedsideMayLeave = false;
+    if (porchGuestActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handlePorchGuestAction(String(action), { store, now, house, me: memberFor(house, auth), input,
+        rooms: (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms,
+        reachable: member => online(member, now) || (!!member.voip && pushEnabled),
+        ring: async (guest, member, callerName) => {
+          if (member.voip && pushEnabled) {
+            const registration = member.voip;
+            let delivery: PushResult;
+            try { delivery = await (dependencies.sendPush ?? sendVoIPPush)(registration, { callID: guest.id, recipientID: member.id, callerName, mode: house.call!.mode, expiresAt: guest.ringUntil }); }
+            catch { delivery = { delivered: false }; }
+            if (delivery.invalidToken) await mutate(store, house.id, current => {
+              const recipient = current.members.find(m => m.id === member.id);
+              if (recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
+            });
+            if (delivery.delivered) return true;
+          }
+          // An open app finds the call on its next check-in.
+          return online(member, now);
+        } });
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled) });
+    }
+    // Hanging up leaves only you while the call can go on without you: two people still connected, counting a phone
+    // guest only while whoever added it stays. So the bedside is never left alone with a phone, and a family guest
+    // and the bedside keep talking when the person who rang them in leaves. Otherwise it ends the call for everyone.
+    let mayLeave = false;
     if (action === "endCall") {
       const raw = await store.get(`house:${auth.householdID}`);
       const house: Household | undefined = raw ? JSON.parse(raw) : undefined;
-      const call = house?.call, guest = activePhoneGuest(call);
-      if (house && call && guest && call.id === input.callID && call.state === "accepted" && memberFor(house, auth).role === "bedside") {
-        // Both must still be connected: stored state can lag a phone that already hung up.
-        try {
-          const rooms = (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms;
-          bedsideMayLeave = await inRoom(rooms, callRoom(call), guest.addedBy) && await inRoom(rooms, callRoom(call), phoneGuestIdentity(guest));
+      const call = house?.call;
+      if (house && call?.state === "accepted" && !call.phone) {
+        const me = memberFor(house, auth);
+        const leaving = (call.id === input.callID && [call.from, call.to].includes(me.id)) ||
+          call.porchGuests?.some(g => g.id === input.callID && g.memberID === me.id && g.state === "joined");
+        const remaining = presentMembers(call).filter(id => id !== me.id);
+        if (leaving && presentMembers(call).includes(me.id) && carriesOn(call, remaining)) {
+          // Stored state can lag a device or phone that already hung up, so count only who LiveKit still has.
+          try {
+            const rooms = (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms, room = callRoom(call);
+            const connected: string[] = [];
+            for (const id of remaining) if (await inRoom(rooms, room, id)) connected.push(id);
+            const phone = activePhoneGuest(call);
+            const phoneOn = !!phone && connected.includes(phone.addedBy) && await inRoom(rooms, room, phoneGuestIdentity(phone));
+            mayLeave = connected.length + (phoneOn ? 1 : 0) >= 2;
+          } catch { /* ending the whole call is the safe choice */ }
         }
-        catch { /* ending the whole call is the safe choice */ }
       }
     }
     if (["poll", "acceptCall", "joinCall", "startCall"].includes(String(action))) {
@@ -354,7 +398,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         removedMedia = profileMedia(me);
         me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.profile; delete me.override; delete me.pendingPhotos;
         const call = house.call;
-        if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+        if (call && call.state !== "ended" && [call.from, call.to, activePorchGuest(call)?.memberID].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
         return undefined;
       }
       if (action === "registerVoIP" || action === "registerAlerts") {
@@ -373,6 +417,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.
         if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === call.id) call.receivedAt ??= now;
+        const ringing = call?.porchGuests?.find(g => g.id === input.receivedCallID && g.memberID === me.id && g.state === "ringing");
+        if (ringing) ringing.receivedAt ??= now;
         if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
@@ -427,7 +473,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           } else target.permissions = permissions(input.permissions);
         }
         const call = house.call;
-        if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to].includes(m.id)) || (call.kind === "dropIn" && !dropInAllowed(house, call)))) {
+        if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to, activePorchGuest(call)?.memberID].includes(m.id)) || (call.kind === "dropIn" && !dropInAllowed(house, call)))) {
           call.state = "ended"; call.reason = "Drop-in access was changed."; cleanupRoom = callRoom(call);
         }
         return undefined;
@@ -453,6 +499,27 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       if (action === "acceptCall" || action === "endCall" || action === "joinCall" || action === "fallback") {
         const call = house.call;
+        // A family member rung into the call answers, joins and hangs up their own invitation.
+        const invite = call?.porchGuests?.find(g => g.id === input.callID && g.memberID === me.id);
+        if (call && invite) {
+          requireValue(action !== "fallback", "Phone fallback is only available to the bedside caller.", 403);
+          if (action === "endCall") {
+            if (invite.state === "ringing") { invite.state = "declined"; invite.endedAt = now; }
+            else if (invite.state === "joined" && call.state === "accepted") {
+              if (mayLeave) leaveCall(call, me.id, now);
+              else { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+            }
+            return undefined;
+          }
+          requireValue(call.state === "accepted" && call.expiresAt > now && call.left?.[me.id] === undefined, "This call ended or expired.", 410);
+          if (action === "acceptCall") {
+            requireValue(input.available === true, "Open Porch to answer this call.", 409);
+            requireValue(invite.state === "ringing" && invite.ringUntil > now, invite.state === "joined" ? "This call was already answered." : "This call ended or expired.", invite.state === "joined" ? 409 : 410);
+            invite.state = "joined"; invite.joinedAt = now;
+            me.available = false; me.seenAt = now;
+          } else { requireValue(invite.state === "joined", "Answer this call before joining.", 403); me.seenAt = now; }
+          return undefined;
+        }
         requireValue(call && call.id === input.callID && [call.from, call.to].includes(me.id), "This call is no longer available.", 404);
         if (action === "fallback") {
           requireValue(me.role === "bedside" && call.from === me.id && call.kind === "call", "Phone fallback is only available to the bedside caller.", 403);
@@ -460,10 +527,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           requireValue(call.state === "pending", "This call already ended.", 410);
           call.state = "ended"; call.reason = "Trying their regular phone."; cleanupRoom = callRoom(call);
         } else if (action === "endCall") {
-          if (bedsideMayLeave && me.role === "bedside" && call.state === "accepted" && activePhoneGuest(call) && !call.bedsideLeftAt) call.bedsideLeftAt = now;
-          else if (!call.bedsideLeftAt || me.role !== "bedside") { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+          if (call.left?.[me.id] !== undefined) return undefined; // Already off a call that went on.
+          if (mayLeave && call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== me.id))) leaveCall(call, me.id, now);
+          else { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
         } else {
-          requireValue(!(me.role === "bedside" && call.bedsideLeftAt), "You left this call.", 410);
+          requireValue(call.left?.[me.id] === undefined, "You left this call.", 410);
           requireValue(call.state !== "ended" && call.expiresAt > now, "This call ended or expired.", 410);
           if (call.kind === "dropIn") requireValue(dropInAllowed(house, call), "Drop-in access was removed.", 403);
           if (action === "acceptCall") {
@@ -553,10 +621,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const configuration = config();
       const roomName = callRoom(call);
       const token = new AccessToken(configuration.apiKey, configuration.apiSecret, { identity: me.id, name: displayName(me), ttl: "1m" });
-      // Room for a phone guest a family caregiver adds (see phone-guests.ts). Only the server can add one.
-      token.roomConfig = new RoomConfiguration({ maxParticipants: 3, emptyTimeout: 60, departureTimeout: 5 });
+      // Room for a family member rung in and a phone a caregiver adds (porch-guests.ts, phone-guests.ts). Only
+      // the server lets either in.
+      token.roomConfig = new RoomConfiguration({ maxParticipants: 4, emptyTimeout: 60, departureTimeout: 5 });
       // Caregivers who can add a phone guest send its keypad tones, such as a bank's menu choices, as data.
-      token.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true, canPublishData: !call.phone && canAddPhoneGuests(me), canUpdateOwnMetadata: false,
+      token.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true,
+        canPublishData: !call.phone && canAddPhoneGuests(me) && [call.from, call.to].includes(me.id), canUpdateOwnMetadata: false,
         canPublishSources: call.mode === "voice" ? [TrackSource.MICROPHONE] : [TrackSource.MICROPHONE, TrackSource.CAMERA] });
       return callJSON({ token: await token.toJwt(), serverUrl: configuration.serverUrl, room: roomName });
     }
