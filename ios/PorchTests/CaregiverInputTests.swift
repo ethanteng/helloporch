@@ -871,6 +871,16 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(privacyPolicyURL.absoluteString, "https://helloporch.store/privacy")
     }
 
+    @MainActor func testCaregiverPINScreenLinksPrivacyPolicy() {
+        let setup = CaregiverPINViewController(profile: nil)
+        setup.loadViewIfNeeded()
+        func find(_ view: UIView) -> UIButton? {
+            if view.accessibilityIdentifier == "caregiver.privacy" { return view as? UIButton }
+            return view.subviews.compactMap(find).first
+        }
+        XCTAssertEqual(find(setup.view)?.configuration?.title, "Privacy policy")
+    }
+
     @MainActor func testFirstCaregiverEntryAsksForChosenPINAndConfirmation() {
         let setup = CaregiverPINViewController(profile: nil)
         setup.loadViewIfNeeded()

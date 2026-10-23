@@ -190,11 +190,12 @@ final class CaregiverPINViewController: CaregiverFormViewController {
             family.addAction(UIAction { [weak self] _ in self?.useAsFamily() }, for: .touchUpInside)
             let detail = PorchDevice.credential(for: .family) != nil ? "Switch back to family mode. Your family pairing is still saved." : "Family members call and drop in from their own device."
             content.addArrangedSubview(section("Not the bedside device?", detail: detail, views: [family]))
-            let privacy = PorchStyle.button("Privacy policy", symbol: "hand.raised", filled: false)
-            privacy.accessibilityIdentifier = "caregiver.privacy"
-            privacy.addAction(UIAction { [weak self] _ in if let self { showPrivacyPolicy(on: self) } }, for: .touchUpInside)
-            content.addArrangedSubview(section("Privacy", detail: "What Porch keeps, who helps run it, and how long messages are kept.", views: [privacy]))
         }
+        // Reachable without the PIN, so anyone at the bedside can read it.
+        let privacy = PorchStyle.button("Privacy policy", symbol: "hand.raised", filled: false)
+        privacy.accessibilityIdentifier = "caregiver.privacy"
+        privacy.addAction(UIAction { [weak self] _ in if let self { showPrivacyPolicy(on: self) } }, for: .touchUpInside)
+        content.addArrangedSubview(section("Privacy", detail: "What Porch keeps, who helps run it, and how long messages are kept.", views: [privacy]))
     }
     private func useAsFamily() {
         task?.cancel(); try? PorchDevice.saveActivation(nil)
