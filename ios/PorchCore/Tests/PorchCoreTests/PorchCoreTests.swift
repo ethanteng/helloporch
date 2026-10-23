@@ -349,6 +349,16 @@ final class PorchCoreTests: XCTestCase {
             XCTAssertTrue(CallPreferences.startVideoWithCamera(in: defaults))
         }
     }
+    func testBedsideVideoCallsAlwaysStartWithCamera() throws {
+        try withDefaults { defaults in
+            XCTAssertTrue(CallPreferences.startVideoWithCamera(as: .bedside, in: defaults))
+            XCTAssertTrue(CallPreferences.startVideoWithCamera(as: .family, in: defaults))
+            // The family setting is per phone; it never turns off the bedside's camera.
+            CallPreferences.saveStartVideoWithCamera(false, in: defaults)
+            XCTAssertTrue(CallPreferences.startVideoWithCamera(as: .bedside, in: defaults))
+            XCTAssertFalse(CallPreferences.startVideoWithCamera(as: .family, in: defaults))
+        }
+    }
 
 }
 

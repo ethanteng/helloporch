@@ -244,7 +244,7 @@ extension Notification.Name {
                 try Task.checkCancellation()
                 guard uuid == action.callUUID, let accepted = response.state?.call, accepted.state == "accepted" else { action.fail(); return }
                 call = accepted; answered = true; status = "Connecting…"
-                wantsCamera = isVideo && profile.role == .family && CallPreferences.startVideoWithCamera()
+                wantsCamera = isVideo && CallPreferences.startVideoWithCamera(as: profile.role)
                 AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = false
                 try AudioManager.shared.setEngineAvailability(.none)
                 try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: mode == .video ? .videoChat : .voiceChat,

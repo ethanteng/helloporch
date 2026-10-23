@@ -45,6 +45,12 @@ public enum CallPreferences {
         defaults.object(forKey: cameraKey) as? Bool ?? true
     }
 
+    /// Whether a video call on this device starts with its camera on. The bedside always does, whether it placed,
+    /// answered or was dropped in on; a family phone follows its own setting.
+    public static func startVideoWithCamera(as role: PorchExperience, in defaults: UserDefaults = .standard) -> Bool {
+        role == .bedside || startVideoWithCamera(in: defaults)
+    }
+
     public static func saveStartVideoWithCamera(_ enabled: Bool, in defaults: UserDefaults = .standard) {
         defaults.set(enabled, forKey: cameraKey)
     }

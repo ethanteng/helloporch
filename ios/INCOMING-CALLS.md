@@ -10,7 +10,7 @@ The ordinary Porch attempt now has its own delivery path:
 
 The server sends VoIP pushes for new, ordinary calls to either paired device role, including inbound telephone calls to the bedside iPad. Drop-in retains its foreground bedside announcement and five-second consent window. Cancellation, revocation and expiry travel through authenticated signaling, never a second VoIP push. The app checks state every second while ringing and every five seconds during an incoming call. If iOS ends the ringing execution window, CallKit ringing stops locally. The caller's fallback timer continues for calls from the bedside to a family device; bedside incoming calls release the server call and telephone leg.
 
-Incoming ordinary-call audio is owned by an application-level session rather than a view controller and survives leaving Porch or locking the device. A video answer initially connects audio only. The person explicitly enables the camera in the foreground; backgrounding turns it off. Outgoing calls, drop-in, legacy rooms and phone-fallback media retain their existing foreground lifecycle.
+Incoming ordinary-call audio is owned by an application-level session rather than a view controller and survives leaving Porch or locking the device. A video answer connects audio first, then turns the camera on once Porch is in the foreground: always on the bedside, and on a family phone unless **Call settings → Start with my camera on** is off. Backgrounding turns it off. Outgoing calls, drop-in, legacy rooms and phone-fallback media retain their existing foreground lifecycle.
 
 ## Server setup
 
