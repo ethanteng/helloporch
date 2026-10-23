@@ -228,9 +228,12 @@ test('a call that expires with a phone guest has its room deleted, retried until
 
 test('a refused dial frees the call for another try',async()=>{
   const f=fixture(),{family,callID}=await f.connected();
+  const before=(await f.json('poll',{available:true},family.credential)).state.call.expiresAt;
   f.livekit.state.dialError=Object.assign(new Error('bad number'),{code:'invalid_argument'});
   assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,502);
-  assert.equal((await f.json('poll',{available:true},family.credential)).state.call.phoneGuest,undefined);
+  const after=(await f.json('poll',{available:true},family.credential)).state.call;
+  assert.equal(after.phoneGuest,undefined);
+  assert.equal(after.expiresAt,before,'a number that never dialed does not lengthen the call');
   delete f.livekit.state.dialError;
   await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
 });

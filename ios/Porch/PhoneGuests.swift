@@ -110,9 +110,21 @@ import PorchCore
     }
 
     private func dial(label: String, number: String) async throws {
+        guard !dialing else { throw FamilyServiceError(message: "Porch is still checking the last number. Try again in a moment.", status: 409) }
         dialing = true; refresh()
-        defer { dialing = false; refresh() }
-        let response = try await FamilyService(credential).send("addPhoneGuest", ["callID": callID, "phoneNumber": number, "label": label], timeout: 25)
+        var settle: UInt64 = 0
+        defer {
+            // A failed dial may still be ringing, and the server keeps tracking it. Wait for the next check-in
+            // to show it here before another number can be dialed.
+            let delay = settle
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: delay)
+                self?.dialing = false; self?.refresh()
+            }
+        }
+        let response: FamilyResponse
+        do { response = try await FamilyService(credential).send("addPhoneGuest", ["callID": callID, "phoneNumber": number, "label": label], timeout: 25) }
+        catch { if (error as? FamilyServiceError)?.status ?? 502 >= 500 { settle = 6_000_000_000 }; throw error }
         if FamilyCoordinator.shared.credential?.credential == credential.credential { FamilyCoordinator.shared.update(response) }
         guard let added = response.phoneGuest else { throw FamilyServiceError(message: "Couldn't add that phone number.", status: 502) }
         track(added)

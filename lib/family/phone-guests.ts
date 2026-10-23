@@ -138,7 +138,6 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
     requireValue(guests.length < phoneGuestLimits.perCall, "This call can't add more phone numbers. Start a new call to add another.", 429);
     const added: PhoneGuest = { id: randomUUID(), number: input.phoneNumber as string, label, addedBy: me.id, addedAt: now };
     guests.push(added);
-    live.expiresAt = Math.max(live.expiresAt, now + phoneGuestLimits.callSeconds);
     return added;
   });
   const identity = phoneGuestIdentity(guest);
@@ -178,5 +177,12 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   }
   // The number this one replaced may have connected while it was dialing.
   try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
+  // Only a number that actually dialed lengthens the call.
+  await mutate(store, house.id, current => {
+    const dialed = current.call;
+    if (dialed?.id === call.id && dialed.state === "accepted" && activePhoneGuest(dialed)?.id === guest.id) {
+      dialed.expiresAt = Math.max(dialed.expiresAt, now + phoneGuestLimits.callSeconds);
+    }
+  });
   return { phoneGuest: { id: guest.id, label, addedBy: me.id, number: guest.number } };
 }
