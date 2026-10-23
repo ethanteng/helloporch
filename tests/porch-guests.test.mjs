@@ -279,6 +279,36 @@ test('hanging up before the guest answers stops their phone ringing',async()=>{
   assert.equal(saved(),'cancelled');
 });
 
+test('a retried hang-up does not delete the room when the call should go on',async()=>{
+  const f=fixture(),{bedside,ethan,david,callID,room,ids}=await f.connected();
+  const invite=(await f.json('addPorchGuest',{callID,memberID:ids.david},ethan.credential)).porchGuest;
+  await f.answer({david,room,ids},invite.id);
+  const key=`house:${bedside.state.householdID}`;
+  // David's check-in looks late, so the first attempt drops him and would end the call when Ethan leaves.
+  const stale=JSON.parse(f.store.values.get(key));
+  stale.members.find(m=>m.id===ids.david).seenAt=f.now()-40;
+  f.store.values.set(key,JSON.stringify(stale));
+  const compare=f.store.compareAndSet.bind(f.store);
+  let flipped=false;
+  f.store.compareAndSet=async(k,before,after)=>{
+    if(!flipped&&k===key){
+      flipped=true;
+      const fresh=JSON.parse(before);
+      fresh.members.find(m=>m.id===ids.david).seenAt=f.now();
+      f.store.values.set(k,JSON.stringify(fresh));
+      return false;
+    }
+    return compare(k,before,after);
+  };
+  f.livekit.leave(room,ids.ethan);
+  const left=await f.json('endCall',{callID},ethan.credential);
+  assert.equal(flipped,true);
+  assert.equal(left.state.call,null);
+  assert.deepEqual(f.livekit.deleted,[],'the lost attempt must not tear the room down');
+  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.call.state,'accepted');
+  assert.equal((await f.json('poll',{available:true},david.credential)).state.call.state,'accepted');
+});
+
 test('revoking someone whose invitation is still ringing cancels it and leaves the call alone',async()=>{
   const f=fixture(),{bedside,ethan,callID,ids}=await f.connected();
   await f.json('addPorchGuest',{callID,memberID:ids.david},ethan.credential);

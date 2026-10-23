@@ -365,7 +365,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     let issuedCode: string | undefined;
     if (action === "createInvite") issuedCode = randomBytes(32).toString("hex");
     const { house, result } = await mutate(store, auth.householdID, house => {
-      removedMedia = []; removeFromRoom = undefined;
+      // A failed save retries this update from scratch. Room teardown from the attempt that lost must not survive
+      // into one that keeps the call going, or Mom and a guest are disconnected after all.
+      removedMedia = []; removeFromRoom = undefined; cleanupRoom = undefined;
       const me = memberFor(house, auth);
       expire(house, now);
       // A family guest who loses access or leaves the family: a ringing invitation is cancelled, and someone who
