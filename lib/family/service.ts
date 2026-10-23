@@ -151,8 +151,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "createBedsideInvite") {
       requireValue((request.headers.get("X-Porch-Setup-Code") ?? "").length >= 16, "A server operator must authorize a new bedside device.", 403);
       await checkCaregiverCode(request, store, now);
-      const code = randomBytes(32).toString("hex"), expiresAt = now + 86400;
-      await store.create(`activation:${hash(code)}`, JSON.stringify({ expiresAt }), 86400);
+      // Review may start weeks after submission. These still authorize just one fresh
+      // household, never access to an existing family or the operator's recovery secret.
+      requireValue(input.purpose === undefined || input.purpose === "appReview", "Choose a valid activation purpose.");
+      const seconds = input.purpose === "appReview" ? 90 * 86400 : 86400;
+      const code = randomBytes(32).toString("hex"), expiresAt = now + seconds;
+      requireValue(await store.create(`activation:${hash(code)}`, JSON.stringify({ expiresAt }), seconds), "Couldn't create an activation. Try again.", 409);
       return callJSON({ code, expiresAt });
     }
     if (action === "setCaregiverPIN") {

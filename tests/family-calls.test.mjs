@@ -270,6 +270,42 @@ test('expired or missing activation cannot enroll; malformed details do not cons
  assert.equal((await f.send('enrollBedside',{...register(),activation:expired.code})).status,410);
 });
 
+test('review activations last 90 days, remain operator-only, and enroll isolated households once',async()=>{
+ const f=fixture();
+ const {bedside,family}=await f.setup();
+ for(const credential of [undefined,bedside.credential,family.credential]) {
+  assert.equal((await f.send('createBedsideInvite',{purpose:'appReview'},credential,'123456')).status,403);
+  assert.equal((await f.send('createBedsideInvite',{purpose:'appReview'},credential,env.PORCH_CALL_ACCESS_CODE)).status,403);
+ }
+ const ordinary=await f.json('createBedsideInvite',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ const invite=await f.json('createBedsideInvite',{purpose:'appReview'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal(invite.expiresAt-ordinary.expiresAt,89*86400);
+ assert.equal((await f.send('createBedsideInvite',{purpose:'unknown'},undefined,env.PORCH_CONTACT_SETUP_CODE)).status,400);
+ f.advance(30*86400);
+ const registration={deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex'),pin:'098765',name:'Review bedside',activation:invite.code};
+ const owner=await f.json('enrollBedside',registration);
+ assert.notEqual(owner.state.householdID,bedside.state.householdID);
+ assert.deepEqual(owner.state.people,[]);
+ assert.equal(owner.state.dropInEnabled,false);
+ assert.equal((await f.json('enrollBedside',registration)).credential,owner.credential);
+ assert.equal((await f.send('enrollBedside',{...registration,deviceID:randomUUID()})).status,410);
+ await f.json('verifyPIN',{},owner.credential,'098765');
+ assert.equal((await f.send('verifyPIN',{},bedside.credential,'098765')).status,403);
+ const expired=await f.json('createBedsideInvite',{purpose:'appReview'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ f.advance(90*86400+1);
+ assert.equal((await f.send('enrollBedside',{...registration,deviceID:randomUUID(),activation:expired.code})).status,410);
+});
+
+test('activation issuance preserves the matching storage lifetime and reports a failed write',async()=>{
+ const f=fixture(); const create=f.store.create.bind(f.store); const lifetimes=[];
+ f.store.create=async(key,value,seconds)=>{lifetimes.push(seconds);return create(key,value);};
+ await f.json('createBedsideInvite',{},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ await f.json('createBedsideInvite',{purpose:'appReview'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ assert.deepEqual(lifetimes,[86400,90*86400]);
+ f.store.create=async()=>false;
+ assert.equal((await f.send('createBedsideInvite',{purpose:'appReview'},undefined,env.PORCH_CONTACT_SETUP_CODE)).status,409);
+});
+
 test('a saved legacy credential can migrate directly to a chosen household PIN',async()=>{
  const f=fixture();
  const owner=await f.json('enrollBedside',{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex'),pin:'123456',name:'Pat'},undefined,env.PORCH_CONTACT_SETUP_CODE);

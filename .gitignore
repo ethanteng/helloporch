@@ -22,3 +22,6 @@ ios/build/
 
 # Local voice listening samples (scripts/voice-samples.mjs)
 /.voice-samples/
+
+# Private App Review activation links and submission drafts
+/.app-review/
