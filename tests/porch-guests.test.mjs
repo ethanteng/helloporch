@@ -263,6 +263,22 @@ test('a guest whose phone stops checking in drops off, and revoking him takes on
   assert.deepEqual(h.livekit.deleted,[alone.room]);
 });
 
+test('hanging up before the guest answers stops their phone ringing',async()=>{
+  const f=fixture(),{bedside,ethan,david,callID,room,ids}=await f.connected();
+  const invite=(await f.json('addPorchGuest',{callID,memberID:ids.david},ethan.credential)).porchGuest;
+  await f.json('endCall',{callID},ethan.credential);
+  assert.deepEqual(f.livekit.deleted,[room]);
+  // Answering races the hang-up: the invitation is no longer a call he can join.
+  assert.equal((await f.send('acceptCall',{callID:invite.id,available:true},david.credential)).status,410);
+  const view=await f.json('poll',{available:true},david.credential);
+  assert.equal(view.state.call.state,'ended');
+  const saved=()=>JSON.parse(f.store.values.get(`house:${bedside.state.householdID}`)).call.porchGuests[0].state;
+  assert.equal(saved(),'cancelled');
+  // His phone reports the ring as over. That must not be stored as him declining.
+  await f.json('endCall',{callID:invite.id},david.credential);
+  assert.equal(saved(),'cancelled');
+});
+
 test('revoking someone whose invitation is still ringing cancels it and leaves the call alone',async()=>{
   const f=fixture(),{bedside,ethan,callID,ids}=await f.connected();
   await f.json('addPorchGuest',{callID,memberID:ids.david},ethan.credential);

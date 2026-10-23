@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callRoom, carriesOn, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callRoom, carriesOn, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -375,7 +375,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== guest.memberID))) {
           leaveCall(call, guest.memberID, now);
           removeFromRoom = { room: callRoom(call), identity: guest.memberID };
-        } else { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+        } else { finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call); }
       };
       if (house.call?.phone && house.call.state === "ended" && !house.call.phone.cleanedUp) cleanupRoom = callRoom(house.call);
       // A telephone leg keeps its room open, so an ended call with a phone guest has its room deleted, retried until it is.
@@ -411,7 +411,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const call = house.call;
         const invite = activePorchGuest(call);
         if (call && call.state !== "ended" && invite?.memberID === me.id) dropGuest(call, invite);
-        else if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+        else if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call); }
         return undefined;
       }
       if (action === "registerVoIP" || action === "registerAlerts") {
@@ -488,7 +488,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const call = house.call, invite = activePorchGuest(call);
         if (call && call.state !== "ended" && invite && house.members.find(m => m.id === invite.memberID)?.revoked) dropGuest(call, invite);
         if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to].includes(m.id)) || (call.kind === "dropIn" && !dropInAllowed(house, call)))) {
-          call.state = "ended"; call.reason = "Drop-in access was changed."; cleanupRoom = callRoom(call);
+          finishCall(call, "Drop-in access was changed.", now); cleanupRoom = callRoom(call);
         }
         return undefined;
       }
@@ -521,7 +521,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             if (invite.state === "ringing") { invite.state = "declined"; invite.endedAt = now; }
             else if (invite.state === "joined" && call.state === "accepted") {
               if (mayLeave) leaveCall(call, me.id, now);
-              else { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+              else { finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call); }
             }
             return undefined;
           }
@@ -539,11 +539,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           requireValue(me.role === "bedside" && call.from === me.id && call.kind === "call", "Phone fallback is only available to the bedside caller.", 403);
           if (call.state === "accepted") throw new FamilyError("They answered on Porch. Phone fallback was cancelled.", 409, "answered");
           requireValue(call.state === "pending", "This call already ended.", 410);
-          call.state = "ended"; call.reason = "Trying their regular phone."; cleanupRoom = callRoom(call);
+          finishCall(call, "Trying their regular phone.", now); cleanupRoom = callRoom(call);
         } else if (action === "endCall") {
           if (call.left?.[me.id] !== undefined) return undefined; // Already off a call that went on.
           if (mayLeave && call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== me.id))) leaveCall(call, me.id, now);
-          else { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+          else { finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call); }
         } else {
           requireValue(call.left?.[me.id] === undefined, "You left this call.", 410);
           requireValue(call.state !== "ended" && call.expiresAt > now, "This call ended or expired.", 410);
@@ -598,7 +598,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             // A call-specific recipient receipt or answer outweighs a missing
             // APNs acknowledgment, even while the recipient is backgrounded.
             if (recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
-              active.state = "ended"; active.reason = "Incoming call delivery unavailable.";
+              finishCall(active, "Incoming call delivery unavailable.", now);
               return true;
             }
             return false;

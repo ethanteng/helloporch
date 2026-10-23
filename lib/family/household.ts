@@ -66,10 +66,29 @@ export function config(): CallServer {
   requireValue(serverUrl?.startsWith("wss://") && apiKey && apiSecret, "Calling is not configured.", 503);
   return { serverUrl: serverUrl!, apiKey, apiSecret };
 }
+/** A call saved before leaving was recorded per person: the bedside had already hung up. */
+function adoptBedsideLeft(house: Household) {
+  const call = house.call as (Call & { bedsideLeftAt?: number }) | undefined;
+  if (!call || call.bedsideLeftAt === undefined) return;
+  const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
+  if (bedside) (call.left ??= {})[bedside.id] ??= call.bedsideLeftAt;
+  delete call.bedsideLeftAt;
+}
+/** A family member still being rung can't answer a call that is already over. */
+export function cancelRingingPorchGuests(call: Call | undefined, now: number) {
+  for (const guest of call?.porchGuests ?? []) if (guest.state === "ringing") { guest.state = "cancelled"; guest.endedAt = now; }
+}
+export function finishCall(call: Call, reason: string, now: number) {
+  call.state = "ended"; call.reason = reason; cancelRingingPorchGuests(call, now);
+}
 export function expire(house: Household, now: number) {
   const call = house.call;
-  if (!call || call.state === "ended") return;
-  const end = () => { call.state = "ended"; call.reason = "The call timed out or a device went offline."; };
+  if (!call) return;
+  adoptBedsideLeft(house);
+  // The call can end in the same update that is still ringing someone in. A later check-in must not leave that
+  // invitation looking answerable: their phone treats it as an ordinary incoming call.
+  if (call.state === "ended") { cancelRingingPorchGuests(call, now); return; }
+  const end = () => finishCall(call, "The call timed out or a device went offline.", now);
   if (call.expiresAt <= now) return end();
   for (const guest of call.porchGuests ?? []) if (guest.state === "ringing" && guest.ringUntil <= now) { guest.state = "missed"; guest.endedAt = now; }
   if (call.state !== "accepted") return;

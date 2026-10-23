@@ -182,6 +182,23 @@ test("Mom's hang-up ends the whole call when the caregiver who added the number 
   assert.deepEqual(f.livekit.deleted,[room]);
 });
 
+test('a call saved before leaving was per person still keeps Mom from rejoining',async()=>{
+  const f=fixture(),{bedside,family,callID}=await f.connected();
+  await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+  const key=`house:${bedside.state.householdID}`;
+  const house=JSON.parse(f.store.values.get(key));
+  house.call.bedsideLeftAt=f.now();
+  delete house.call.left;
+  f.store.values.set(key,JSON.stringify(house));
+  assert.equal((await f.send('joinCall',{callID},bedside.credential)).status,410);
+  const ethan=await f.json('poll',{available:true},family.credential);
+  assert.equal(ethan.state.call.state,'accepted');
+  assert.equal(ethan.state.call.bedsideLeft,true);
+  const saved=JSON.parse(f.store.values.get(key)).call;
+  assert.equal(saved.bedsideLeftAt,undefined);
+  assert.equal(typeof saved.left[bedside.state.me.id],'number');
+});
+
 test("once Mom has left, only the caregiver's phone has to stay online",async()=>{
   const f=fixture(),{bedside,family,callID,room}=await f.connected();
   await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);

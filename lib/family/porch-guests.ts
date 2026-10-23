@@ -26,7 +26,10 @@ export function guestCallerName(house: Household, call: Call, guest: PorchGuest)
 }
 /** A family guest's own view of the call: an ordinary incoming call that is ringing, answered, or over. */
 export function guestCall(house: Household, call: Call, guest: PorchGuest) {
-  const state = guest.state === "ringing" ? "pending" : guest.state === "joined" && call.state === "accepted" ? "accepted" : "ended";
+  // Ringing is an incoming call only while the call they were invited to is still going. Otherwise their phone
+  // would keep ringing, and answering would fail, after everyone else had already hung up.
+  const live = call.state === "accepted";
+  const state = guest.state === "ringing" && live ? "pending" : guest.state === "joined" && live ? "accepted" : "ended";
   return { id: guest.id, from: guest.addedBy, to: guest.memberID, mode: call.mode, kind: "call", state, createdAt: guest.invitedAt,
     ...(guest.joinedAt ? { acceptedAt: guest.joinedAt } : {}), expiresAt: guest.state === "ringing" ? guest.ringUntil : call.expiresAt,
     ...(state === "ended" ? { reason: guest.state === "missed" ? "The call timed out." : "Call ended." } : {}),
