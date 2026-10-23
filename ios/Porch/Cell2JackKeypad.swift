@@ -4,11 +4,22 @@ import PorchCore
 /// Phone digits share Porch's existing actions; keyboard input remains independent.
 protocol Cell2JackDigitReceiving: AnyObject {
     func receiveCell2JackDigit(_ digit: Int) -> String
+    /// The receiver went back on the cradle. Only screens with a call to end act on it.
+    func receiveCell2JackHangUp() -> String
+}
+extension Cell2JackDigitReceiving {
+    func receiveCell2JackHangUp() -> String { "hang-up ignored" }
 }
 
 enum Cell2JackDigitRouter {
     static func route(_ symbol: String, root: UIViewController) -> String {
         guard let digit = CallSlots.digit(forSymbol: symbol) else { return "unassigned symbol" }
+        return deliver(root: root) { $0.receiveCell2JackDigit(digit) }
+    }
+    static func routeHangUp(root: UIViewController) -> String {
+        deliver(root: root) { $0.receiveCell2JackHangUp() }
+    }
+    private static func deliver(root: UIViewController, _ action: (Cell2JackDigitReceiving) -> String) -> String {
         var screen = root
         while true {
             guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return "screen transitioning" }
@@ -20,7 +31,7 @@ enum Cell2JackDigitRouter {
         }
         // An unknown modal (PIN, settings, alert, permission UI) blocks input.
         guard let receiver = screen as? Cell2JackDigitReceiving else { return "screen does not accept phone keys" }
-        return receiver.receiveCell2JackDigit(digit)
+        return action(receiver)
     }
 }
 
@@ -42,6 +53,9 @@ final class Cell2JackKeypad {
     static let shared = Cell2JackKeypad()
     // The prototype's automatic test opt-in is deliberately not migrated.
     static let enabledKey = "porch.cell2jack.enabled"
+    // On unless a caregiver turns it off, for someone who sets the receiver down
+    // right after pressing a key because the sound comes from the iPad.
+    static let receiverHangUpKey = "porch.cell2jack.receiverHangUp"
     weak var root: UIViewController?
     weak var windowScene: UIWindowScene?
     private(set) var status = "Phone keypad off"
@@ -64,6 +78,7 @@ final class Cell2JackKeypad {
     private let enqueueRetry: (TimeInterval, DispatchWorkItem) -> Void
     private let makeConnection: (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection
     var enabled: Bool { defaults.bool(forKey: Self.enabledKey) }
+    var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
 
     init(defaults: UserDefaults = .standard,
          isBedside: @escaping () -> Bool = { PorchDevice.experience == .bedside },
@@ -94,6 +109,7 @@ final class Cell2JackKeypad {
         defaults.set(value, forKey: Self.enabledKey)
         refresh()
     }
+    func setReceiverHangUp(_ value: Bool) { defaults.set(value, forKey: Self.receiverHangUpKey) }
     func activate() {
         sceneActive = true
         if enabled { record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
@@ -125,6 +141,7 @@ final class Cell2JackKeypad {
                       age < 1, self.sceneActive, self.isBedside() else {
                     self.record(["kind": "digitIgnored", "reason": "session or foreground gate",
                                  "symbols": digits.filter { $0.kind == .digit }.map(\.digit).joined(),
+                                 "hangUp": digits.contains { $0.kind == .hangUp },
                                  "callbackAge": age, "generationMatches": self.generation == token,
                                  "wanted": self.wanted, "stopping": self.stopping,
                                  "sceneActive": self.sceneActive, "bedside": self.isBedside()])
@@ -140,6 +157,10 @@ final class Cell2JackKeypad {
                 for event in digits {
                     if event.kind == .pulse {
                         self.record(["kind": "pulseDigitIgnored", "symbol": event.digit, "rawLine": event.line])
+                    }
+                    if event.kind == .hangUp {
+                        let outcome = self.receiverHangUp ? Cell2JackDigitRouter.routeHangUp(root: root) : "receiver hang-up off"
+                        self.record(["kind": "hangUp", "outcome": outcome, "rawLine": event.line])
                     }
                     guard event.kind == .digit else { continue }
                     let outcome = Cell2JackDigitRouter.route(event.digit, root: root)

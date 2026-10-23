@@ -841,15 +841,19 @@ extension CallViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard presentedViewController == nil else { return "clock covered" }
         if opening {
-            if slots.action(for: digit) == .callControl {
-                cancelOpening = true
-                displayStatus(BedsideText.string("Ending call…"))
-                return "cancel pending call requested"
-            }
-            return "call already opening"
+            return slots.action(for: digit) == .callControl ? cancelPendingCall() : "call already opening"
         }
         call(slot: digit)
         return "clock key dispatched"
+    }
+    func receiveCell2JackHangUp() -> String {
+        guard presentedViewController == nil, opening else { return "no call to end" }
+        return cancelPendingCall()
+    }
+    private func cancelPendingCall() -> String {
+        cancelOpening = true
+        displayStatus(BedsideText.string("Ending call…"))
+        return "cancel pending call requested"
     }
 }
 extension PeoplePickerViewController: Cell2JackDigitReceiving {

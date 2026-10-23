@@ -50,10 +50,21 @@ import Foundation
             var pulses = Cell2JackDTMFParser()
             let bytes = Data(pickups.utf8)
             let events = pulses.append(bytes.prefix(split)) + pulses.append(bytes.dropFirst(split))
-            precondition(events.map(\.kind) == [.pulse, .digit] && events.map(\.digit) == ["1", "0"])
+            precondition(events.map(\.kind) == [.pulse, .hangUp, .digit, .hangUp])
+            precondition(events.filter { $0.kind != .hangUp }.map(\.digit) == ["1", "0"])
         }
         var stale = Cell2JackDTMFParser()
         precondition(stale.append(Data(".. Get PULSE 1 1\r\n ON_HOOK \r\nL1L2 OFF_HOOK \r\n DTMF 3 :0 20: 2\r\n".utf8)).map(\.kind) == [.digit])
+        // Captured when Cell2Jack was plugged back in: it reports ON_HOOK as it starts, with no
+        // pickup before it. Only putting the receiver back after a pickup is a hang-up.
+        var hooks = Cell2JackDTMFParser()
+        precondition(hooks.append(Data(" ON_HOOK \r\n Set ON-hook 121\r\n Set Ring = 0\r\n Set ON-hook 121\r\n--Cell2Jack CopyRight00\r\n".utf8)).isEmpty)
+        let lifted = hooks.append(Data("L1L2 OFF_HOOK \r\nH1H2L1L2 FLASH \r\n Set OFF-hook 230\r\nH1H2 ON_HOOK \r\n Set ON-hook 121\r\n ON_HOOK \r\n".utf8))
+        precondition(lifted.map(\.kind) == [.hangUp] && lifted[0].line == "H1H2 ON_HOOK " && lifted[0].digit.isEmpty)
+        precondition(hooks.append(Data("L1L2 OFF_HOOK \r\nNON_HOOKED\r\n DTMF 0 :0 20: 2 H1H2 ON_HOOK \r\n".utf8)).map(\.kind) == [.digit, .hangUp])
+        // Logs that start with the receiver already up: a key press shows it was off the cradle.
+        var startedLifted = Cell2JackDTMFParser()
+        precondition(startedLifted.append(Data(" DTMF 5 :0 20: 2\r\nH1H2 ON_HOOK \r\n ON_HOOK \r\n".utf8)).map(\.kind) == [.digit, .hangUp])
         if CommandLine.arguments.count > 1 {
             var capture = Cell2JackDTMFParser()
             let bytes = try! Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
@@ -62,6 +73,6 @@ import Foundation
             precondition(actual.filter(\.embeddedInLine).map(\.digit) == ["1"])
             print("Physical full-keypad capture: all 12 events recovered; joined first-digit line marked")
         }
-        print("DTMF parser: observed capture, every split, bytewise framing, repeats, duplicate diagnostics, config rejection, overflow recovery and pickup pulses passed")
+        print("DTMF parser: observed capture, every split, bytewise framing, repeats, duplicate diagnostics, config rejection, overflow recovery, pickup pulses and hang-ups passed")
     }
 }

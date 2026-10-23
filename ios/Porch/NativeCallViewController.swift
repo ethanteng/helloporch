@@ -982,4 +982,9 @@ extension NativeCallViewController: Cell2JackDigitReceiving {
         performKeypadDigit(digit)
         return "call key dispatched"
     }
+    func receiveCell2JackHangUp() -> String {
+        guard !isEnding else { return "call ending" }
+        endCall()
+        return "call end requested"
+    }
 }
