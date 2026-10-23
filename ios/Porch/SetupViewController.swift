@@ -26,7 +26,7 @@ final class SlotsViewController: UITableViewController {
         if let state = FamilyCoordinator.shared.state { try? slots.reconcile(with: state) }
         tableView.reloadData()
     }
-    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    override func numberOfSections(in tableView: UITableView) -> Int { 4 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 4 : 1 }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
@@ -87,16 +87,21 @@ final class SlotsViewController: UITableViewController {
             content.secondaryText = CallPreferences.disconnectAfterSilence() ? "End calls after \(CallPreferences.silenceSeconds()) seconds of silence" : "Automatic hang-up is off"
             content.image = UIImage(systemName: "gearshape.2")
             cell.accessibilityIdentifier = "caregiver.advanced"
-        } else {
+        } else if indexPath.section == 2 {
             content.text = "Bedside mode"
             content.secondaryText = "Change this device to family mode"
             content.image = UIImage(systemName: "ipad.and.iphone")
+        } else {
+            content.text = "Privacy policy"
+            content.secondaryText = "What Porch keeps, and why"
+            content.image = UIImage(systemName: "hand.raised.fill")
+            cell.accessibilityIdentifier = "caregiver.privacy"
         }
         cell.contentConfiguration = content
         return cell
     }
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        ["Keypad · people & controls", "Settings", "Device mode"][section]
+        ["Keypad · people & controls", "Settings", "Device mode", "About"][section]
     }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         section == 0 ? "Twelve keys, each with its own action. By default 1–8 call people, 9 toggles video, 0 answers or hangs up, and * and # are free. Any key can be reassigned. Saving never places a call." : nil
@@ -114,6 +119,7 @@ final class SlotsViewController: UITableViewController {
             navigationController?.pushViewController(controller, animated: true); return
         }
         if indexPath.section == 2 { offerExperienceChange(on: self); return }
+        if indexPath.section == 3 { showPrivacyPolicy(on: self); return }
         let number = CallSlots.digits[indexPath.row]
         let editor = SetupViewController(slot: number, contact: slots.contact(for: number), action: slots.action(for: number) ?? .person)
         editor.onSaveSlot = { [weak self] action, contact in

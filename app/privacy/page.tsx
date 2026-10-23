@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 const updated = "October 22, 2026";
 // Where privacy questions and deletion requests go.
-const contact = "privacy@helloporch.com";
+const contact = "privacy@helloporch.store";
 
 const sections = [
   ["collect", "What we collect"],
