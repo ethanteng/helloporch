@@ -42,6 +42,18 @@ import Foundation
         let diagnostic = parser.append(Data(" Cal RX Double DTMF 1 :0 20: 2\n".utf8))
         precondition(diagnostic.count == 1 && diagnostic[0].kind == .doubleReport)
         precondition(parser.append(Data("status mentions DTMF 1\nUnknown DTMF key 1\nstatus DTMF 12 :0 20: 2\n".utf8)).isEmpty)
+        // Captured from the bedside's picture phone: the first pickup after reconnecting
+        // Cell2Jack broke the line once, which it counted as a pulse-dialed 1. The next
+        // pickup's 0 is a real key press.
+        let pickups = "L1L2 OFF_HOOK \r\n Set OFF-hook 230\r\n Play tone\r\nH1H2L1L2 FLASH \r\n Set OFF-hook 230\r\n.. Get PULSE 1 1\r\n Stop Playing Dialtone\r\n DTMF 1 :0 20: 2\r\nH1H2.Loop 1: Null Addr\r\n ON_HOOK \r\nL1L2 OFF_HOOK \r\n Play tone\r\n Stop Playing Audio\r\n DTMF 0 :0 20: 2\r\nH1H2 ON_HOOK \r\n"
+        for split in 0...pickups.utf8.count {
+            var pulses = Cell2JackDTMFParser()
+            let bytes = Data(pickups.utf8)
+            let events = pulses.append(bytes.prefix(split)) + pulses.append(bytes.dropFirst(split))
+            precondition(events.map(\.kind) == [.pulse, .digit] && events.map(\.digit) == ["1", "0"])
+        }
+        var stale = Cell2JackDTMFParser()
+        precondition(stale.append(Data(".. Get PULSE 1 1\r\n ON_HOOK \r\nL1L2 OFF_HOOK \r\n DTMF 3 :0 20: 2\r\n".utf8)).map(\.kind) == [.digit])
         if CommandLine.arguments.count > 1 {
             var capture = Cell2JackDTMFParser()
             let bytes = try! Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
@@ -50,6 +62,6 @@ import Foundation
             precondition(actual.filter(\.embeddedInLine).map(\.digit) == ["1"])
             print("Physical full-keypad capture: all 12 events recovered; joined first-digit line marked")
         }
-        print("DTMF parser: observed capture, every split, bytewise framing, repeats, duplicate diagnostics, config rejection and overflow recovery passed")
+        print("DTMF parser: observed capture, every split, bytewise framing, repeats, duplicate diagnostics, config rejection, overflow recovery and pickup pulses passed")
     }
 }

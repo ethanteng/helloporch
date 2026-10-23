@@ -326,6 +326,49 @@ final class Cell2JackRoutingTests: XCTestCase {
         transport.update(.finished("/q sent"))
     }
 
+    @MainActor func testHandsetPickupPulseDoesNotCallPersonOne() throws {
+        let name = "cell2jack-pulse-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver()
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.setEnabled(true); keypad.activate()
+        // The bedside's capture: first pickup after reconnecting, then a pickup and a real 0.
+        var parser = Cell2JackDTMFParser()
+        let events = parser.append(Data("L1L2 OFF_HOOK \r\nH1H2L1L2 FLASH \r\n.. Get PULSE 1 1\r\n Stop Playing Dialtone\r\n DTMF 1 :0 20: 2\r\n ON_HOOK \r\nL1L2 OFF_HOOK \r\n Stop Playing Audio\r\n DTMF 0 :0 20: 2\r\nH1H2 ON_HOOK \r\n".utf8))
+        let transport = try XCTUnwrap(connection)
+        transport.update(.digits(events, ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(clock.received, [0])
+        keypad.pause()
+        transport.update(.finished("/q sent"))
+    }
+
+    @MainActor func testHealthReplacesOnlyTheHealthRecordBeforeIt() throws {
+        let name = "cell2jack-health-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        keypad.setEnabled(true); keypad.activate()
+        let transport = try XCTUnwrap(connection)
+        transport.update(.health(bytes: 10, packets: 1, primaryDigits: 0))
+        transport.update(.health(bytes: 20, packets: 2, primaryDigits: 0))
+        transport.update(.ready)
+        transport.update(.health(bytes: 30, packets: 3, primaryDigits: 0))
+        XCTAssertEqual(keypad.records.compactMap { $0["kind"] as? String },
+                       ["sceneActive", "usbStartRequested", "usbHealth", "usbReady", "usbHealth"])
+        XCTAssertEqual(keypad.records.compactMap { $0["bytes"] as? Int }, [20, 30])
+        keypad.pause()
+        transport.update(.finished("/q sent"))
+    }
+
     @MainActor func testNormalPreferenceStartsOffEvenAfterPrototypeOptIn() throws {
         let name = "cell2jack-default-off-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
