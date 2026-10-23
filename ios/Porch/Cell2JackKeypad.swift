@@ -56,7 +56,7 @@ final class Cell2JackKeypad {
     private var retryID = UUID()
     private var nextRetryDelay: TimeInterval = 1
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
-    private var records: [[String: Any]] = []
+    private(set) var records: [[String: Any]] = []
     private let reportQueue = DispatchQueue(label: "porch.cell2jack.actions")
     private let defaults: UserDefaults
     private let isBedside: () -> Bool
