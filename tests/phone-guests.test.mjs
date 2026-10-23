@@ -288,6 +288,23 @@ test('a call that ends while the number is dialing does not keep its telephone l
   assert.equal(f.livekit.deleted.at(-1),room);
 });
 
+test('a room deletion that fails while the number is dialing is retried',async()=>{
+  const f=fixture(),{family,bedside,callID,room}=await f.connected();
+  const endRoom=f.livekit.endRoom; let fail=true;
+  f.livekit.endRoom=async r=>{ if(fail) throw new Error('LiveKit unavailable'); await endRoom(r); };
+  f.livekit.state.onDial=async()=>{ assert.equal((await f.send('endCall',{callID},family.credential)).status,502); };
+  assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,409);
+  assert.equal(f.livekit.rooms.has(room),true,'the leg stays until a deletion succeeds');
+  const retry=await f.send('poll',{available:true},family.credential);
+  assert.equal(retry.status,502);
+  assert.equal((await retry.json()).state.call.phoneGuest.label,'Bank','the guest stays active so a later poll deletes the room');
+  fail=false;
+  await f.json('poll',{available:true},bedside.credential);
+  assert.deepEqual(f.livekit.deleted,[room]);
+  await f.json('poll',{available:true},bedside.credential);
+  assert.deepEqual(f.livekit.deleted,[room],'once the room is gone, it is not deleted again');
+});
+
 test('rooms make space for one phone guest, and only caregivers can send its keypad tones',async()=>{
   const f=fixture(),{bedside,family,callID}=await f.connected();
   const verify=async credential=>new TokenVerifier(env.LIVEKIT_API_KEY,env.LIVEKIT_API_SECRET).verify((await f.json('joinCall',{callID},credential)).token);

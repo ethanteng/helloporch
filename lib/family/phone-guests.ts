@@ -163,8 +163,12 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   const raw = await store.get(`house:${house.id}`);
   const live = raw ? (JSON.parse(raw) as Household).call : undefined;
   if (live?.id !== call.id || live.state === "ended") {
-    try { await context.endRoom(room); } catch { /* the room's call limit ends it */ }
-    await endPhoneGuests(store, house.id, call.id, now);
+    // Only mark the guests ended after the room is gone. A failed delete has to stay retryable,
+    // which later polls do while a phone guest is still active.
+    try {
+      await context.endRoom(room);
+      await endPhoneGuests(store, house.id, call.id, now);
+    } catch { /* the next poll deletes the room */ }
     throw new FamilyError("The call ended before the phone could be added.", 409);
   }
   if (live.guests?.find(g => g.id === guest.id)?.endedAt) {
