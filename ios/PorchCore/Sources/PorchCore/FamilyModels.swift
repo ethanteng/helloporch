@@ -63,7 +63,7 @@ public struct FamilyPorchGuest: Codable, Equatable {
     public let id: String
     public let memberID: String
     public let name: String
-    /// "ringing", "joined", "declined", "missed" or "left".
+    /// "ringing", "joined", "declined", "missed", "cancelled" (they lost access while it rang) or "left".
     public let state: String
     public var isActive: Bool { state == "ringing" || state == "joined" }
 }

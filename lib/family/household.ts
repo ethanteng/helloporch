@@ -22,7 +22,7 @@ export type Call = { id: string; from: string; to: string; mode: Mode; kind: "ca
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
  * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
 export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;
-  state: "ringing" | "joined" | "declined" | "missed" | "left"; receivedAt?: number; joinedAt?: number; endedAt?: number };
+  state: "ringing" | "joined" | "declined" | "missed" | "cancelled" | "left"; receivedAt?: number; joinedAt?: number; endedAt?: number };
 /** A regular phone a family caregiver added to their call with the bedside, such as a bank that needs Mom on the line.
  * It stays only while the person who added it does. `label` is what the bedside shows; the number never reaches it.
  * `endedAt` is set once its telephone leg is known to be gone. */

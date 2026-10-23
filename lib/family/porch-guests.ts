@@ -54,19 +54,23 @@ export async function handlePorchGuestAction(_action: string, context: PorchGues
   requireValue(await inRoom(rooms, callRoom(call), bedside.id) && await inRoom(rooms, callRoom(call), me.id),
     `Porch can add someone once you and ${displayName(bedside)} are both connected.`, 409);
 
-  const { house: updated, result: guest } = await mutate(store, house.id, current => {
+  const { house: updated, result: { guest, invitee } } = await mutate(store, house.id, current => {
     expire(current, now);
     const live = current.call;
     requireValue(live?.id === call.id && live.state === "accepted" && live.left?.[me.id] === undefined && live.left?.[bedside.id] === undefined, "This call ended.", 410);
+    // Access can change while the room is checked: ring only someone still in the family, using what's stored now.
+    requireValue(current.members.some(m => m.id === me.id && !m.revoked), "This call is no longer available.", 404);
+    const invitee = current.members.find(m => m.id === target.id && !m.revoked && m.role === "family" && ![live.from, live.to].includes(m.id));
+    requireValue(invitee, "This person isn't in your family on Porch.", 404);
     requireValue(!activePorchGuest(live), "Someone is already being added to this call.", 409);
     requireValue((live.porchGuests?.length ?? 0) < porchGuestLimits.perCall, "This call can't add more people. Start a new call to add someone else.", 429);
     const added: PorchGuest = { id: randomUUID(), memberID: target.id, addedBy: me.id, invitedAt: now, ringUntil: now + porchGuestLimits.ringSeconds, state: "ringing" };
     (live.porchGuests ??= []).push(added);
-    return added;
+    return { guest: added, invitee };
   });
   // Outside the update, as for ordinary calls: only an invitation that won the household's reservation rings.
   let delivered = false;
-  try { delivered = await context.ring(guest, target, guestCallerName(updated, updated.call!, guest)); } catch { /* treated as undelivered */ }
+  try { delivered = await context.ring(guest, invitee, guestCallerName(updated, updated.call!, guest)); } catch { /* treated as undelivered */ }
   if (!delivered) {
     const { result: missed } = await mutate(store, house.id, current => {
       const ringing = current.call?.porchGuests?.find(g => g.id === guest.id);
@@ -75,7 +79,7 @@ export async function handlePorchGuestAction(_action: string, context: PorchGues
       ringing.state = "missed"; ringing.endedAt = now;
       return true;
     });
-    if (missed) throw new FamilyError(`Couldn't reach ${displayName(target)}'s Porch app.`, 409, "offline");
+    if (missed) throw new FamilyError(`Couldn't reach ${displayName(invitee)}'s Porch app.`, 409, "offline");
   }
-  return { porchGuest: { id: guest.id, memberID: target.id, name: displayName(target), state: guest.state } };
+  return { porchGuest: { id: guest.id, memberID: invitee.id, name: displayName(invitee), state: guest.state } };
 }

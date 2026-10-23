@@ -78,7 +78,7 @@ While you're on a Porch call with Mom, you can ring another family member into i
 - Anyone in the family who is on the call with Mom can add someone, once you're both connected. The list shows the other family members paired with this Porch whose app can ring now. Someone who was rung in can't add anyone else.
 - One person rings at a time, for the standard ring time, up to five tries per call. If they decline or don't answer, the screen says so and you can try again or choose someone else. If their Porch can't be reached, you're told right away.
 - The call goes on while two people are still on it. If you hang up, Mom and your brother keep talking. If Mom hangs up, you and your brother keep talking, and she can't rejoin. A phone counts only while the caregiver who added it is still on, so the bedside is never left alone with a phone, and a phone you added hangs up when you leave. A device that stops checking in for about 35 seconds drops off the same way. When fewer than two people would remain, hanging up ends the call for everyone.
-- Removing someone's access while they're on the call ends it.
+- Removing a rung-in family member's access cancels their invitation if it's still ringing, or takes them off the call, which goes on if two people remain. Removing access from the family member who started the call with Mom ends it.
 
 ## Adding a phone number to a call
 

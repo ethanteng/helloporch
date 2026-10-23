@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callRoom, carriesOn, leaveCall, phoneGuestIdentity, presentMembers, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callRoom, carriesOn, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -358,14 +358,25 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       await reconcileInboundCall(store, auth.householdID, now, dependencies, action === "acceptCall" || action === "joinCall");
     }
     let cleanupRoom: string | undefined;
+    // A family guest taken off a call that goes on, removed from its room once the change is saved.
+    let removeFromRoom: { room: string; identity: string } | undefined;
     // Photos of someone who lost access, deleted once the change is saved.
     let removedMedia: string[] = [];
     let issuedCode: string | undefined;
     if (action === "createInvite") issuedCode = randomBytes(32).toString("hex");
     const { house, result } = await mutate(store, auth.householdID, house => {
-      removedMedia = [];
+      removedMedia = []; removeFromRoom = undefined;
       const me = memberFor(house, auth);
       expire(house, now);
+      // A family guest who loses access or leaves the family: a ringing invitation is cancelled, and someone who
+      // joined leaves a call that can go on without them. Only a call that can't ends for everyone.
+      const dropGuest = (call: Call, guest: PorchGuest) => {
+        if (guest.state === "ringing") { guest.state = "cancelled"; guest.endedAt = now; return; }
+        if (call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== guest.memberID))) {
+          leaveCall(call, guest.memberID, now);
+          removeFromRoom = { room: callRoom(call), identity: guest.memberID };
+        } else { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+      };
       if (house.call?.phone && house.call.state === "ended" && !house.call.phone.cleanedUp) cleanupRoom = callRoom(house.call);
       // A telephone leg keeps its room open, so an ended call with a phone guest has its room deleted, retried until it is.
       if (house.call?.state === "ended" && activePhoneGuest(house.call)) cleanupRoom = callRoom(house.call);
@@ -398,7 +409,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         removedMedia = profileMedia(me);
         me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.profile; delete me.override; delete me.pendingPhotos;
         const call = house.call;
-        if (call && call.state !== "ended" && [call.from, call.to, activePorchGuest(call)?.memberID].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
+        const invite = activePorchGuest(call);
+        if (call && call.state !== "ended" && invite?.memberID === me.id) dropGuest(call, invite);
+        else if (call && call.state !== "ended" && [call.from, call.to].includes(me.id)) { call.state = "ended"; call.reason = "Call ended."; cleanupRoom = callRoom(call); }
         return undefined;
       }
       if (action === "registerVoIP" || action === "registerAlerts") {
@@ -472,8 +485,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             if (input.enabled) target.caregiver = true; else delete target.caregiver;
           } else target.permissions = permissions(input.permissions);
         }
-        const call = house.call;
-        if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to, activePorchGuest(call)?.memberID].includes(m.id)) || (call.kind === "dropIn" && !dropInAllowed(house, call)))) {
+        const call = house.call, invite = activePorchGuest(call);
+        if (call && call.state !== "ended" && invite && house.members.find(m => m.id === invite.memberID)?.revoked) dropGuest(call, invite);
+        if (call && call.state !== "ended" && (house.members.some(m => m.revoked && [call.from, call.to].includes(m.id)) || (call.kind === "dropIn" && !dropInAllowed(house, call)))) {
           call.state = "ended"; call.reason = "Drop-in access was changed."; cleanupRoom = callRoom(call);
         }
         return undefined;
@@ -546,6 +560,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       throw new FamilyError("Unknown family action.");
     });
+    const removeMember = async ({ room, identity }: { room: string; identity: string }) => {
+      try { await (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms.removeParticipant(room, identity); }
+      catch (error) { if (!(error && typeof error === "object" && "code" in error && error.code === "not_found")) throw error; }
+    };
     const releaseRoom = async (room: string) => {
       if (house.call?.phone && callRoom(house.call) === room) await cleanupInboundCall(store, house.id, house.call, dependencies);
       else await endRoom(room, dependencies);
@@ -553,6 +571,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "leaveHousehold") {
       // The call already ended in storage; LiveKit's empty-room timeout covers a failed delete.
       if (cleanupRoom) { try { await releaseRoom(cleanupRoom); } catch { /* see above */ } }
+      // Their credential is gone, so the token they joined with can't reconnect them.
+      if (removeFromRoom) { try { await removeMember(removeFromRoom); } catch { /* see above */ } }
       // No one else can play the bedside's messages for this device.
       try { await removeMessagesTo(store, media, house, auth.deviceID, now); } catch { /* purged after 90 days */ }
       try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
@@ -598,6 +618,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
+    }
+    if (removeFromRoom) {
+      try { await removeMember(removeFromRoom); }
+      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }
     }
     if (cleanupRoom) {
       try { await releaseRoom(cleanupRoom); }

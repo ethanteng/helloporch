@@ -19,18 +19,21 @@ beforeEach(() => { previous = Object.fromEntries(Object.keys(env).map(k => [k,pr
 afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefined) delete process.env[k]; else process.env[k]=v; } });
 
 function liveKit() {
-  const rooms = new Map(), removed = [], deleted = [];
+  const rooms = new Map(), removed = [], deleted = [], hooks = {};
   const missing = () => Object.assign(new Error('not found'), { code:'not_found' });
   const join = (room, identity, attributes={}) => { if (!rooms.has(room)) rooms.set(room,new Map()); rooms.get(room).set(identity,attributes); };
   const leave = (room, identity) => rooms.get(room)?.delete(identity);
   const services = {
     rooms: {
-      async getParticipant(room, identity) { const attributes = rooms.get(room)?.get(identity); if (!attributes) throw missing(); return { identity, attributes }; },
+      async getParticipant(room, identity) {
+        await hooks.beforeGet?.();
+        const attributes = rooms.get(room)?.get(identity); if (!attributes) throw missing(); return { identity, attributes };
+      },
       async removeParticipant(room, identity) { removed.push(identity); if (!leave(room,identity)) throw missing(); },
     },
     sip: { async createSipParticipant(_trunk, _number, room, options) { join(room, options.participantIdentity, { 'sip.callStatus':'active' }); return {}; } },
   };
-  return { rooms, removed, deleted, join, leave, services, endRoom: async room => { deleted.push(room); rooms.delete(room); } };
+  return { rooms, removed, deleted, hooks, join, leave, services, endRoom: async room => { deleted.push(room); rooms.delete(room); } };
 }
 
 function fixture() {
@@ -232,7 +235,7 @@ test("a phone Ethan added hangs up when he leaves, while Mom and David keep talk
   assert.deepEqual(f.livekit.deleted,[]);
 });
 
-test('a guest whose phone stops checking in drops off, and revoking him ends the call',async()=>{
+test('a guest whose phone stops checking in drops off, and revoking him takes only him off the call',async()=>{
   const f=fixture(),{bedside,ethan,david,callID,room,ids}=await f.connected();
   const invite=(await f.json('addPorchGuest',{callID,memberID:ids.david},ethan.credential)).porchGuest;
   await f.answer({david,room,ids},invite.id);
@@ -245,8 +248,39 @@ test('a guest whose phone stops checking in drops off, and revoking him ends the
   const second=(await g.json('addPorchGuest',{callID:other.callID,memberID:other.ids.david},other.ethan.credential)).porchGuest;
   await g.answer({david:other.david,room:other.room,ids:other.ids},second.id);
   await g.json('revoke',{memberID:other.ids.david},other.bedside.credential,pin);
-  assert.deepEqual(g.livekit.deleted,[other.room]);
-  assert.equal((await g.json('poll',{available:true},other.ethan.credential)).state.call.state,'ended');
+  assert.deepEqual(g.livekit.deleted,[],'Mom and Ethan keep talking');
+  assert.ok(g.livekit.removed.includes(other.ids.david)); assert.equal(g.livekit.rooms.get(other.room)?.has(other.ids.david),false);
+  const ethanView=(await g.json('poll',{available:true},other.ethan.credential)).state.call;
+  assert.equal(ethanView.state,'accepted'); assert.equal(ethanView.porchGuest.state,'left');
+
+  // If he was the only one left with Mom, losing access ends the call.
+  const h=fixture(),alone=await h.connected();
+  const third=(await h.json('addPorchGuest',{callID:alone.callID,memberID:alone.ids.david},alone.ethan.credential)).porchGuest;
+  await h.answer({david:alone.david,room:alone.room,ids:alone.ids},third.id);
+  h.livekit.leave(alone.room,alone.ids.ethan);
+  await h.json('endCall',{callID:alone.callID},alone.ethan.credential);
+  await h.json('revoke',{memberID:alone.ids.david},alone.bedside.credential,pin);
+  assert.deepEqual(h.livekit.deleted,[alone.room]);
+});
+
+test('revoking someone whose invitation is still ringing cancels it and leaves the call alone',async()=>{
+  const f=fixture(),{bedside,ethan,callID,ids}=await f.connected();
+  await f.json('addPorchGuest',{callID,memberID:ids.david},ethan.credential);
+  await f.json('revoke',{memberID:ids.david},bedside.credential,pin);
+  assert.deepEqual(f.livekit.deleted,[]); assert.deepEqual(f.livekit.removed,[]);
+  const view=(await f.json('poll',{available:true},ethan.credential)).state.call;
+  assert.equal(view.state,'accepted'); assert.equal(view.porchGuest.state,'cancelled');
+  assert.deepEqual((await f.json('poll',{available:true},ethan.credential)).state.family,[]);
+});
+
+test('someone who loses access while the room is checked is not rung',async()=>{
+  const f=fixture(),{bedside,ethan,david,callID,ids}=await f.connected();
+  await f.json('registerVoIP',{token:'ef'.repeat(32),environment:'sandbox'},david.credential);
+  let revoked=false;
+  f.livekit.hooks.beforeGet=async()=>{ if (!revoked) { revoked=true; await f.json('revoke',{memberID:ids.david},bedside.credential,pin); } };
+  assert.equal((await f.send('addPorchGuest',{callID,memberID:ids.david},ethan.credential)).status,404);
+  assert.equal(f.pushes.length,0);
+  assert.equal((await f.json('poll',{available:true},ethan.credential)).state.call.porchGuest,undefined);
 });
 
 test('a call can ring in a limited number of people',async()=>{
