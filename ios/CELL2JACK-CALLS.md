@@ -404,6 +404,7 @@ Porch routes `hangUp` like a key, to the visible screen only, recording each as
 | Outgoing, connected or phone-fallback call | Ends it, as the call-control key does |
 | Answered system (CallKit) call | Ends it |
 | Clock while a call request is starting | Cancels the request |
+| Call screen already saying they didn't answer | Skips the message. The receiver is down, so that hang-up cannot be pressed again on the message screen |
 | Leaving a message after no answer | Finishes it; before the beep nothing is sent |
 | Incoming call still ringing, drop-in countdown, message playback, clock, people picker | Nothing |
 

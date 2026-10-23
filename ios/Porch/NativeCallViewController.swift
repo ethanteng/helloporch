@@ -284,6 +284,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     /// that phone's own voicemail can answer instead.
     var onUnanswered: (() -> Void)?
     private var endedByCaller = false
+    /// True while this close will offer that message. A receiver hang-up in this window
+    /// cannot be pressed again once the message screen appears, so it cancels the handoff.
+    private var willOfferUnansweredMessage = false
+    private var skipUnansweredHandoff = false
     private var beginWithPhoneFallback = false
     private var keypad = CallTrigger()
     override var canBecomeFirstResponder: Bool { true }
@@ -693,7 +697,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
+        skipUnansweredHandoff = false
         let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted && !isPhoneCall && !isSwitchingToPhone ? onUnanswered : nil
+        willOfferUnansweredMessage = unanswered != nil
         ringback.stop()
         connectionCue.stop()
         connectionTask?.cancel()
@@ -749,6 +755,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             if message != nil { try? await Task.sleep(nanoseconds: 1_500_000_000) }
             dismiss(animated: true) {
                 Cell2JackKeypad.shared.record(["kind": "callScreenClosed"])
+                // Read on the main queue, same as a receiver hang-up, after the disconnect wait.
+                if self.skipUnansweredHandoff { self.skipUnansweredHandoff = false; return }
                 unanswered?()
             }
         }
@@ -983,7 +991,13 @@ extension NativeCallViewController: Cell2JackDigitReceiving {
         return "call key dispatched"
     }
     func receiveCell2JackHangUp() -> String {
-        guard !isEnding else { return "call ending" }
+        if isEnding {
+            // The picture phone's keys work only with the receiver up, so this hang-up
+            // will not arrive again on the message screen that is about to appear.
+            let cancelled = willOfferUnansweredMessage
+            if cancelled { skipUnansweredHandoff = true; willOfferUnansweredMessage = false }
+            return cancelled ? "unanswered message cancelled" : "call ending"
+        }
         endCall()
         return "call end requested"
     }
