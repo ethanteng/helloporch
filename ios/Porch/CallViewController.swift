@@ -471,7 +471,7 @@ final class CallViewController: UIViewController {
     /// downloaded messages are waiting, it's within the caregiver's hours, and Mom hasn't just said not now.
     private var presenceAllowed: Bool {
         let ready = BedsideMessages.shared.ready
-        guard !presenceSuppressed, isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
+        guard !presenceSuppressed, !SystemIncomingCalls.shared.reservesFrontCamera, isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
               notice == nil, !opening, !ready.isEmpty, UIApplication.shared.applicationState == .active,
               PorchDevice.experience == .bedside, FamilyCoordinator.shared.state?.busy != true,
               ProcessInfo.processInfo.thermalState != .serious, ProcessInfo.processInfo.thermalState != .critical,
@@ -486,6 +486,11 @@ final class CallViewController: UIViewController {
     /// Posted off the main thread on some iOS versions. Presence state is main-thread only.
     @objc private func thermalStateChanged() {
         if Thread.isMainThread { refreshPresence() } else { DispatchQueue.main.async { [weak self] in self?.refreshPresence() } }
+    }
+    /// Stops the message-presence camera, then calls `done` on the main queue.
+    /// Does not present another screen or start presence again.
+    func stopPresenceCamera(then done: @escaping () -> Void) {
+        presence.stopThen { DispatchQueue.main.async(execute: done) }
     }
     /// Before anything else covers the clock or needs the camera. Nothing is snoozed.
     /// `done` runs on the main thread after the capture session has stopped, without blocking
