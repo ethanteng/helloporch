@@ -42,6 +42,9 @@ extension Notification.Name {
     private(set) var answered = false
     private(set) var pushReady = false
     private(set) var status = "Incoming Porch call"
+    /// Family caregivers: this call can add a regular phone, such as a bank (see PhoneGuests.swift).
+    private(set) var canAddPhoneGuests = false
+    var familyCredential: FamilyCredential? { credential }
     var hasCall: Bool { uuid != nil }
     func owns(_ callID: String) -> Bool { uuid?.uuidString.lowercased() == callID.lowercased() }
     var callerContact: CallContact? {
@@ -202,7 +205,8 @@ extension Notification.Name {
                       current.to == state.me.id, current.kind == "call", current.state != "ended" else {
                     finish(reason: .remoteEnded); return
                 }
-                call = current; expiry = current.expiresAt; lastSuccess = Date(); changed()
+                call = current; expiry = current.expiresAt; lastSuccess = Date()
+                canAddPhoneGuests = state.canAddPhoneGuests == true; changed()
             } catch {
                 if Task.isCancelled { return }
                 if (error as? FamilyServiceError)?.status == 401 || Date().timeIntervalSince(lastSuccess) > 25 {
@@ -211,7 +215,8 @@ extension Notification.Name {
             }
             if Date().timeIntervalSince1970 >= expiry { finish(reason: .unanswered); return }
             if let room {
-                let speaking = room.localParticipant.isSpeaking || room.remoteParticipants.values.contains { $0.isSpeaking }
+                // A bank's hold can be silent, so an added phone keeps the call from ending as quiet.
+                let speaking = room.localParticipant.isSpeaking || room.remoteParticipants.values.contains { $0.isSpeaking || (call?.source == "porch" && $0.kind == .sip) }
                 if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected && audioActive && room.connectionState == .connected && !room.remoteParticipants.isEmpty, speaking: speaking) {
                     requestEnd(); return
                 }
@@ -384,7 +389,12 @@ extension Notification.Name {
     }
     private func changed() { NotificationCenter.default.post(name: .porchSystemCallChanged, object: self) }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        Task { @MainActor in if room === self.room && self.connected && room.remoteParticipants.isEmpty { self.finish(reason: .remoteEnded) } }
+        // The bedside is never left on with only a phone a family caregiver added; the caregiver stays on with it.
+        Task { @MainActor in
+            let bedside = self.credential?.role == .bedside && self.call?.source == "porch"
+            if room === self.room && self.connected && !room.remoteParticipants.values.contains(where: { !bedside || $0.kind != .sip }) { self.finish(reason: .remoteEnded) }
+            else { self.changed() }
+        }
     }
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor in if room === self.room && self.connected { self.finish(reason: .failed) } }
@@ -407,6 +417,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private var cameraEnabled = false
     private weak var observedRoom: Room?
     private var keypad = CallTrigger()
+    private var phoneGuests: PhoneGuestControls?
     override var canBecomeFirstResponder: Bool { true }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
@@ -458,8 +469,16 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }, for: .touchUpInside)
         placeholder.text = "Voice call"; placeholder.textColor = .white; placeholder.textAlignment = .center
         placeholder.font = PorchStyle.font(28)
+        // Family caregivers can add a regular phone, such as a bank, to the bedside's call.
+        let calls = SystemIncomingCalls.shared
+        if let credential = calls.familyCredential, credential.role == .family, let call = calls.call, call.source == "porch" {
+            phoneGuests = PhoneGuestControls(host: self, credential: credential, callID: call.id, room: { SystemIncomingCalls.shared.room }) {
+                (SystemIncomingCalls.shared.call, SystemIncomingCalls.shared.canAddPhoneGuests)
+            }
+        }
         CallScreenLayout.install(in: view, video: video, placeholder: placeholder, title: title, status: status,
-                                 photo: personPhoto.image == nil ? nil : personPhoto, buttons: [microphone, camera, end])
+                                 photo: personPhoto.image == nil ? nil : personPhoto, accessory: phoneGuests?.bar,
+                                 buttons: [microphone, camera] + (phoneGuests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
     }
@@ -471,15 +490,27 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
             room.add(delegate: self); observedRoom = room
         }
         status.text = calls.status
+        phoneGuests?.refresh()
+        let peers = calls.room?.remoteParticipants.values.map { $0 } ?? []
+        if phoneGuests != nil, peers.contains(where: { $0.kind == .sip }), !peers.contains(where: { $0.kind != .sip }) {
+            status.text = "\(calls.callerName) left the call."
+        }
         cameraEnabled = calls.room?.localParticipant.isCameraEnabled() == true
         camera.configuration?.title = cameraEnabled ? "Camera off" : "Camera on"
         microphone.configuration?.title = calls.room?.localParticipant.isMicrophoneEnabled() == true ? "Mute" : "Unmute"
-        video.track = calls.room?.remoteParticipants.values.first?.videoTracks.first?.track as? VideoTrack
+        // An added phone has no video, so show whoever does.
+        video.track = peers.lazy.compactMap { $0.videoTracks.first?.track as? VideoTrack }.first
         personPhoto.isHidden = video.track != nil
         placeholder.isHidden = video.track != nil
         placeholder.text = calls.isVideo ? "Waiting for video" : "Voice call"
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
+    nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
+    nonisolated func room(_ room: Room, participant: Participant, didUpdateAttributes attributes: [String: String]) {
         Task { @MainActor [weak self] in self?.refresh() }
     }
 }
