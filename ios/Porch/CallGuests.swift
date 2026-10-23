@@ -4,27 +4,34 @@ import ContactsUI
 import LiveKit
 import PorchCore
 
-/// Lets a family caregiver add a regular phone, such as a bank that needs Mom on the line, to their call with the
-/// bedside, press keys for its menus and hang it up. The server dials it into the call's room; it stays on only
-/// while this phone does. Only this phone sees the number.
-@MainActor final class PhoneGuestControls {
+/// Lets a family member on a call with the bedside add someone: another family member on Porch, who rings like an
+/// ordinary call and joins with video, or (for caregivers) a regular phone, such as a bank that needs Mom on the
+/// line, with a keypad for its menus and its own hang-up. The server rings or dials them into the call's room. A
+/// phone stays on only while this phone does, and only this phone sees its number.
+@MainActor final class CallGuestControls {
+    struct Snapshot { var call: FamilyCallRecord?; var canAddPhone: Bool; var family: [FamilyRelative] }
     let addButton = UIButton(type: .system)
-    /// What the added phone is doing, with its keypad and hang-up; hidden until there is one.
+    /// Who is being added and what the added phone is doing, with its keypad and hang-up; hidden until needed.
     let bar = UIStackView()
+    private let porchStatus = PorchStyle.label("", size: 17, color: .white, weight: .semibold)
     private let status = PorchStyle.label("", size: 17, color: .white, weight: .semibold)
+    private let phoneRow = UIStackView()
     private let keypadButton = UIButton(type: .system)
     private let hangUpButton = UIButton(type: .system)
     private weak var host: UIViewController?
     private let credential: FamilyCredential
     private let callID: String
     private let room: () -> Room?
-    private let snapshot: () -> (call: FamilyCallRecord?, canAdd: Bool)
+    private let snapshot: () -> Snapshot
     private var guest: FamilyPhoneGuest?
     /// Guests this phone already saw end, so a snapshot from before the hang-up can't bring one back.
     private var finished: Set<String> = []
-    private var legSeen = false, answered = false, dialing = false
-    private var notice: String?
-    private var noticeTask: Task<Void, Never>?
+    private var legSeen = false, answered = false, dialing = false, ringing = false
+    private var notice: String?, porchNotice: String?
+    private var noticeTask: Task<Void, Never>?, porchNoticeTask: Task<Void, Never>?
+    /// The family member just rung in, until the household's call shows them; and how each invitation last looked.
+    private var invited: FamilyPorchGuest?
+    private var porchStates: [String: String] = [:]
     private var since = Date.distantPast
     private var watchTask: Task<Void, Never>?
     /// A phone that hasn't joined the room by the end of its ring time, say after a dial request timed out, is
@@ -33,29 +40,28 @@ import PorchCore
     private var myID: String { credential.credential.split(separator: ".").first.map(String.init) ?? "" }
 
     init(host: UIViewController, credential: FamilyCredential, callID: String, room: @escaping () -> Room?,
-         snapshot: @escaping () -> (call: FamilyCallRecord?, canAdd: Bool)) {
+         snapshot: @escaping () -> Snapshot) {
         self.host = host; self.credential = credential; self.callID = callID; self.room = room; self.snapshot = snapshot
-        CallScreenLayout.configure(addButton, title: "Add a phone", symbol: "phone.badge.plus")
+        CallScreenLayout.configure(addButton, title: "Add someone", symbol: "person.badge.plus")
         CallScreenLayout.configure(keypadButton, title: "Keypad", symbol: "circle.grid.3x3.fill")
         CallScreenLayout.configure(hangUpButton, title: "Hang up", symbol: "phone.down", isEnd: true)
-        addButton.accessibilityIdentifier = "call.addPhone"
+        addButton.accessibilityIdentifier = "call.addSomeone"
         addButton.addAction(UIAction { [weak self] _ in self?.add() }, for: .touchUpInside)
         keypadButton.addAction(UIAction { [weak self] _ in self?.showKeypad() }, for: .touchUpInside)
         hangUpButton.addAction(UIAction { [weak self] _ in self?.hangUp() }, for: .touchUpInside)
-        status.textAlignment = .center
-        status.accessibilityTraits.insert(.updatesFrequently)
-        let row = UIStackView(arrangedSubviews: [keypadButton, hangUpButton])
-        row.distribution = .fillEqually; row.spacing = 8
-        bar.addArrangedSubview(status); bar.addArrangedSubview(row)
+        for label in [porchStatus, status] { label.textAlignment = .center; label.accessibilityTraits.insert(.updatesFrequently) }
+        phoneRow.addArrangedSubview(keypadButton); phoneRow.addArrangedSubview(hangUpButton)
+        phoneRow.distribution = .fillEqually; phoneRow.spacing = 8
+        bar.addArrangedSubview(porchStatus); bar.addArrangedSubview(status); bar.addArrangedSubview(phoneRow)
         bar.axis = .vertical; bar.spacing = 8
-        bar.accessibilityIdentifier = "call.phoneGuest"
+        bar.accessibilityIdentifier = "call.guests"
         refresh()
     }
 
     /// Call whenever the room's participants or the household's call change.
     func refresh() {
-        let (call, canAdd) = snapshot()
-        if guest == nil, let current = call?.phoneGuest, current.addedBy == myID, !finished.contains(current.id) { track(current) }
+        let current = snapshot(), call = current.call
+        if guest == nil, let phone = call?.phoneGuest, phone.addedBy == myID, !finished.contains(phone.id) { track(phone) }
         let peers = room()?.remoteParticipants.values.map { $0 } ?? []
         if let guest {
             let leg = peers.first { $0.identity?.stringValue == guest.identity }
@@ -65,17 +71,43 @@ import PorchCore
             let neverJoined = !legSeen && Date().timeIntervalSince(since) >= Self.joinSeconds
             if (legSeen && leg == nil) || callStatus == "hangup" || neverJoined { legEnded(guest) }
         }
-        let bedsideHere = peers.contains { $0.kind != .sip }
-        addButton.isHidden = !(canAdd && call?.state == "accepted" && call?.bedsideLeft != true && guest == nil && bedsideHere)
-        addButton.isEnabled = !dialing
-        bar.isHidden = guest == nil && notice == nil
-        keypadButton.isHidden = guest == nil
+        let porch = updatePorch(call?.porchGuest)
+        // Mom is the other end of this call, and her LiveKit identity is that member id. The household
+        // snapshot isn't loaded on the CallKit screen, so it can't be what decides she's still here.
+        let bedsideID: String? = call?.guest == true ? nil : (call?.from == myID ? call?.to : (call?.to == myID ? call?.from : nil))
+        let bedsideHere = bedsideID.map { id in peers.contains { $0.kind != .sip && $0.identity?.stringValue == id } } ?? false
+        let canRing = porch?.isActive != true && current.family.contains { $0.canReceiveCalls }
+        let canDial = current.canAddPhone && guest == nil
+        addButton.isHidden = !(call?.state == "accepted" && call?.bedsideLeft != true && call?.guest != true && bedsideHere && (canRing || canDial))
+        addButton.isEnabled = !dialing && !ringing
+        addButton.configuration?.title = canRing ? "Add someone" : "Add a phone"
+        porchStatus.text = porch?.state == "ringing" ? "Ringing \(porch!.name)…" : porchNotice
+        porchStatus.isHidden = porchStatus.text == nil
+        status.text = guest.map { answered ? "\($0.label) is on the call" : "Calling \($0.label)…" } ?? notice
+        status.isHidden = status.text == nil
+        phoneRow.isHidden = guest == nil
         keypadButton.isEnabled = answered
-        hangUpButton.isHidden = guest == nil
-        if let guest {
-            status.text = answered ? "\(guest.label) is on the call" : "Calling \(guest.label)…"
-            hangUpButton.configuration?.title = "Hang up \(guest.label)"
-        } else { status.text = notice }
+        if let guest { hangUpButton.configuration?.title = "Hang up \(guest.label)" }
+        bar.isHidden = porchStatus.isHidden && status.isHidden
+    }
+
+    /// The latest family invitation, from the server once it has caught up with this phone. A change this phone
+    /// sees happen is announced for a few seconds; one that was already over when the screen opened isn't.
+    private func updatePorch(_ server: FamilyPorchGuest?) -> FamilyPorchGuest? {
+        if let local = invited, server?.id == local.id { invited = nil }
+        guard let porch = invited ?? server else { return nil }
+        let previous = porchStates.updateValue(porch.state, forKey: porch.id)
+        if let previous, previous != porch.state {
+            switch porch.state {
+            case "joined": showPorch("\(porch.name) joined the call.")
+            case "declined": showPorch("\(porch.name) declined.")
+            case "missed": showPorch("\(porch.name) didn't answer.")
+            case "left": showPorch("\(porch.name) left the call.")
+            case "cancelled": showPorch("Stopped ringing \(porch.name).")
+            default: break
+            }
+        }
+        return porch
     }
 
     private func track(_ added: FamilyPhoneGuest) {
@@ -103,7 +135,46 @@ import PorchCore
         }
     }
 
+    private func showPorch(_ message: String) {
+        porchNotice = message; porchNoticeTask?.cancel()
+        porchNoticeTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 5_000_000_000) } catch { return }
+            self?.porchNotice = nil; self?.refresh()
+        }
+    }
+
+    /// Family on Porch first, since they join with video; then a phone number. With only one choice, it opens directly.
     private func add() {
+        guard let host, host.presentedViewController == nil else { return }
+        let current = snapshot()
+        let people = (invited ?? current.call?.porchGuest)?.isActive == true ? [] : current.family.filter(\.canReceiveCalls)
+        let canDial = current.canAddPhone && guest == nil
+        if people.isEmpty { if canDial { addPhone() }; return }
+        let menu = UIAlertController(title: "Add someone to this call", message: current.call?.mode == .video ? "Family join on Porch with video." : nil, preferredStyle: .actionSheet)
+        for person in people {
+            menu.addAction(UIAlertAction(title: person.name, style: .default) { [weak self] _ in self?.ring(person) })
+        }
+        if canDial { menu.addAction(UIAlertAction(title: "A phone number…", style: .default) { [weak self] _ in self?.addPhone() }) }
+        menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        menu.popoverPresentationController?.sourceView = addButton
+        menu.popoverPresentationController?.sourceRect = addButton.bounds
+        host.present(menu, animated: true)
+    }
+
+    private func ring(_ person: FamilyRelative) {
+        ringing = true; refresh()
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.ringing = false; self.refresh() }
+            do {
+                let response = try await FamilyService(self.credential).send("addPorchGuest", ["callID": self.callID, "memberID": person.id])
+                if FamilyCoordinator.shared.credential?.credential == self.credential.credential { FamilyCoordinator.shared.update(response) }
+                if let added = response.porchGuest { self.invited = added; self.porchStates[added.id] = added.state }
+            } catch { if let host = self.host { showPorchError(error, on: host) } }
+        }
+    }
+
+    private func addPhone() {
         guard let host, host.presentedViewController == nil else { return }
         let form = AddPhoneGuestViewController { [weak self] label, number in try await self?.dial(label: label, number: number) }
         host.present(UINavigationController(rootViewController: form), animated: true)
@@ -152,6 +223,36 @@ import PorchCore
             try await room?.localParticipant.publishDtmf(code: code, digit: digit)
         }
         host.present(UINavigationController(rootViewController: keypad), animated: true)
+    }
+}
+
+/// Who is on a call, as the call screens show them.
+@MainActor enum CallPeople {
+    /// Everyone on Porch, `first` (the person the screen is about) leading, with their camera and photo. An added
+    /// phone has no video, so it gets no tile.
+    static func tiles(_ peers: [RemoteParticipant], first: String?) -> [CallVideoStage.Tile] {
+        peers.filter { $0.kind != .sip }
+            .sorted { $0.identity?.stringValue == first && $1.identity?.stringValue != first }
+            .map { peer in
+                let track = peer.videoTracks.first { !$0.isMuted && $0.track is VideoTrack }?.track as? VideoTrack
+                let photo = peer.identity.flatMap { FamilyPhotos.shared.photo(forMember: $0.stringValue) }.flatMap(UIImage.init(data:))
+                return CallVideoStage.Tile(name: peer.name ?? "", track: track, photo: photo)
+            }
+    }
+    /// What the bedside says about people added to its call, in its language: "Calling David…", "David joined the call".
+    static func bedsideLines(_ peers: [RemoteParticipant], call: FamilyCallRecord?) -> [String] {
+        var lines: [String] = []
+        if let porch = call?.porchGuest {
+            if porch.state == "ringing" { lines.append(BedsideText.string("Calling %@…", porch.name)) }
+            else if porch.state == "joined", peers.contains(where: { $0.identity?.stringValue == porch.memberID }) {
+                lines.append(BedsideText.string("%@ joined the call", porch.name))
+            }
+        }
+        if let phone = peers.first(where: { $0.kind == .sip }) {
+            let name = phone.name ?? ""
+            lines.append(phone.attributes["sip.callStatus"] == "active" ? BedsideText.string("%@ joined the call", name) : BedsideText.string("Calling %@…", name))
+        }
+        return lines
     }
 }
 

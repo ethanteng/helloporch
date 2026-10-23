@@ -15,9 +15,14 @@ export type PendingPhoto = { pathname: string; expiresAt: number };
 export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
- * `bedsideLeftAt`: the bedside hung up while a phone guest was on, leaving the family member and the guest talking. */
+ * `porchGuests`: other family members rung into it on Porch (see porch-guests.ts).
+ * `left`: when each of the call's two ends or a family guest hung up while the call went on without them. */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
-  guests?: PhoneGuest[]; bedsideLeftAt?: number };
+  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number> };
+/** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
+ * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
+export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;
+  state: "ringing" | "joined" | "declined" | "missed" | "cancelled" | "left"; receivedAt?: number; joinedAt?: number; endedAt?: number };
 /** A regular phone a family caregiver added to their call with the bedside, such as a bank that needs Mom on the line.
  * It stays only while the person who added it does. `label` is what the bedside shows; the number never reaches it.
  * `endedAt` is set once its telephone leg is known to be gone. */
@@ -61,16 +66,42 @@ export function config(): CallServer {
   requireValue(serverUrl?.startsWith("wss://") && apiKey && apiSecret, "Calling is not configured.", 503);
   return { serverUrl: serverUrl!, apiKey, apiSecret };
 }
+/** A call saved before leaving was recorded per person: the bedside had already hung up. */
+function adoptBedsideLeft(house: Household) {
+  const call = house.call as (Call & { bedsideLeftAt?: number }) | undefined;
+  if (!call || call.bedsideLeftAt === undefined) return;
+  const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
+  if (bedside) (call.left ??= {})[bedside.id] ??= call.bedsideLeftAt;
+  delete call.bedsideLeftAt;
+}
+/** A family member still being rung can't answer a call that is already over. */
+export function cancelRingingPorchGuests(call: Call | undefined, now: number) {
+  for (const guest of call?.porchGuests ?? []) if (guest.state === "ringing") { guest.state = "cancelled"; guest.endedAt = now; }
+}
+export function finishCall(call: Call, reason: string, now: number) {
+  call.state = "ended"; call.reason = reason; cancelRingingPorchGuests(call, now);
+}
 export function expire(house: Household, now: number) {
   const call = house.call;
-  if (!call || call.state === "ended") return;
-  // Once the bedside has left a call with a phone guest, only the family member still on it must stay reachable.
-  const present = call.phone ? [call.to] : call.bedsideLeftAt
-    ? [call.from, call.to].filter(id => house.members.find(m => m.id === id)?.role !== "bedside") : [call.from, call.to];
-  if (call.expiresAt <= now || (call.state === "accepted" && present.some(id => {
+  if (!call) return;
+  adoptBedsideLeft(house);
+  // The call can end in the same update that is still ringing someone in. A later check-in must not leave that
+  // invitation looking answerable: their phone treats it as an ordinary incoming call.
+  if (call.state === "ended") { cancelRingingPorchGuests(call, now); return; }
+  const end = () => finishCall(call, "The call timed out or a device went offline.", now);
+  if (call.expiresAt <= now) return end();
+  for (const guest of call.porchGuests ?? []) if (guest.state === "ringing" && guest.ringUntil <= now) { guest.state = "missed"; guest.endedAt = now; }
+  if (call.state !== "accepted") return;
+  const lost = (id: string) => {
     const member = house.members.find(m => m.id === id);
     return !member || member.revoked || member.seenAt < now - 35;
-  }))) { call.state = "ended"; call.reason = "The call timed out or a device went offline."; }
+  };
+  if (call.phone) { if (lost(call.to)) end(); return; }
+  // Someone whose device stops checking in has left. The call goes on only if it still could without them.
+  const present = presentMembers(call), gone = present.filter(lost);
+  if (!gone.length) return;
+  if (!carriesOn(call, present.filter(id => !gone.includes(id)))) return end();
+  for (const id of gone) leaveCall(call, id, now);
 }
 export async function mutate<T>(store: FamilyStore, id: string, change: (house: Household) => T): Promise<{ house: Household; result: T }> {
   for (let attempt = 0; attempt < 12; attempt++) {
@@ -101,6 +132,27 @@ export function bedsideLanguage(house: Household): BedsideLanguage {
 }
 
 export function callRoom(call: Call): string { return call.phone?.room ?? `porch-paired-${call.id}`; }
+/** The family member ringing into or on this call. A call has at most one at a time. */
+export function activePorchGuest(call?: Call): PorchGuest | undefined { return call?.porchGuests?.find(g => g.state === "ringing" || g.state === "joined"); }
+/** The members still on an answered call: its two ends and a family guest who answered, less anyone who left. */
+export function presentMembers(call: Call): string[] {
+  const guest = call.porchGuests?.find(g => g.state === "joined");
+  return [call.from, call.to, ...(guest ? [guest.memberID] : [])].filter(id => call.left?.[id] === undefined);
+}
+/** Whether a call can go on with only `remaining` on it: two people, counting a phone guest only while whoever added it
+ * stays. So the bedside is never left alone with a phone, and nobody is left talking to no one. */
+export function carriesOn(call: Call, remaining: string[]): boolean {
+  const phone = activePhoneGuest(call);
+  return remaining.length + (phone && remaining.includes(phone.addedBy) ? 1 : 0) >= 2;
+}
+/** Takes `id` off a call that goes on without them. A phone guest they added hangs up with them. */
+export function leaveCall(call: Call, id: string, now: number) {
+  (call.left ??= {})[id] = now;
+  const phone = activePhoneGuest(call);
+  if (phone?.addedBy === id) phone.endedAt = now;
+  const guest = call.porchGuests?.find(g => g.memberID === id && g.state === "joined");
+  if (guest) { guest.state = "left"; guest.endedAt = now; }
+}
 /** The phone guest whose telephone leg may still be connected. A call has at most one. */
 export function activePhoneGuest(call?: Call): PhoneGuest | undefined { return call?.guests?.find(g => !g.endedAt); }
 export function phoneGuestIdentity(guest: PhoneGuest): string { return `phone-guest-${guest.id}`; }

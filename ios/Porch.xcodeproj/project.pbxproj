@@ -38,7 +38,7 @@
         B00000000000000000000029 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilyProfiles.swift; sourceTree = "<group>"; };
         B00000000000000000000026 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsViewController.swift; sourceTree = "<group>"; };
         B00000000000000000000025 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemIncomingCalls.swift; sourceTree = "<group>"; };
-        B0000000000000000000002A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneGuests.swift; sourceTree = "<group>"; };
+        B0000000000000000000002A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallGuests.swift; sourceTree = "<group>"; };
         B00000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudio.swift; sourceTree = "<group>"; };
         B00000000000000000000023 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedsideDisplayView.swift; sourceTree = "<group>"; };
         B00000000000000000000022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PorchContainerViewController.swift; sourceTree = "<group>"; };

@@ -30,12 +30,13 @@ import PorchCore
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
     }
 
+    /// `video` fills the screen: a `VideoView`, or a `CallVideoStage` when more than one person may join.
     /// `accessory` sits above the buttons, such as an added phone's status and controls.
-    static func install(in view: UIView, video: VideoView, preview: VideoView? = nil,
+    static func install(in view: UIView, video: UIView, preview: VideoView? = nil,
                         placeholder: UILabel? = nil, title: UILabel, status: UILabel,
                         hint: UILabel? = nil, photo: UIImageView? = nil, accessory: UIView? = nil, buttons: [UIButton]) {
         view.backgroundColor = .black
-        video.layoutMode = .fill
+        (video as? VideoView)?.layoutMode = .fill
         video.clipsToBounds = true
         video.accessibilityIdentifier = "call.remoteVideo"
         video.translatesAutoresizingMaskIntoConstraints = false
@@ -165,6 +166,79 @@ import PorchCore
     }
 }
 
+/// The other people's video on a call. One person fills the screen. Two, such as Mom and a brother rung into the
+/// call, share it: side by side when the screen is wide and stacked when it's tall. While the screen is shared, a
+/// tile whose camera is off shows that person's photo or name; with one person, the call screen shows its own.
+@MainActor final class CallVideoStage: UIView {
+    struct Tile { let name: String; let track: VideoTrack?; var photo: UIImage? = nil }
+    let primary = VideoView()
+    private let secondary = VideoView()
+    private let tiles = UIStackView()
+    private let secondaryTile = UIView()
+    private let standIns = [StandIn(), StandIn()]
+    private(set) var isSplit = false
+
+    private final class StandIn: UIStackView {
+        let photo = UIImageView(), name = UILabel()
+        init() {
+            super.init(frame: .zero)
+            axis = .vertical; alignment = .center; spacing = 12
+            photo.contentMode = .scaleAspectFill; photo.clipsToBounds = true; photo.layer.cornerRadius = 16
+            name.font = PorchStyle.font(28, weight: .semibold); name.textColor = .white; name.textAlignment = .center
+            name.numberOfLines = 2; name.adjustsFontForContentSizeCategory = true
+            NSLayoutConstraint.activate([photo.widthAnchor.constraint(equalToConstant: 120), photo.heightAnchor.constraint(equalToConstant: 120)])
+            addArrangedSubview(photo); addArrangedSubview(name)
+        }
+        required init(coder: NSCoder) { fatalError("Use init()") }
+        func show(_ tile: Tile?) {
+            isHidden = tile == nil || tile?.track != nil
+            photo.image = tile?.photo; photo.isHidden = tile?.photo == nil; name.text = tile?.name
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .black
+        let primaryTile = UIView()
+        for (tile, video, standIn) in [(primaryTile, primary, standIns[0]), (secondaryTile, secondary, standIns[1])] {
+            video.layoutMode = .fill; video.clipsToBounds = true
+            tile.backgroundColor = PorchStyle.night; tile.clipsToBounds = true
+            for view in [standIn, video] as [UIView] { view.translatesAutoresizingMaskIntoConstraints = false; tile.addSubview(view) }
+            NSLayoutConstraint.activate([
+                video.leadingAnchor.constraint(equalTo: tile.leadingAnchor), video.trailingAnchor.constraint(equalTo: tile.trailingAnchor),
+                video.topAnchor.constraint(equalTo: tile.topAnchor), video.bottomAnchor.constraint(equalTo: tile.bottomAnchor),
+                standIn.centerXAnchor.constraint(equalTo: tile.centerXAnchor), standIn.centerYAnchor.constraint(equalTo: tile.centerYAnchor),
+                standIn.widthAnchor.constraint(lessThanOrEqualTo: tile.widthAnchor, constant: -24),
+            ])
+            tiles.addArrangedSubview(tile)
+        }
+        secondaryTile.isHidden = true
+        standIns.forEach { $0.isHidden = true }
+        tiles.distribution = .fillEqually; tiles.spacing = 2
+        tiles.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(tiles)
+        NSLayoutConstraint.activate([
+            tiles.leadingAnchor.constraint(equalTo: leadingAnchor), tiles.trailingAnchor.constraint(equalTo: trailingAnchor),
+            tiles.topAnchor.constraint(equalTo: topAnchor), tiles.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(frame:)") }
+
+    /// The people on Porch to show, the most important first. Only the first two are shown.
+    func show(_ people: [Tile]) {
+        isSplit = people.count > 1
+        primary.track = people.first?.track
+        secondary.track = isSplit ? people[1].track : nil
+        secondaryTile.isHidden = !isSplit
+        standIns[0].show(isSplit ? people[0] : nil)
+        standIns[1].show(isSplit ? people[1] : nil)
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        tiles.axis = bounds.width > bounds.height ? .horizontal : .vertical
+    }
+}
+
 /// Foreground LiveKit media for paired calls, legacy rooms and phone fallback.
 final class NativeCallViewController: UIViewController, RoomDelegate {
     private let contact: CallContact
@@ -173,7 +247,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private(set) var room = Room()
     private let statusLabel = UILabel()
     private let keypadHint = PorchStyle.label("", size: 16, color: PorchStyle.nightSecondary)
-    private let remoteVideo = VideoView()
+    private let stage = CallVideoStage()
     private let localVideo = VideoView()
     private let placeholder = UILabel()
     private lazy var personPhoto = RecipientAppearance.photoView(contact.photoData)
@@ -200,7 +274,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let fallbackSeconds = CallPreferences.fallbackSeconds()
     private var familySession: FamilyCallSession?
     private var familyAccepted = false
-    private var phoneGuests: PhoneGuestControls?
+    private var guests: CallGuestControls?
+    /// Someone who left while the call went on, such as Ethan leaving Mom and David talking.
+    private var leftNotice: String?
+    private var leftNoticeTask: Task<Void, Never>?
     /// Runs after the screen closes when the other person never answered (declined, timed out
     /// or unreachable) and the caller didn't hang up first. Family phones offer voicemail here, and
     /// the bedside records a message. A call that rang through to a regular phone never does:
@@ -315,17 +392,17 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
         keypadHint.textAlignment = .center
         updateKeypadHint()
-        // Family caregivers can add a regular phone, such as a bank, to their Porch call with the bedside.
+        // Family on a Porch call with the bedside can ring in another family member, and caregivers can add a phone.
         if let session = familySession, session.credential.role == .family, session.call.source != "phone" {
-            phoneGuests = PhoneGuestControls(host: self, credential: session.credential, callID: session.call.id, room: { [weak self] in self?.room }) {
+            guests = CallGuestControls(host: self, credential: session.credential, callID: session.call.id, room: { [weak self] in self?.room }) {
                 let state = FamilyCoordinator.shared.state
-                return (state?.call?.id == session.call.id ? state?.call : nil, state?.canAddPhoneGuests == true)
+                return .init(call: state?.call?.id == session.call.id ? state?.call : nil, canAddPhone: state?.canAddPhoneGuests == true, family: state?.family ?? [])
             }
         }
-        CallScreenLayout.install(in: view, video: remoteVideo, preview: localVideo,
+        CallScreenLayout.install(in: view, video: stage, preview: localVideo,
                                  placeholder: placeholder, title: title, status: statusLabel,
-                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, accessory: phoneGuests?.bar,
-                                 buttons: [microphoneButton, cameraButton] + (phoneGuests.map { [$0.addButton] } ?? []) + [endButton])
+                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
+                                 buttons: [microphoneButton, cameraButton] + (guests.map { [$0.addButton] } ?? []) + [endButton])
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-outgoing-call") {
             statusLabel.text = BedsideText.string("Calling %@ on Porch…", contact.name)
@@ -440,7 +517,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             hasFailed = true
             ringback.stop()
             await room.disconnect()
-            remoteVideo.track = nil
+            stage.show([])
             localVideo.track = nil
             localVideo.isHidden = true
             statusLabel.text = BedsideText.string("Couldn't start the call.")
@@ -462,7 +539,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         guard !isEnding, !hasFailed, source == nil || source === room else { return }
         defer { checkInactivity() }
         updateKeypadHint()
-        phoneGuests?.refresh()
+        guests?.refresh()
         let peers = Array(room.remoteParticipants.values)
         if familySession?.call.source == "phone" {
             let status = peers.first?.attributes["sip.callStatus"]
@@ -498,23 +575,25 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             statusLabel.text = BedsideText.string("Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered.", contact.name)
         }
         if call.mode == .video {
-            let remoteTrack = peers.flatMap(\.videoTracks).first { !$0.isMuted && $0.track is VideoTrack }?.track as? VideoTrack
-            remoteVideo.track = remoteTrack
-            placeholder.isHidden = remoteTrack != nil
-            personPhoto.isHidden = remoteTrack != nil
+            let tiles = CallPeople.tiles(peers, first: familySession?.peerID)
+            stage.show(tiles)
+            let showing = stage.isSplit || tiles.first?.track != nil
+            placeholder.isHidden = showing
+            personPhoto.isHidden = showing
             localVideo.track = room.localParticipant.videoTracks.first { !$0.isMuted }?.track as? VideoTrack
             localVideo.isHidden = localVideo.track == nil
         }
-        // A regular phone a family caregiver added, such as a bank. The bedside says who it is; the
-        // caregiver's own controls show its progress, so their status only changes once the bedside leaves.
-        if let guest = peers.first(where: { $0.kind == .sip }), hasConnectedPeer, familySession?.call.source == "porch" {
-            let name = guest.name ?? ""
-            if familySession?.credential.role == .bedside {
-                let progress = guest.attributes["sip.callStatus"] == "active" ? BedsideText.string("%@ joined the call", name) : BedsideText.string("Calling %@…", name)
-                statusLabel.text = [statusLabel.text ?? "", progress].joined(separator: "\n")
-            } else if !peers.contains(where: { $0.kind != .sip }) {
+        // People added to a call with the bedside: family rung in, or a phone a caregiver added, such as a bank.
+        // The bedside says who they are. A family caller's own controls show their progress, so its status only
+        // changes once the bedside leaves.
+        if hasConnectedPeer, let session = familySession, session.call.source == "porch" {
+            if session.credential.role == .bedside {
+                let current = FamilyCoordinator.shared.state?.call.flatMap { $0.id == session.call.id ? $0 : nil }
+                let lines = CallPeople.bedsideLines(peers, call: current) + (leftNotice.map { [$0] } ?? [])
+                if !lines.isEmpty { statusLabel.text = ([statusLabel.text ?? ""] + lines).joined(separator: "\n") }
+            } else if !peers.isEmpty, !peers.contains(where: { $0.identity?.stringValue == session.peerID }) {
                 statusLabel.text = "\(contact.name) left the call."
-                placeholder.text = "Phone call"
+                if !peers.contains(where: { $0.kind != .sip }) { placeholder.text = "Phone call" }
             }
         }
         if hasConnectedPeer && mediaReady { playConnectionCue() }
@@ -530,7 +609,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         guard let call = state.call, call.id == session.call.id, call.state != "ended" else {
             finish(message: BedsideText.language != .english ? "Call ended. Returning to Porch…" : state.call?.reason ?? "Call ended. Returning to Porch…"); return
         }
-        phoneGuests?.refresh()
+        guests?.refresh()
+        if session.credential.role == .bedside { refresh() }
         if call.state == "accepted", !familyAccepted {
             familyAccepted = true; waitTask?.cancel(); ringback.stop(); refresh()
             waitTask = Task { [weak self] in
@@ -538,6 +618,14 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 guard let self, !self.hasConnectedPeer else { return }
                 self.finish(message: "Couldn't connect the call. Please try again.")
             }
+        }
+    }
+
+    private func noteLeft(_ name: String) {
+        leftNotice = BedsideText.string("%@ left the call", name); leftNoticeTask?.cancel()
+        leftNoticeTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 6_000_000_000) } catch { return }
+            self?.leftNotice = nil; self?.refresh()
         }
     }
 
@@ -641,7 +729,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 }
             } else { await familySession?.end() }
             familySession = nil
-            remoteVideo.track = nil
+            stage.show([])
             localVideo.track = nil
             if let ticket = phoneControlToken {
                 do {
@@ -682,7 +770,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     nonisolated func handleParticipantDisconnect(_ participant: Participant, in room: Room) {
         // LiveKit resets participant state after this callback returns.
-        let identity = participant.identity?.stringValue
+        let identity = participant.identity?.stringValue, name = participant.name, kind = participant.kind
         Task { @MainActor [weak self] in
             guard let self, room === self.room else { return }
             if self.isPhoneCall, identity == "phone" {
@@ -695,7 +783,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             let bedside = self.familySession?.credential.role == .bedside && self.familySession?.call.source == "porch"
             if self.hasConnectedPeer, !self.room.remoteParticipants.values.contains(where: { !bedside || $0.kind != .sip }) {
                 self.finish(message: "Call ended. Returning to the clock…")
-            } else { self.refresh() }
+            } else {
+                if bedside, self.hasConnectedPeer, kind != .sip, let name, !name.isEmpty { self.noteLeft(name) }
+                self.refresh()
+            }
         }
     }
 
@@ -832,7 +923,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         if !isEnding && !Task.isCancelled { ringback.start() }
         let family = familySession; familySession = nil
         await family?.end()
-        remoteVideo.track = nil
+        stage.show([])
         localVideo.track = nil
         localVideo.isHidden = true
         placeholder.isHidden = false

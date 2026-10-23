@@ -106,12 +106,13 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   requireValue(me.role === "family" && me.caregiver === true, "Only a caregiver can add a phone number to a call.", 403);
   const trunk = process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID;
   requireValue(trunk, "Adding a phone number isn't set up on this server yet.", 503);
-  requireValue(call.state === "accepted" && call.expiresAt > now && !call.bedsideLeftAt, "Add a phone number once you're both on the call.", 409);
+  requireValue(call.state === "accepted" && call.expiresAt > now && call.left?.[me.id] === undefined, "Add a phone number once you're both on the call.", 409);
   requireValue(dialableNumber(input.phoneNumber), "Enter a US or Canadian phone number with its area code.");
   const label = typeof input.label === "string" ? input.label.trim() : "";
   requireValue(label.length > 0 && label.length <= phoneGuestLimits.label, `Name who you're calling in up to ${phoneGuestLimits.label} characters, such as "Bank".`);
   const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
   requireValue(bedside, "This call is no longer available.", 404);
+  requireValue(call.left?.[bedside.id] === undefined, `${displayName(bedside)} has left this call.`, 409);
   // Don't ring anybody until both of you are actually in the call.
   requireValue(await inRoom(services.rooms, room, bedside.id) && await inRoom(services.rooms, room, me.id),
     `Porch can add a phone number once you and ${displayName(bedside)} are both connected.`, 409);
@@ -129,7 +130,7 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   const { result: guest } = await mutate(store, house.id, current => {
     expire(current, now);
     const live = current.call, adder = current.members.find(m => m.id === me.id);
-    requireValue(live?.id === call.id && live.state === "accepted" && !live.bedsideLeftAt, "This call ended.", 410);
+    requireValue(live?.id === call.id && live.state === "accepted" && live.left?.[me.id] === undefined && live.left?.[bedside.id] === undefined, "This call ended.", 410);
     requireValue(adder && !adder.revoked && adder.caregiver === true, "Only a caregiver can add a phone number to a call.", 403);
     const guests = live.guests ??= [];
     const stale = previous && guests.find(g => g.id === previous.id);
