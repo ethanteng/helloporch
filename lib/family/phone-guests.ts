@@ -45,6 +45,8 @@ export function publicPhoneGuest(call: Call, me: Member) {
   return guest && { id: guest.id, label: guest.label, addedBy: guest.addedBy, ...(guest.addedBy === me.id ? { number: guest.number } : {}) };
 }
 
+// LiveKit (Twirp) error codes for a dial request it rejected outright, before starting any telephone leg.
+const refusedDial = new Set(["invalid_argument", "not_found", "permission_denied", "failed_precondition", "unauthenticated", "resource_exhausted"]);
 function notFound(error: unknown) {
   return !!error && typeof error === "object" && "code" in error && error.code === "not_found";
 }
@@ -122,10 +124,13 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
       hidePhoneNumber: true, playDialtone: true, waitUntilAnswered: false,
       ringingTimeout: phoneGuestLimits.ringSeconds, maxCallDuration: phoneGuestLimits.callSeconds, timeout: 10,
     });
-  } catch {
-    // A timed-out request can still have created the leg.
+  } catch (error) {
+    // A refused request created no leg. Any other failure, such as a timeout, may still create one after
+    // this removal finds nothing, so the guest stays tracked: ending the call deletes its room, and the
+    // caregiver's app hangs it up if it never appears.
     try { await services.rooms.removeParticipant(room, identity); } catch { /* usually it doesn't exist */ }
-    await endGuest(store, house.id, call.id, guest.id, now);
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+    if (refusedDial.has(code)) await endGuest(store, house.id, call.id, guest.id, now);
     throw new FamilyError("Couldn't call that number. Check it and try again.", 502);
   }
   // Ending the call or hanging up the guest can race with dialing. Release a leg that arrived too late.

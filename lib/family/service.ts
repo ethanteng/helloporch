@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, bedsideLanguage, callRoom, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, bedsideLanguage, callRoom, phoneGuestIdentity, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -299,7 +299,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household | undefined = raw ? JSON.parse(raw) : undefined;
       const call = house?.call, guest = activePhoneGuest(call);
       if (house && call && guest && call.id === input.callID && call.state === "accepted" && memberFor(house, auth).role === "bedside") {
-        try { bedsideMayLeave = await inRoom((dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms, callRoom(call), guest.addedBy); }
+        // Both must still be connected: stored state can lag a phone that already hung up.
+        try {
+          const rooms = (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms;
+          bedsideMayLeave = await inRoom(rooms, callRoom(call), guest.addedBy) && await inRoom(rooms, callRoom(call), phoneGuestIdentity(guest));
+        }
         catch { /* ending the whole call is the safe choice */ }
       }
     }

@@ -25,6 +25,11 @@ import PorchCore
     private var legSeen = false, answered = false, dialing = false
     private var notice: String?
     private var noticeTask: Task<Void, Never>?
+    private var since = Date.distantPast
+    private var watchTask: Task<Void, Never>?
+    /// A phone that hasn't joined the room by the end of its ring time, say after a dial request timed out, is
+    /// hung up here. The server keeps tracking it until then, so this also removes a leg that arrives late.
+    private static let joinSeconds: TimeInterval = 75
     private var myID: String { credential.credential.split(separator: ".").first.map(String.init) ?? "" }
 
     init(host: UIViewController, credential: FamilyCredential, callID: String, room: @escaping () -> Room?,
@@ -50,14 +55,15 @@ import PorchCore
     /// Call whenever the room's participants or the household's call change.
     func refresh() {
         let (call, canAdd) = snapshot()
-        if guest == nil, let current = call?.phoneGuest, current.addedBy == myID, !finished.contains(current.id) { guest = current }
+        if guest == nil, let current = call?.phoneGuest, current.addedBy == myID, !finished.contains(current.id) { track(current) }
         let peers = room()?.remoteParticipants.values.map { $0 } ?? []
         if let guest {
             let leg = peers.first { $0.identity?.stringValue == guest.identity }
             let callStatus = leg?.attributes["sip.callStatus"]
             if leg != nil { legSeen = true }
             if callStatus == "active" { answered = true }
-            if (legSeen && leg == nil) || callStatus == "hangup" { legEnded(guest) }
+            let neverJoined = !legSeen && Date().timeIntervalSince(since) >= Self.joinSeconds
+            if (legSeen && leg == nil) || callStatus == "hangup" || neverJoined { legEnded(guest) }
         }
         let bedsideHere = peers.contains { $0.kind != .sip }
         addButton.isHidden = !(canAdd && call?.state == "accepted" && call?.bedsideLeft != true && guest == nil && bedsideHere)
@@ -70,6 +76,15 @@ import PorchCore
             status.text = answered ? "\(guest.label) is on the call" : "Calling \(guest.label)…"
             hangUpButton.configuration?.title = "Hang up \(guest.label)"
         } else { status.text = notice }
+    }
+
+    private func track(_ added: FamilyPhoneGuest) {
+        guest = added; legSeen = false; answered = false; notice = nil; since = Date()
+        watchTask?.cancel()
+        watchTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(Self.joinSeconds * 1_000_000_000)) } catch { return }
+            self?.refresh()
+        }
     }
 
     private func legEnded(_ ended: FamilyPhoneGuest) {
@@ -100,7 +115,7 @@ import PorchCore
         let response = try await FamilyService(credential).send("addPhoneGuest", ["callID": callID, "phoneNumber": number, "label": label], timeout: 25)
         if FamilyCoordinator.shared.credential?.credential == credential.credential { FamilyCoordinator.shared.update(response) }
         guard let added = response.phoneGuest else { throw FamilyServiceError(message: "Couldn't add that phone number.", status: 502) }
-        guest = added; legSeen = false; answered = false; notice = nil
+        track(added)
     }
 
     private func hangUp() {

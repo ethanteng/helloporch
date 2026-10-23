@@ -64,7 +64,10 @@ export function config(): CallServer {
 export function expire(house: Household, now: number) {
   const call = house.call;
   if (!call || call.state === "ended") return;
-  if (call.expiresAt <= now || (call.state === "accepted" && (call.phone ? [call.to] : [call.from, call.to]).some(id => {
+  // Once the bedside has left a call with a phone guest, only the family member still on it must stay reachable.
+  const present = call.phone ? [call.to] : call.bedsideLeftAt
+    ? [call.from, call.to].filter(id => house.members.find(m => m.id === id)?.role !== "bedside") : [call.from, call.to];
+  if (call.expiresAt <= now || (call.state === "accepted" && present.some(id => {
     const member = house.members.find(m => m.id === id);
     return !member || member.revoked || member.seenAt < now - 35;
   }))) { call.state = "ended"; call.reason = "The call timed out or a device went offline."; }

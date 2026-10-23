@@ -182,6 +182,28 @@ test("Mom's hang-up ends the whole call when the caregiver who added the number 
   assert.deepEqual(f.livekit.deleted,[room]);
 });
 
+test("once Mom has left, only the caregiver's phone has to stay online",async()=>{
+  const f=fixture(),{bedside,family,callID,room}=await f.connected();
+  await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+  f.livekit.leave(room,bedside.state.me.id);
+  await f.json('endCall',{callID},bedside.credential);
+  // Mom's iPad goes offline, while Ethan keeps talking to the bank.
+  for (let n=0;n<4;n++) { f.advance(20); assert.equal((await f.json('poll',{available:true},family.credential)).state.call.state,'accepted'); }
+  assert.deepEqual(f.livekit.deleted,[]);
+  f.advance(36); // Then Ethan's phone stops checking in too.
+  await f.json('poll',{available:true},bedside.credential);
+  assert.deepEqual(f.livekit.deleted,[room]);
+});
+
+test("Mom's hang-up ends the whole call when the phone has already hung up",async()=>{
+  const f=fixture(),{bedside,family,callID,room}=await f.connected();
+  const guest=(await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).phoneGuest;
+  f.livekit.leave(room,`phone-guest-${guest.id}`); // Before Ethan's app reports it.
+  const ended=await f.json('endCall',{callID},bedside.credential);
+  assert.equal(ended.state.call.state,'ended');
+  assert.deepEqual(f.livekit.deleted,[room]);
+});
+
 test('without a phone guest, the bedside hanging up still ends the call',async()=>{
   const f=fixture(),{bedside,family,callID,room}=await f.connected();
   await f.json('endCall',{callID},bedside.credential);
@@ -204,13 +226,33 @@ test('a call that expires with a phone guest has its room deleted, retried until
   assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,409);
 });
 
-test('a failed dial frees the call for another try, and removes a leg a timeout may have left',async()=>{
+test('a refused dial frees the call for another try',async()=>{
   const f=fixture(),{family,callID}=await f.connected();
-  f.livekit.state.dialError=Object.assign(new Error('timeout'),{code:'deadline_exceeded'});
+  f.livekit.state.dialError=Object.assign(new Error('bad number'),{code:'invalid_argument'});
   assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,502);
-  assert.equal(f.livekit.removed.length,1);
+  assert.equal((await f.json('poll',{available:true},family.credential)).state.call.phoneGuest,undefined);
   delete f.livekit.state.dialError;
   await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+});
+
+test('a timed-out dial stays tracked, so a leg that arrives late is still hung up',async()=>{
+  const f=fixture(),{family,callID,room}=await f.connected();
+  f.livekit.state.dialError=Object.assign(new Error('timeout'),{code:'deadline_exceeded'});
+  assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,502);
+  assert.equal(f.livekit.removed.length,1,'a leg the timeout may have left is removed right away');
+  const tracked=(await f.json('poll',{available:true},family.credential)).state.call.phoneGuest;
+  assert.equal(tracked.label,'Bank');
+  // The leg shows up after all; ending the call still deletes its room.
+  f.livekit.join(room,`phone-guest-${tracked.id}`,{'sip.callStatus':'active'});
+  await f.json('endCall',{callID},family.credential);
+  assert.deepEqual(f.livekit.deleted,[room]);
+
+  // If it never shows up, another number can be added once the room is checked.
+  const g=fixture(),other=await g.connected();
+  g.livekit.state.dialError=Object.assign(new Error('timeout'),{code:'deadline_exceeded'});
+  assert.equal((await g.send('addPhoneGuest',{callID:other.callID,phoneNumber:bank,label:'Bank'},other.family.credential)).status,502);
+  delete g.livekit.state.dialError;
+  await g.json('addPhoneGuest',{callID:other.callID,phoneNumber:bank,label:'Bank'},other.family.credential);
 });
 
 test('a call that ends while the number is dialing does not keep its telephone leg',async()=>{
