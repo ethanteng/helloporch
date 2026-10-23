@@ -14,7 +14,14 @@ export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's. */
 export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
-export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone };
+/** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
+ * `bedsideLeftAt`: the bedside hung up while a phone guest was on, leaving the family member and the guest talking. */
+export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
+  guests?: PhoneGuest[]; bedsideLeftAt?: number };
+/** A regular phone a family caregiver added to their call with the bedside, such as a bank that needs Mom on the line.
+ * It stays only while the person who added it does. `label` is what the bedside shows; the number never reaches it.
+ * `endedAt` is set once its telephone leg is known to be gone. */
+export type PhoneGuest = { id: string; number: string; label: string; addedBy: string; addedAt: number; endedAt?: number };
 export type MessageKind = "message" | "voicemail";
 export type MessageMode = "audio" | "video";
 /** A queued message. Kept in the household so the bedside's existing poll carries the queue.
@@ -57,7 +64,10 @@ export function config(): CallServer {
 export function expire(house: Household, now: number) {
   const call = house.call;
   if (!call || call.state === "ended") return;
-  if (call.expiresAt <= now || (call.state === "accepted" && (call.phone ? [call.to] : [call.from, call.to]).some(id => {
+  // Once the bedside has left a call with a phone guest, only the family member still on it must stay reachable.
+  const present = call.phone ? [call.to] : call.bedsideLeftAt
+    ? [call.from, call.to].filter(id => house.members.find(m => m.id === id)?.role !== "bedside") : [call.from, call.to];
+  if (call.expiresAt <= now || (call.state === "accepted" && present.some(id => {
     const member = house.members.find(m => m.id === id);
     return !member || member.revoked || member.seenAt < now - 35;
   }))) { call.state = "ended"; call.reason = "The call timed out or a device went offline."; }
@@ -91,6 +101,9 @@ export function bedsideLanguage(house: Household): BedsideLanguage {
 }
 
 export function callRoom(call: Call): string { return call.phone?.room ?? `porch-paired-${call.id}`; }
+/** The phone guest whose telephone leg may still be connected. A call has at most one. */
+export function activePhoneGuest(call?: Call): PhoneGuest | undefined { return call?.guests?.find(g => !g.endedAt); }
+export function phoneGuestIdentity(guest: PhoneGuest): string { return `phone-guest-${guest.id}`; }
 export function phoneDropIn(house: Household, number?: string): PhoneDropIn | undefined {
   return number ? house.phoneDropIns?.find(p => p.number === number) : undefined;
 }

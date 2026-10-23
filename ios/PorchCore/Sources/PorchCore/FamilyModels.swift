@@ -49,6 +49,20 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     /// The caller's telephone number, when caller ID is available. Display information only.
     public let callerNumber: String?
     public let reason: String?
+    /// A regular phone a family caregiver added to this call, such as a bank. Older servers don't send it.
+    public let phoneGuest: FamilyPhoneGuest?
+    /// Family devices: the bedside hung up while a phone guest was on, so the call continues without it.
+    public let bedsideLeft: Bool?
+}
+/// A regular phone on a Porch call. Its telephone leg joins the call's LiveKit room as `identity`.
+public struct FamilyPhoneGuest: Codable, Equatable {
+    public let id: String
+    /// What the person who added it called it, such as "Bank". The bedside sees this, never the number.
+    public let label: String
+    public let addedBy: String
+    /// Only the person who added it receives the number.
+    public let number: String?
+    public var identity: String { "phone-guest-\(id)" }
 }
 /// A telephone number the caregiver approved for audio drop-in by calling the household's number.
 public struct PhoneDropInApproval: Codable, Equatable {
@@ -173,6 +187,8 @@ public struct FamilySnapshot: Codable, Equatable {
     public let bedsideLanguage: String?
     /// Bedside only: who can ring by phone. Older servers don't send it.
     public let callScreening: CallScreening?
+    /// Family caregivers: this phone can add a regular phone number to its calls with the bedside.
+    public let canAddPhoneGuests: Bool?
 
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {

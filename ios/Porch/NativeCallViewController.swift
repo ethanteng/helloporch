@@ -30,9 +30,10 @@ import PorchCore
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
     }
 
+    /// `accessory` sits above the buttons, such as an added phone's status and controls.
     static func install(in view: UIView, video: VideoView, preview: VideoView? = nil,
                         placeholder: UILabel? = nil, title: UILabel, status: UILabel,
-                        hint: UILabel? = nil, photo: UIImageView? = nil, buttons: [UIButton]) {
+                        hint: UILabel? = nil, photo: UIImageView? = nil, accessory: UIView? = nil, buttons: [UIButton]) {
         view.backgroundColor = .black
         video.layoutMode = .fill
         video.clipsToBounds = true
@@ -87,7 +88,7 @@ import PorchCore
         let row = UIStackView(arrangedSubviews: buttons)
         row.distribution = .fillEqually
         row.spacing = 8
-        let controls = UIStackView(arrangedSubviews: (hint.map { [$0 as UIView] } ?? []) + [row])
+        let controls = UIStackView(arrangedSubviews: (accessory.map { [$0] } ?? []) + (hint.map { [$0 as UIView] } ?? []) + [row])
         controls.axis = .vertical
         controls.spacing = 8
         controls.accessibilityIdentifier = "call.controls"
@@ -199,6 +200,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let fallbackSeconds = CallPreferences.fallbackSeconds()
     private var familySession: FamilyCallSession?
     private var familyAccepted = false
+    private var phoneGuests: PhoneGuestControls?
     /// Runs after the screen closes when the other person never answered (declined, timed out
     /// or unreachable) and the caller didn't hang up first. Family phones offer voicemail here, and
     /// the bedside records a message. A call that rang through to a regular phone never does:
@@ -313,9 +315,17 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
         keypadHint.textAlignment = .center
         updateKeypadHint()
+        // Family caregivers can add a regular phone, such as a bank, to their Porch call with the bedside.
+        if let session = familySession, session.credential.role == .family, session.call.source != "phone" {
+            phoneGuests = PhoneGuestControls(host: self, credential: session.credential, callID: session.call.id, room: { [weak self] in self?.room }) {
+                let state = FamilyCoordinator.shared.state
+                return (state?.call?.id == session.call.id ? state?.call : nil, state?.canAddPhoneGuests == true)
+            }
+        }
         CallScreenLayout.install(in: view, video: remoteVideo, preview: localVideo,
                                  placeholder: placeholder, title: title, status: statusLabel,
-                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, buttons: [microphoneButton, cameraButton, endButton])
+                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, accessory: phoneGuests?.bar,
+                                 buttons: [microphoneButton, cameraButton] + (phoneGuests.map { [$0.addButton] } ?? []) + [endButton])
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-outgoing-call") {
             statusLabel.text = BedsideText.string("Calling %@ on Porch…", contact.name)
@@ -452,6 +462,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         guard !isEnding, !hasFailed, source == nil || source === room else { return }
         defer { checkInactivity() }
         updateKeypadHint()
+        phoneGuests?.refresh()
         let peers = Array(room.remoteParticipants.values)
         if familySession?.call.source == "phone" {
             let status = peers.first?.attributes["sip.callStatus"]
@@ -494,6 +505,18 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             localVideo.track = room.localParticipant.videoTracks.first { !$0.isMuted }?.track as? VideoTrack
             localVideo.isHidden = localVideo.track == nil
         }
+        // A regular phone a family caregiver added, such as a bank. The bedside says who it is; the
+        // caregiver's own controls show its progress, so their status only changes once the bedside leaves.
+        if let guest = peers.first(where: { $0.kind == .sip }), hasConnectedPeer, familySession?.call.source == "porch" {
+            let name = guest.name ?? ""
+            if familySession?.credential.role == .bedside {
+                let progress = guest.attributes["sip.callStatus"] == "active" ? BedsideText.string("%@ joined the call", name) : BedsideText.string("Calling %@…", name)
+                statusLabel.text = [statusLabel.text ?? "", progress].joined(separator: "\n")
+            } else if !peers.contains(where: { $0.kind != .sip }) {
+                statusLabel.text = "\(contact.name) left the call."
+                placeholder.text = "Phone call"
+            }
+        }
         if hasConnectedPeer && mediaReady { playConnectionCue() }
     }
 
@@ -507,6 +530,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         guard let call = state.call, call.id == session.call.id, call.state != "ended" else {
             finish(message: BedsideText.language != .english ? "Call ended. Returning to Porch…" : state.call?.reason ?? "Call ended. Returning to Porch…"); return
         }
+        phoneGuests?.refresh()
         if call.state == "accepted", !familyAccepted {
             familyAccepted = true; waitTask?.cancel(); ringback.stop(); refresh()
             waitTask = Task { [weak self] in
@@ -551,7 +575,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         let connected = mediaReady && !isEnding && !hasFailed && !isSwitchingToPhone
             && room.connectionState == .connected && !peers.isEmpty
             && (!(isPhoneCall || inboundPhone) || phoneStatus == "active" || phoneStatus == "automation")
-        let speech = speaking || room.localParticipant.isSpeaking || peers.contains { $0.isSpeaking }
+        // A bank's hold can be silent, so an added phone keeps the call from ending as quiet.
+        let phoneGuest = familySession?.call.source == "porch" && peers.contains { $0.kind == .sip }
+        let speech = speaking || phoneGuest || room.localParticipant.isSpeaking || peers.contains { $0.isSpeaking }
         if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected, speaking: speech) {
             finish(message: "Call ended. Returning to the clock…")
         }
@@ -664,7 +690,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return
             }
             guard !self.isSwitchingToPhone, !self.isPhoneCall else { return }
-            if self.hasConnectedPeer, self.room.remoteParticipants.isEmpty {
+            // The bedside is never left on with only a phone a family caregiver added, such as a bank.
+            // The caregiver stays on with it when the bedside leaves.
+            let bedside = self.familySession?.credential.role == .bedside && self.familySession?.call.source == "porch"
+            if self.hasConnectedPeer, !self.room.remoteParticipants.values.contains(where: { !bedside || $0.kind != .sip }) {
                 self.finish(message: "Call ended. Returning to the clock…")
             } else { self.refresh() }
         }

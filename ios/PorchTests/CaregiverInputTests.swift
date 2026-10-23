@@ -532,6 +532,41 @@ final class CaregiverInputTests: XCTestCase {
         }
     }
 
+    @MainActor func testPhoneGuestKeypadSendsSIPCodesInOrderAndTheFormDialsANorthAmericanNumber() async throws {
+        final class Sent { var keys: [(UInt32, String)] = []; var calls: [(String, String)] = [] }
+        let sent = Sent()
+        let keypad = PhoneKeypadViewController(name: "Bank") { code, digit in sent.keys.append((code, digit)) }
+        let navigation = UINavigationController(rootViewController: keypad)
+        for size in [CGSize(width: 375, height: 667), CGSize(width: 1032, height: 1376)] {
+            navigation.view.frame = CGRect(origin: .zero, size: size); navigation.view.layoutIfNeeded()
+            let keys = buttons(in: keypad.view).filter { $0.accessibilityIdentifier?.hasPrefix("phoneGuest.key.") == true }
+            XCTAssertEqual(keys.count, 12)
+            for key in keys {
+                XCTAssertGreaterThanOrEqual(key.bounds.height, 44, "\(size)")
+                XCTAssertTrue(keypad.view.bounds.contains(key.convert(key.bounds, to: keypad.view)), "\(size)")
+            }
+        }
+        for key in ["1", "*", "0", "#"] {
+            buttons(in: keypad.view).first { $0.accessibilityIdentifier == "phoneGuest.key.\(key)" }?.sendActions(for: .touchUpInside)
+        }
+        for _ in 0..<100 where sent.keys.count < 4 { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(sent.keys.map(\.0), [1, 10, 0, 11])
+        XCTAssertEqual(sent.keys.map(\.1), ["1", "*", "0", "#"])
+
+        let form = AddPhoneGuestViewController { label, number in sent.calls.append((label, number)) }
+        let formNavigation = UINavigationController(rootViewController: form)
+        formNavigation.view.frame = CGRect(x: 0, y: 0, width: 375, height: 667); formNavigation.view.layoutIfNeeded()
+        func textField(_ id: String, in view: UIView) -> UITextField? {
+            (view as? UITextField).flatMap { $0.accessibilityIdentifier == id ? $0 : nil } ?? view.subviews.lazy.compactMap { textField(id, in: $0) }.first
+        }
+        try XCTUnwrap(textField("phoneGuest.name", in: form.view)).text = "  Bank "
+        try XCTUnwrap(textField("phoneGuest.number", in: form.view)).text = "(800) 555-0123"
+        try XCTUnwrap(buttons(in: form.view).first { $0.configuration?.title == "Call and add to this call" }).sendActions(for: .touchUpInside)
+        for _ in 0..<100 where sent.calls.isEmpty { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(sent.calls.first?.0, "Bank")
+        XCTAssertEqual(sent.calls.first?.1, "+18005550123")
+    }
+
     @MainActor private func buttons(in view: UIView) -> [UIButton] {
         (view as? UIButton).map { [$0] } ?? view.subviews.flatMap { buttons(in: $0) }
     }
