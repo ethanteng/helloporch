@@ -974,6 +974,14 @@ final class CaregiverInputTests: XCTestCase {
         let ana = FamilyPersonViewController(personID: "ana", admin: admin); ana.loadViewIfNeeded()
         XCTAssertEqual(switches(ana.view).first { $0.accessibilityIdentifier == "person.autoDropIn" }?.isOn, false)
         XCTAssertTrue(labels(ana.view).contains("Their audio calls drop in too. Video calls ring."))
+        let kept = try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
+            ["id": "noa", "name": "Noa", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": false, "autoDropIn": true]]]))
+        let keptAdmin = FamilyAdminViewController(remote: remote, state: kept); keptAdmin.loadViewIfNeeded()
+        let noa = FamilyPersonViewController(personID: "noa", admin: keptAdmin); noa.loadViewIfNeeded()
+        let saved = try XCTUnwrap(switches(noa.view).first { $0.accessibilityIdentifier == "person.autoDropIn" })
+        XCTAssertTrue(saved.isOn)
+        XCTAssertTrue(saved.isEnabled, "A saved choice can be turned off after drop-in approval is removed")
+        XCTAssertTrue(labels(noa.view).contains("Saved. It applies once audio or video drop-in is on."))
     }
 
     @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {

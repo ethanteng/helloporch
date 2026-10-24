@@ -800,8 +800,10 @@ final class FamilyPersonViewController: CaregiverFormViewController {
             }, for: .valueChanged)
         }
         // Their Audio call and Video call drop in too, but only as the drop-ins approved above.
+        // The switch stays usable when that approval is later removed, so a saved choice can be turned off.
+        let callsApproved = person.permissions.audio || person.permissions.video
         let calls = UISwitch(); calls.isOn = person.autoDropIn == true
-        calls.isEnabled = person.permissions.audio || person.permissions.video
+        calls.isEnabled = callsApproved || person.autoDropIn == true
         calls.accessibilityIdentifier = "person.autoDropIn"
         calls.addAction(UIAction { [weak self, weak admin, weak calls] _ in
             guard let self, let admin, let calls else { return }
@@ -813,6 +815,7 @@ final class FamilyPersonViewController: CaregiverFormViewController {
         let callsDetail = person.permissions.audio && person.permissions.video ? "Their audio and video calls drop in too."
             : person.permissions.audio ? "Their audio calls drop in too. Video calls ring."
             : person.permissions.video ? "Their video calls drop in too. Audio calls ring."
+            : person.autoDropIn == true ? "Saved. It applies once audio or video drop-in is on."
             : "Turn on audio or video drop-in first."
         let dropInFooter = state.dropInEnabled
             ? "Connects without anyone answering, after a spoken announcement and five-second countdown. Their ordinary calls ring for Answer, unless Drop in when they call is on and Porch is open on the bedside iPad."
