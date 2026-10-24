@@ -12,7 +12,7 @@ export type Profile = { name?: string; photo?: ProfilePhoto };
 /** A photo upload the server signed that hasn't been saved yet; deleted once `expiresAt` passes. */
 export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
- * `autoDropIn`: a caregiver had this family member's ordinary calls to the bedside drop in (see `callKind`). */
+ * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`). */
 export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).

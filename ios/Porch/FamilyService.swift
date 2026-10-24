@@ -276,7 +276,7 @@ struct FamilyCallSession {
         let result = try await FamilyService(credential).send("startCall", values)
         update(result)
         guard let call = result.state?.call else { throw FamilyServiceError(message: "Couldn't start the call.", status: 503) }
-        // The server decides: an ordinary call can drop in when a caregiver set this phone's calls to.
+        // The server decides whether an ordinary call drops in, from this phone's caregiver setting.
         let wait = credential.role != .family ? waitSeconds : call.kind == "dropIn" ? CallPreferences.dropInWaitSeconds : result.state?.ringSeconds ?? CallPreferences.defaultVoicemailSeconds
         return FamilyCallSession(credential: credential, call: call, peerName: name, waitSeconds: wait)
     }
