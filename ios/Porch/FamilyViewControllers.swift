@@ -31,6 +31,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let people: [FamilyPerson]
         let permissions: DropInPermissions?
         let dropIn: Bool?
+        let autoDropIn: Bool?
         let busy: Bool?
         let error: String?
         let paired: Bool
@@ -127,7 +128,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         guard isViewLoaded else { return }
         let coordinator = FamilyCoordinator.shared
         let state = coordinator.state
-        let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0,
+        let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, autoDropIn: state?.me.autoDropIn, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0,
                               photo: state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
         guard next != displayed else { return }
         displayed = next
@@ -186,6 +187,12 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         people.addArrangedSubview(sent)
         if !state.dropInEnabled { people.addArrangedSubview(PorchStyle.label("Drop-in is paused on the bedside device.")) }
         else if !state.me.permissions.audio && !state.me.permissions.video { people.addArrangedSubview(PorchStyle.label("The caregiver hasn't enabled drop-in for this device. You can still make an ordinary call.")) }
+        // A caregiver set this phone's ordinary calls to drop in, so it says so before anyone taps Audio call.
+        else if state.me.autoDropIn == true {
+            let permissions = state.me.permissions
+            people.addArrangedSubview(PorchStyle.label(permissions.audio && permissions.video ? "Your audio and video calls drop in while their Porch is open."
+                : permissions.audio ? "Your audio calls drop in while their Porch is open. Video calls ring." : "Your video calls drop in while their Porch is open. Audio calls ring."))
+        }
     }
     private func offerVoicemail(to name: String, title: String) {
         guard view.window != nil, presentedViewController == nil, FamilyCoordinator.shared.state?.messagesEnabled != false else {
@@ -455,7 +462,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let approved = (state?.people ?? []).filter { $0.permissions.audio || $0.permissions.video }
         let phones = state?.phoneDropIns ?? []
         rows += approved.map { person in
-            let modes = person.dropInModes ?? ""
+            let modes = (person.dropInModes ?? "") + (person.callsDropIn ? " · Calls drop in" : "")
             let text = UIStackView(arrangedSubviews: [PorchStyle.label(person.name, size: 18, color: ink), PorchStyle.label("Porch app · \(modes)", size: 15)])
             text.axis = .vertical; text.spacing = 2
             return PorchListRow([text], label: "\(person.name), Porch app, \(modes)") { [weak self] in self?.showPerson(person.id) }
@@ -476,7 +483,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             rows.append(listRow([PorchStyle.label("No one yet. Turn on drop-in for a family member, or approve a phone number.", size: 16)]))
         }
         rows.append(actionRow("Approve a phone number", symbol: "phone.badge.plus") { [weak self] in self?.showPhoneDropIn() })
-        let footer = "Only the people and numbers listed here connect without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls always ring for Answer. Phone drop-ins work while Porch is open on the bedside iPad, for calls their phone company verifies."
+        let footer = "Only the people and numbers listed here connect without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls ring for Answer, except Porch calls from people whose calls drop in. Phone drop-ins work while Porch is open on the bedside iPad, for calls their phone company verifies."
         return group("Drop-in", footer: remote == nil ? footer : footer + " Drop-ins connect only if the bedside iPad allows microphone and camera access.", rows: rows)
     }
     /// Who can ring this Porch from a regular phone, beside the numbers that were turned away.
@@ -712,9 +719,11 @@ fileprivate extension FamilyPerson {
     var dropInModes: String? {
         permissions.audio && permissions.video ? "Audio and video" : permissions.audio ? "Audio" : permissions.video ? "Video" : nil
     }
+    /// Their ordinary calls drop in, as the drop-in types they're approved for.
+    var callsDropIn: Bool { autoDropIn == true && dropInModes != nil }
     /// A one-line summary for the family list; nil when they can only make ordinary calls.
     var access: String? {
-        let parts = [dropInModes.map { "\($0) drop-in" }, caregiver == true ? "Caregiver" : nil].compactMap { $0 }
+        let parts = [dropInModes.map { "\($0) drop-in" }, callsDropIn ? "Calls drop in" : nil, caregiver == true ? "Caregiver" : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
@@ -790,10 +799,28 @@ final class FamilyPersonViewController: CaregiverFormViewController {
                 }
             }, for: .valueChanged)
         }
+        // Their Audio call and Video call drop in too, but only as the drop-ins approved above.
+        // The switch stays usable when that approval is later removed, so a saved choice can be turned off.
+        let callsApproved = person.permissions.audio || person.permissions.video
+        let calls = UISwitch(); calls.isOn = person.autoDropIn == true
+        calls.isEnabled = callsApproved || person.autoDropIn == true
+        calls.accessibilityIdentifier = "person.autoDropIn"
+        calls.addAction(UIAction { [weak self, weak admin, weak calls] _ in
+            guard let self, let admin, let calls else { return }
+            Task {
+                if admin.remote == nil, calls.isOn { guard await admin.requestMedia(video: person.permissions.video) else { self.render(); return } }
+                await admin.perform("setAutoDropIn", ["memberID": person.id, "enabled": calls.isOn])
+            }
+        }, for: .valueChanged)
+        let callsDetail = person.permissions.audio && person.permissions.video ? "Their audio and video calls drop in too."
+            : person.permissions.audio ? "Their audio calls drop in too. Video calls ring."
+            : person.permissions.video ? "Their video calls drop in too. Audio calls ring."
+            : person.autoDropIn == true ? "Saved. It applies once audio or video drop-in is on."
+            : "Turn on audio or video drop-in first."
         let dropInFooter = state.dropInEnabled
-            ? "Connects without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls are always available."
+            ? "Connects without anyone answering, after a spoken announcement and five-second countdown. Their ordinary calls ring for Answer, unless Drop in when they call is on and Porch is open on the bedside iPad."
             : "Drop-ins are paused for everyone. Turn on Allow approved drop-ins in Family and drop-in."
-        content.addArrangedSubview(group("Drop-in", footer: dropInFooter, rows: [toggleRow("Audio drop-in", audio), toggleRow("Video drop-in", video)]))
+        content.addArrangedSubview(group("Drop-in", footer: dropInFooter, rows: [toggleRow("Audio drop-in", audio), toggleRow("Video drop-in", video), toggleRow("Drop in when they call", detail: callsDetail, calls)]))
         let caregiver = UISwitch(); caregiver.isOn = person.caregiver == true
         caregiver.isEnabled = !isMe
         caregiver.addAction(UIAction { [weak admin, weak caregiver] _ in

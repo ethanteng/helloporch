@@ -58,7 +58,9 @@ final class SlotsViewController: UITableViewController {
             content.secondaryText = person.map { contact in
                 if let call = contact.nativeCall {
                     let dropIn = contact.phoneNumber.map { number in FamilyCoordinator.shared.state?.phoneDropIns?.contains { $0.number == number } == true } == true
-                    return "Porch \(call.mode == .video ? "video" : "voice")" + (contact.phoneNumber == nil ? "" : " · Phone fallback on") + (contact.otherPhoneNumbers.isEmpty ? "" : " · \(contact.phoneNumbers.count) numbers") + (dropIn ? " · Phone drop-in on" : "")
+                    let member = contact.familyMemberID.flatMap { id in FamilyCoordinator.shared.state?.people.first { $0.id == id } }
+                    let porchDropIn = member.map { $0.autoDropIn == true && ($0.permissions.audio || $0.permissions.video) } == true
+                    return "Porch \(call.mode == .video ? "video" : "voice")" + (porchDropIn ? " · Porch calls drop in" : "") + (contact.phoneNumber == nil ? "" : " · Phone fallback on") + (contact.otherPhoneNumbers.isEmpty ? "" : " · \(contact.phoneNumbers.count) numbers") + (dropIn ? " · Phone drop-in on" : "")
                 }
                 return "Finish Porch setup"
             } ?? "Assign key \(key)"

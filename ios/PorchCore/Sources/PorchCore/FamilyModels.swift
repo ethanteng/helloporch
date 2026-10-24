@@ -29,6 +29,9 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let invitationID: String?
     /// Family devices only: approved to open caregiver mode with the PIN.
     public let caregiver: Bool?
+    /// Family devices only: their Audio call and Video call drop in, for the drop-in types they're approved for,
+    /// while drop-ins are on and the bedside Porch is open. Older servers don't send it.
+    public let autoDropIn: Bool?
 }
 public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let id: String
