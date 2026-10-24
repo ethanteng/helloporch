@@ -12,8 +12,11 @@ export type Profile = { name?: string; photo?: ProfilePhoto };
 /** A photo upload the server signed that hasn't been saved yet; deleted once `expiresAt` passes. */
 export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
- * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`). */
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+ * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`).
+ * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`). */
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+/** Where a poll falls among those one app launch sent. */
+export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
  * `porchGuests`: other family members rung into it on Porch (see porch-guests.ts).
@@ -172,6 +175,15 @@ export function dropInAllowed(house: Household, call: Call): boolean {
   if (call.phone) return call.mode === "voice" && !!phoneDropIn(house, call.phone.callerNumber);
   const caller = house.members.find(m => m.id === call.from);
   return !!caller && !caller.revoked && caller.permissions[call.mode === "voice" ? "audio" : "video"];
+}
+/** Polls can arrive out of order, such as the one sent as Porch closes overtaking the last one sent while it was open.
+ * An earlier poll from the same launch mustn't make the device look open again, so a numbered one only sets
+ * availability if it's the newest so far. Older builds don't number theirs, which always do, as before. */
+export function takesAvailability(member: Member, launch: unknown, sequence: unknown): boolean {
+  if (typeof launch !== "string" || launch.length < 1 || launch.length > 64 || !Number.isSafeInteger(sequence) || (sequence as number) < 0) return true;
+  if (member.lastPoll?.launch === launch && (sequence as number) < member.lastPoll.sequence) return false;
+  member.lastPoll = { launch, sequence: sequence as number };
+  return true;
 }
 /** What a new Porch call becomes. A family member whose calls a caregiver set to drop in drops in with an ordinary
  * call too, whenever they could have chosen that drop-in themselves and the bedside is ready for it. Otherwise it

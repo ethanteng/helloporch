@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -447,14 +447,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
-        me.seenAt = now; me.available = input.available;
+        me.seenAt = now;
+        if (takesAvailability(me, input.launch, input.sequence)) me.available = input.available;
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.
         if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === call.id) call.receivedAt ??= now;
         const ringing = call?.porchGuests?.find(g => g.id === input.receivedCallID && g.memberID === me.id && g.state === "ringing");
         if (ringing) ringing.receivedAt ??= now;
-        if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
+        if (me.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
       if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "setAutoDropIn" || action === "revoke" || action === "cancelInvites" || action === "cancelInvite" || action === "setCaregiver" || action === "setMessages" || action === "setPhoneDropIn") {
