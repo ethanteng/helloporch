@@ -3,6 +3,7 @@ import PorchCore
 
 final class AdvancedSettingsViewController: CaregiverFormViewController {
     private let phoneSwitch = UISwitch()
+    private let receiverSwitch = UISwitch()
     private let defaults: UserDefaults
     private let phoneKeypad: Cell2JackKeypad
     private let silenceSwitch = UISwitch()
@@ -45,13 +46,20 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         phoneSwitch.addTarget(self, action: #selector(changePhoneKeypad), for: .valueChanged)
         let phoneRow = UIStackView(arrangedSubviews: [PorchStyle.label("Use Cell2Jack phone keypad", size: 20), phoneSwitch])
         phoneRow.spacing = 20; phoneRow.alignment = .center
+        receiverSwitch.isOn = phoneKeypad.receiverHangUp
+        receiverSwitch.onTintColor = PorchStyle.accent
+        receiverSwitch.accessibilityIdentifier = "advanced.cell2jackReceiverHangUp"
+        receiverSwitch.accessibilityLabel = "Hang up when the receiver is put back"
+        receiverSwitch.addTarget(self, action: #selector(changeReceiverHangUp), for: .valueChanged)
+        let receiverRow = UIStackView(arrangedSubviews: [PorchStyle.label("Hang up when the receiver is put back", size: 20), receiverSwitch])
+        receiverRow.spacing = 20; receiverRow.alignment = .center
         let retry = PorchStyle.button("Retry phone connection", symbol: "arrow.clockwise", filled: false)
         retry.addAction(UIAction { [weak self] _ in self?.phoneKeypad.refresh() }, for: .touchUpInside)
         let driver = PorchStyle.button("Open app settings", symbol: "gearshape", filled: false)
         driver.addAction(UIAction { _ in
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         }, for: .touchUpInside)
-        form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Optional, off by default. Requires an M-series iPad with iPadOS 16 or later and the USB driver enabled in this app’s settings. This switch takes effect immediately. Use your saved person keys to call and your call-control key (normally 0) to hang up. Keep Porch open. Receiver pickup and hang-up do not control Porch. USB provides keypad input; sound follows the iPad’s selected audio output.", views: [phoneRow, retry, driver]))
+        form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Optional, off by default. Requires an M-series iPad with iPadOS 16 or later and the USB driver enabled in this app’s settings. These switches take effect immediately. Use your saved person keys to call and your call-control key (normally 0) to hang up. Putting the receiver back on the phone also hangs up; turn that off if they set the receiver down right after pressing a key, since the sound comes from the iPad. Picking it up does nothing by itself. Keep Porch open. USB provides keypad input; sound follows the iPad’s selected audio output.", views: [phoneRow, receiverRow, retry, driver]))
         } else {
             form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Cell2Jack requires an M-series iPad with iPadOS 16 or later. You can continue using a standard USB keypad and touch controls on this device.", views: []))
         }
@@ -81,4 +89,5 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
 
 extension AdvancedSettingsViewController {
     @objc private func changePhoneKeypad() { phoneKeypad.setEnabled(phoneSwitch.isOn) }
+    @objc private func changeReceiverHangUp() { phoneKeypad.setReceiverHangUp(receiverSwitch.isOn) }
 }

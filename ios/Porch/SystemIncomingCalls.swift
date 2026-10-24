@@ -566,12 +566,14 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
 extension SystemCallViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         switch (try? CallSlots.load())?.action(for: digit) {
-        case .callControl:
-            SystemIncomingCalls.shared.requestEnd()
-            Cell2JackKeypad.shared.record(["kind": "callEndRequested", "screen": "systemCall"])
-            return "system call end requested"
+        case .callControl: return receiveCell2JackHangUp()
         case .toggleVideo: camera.sendActions(for: .touchUpInside); return "system camera key dispatched"
         default: return "system call key ignored"
         }
+    }
+    func receiveCell2JackHangUp() -> String {
+        SystemIncomingCalls.shared.requestEnd()
+        Cell2JackKeypad.shared.record(["kind": "callEndRequested", "screen": "systemCall"])
+        return "system call end requested"
     }
 }

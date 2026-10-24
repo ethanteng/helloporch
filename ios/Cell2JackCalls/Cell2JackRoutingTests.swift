@@ -6,9 +6,29 @@ import PorchCore
 final class Cell2JackRoutingTests: XCTestCase {
     private final class Receiver: UIViewController, Cell2JackDigitReceiving {
         var received: [Int] = []
+        var hangUps = 0
         var overlay: UIViewController?
+        var appearing = false
         override var presentedViewController: UIViewController? { overlay }
+        override var isBeingPresented: Bool { appearing }
         func receiveCell2JackDigit(_ digit: Int) -> String { received.append(digit); return "handled" }
+        func receiveCell2JackHangUp() -> String { hangUps += 1; return "hung up" }
+    }
+    /// A screen without a call to end, like an incoming call that is still ringing.
+    private final class KeysOnly: UIViewController, Cell2JackDigitReceiving {
+        func receiveCell2JackDigit(_ digit: Int) -> String { "handled" }
+    }
+    @MainActor func testHangUpGoesOnlyToVisibleScreenWithACall() {
+        let clock = Receiver(), call = Receiver()
+        clock.overlay = call
+        XCTAssertEqual(Cell2JackDigitRouter.routeHangUp(root: clock), "hung up")
+        XCTAssertEqual(call.hangUps, 1); XCTAssertEqual(clock.hangUps, 0)
+        call.overlay = UIViewController() // settings, alert, PIN, permission UI
+        XCTAssertEqual(Cell2JackDigitRouter.routeHangUp(root: clock), "screen does not accept phone keys")
+        call.overlay = KeysOnly()
+        XCTAssertEqual(Cell2JackDigitRouter.routeHangUp(root: clock), "hang-up ignored")
+        XCTAssertEqual(call.hangUps, 1)
+        XCTAssertEqual(CallViewController().receiveCell2JackHangUp(), "no call to end")
     }
     @MainActor func testRoutesToCurrentScreenAndBlocksUnknownModal() {
         let clock = Receiver(), call = Receiver()
@@ -68,6 +88,32 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertTrue(screen.isEnding)
         XCTAssertEqual(screen.receiveCell2JackDigit(4), "call ending")
         XCTAssertFalse(screen.isViewLoaded)
+    }
+    @MainActor func testPuttingReceiverBackEndsRealCallScreenWithoutConnecting() throws {
+        let call = try NativeCall(room: "local-test", mode: .voice)
+        let person = try CallContact(name: "Local fixture", nativeCall: call)
+        let server = try NativeCallServer(url: "https://example.invalid", accessCode: "local-fixture-only-access-code")
+        let screen = NativeCallViewController(contact: person, call: call, server: server)
+        // Deliberately do not load its view: no media or connection task starts.
+        XCTAssertEqual(screen.receiveCell2JackHangUp(), "call end requested")
+        XCTAssertTrue(screen.isEnding)
+        XCTAssertEqual(screen.receiveCell2JackHangUp(), "call ending")
+        XCTAssertFalse(screen.isViewLoaded)
+    }
+    @MainActor func testPuttingReceiverBackWhileSayingTheyDidntAnswerSkipsTheMessage() throws {
+        let call = try NativeCall(room: "local-test", mode: .voice)
+        let person = try CallContact(name: "Local fixture", nativeCall: call)
+        let server = try NativeCallServer(url: "https://example.invalid", accessCode: "local-fixture-only-access-code")
+        // Deliberately do not load their views: no media or connection task starts.
+        let unanswered = NativeCallViewController(contact: person, call: call, server: server)
+        unanswered.onUnanswered = {}
+        unanswered.finish(message: "No one joined. Returning to the clock…")
+        XCTAssertEqual(unanswered.receiveCell2JackHangUp(), "unanswered message cancelled")
+        XCTAssertEqual(unanswered.receiveCell2JackHangUp(), "call ending")
+        let noMessage = NativeCallViewController(contact: person, call: call, server: server)
+        noMessage.finish(message: "No one joined. Returning to the clock…")
+        XCTAssertEqual(noMessage.receiveCell2JackHangUp(), "call ending")
+        XCTAssertFalse(unanswered.isViewLoaded || noMessage.isViewLoaded)
     }
     @MainActor func testPhoneStatusFitsBelowCallButton() throws {
         func find(_ id: String, in view: UIView) -> UIView? {
@@ -344,7 +390,80 @@ final class Cell2JackRoutingTests: XCTestCase {
         let transport = try XCTUnwrap(connection)
         transport.update(.digits(events, ProcessInfo.processInfo.systemUptime))
         XCTAssertEqual(clock.received, [0])
+        XCTAssertEqual(clock.hangUps, 2)
         keypad.pause()
+        transport.update(.finished("/q sent"))
+    }
+
+    @MainActor func testPuttingReceiverBackReachesFullScreenCallOnlyAfterPickup() throws {
+        let name = "cell2jack-hangup-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver(), call = Receiver()
+        clock.loadViewIfNeeded(); clock.overlay = call
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.setEnabled(true); keypad.activate()
+        let transport = try XCTUnwrap(connection)
+        var parser = Cell2JackDTMFParser()
+        // Plugging Cell2Jack back in reports ON_HOOK with the receiver already down.
+        transport.update(.digits(parser.append(Data(" ON_HOOK \r\n Set ON-hook 121\r\n".utf8)), ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.hangUps, 0)
+        transport.update(.digits(parser.append(Data("L1L2 OFF_HOOK \r\n Stop Playing Audio\r\nH1H2 ON_HOOK \r\n".utf8)), ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.hangUps, 1); XCTAssertEqual(clock.hangUps, 0); XCTAssertTrue(call.received.isEmpty)
+        let record = try XCTUnwrap(keypad.records.last)
+        XCTAssertEqual(record["kind"] as? String, "hangUp")
+        XCTAssertEqual(record["outcome"] as? String, "hung up")
+        XCTAssertEqual(record["rawLine"] as? String, "H1H2 ON_HOOK ")
+        keypad.pause()
+        transport.update(.digits(parser.append(Data("L1L2 OFF_HOOK \r\nH1H2 ON_HOOK \r\n".utf8)), ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.hangUps, 1, "Input must still stop when the scene becomes inactive")
+        transport.update(.finished("/q sent"))
+    }
+
+    @MainActor func testHangUpWhileACallScreenAppearsIsTriedAgain() throws {
+        let name = "cell2jack-hangup-retry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        var retries: [DispatchWorkItem] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }, enqueueRetry: { _, work in retries.append(work) }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver(), call = Receiver()
+        clock.overlay = call; call.appearing = true
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.setEnabled(true); keypad.activate()
+        let transport = try XCTUnwrap(connection)
+        var parser = Cell2JackDTMFParser()
+        func hangUp() { transport.update(.digits(parser.append(Data("L1L2 OFF_HOOK \r\nH1H2 ON_HOOK \r\n".utf8)), ProcessInfo.processInfo.systemUptime)) }
+        hangUp()
+        XCTAssertEqual(call.hangUps, 0)
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, Cell2JackDigitRouter.transitioning)
+        retries.removeFirst().perform()
+        XCTAssertEqual(retries.count, 1, "Still appearing, so it waits again")
+        call.appearing = false
+        retries.removeFirst().perform()
+        XCTAssertEqual(call.hangUps, 1); XCTAssertTrue(retries.isEmpty)
+        XCTAssertEqual(keypad.records.last?["attempt"] as? Int, 3)
+        // A screen that never settles: give up after six tries.
+        call.appearing = true
+        hangUp()
+        while !retries.isEmpty { retries.removeFirst().perform() }
+        XCTAssertEqual(call.hangUps, 1)
+        XCTAssertEqual(keypad.records.last?["attempt"] as? Int, 6)
+        // Leaving Porch drops a waiting retry.
+        hangUp()
+        keypad.pause()
+        call.appearing = false
+        retries.removeFirst().perform()
+        XCTAssertEqual(call.hangUps, 1)
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, "dropped: session or foreground gate")
         transport.update(.finished("/q sent"))
     }
 
@@ -399,6 +518,41 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
         toggle.isOn = false; toggle.sendActions(for: .valueChanged)
         XCTAssertFalse(keypad.enabled)
+    }
+    @MainActor func testReceiverHangUpSwitchStartsOnAndTurningItOffKeepsTheCall() throws {
+        guard Cell2JackKeypad.supportsDriverPlatform else { return }
+        let name = "cell2jack-receiver-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connection: Connection?
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
+            let result = Connection(update); connection = result; return result
+        }
+        let screen = AdvancedSettingsViewController(defaults: defaults, phoneKeypad: keypad)
+        screen.loadViewIfNeeded()
+        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
+        let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "advanced.cell2jackReceiverHangUp" })
+        XCTAssertTrue(toggle.isOn); XCTAssertTrue(keypad.receiverHangUp)
+        toggle.isOn = false; toggle.sendActions(for: .valueChanged)
+        XCTAssertFalse(keypad.receiverHangUp)
+        XCTAssertFalse(keypad.enabled, "The receiver switch must not turn Cell2Jack on")
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver(), call = Receiver()
+        clock.overlay = call
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.setEnabled(true); keypad.activate()
+        let transport = try XCTUnwrap(connection)
+        var parser = Cell2JackDTMFParser()
+        let pickupAndHangUp = Data("L1L2 OFF_HOOK \r\n DTMF 1 :0 20: 2\r\nH1H2 ON_HOOK \r\n".utf8)
+        transport.update(.digits(parser.append(pickupAndHangUp), ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.received, [1], "Keys still work with the receiver switch off")
+        XCTAssertEqual(call.hangUps, 0)
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, "receiver hang-up off")
+        toggle.isOn = true; toggle.sendActions(for: .valueChanged)
+        transport.update(.digits(parser.append(pickupAndHangUp), ProcessInfo.processInfo.systemUptime))
+        XCTAssertEqual(call.hangUps, 1)
+        keypad.pause()
+        transport.update(.finished("/q sent"))
     }
     private final class HardwareKey: UIKey {
         var code: UIKeyboardHIDUsage = .keypad0

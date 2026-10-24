@@ -4,14 +4,26 @@ import PorchCore
 /// Phone digits share Porch's existing actions; keyboard input remains independent.
 protocol Cell2JackDigitReceiving: AnyObject {
     func receiveCell2JackDigit(_ digit: Int) -> String
+    /// The receiver went back on the cradle. Only screens with a call to end act on it.
+    func receiveCell2JackHangUp() -> String
+}
+extension Cell2JackDigitReceiving {
+    func receiveCell2JackHangUp() -> String { "hang-up ignored" }
 }
 
 enum Cell2JackDigitRouter {
+    static let transitioning = "screen transitioning"
     static func route(_ symbol: String, root: UIViewController) -> String {
         guard let digit = CallSlots.digit(forSymbol: symbol) else { return "unassigned symbol" }
+        return deliver(root: root) { $0.receiveCell2JackDigit(digit) }
+    }
+    static func routeHangUp(root: UIViewController) -> String {
+        deliver(root: root) { $0.receiveCell2JackHangUp() }
+    }
+    private static func deliver(root: UIViewController, _ action: (Cell2JackDigitReceiving) -> String) -> String {
         var screen = root
         while true {
-            guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return "screen transitioning" }
+            guard !screen.isBeingDismissed, !screen.isBeingPresented, screen.transitionCoordinator == nil else { return transitioning }
             if let presented = screen.presentedViewController { screen = presented }
             else if let nav = screen as? UINavigationController, let top = nav.topViewController { screen = top }
             else if let tabs = screen as? UITabBarController, let selected = tabs.selectedViewController { screen = selected }
@@ -20,7 +32,7 @@ enum Cell2JackDigitRouter {
         }
         // An unknown modal (PIN, settings, alert, permission UI) blocks input.
         guard let receiver = screen as? Cell2JackDigitReceiving else { return "screen does not accept phone keys" }
-        return receiver.receiveCell2JackDigit(digit)
+        return action(receiver)
     }
 }
 
@@ -42,6 +54,9 @@ final class Cell2JackKeypad {
     static let shared = Cell2JackKeypad()
     // The prototype's automatic test opt-in is deliberately not migrated.
     static let enabledKey = "porch.cell2jack.enabled"
+    // On unless a caregiver turns it off, for someone who sets the receiver down
+    // right after pressing a key because the sound comes from the iPad.
+    static let receiverHangUpKey = "porch.cell2jack.receiverHangUp"
     weak var root: UIViewController?
     weak var windowScene: UIWindowScene?
     private(set) var status = "Phone keypad off"
@@ -64,6 +79,7 @@ final class Cell2JackKeypad {
     private let enqueueRetry: (TimeInterval, DispatchWorkItem) -> Void
     private let makeConnection: (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection
     var enabled: Bool { defaults.bool(forKey: Self.enabledKey) }
+    var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
 
     init(defaults: UserDefaults = .standard,
          isBedside: @escaping () -> Bool = { PorchDevice.experience == .bedside },
@@ -94,6 +110,7 @@ final class Cell2JackKeypad {
         defaults.set(value, forKey: Self.enabledKey)
         refresh()
     }
+    func setReceiverHangUp(_ value: Bool) { defaults.set(value, forKey: Self.receiverHangUpKey) }
     func activate() {
         sceneActive = true
         if enabled { record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
@@ -125,6 +142,7 @@ final class Cell2JackKeypad {
                       age < 1, self.sceneActive, self.isBedside() else {
                     self.record(["kind": "digitIgnored", "reason": "session or foreground gate",
                                  "symbols": digits.filter { $0.kind == .digit }.map(\.digit).joined(),
+                                 "hangUp": digits.contains { $0.kind == .hangUp },
                                  "callbackAge": age, "generationMatches": self.generation == token,
                                  "wanted": self.wanted, "stopping": self.stopping,
                                  "sceneActive": self.sceneActive, "bedside": self.isBedside()])
@@ -134,6 +152,7 @@ final class Cell2JackKeypad {
                 // its window. The owning scene, not that view, stays active.
                 guard let root = self.root, self.windowScene?.activationState == .foregroundActive else {
                     self.record(["kind": "digitIgnored", "reason": "window scene inactive or root missing",
+                                 "hangUp": digits.contains { $0.kind == .hangUp },
                                  "sceneState": self.windowScene?.activationState.rawValue ?? -99])
                     return
                 }
@@ -141,6 +160,7 @@ final class Cell2JackKeypad {
                     if event.kind == .pulse {
                         self.record(["kind": "pulseDigitIgnored", "symbol": event.digit, "rawLine": event.line])
                     }
+                    if event.kind == .hangUp { self.deliverHangUp(event.line, root: root, token: token) }
                     guard event.kind == .digit else { continue }
                     let outcome = Cell2JackDigitRouter.route(event.digit, root: root)
                     self.record(["kind": "digit", "symbol": event.digit, "outcome": outcome,
@@ -203,6 +223,22 @@ final class Cell2JackKeypad {
         retryWork = work
         record(["kind": "usbRetryScheduled", "delaySeconds": delay])
         enqueueRetry(delay, work)
+    }
+    /// The receiver can't repeat a hang-up the way a key can be pressed again, so one that
+    /// lands while a screen is opening or closing is tried again for about two seconds.
+    private func deliverHangUp(_ line: String, root: UIViewController, token: UUID, attempt: Int = 1) {
+        let outcome = receiverHangUp ? Cell2JackDigitRouter.routeHangUp(root: root) : "receiver hang-up off"
+        record(["kind": "hangUp", "outcome": outcome, "rawLine": line, "attempt": attempt])
+        guard outcome == Cell2JackDigitRouter.transitioning, attempt < 6 else { return }
+        enqueueRetry(0.4, DispatchWorkItem { [weak self, weak root] in
+            guard let self else { return }
+            guard let root, self.generation == token, self.wanted, !self.stopping, self.sceneActive,
+                  self.windowScene?.activationState == .foregroundActive else {
+                self.record(["kind": "hangUp", "outcome": "dropped: session or foreground gate", "rawLine": line, "attempt": attempt + 1])
+                return
+            }
+            self.deliverHangUp(line, root: root, token: token, attempt: attempt + 1)
+        })
     }
     private func changeStatus(_ text: String) {
         status = text

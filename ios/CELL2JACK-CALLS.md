@@ -63,6 +63,9 @@ communication is an iPadOS facility.
   (currently **0**) to end the call, including while it is ringing. During the
   short interval while the request is starting, that key marks the request for
   cancellation and ends a returned session before presenting it.
+- Putting the receiver back on the phone also ends the call, as the
+  call-control key does, unless **Hang up when the receiver is put back** is off
+  in Advanced. See [Hanging up the receiver](#hanging-up-the-receiver-2026-10-23).
 - The saved camera key works in an applicable video call. Incoming call-control
   input is treated as a tap to answer; during an automatic drop-in countdown it
   cancels the drop-in. Message/call-control keys can stop message playback.
@@ -73,13 +76,9 @@ communication is an iPadOS facility.
   **Retry phone connection** in Advanced can retry immediately. Touch call
   controls remain available when USB is disconnected.
 
-Pickup and handset hang-up events are never routed to app actions. The app's
-interface depends only on digit events. The current physical test uses an AT&T
-210 with its handset off the cradle.
-The handset was left in that position during the successful key and call tests.
-This establishes operation without pickup/hang-up between calls; it does not
-establish on-cradle digit output or behavior of the intended separate-headset
-phone.
+Picking up the receiver is never routed to an app action; putting it back is
+(see below). The first physical tests used an AT&T 210 with its handset left
+off the cradle during the successful key and call tests.
 
 USB transports keypad input only. Call audio uses the existing iPad audio route.
 This integration does not add a USB audio device or automatically route audio to
@@ -371,3 +370,60 @@ Porch records each one as `pulseDigitIgnored` with its raw line. Pulse (rotary)
 dialing is therefore not an input; a phone with a tone/pulse switch must stay on
 tone. Parser tests replay this capture at every split point, and a routing test
 sends it through the owner to the clock, which receives only the 0.
+
+## Hanging up the receiver 2026-10-23
+
+The picture phone's keys work only with the receiver lifted, so every call from
+the bedside starts with a pickup. Putting the receiver back now ends the call,
+like a regular phone.
+
+Someone who sets the receiver down right after pressing a person's key, because
+the sound comes from the iPad, would end every call at once. **Caregiver mode →
+Advanced → Hang up when the receiver is put back** turns this off. It starts on,
+takes effect immediately, is stored as `porch.cell2jack.receiverHangUp`, and
+leaves keys working. With it off, hang-ups are still recorded, with the outcome
+`receiver hang-up off`.
+
+Cell2Jack has no setting to silence its "phone not
+connected" warning on pickup (none of its keypad codes or C2JUtility settings
+covers it); pressing any key already stops it.
+
+Cell2Jack reports a hang-up as a ` ON_HOOK ` line (`H1H2 ON_HOOK ` and similar),
+followed by `Set ON-hook 121`, and a pickup as `L1L2 OFF_HOOK `. A brief break
+shows as `FLASH`, never `ON_HOOK`. It also reports ` ON_HOOK ` while starting up
+after being plugged back in, with the receiver already down. The parser
+therefore reports a `hangUp` event only for an `ON_HOOK` that follows a pickup
+or a key press in the same log session (keys only work off the cradle). If logs
+start with the receiver already up, the first key press is enough.
+
+Porch routes `hangUp` like a key, to the visible screen only, recording each as
+`hangUp` with its outcome and raw line:
+
+| Screen | Putting the receiver back |
+| --- | --- |
+| Outgoing, connected or phone-fallback call | Ends it, as the call-control key does |
+| Answered system (CallKit) call | Ends it |
+| Clock while a call request is starting | Cancels the request |
+| Call screen already saying they didn't answer | Skips the message screen that would follow, as hanging up does on a phone |
+| Leaving a message after no answer | Finishes it; before the beep nothing is sent |
+| Incoming call still ringing, drop-in countdown, message playback, clock, people picker | Nothing |
+
+Lifting and replacing the receiver while a call rings does not decline it.
+
+A key pressed while a screen opens or closes is dropped and can be pressed
+again, but a hang-up can't be repeated without lifting the receiver. So a
+hang-up that finds a screen transitioning is tried again every 0.4 seconds,
+up to six tries (about two seconds), and each try is recorded with its
+`attempt`. That covers a screen animating in or out. Leaving Porch drops a
+waiting retry, recorded as `dropped: session or foreground gate`.
+
+Before a new screen appears, the clock first waits for the presence camera to
+stop, which has no fixed length. A hang-up in that wait is held for that
+screen and given to it once it has appeared, recorded as `heldHangUp`. Only
+the screen that was waiting gets it; a later screen never does. The simulator's
+presence camera stops at once, so unit tests can't open this wait; it needs a
+check on the iPad with waiting messages and presence detection on.
+
+Saved captures replay as expected: the pickup tests' two hang-ups and the
+full-keypad test's final hang-up are found, and three plug-in starts produce
+none.

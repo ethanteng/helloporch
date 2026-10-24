@@ -958,6 +958,7 @@ extension BedsideVoicemailViewController: Cell2JackDigitReceiving {
         guard (try? CallSlots.load())?.action(for: digit) == .callControl else { return "message key ignored" }
         finishFromKeypad(); return "message finished"
     }
+    func receiveCell2JackHangUp() -> String { finishFromKeypad(); return "message finished" }
 }
 
 /// Notices someone sitting in front of the bedside iPad: the front camera runs at a low rate and

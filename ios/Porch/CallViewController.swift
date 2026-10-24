@@ -21,6 +21,10 @@ final class CallViewController: UIViewController {
     /// start again until that present has either appeared or been abandoned.
     private var presenceSuppressed = false
     private var cameraReleaseWaiters: [() -> Void] = []
+    /// The screen waiting for that release, and whether the receiver was put back meanwhile.
+    /// The receiver can't repeat a hang-up, so that screen gets it once it has appeared.
+    private weak var awaitingPresentation: UIViewController?
+    private var hangUpAwaitingPresentation = false
     /// The container skips a new incoming call until this is false, then checks again.
     var isReleasingCamera: Bool { presenceSuppressed }
     /// After Not now or Stop: the messages that were waiting, left alone until then unless a new one arrives.
@@ -286,10 +290,20 @@ final class CallViewController: UIViewController {
     }
     // Calls, the message player and recording all need the camera or the screen.
     override func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
+        awaitingPresentation = viewControllerToPresent; hangUpAwaitingPresentation = false
         releaseCamera { [weak self] in self?.presentNow(viewControllerToPresent, animated: flag, completion: completion) }
     }
     private func presentNow(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
-        super.present(viewControllerToPresent, animated: flag, completion: completion)
+        var heldHangUp = false
+        if awaitingPresentation === viewControllerToPresent {
+            heldHangUp = hangUpAwaitingPresentation
+            awaitingPresentation = nil; hangUpAwaitingPresentation = false
+        }
+        super.present(viewControllerToPresent, animated: flag) {
+            completion?()
+            guard heldHangUp, let screen = viewControllerToPresent as? Cell2JackDigitReceiving else { return }
+            Cell2JackKeypad.shared.record(["kind": "heldHangUp", "outcome": screen.receiveCell2JackHangUp()])
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -841,15 +855,23 @@ extension CallViewController: Cell2JackDigitReceiving {
     func receiveCell2JackDigit(_ digit: Int) -> String {
         guard presentedViewController == nil else { return "clock covered" }
         if opening {
-            if slots.action(for: digit) == .callControl {
-                cancelOpening = true
-                displayStatus(BedsideText.string("Ending call…"))
-                return "cancel pending call requested"
-            }
-            return "call already opening"
+            return slots.action(for: digit) == .callControl ? cancelPendingCall() : "call already opening"
         }
         call(slot: digit)
         return "clock key dispatched"
+    }
+    func receiveCell2JackHangUp() -> String {
+        guard presentedViewController == nil else { return "no call to end" }
+        if opening { return cancelPendingCall() }
+        // A new call screen waits for the presence camera to stop before it appears.
+        guard awaitingPresentation != nil else { return "no call to end" }
+        hangUpAwaitingPresentation = true
+        return "held for the screen that is opening"
+    }
+    private func cancelPendingCall() -> String {
+        cancelOpening = true
+        displayStatus(BedsideText.string("Ending call…"))
+        return "cancel pending call requested"
     }
 }
 extension PeoplePickerViewController: Cell2JackDigitReceiving {
