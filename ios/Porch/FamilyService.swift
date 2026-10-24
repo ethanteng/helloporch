@@ -166,6 +166,17 @@ struct FamilyCallSession {
     }
 }
 
+/// Numbers this launch's polls. Two can reach the server out of order, such as the one sent as Porch closes overtaking
+/// the last one sent while it was open, and the server keeps the newest one's availability.
+@MainActor enum PollOrder {
+    private static let launch = UUID().uuidString.lowercased()
+    private static var sequence = 0
+    static func next(_ values: [String: Any]) -> [String: Any] {
+        sequence += 1
+        return values.merging(["launch": launch, "sequence": sequence]) { current, _ in current }
+    }
+}
+
 @MainActor final class FamilyCoordinator {
     static let shared = FamilyCoordinator()
     private(set) var state: FamilySnapshot?
@@ -194,7 +205,7 @@ struct FamilyCallSession {
             while !Task.isCancelled {
                 guard let self, self.isActive, self.generation == generation else { return }
                 do {
-                    let result = try await FamilyService(credential).send("poll", ["available": self.canReceive()])
+                    let result = try await FamilyService(credential).send("poll", PollOrder.next(["available": self.canReceive()]))
                     guard !Task.isCancelled, self.generation == generation else { return }
                     self.state = result.state; self.error = nil; self.accessRemoved = false; self.changed()
                 } catch {
@@ -214,7 +225,9 @@ struct FamilyCallSession {
         // Porch pauses whenever it stops being active, and a wrong PIN mustn't be retried on every return.
         reportingKeypad = false
         if let credential {
-            Task { _ = try? await FamilyService(credential).send("poll", ["available": false]) }
+            // Numbered now, after any poll still in flight.
+            let values = PollOrder.next(["available": false])
+            Task { _ = try? await FamilyService(credential).send("poll", values) }
         }
     }
     func update(_ response: FamilyResponse) {

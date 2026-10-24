@@ -483,7 +483,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             rows.append(listRow([PorchStyle.label("No one yet. Turn on drop-in for a family member, or approve a phone number.", size: 16)]))
         }
         rows.append(actionRow("Approve a phone number", symbol: "phone.badge.plus") { [weak self] in self?.showPhoneDropIn() })
-        let footer = "Only the people and numbers listed here connect without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls ring for Answer, except Porch calls from people whose calls drop in. Phone drop-ins work while Porch is open on the bedside iPad, for calls their phone company verifies."
+        let footer = "Only the people and numbers listed here connect without anyone answering, after a spoken announcement and five-second countdown. Ordinary calls ring for Answer, except Porch calls from people whose calls drop in, while this is on and Porch is open on the bedside iPad. Phone drop-ins work while Porch is open on the bedside iPad, for calls their phone company verifies."
         return group("Drop-in", footer: remote == nil ? footer : footer + " Drop-ins connect only if the bedside iPad allows microphone and camera access.", rows: rows)
     }
     /// Who can ring this Porch from a regular phone, beside the numbers that were turned away.
