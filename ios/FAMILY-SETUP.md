@@ -94,7 +94,7 @@ A caregiver can bring a regular phone into their call with the bedside, for exam
 
 ## Keypad actions
 
-There are twelve stable slots: **1–9, 0**, then **\*** and **#**. Existing six-person setups keep their assignments; **7 and 8** start empty, **9** initially toggles video, **0** initially controls calls, and **\*** and **#** start empty. Edit any slot to choose **Person**, **Call control**, or **Video toggle**. All twelve slots can call people if reassigned, and any key can be a control. A keyboard's * and # count wherever its layout types them, usually with Shift. Touch controls remain available even if no keypad controls are assigned.
+There are twelve stable slots: **1–9, 0**, then **\*** and **#**. A new keypad starts with **9** toggling video and **0** answering or hanging up; every other key has no action until you assign it. Existing six-person setups keep the people already saved, and their empty keys show as **No action**. Edit any slot to choose **No action**, **Person**, **Call control**, **Video toggle**, or **Messages**. Any key can call a person, be a control, or be set back to **No action**. A keyboard's * and # count wherever its layout types them, usually with Shift. Touch controls remain available even if no keypad controls are assigned.
 
 For the call-control key: tap and release to answer an ordinary incoming call; hold one second to decline it. Tap to stop a drop-in during its announcement, or to hang up an active/dialing call, including phone fallback. The video key toggles your camera during a video call; voice-only and regular phone calls keep it off. Holding a digit does not repeatedly trigger it. Keys work while Porch is foregrounded; caregiver text fields continue to accept typing.
 
