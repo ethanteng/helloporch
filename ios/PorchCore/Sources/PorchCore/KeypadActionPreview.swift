@@ -67,13 +67,13 @@ public struct KeypadActionPreview {
             return result(.stopMessages, "Would stop the message", "No message audio is played in this preview.", action: action)
         }
         guard context == .clock else {
-            return result(.ignored, "Key \(symbol) has no action in this state", "The saved \(action.title.lowercased()) action is available from the clock.", action: action)
+            return result(.ignored, "Key \(symbol) has no action in this state", action == .unassigned ? "This key is set to No action." : "The saved \(action.title.lowercased()) action is available from the clock.", action: action)
         }
         if action == .messages {
             return result(.playMessages, "Would open messages", "Message availability is not fetched or changed in this preview.", action: action)
         }
         guard let person = slots.contact(for: digit) else {
-            return result(.unassigned, "No person assigned to \(symbol)", "This is an empty person slot in the saved HelloPorch setup.", action: action, selected: digit)
+            return result(.unassigned, "No action assigned to \(symbol)", "This key is set to No action in the saved HelloPorch setup.", action: action, selected: digit)
         }
         guard let call = person.nativeCall else {
             return result(.needsSetup, "\(person.name) · finish Porch setup", "This saved person needs Porch calling setup before the normal app can call them.", action: action, name: person.name, selected: digit)

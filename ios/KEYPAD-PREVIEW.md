@@ -43,7 +43,7 @@ Snapshot files in the preview's Documents directory:
 
 - `porch-preview-slots.json`: the existing `porch.slots.v2` data (keys 0–9).
 - `porch-preview-symbol-slots.json`: the `porch.slots.v2.symbols` data (keys * and #),
-  when the setup has it. Without it, * and # preview as empty person keys.
+  when the setup has it. Without it, * and # preview with no action.
 - `porch-preview-photos/`: the referenced contact photo files.
 
 `CallSlots.snapshot` decodes without migration, preference writes, photo writes,
@@ -72,7 +72,7 @@ The saved USB and action traces agree:
 | --- | --- |
 | 1 | First saved contact, video call selected |
 | 2 | Second saved contact, video call selected |
-| 3 | No person assigned |
+| 3 | No action assigned |
 | 9 | Camera key, no video call |
 | 0 | No call to answer or end |
 | * | No action assigned |

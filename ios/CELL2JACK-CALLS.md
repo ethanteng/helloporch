@@ -56,7 +56,7 @@ communication is an iPadOS facility.
 - Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
   disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.
-- Informational clock messages (empty person slot, call/camera key hints, and
+- Informational clock messages (a key with no action, call/camera key hints, and
   no waiting messages) clear after five seconds. Each replacement gets its own
   five seconds; leaving the clock or backgrounding clears the message.
 - Press a saved person's key to call them. Press the configured call-control key
@@ -84,7 +84,7 @@ USB transports keypad input only. Call audio uses the existing iPad audio route.
 This integration does not add a USB audio device or automatically route audio to
 the phone. DTMF logs provide no trustworthy down/up duration, so hold-to-decline
 is not synthesized. `*` and `#` act on whatever their keys are assigned, like
-digits; both start as empty person keys. A–D have no keys and are ignored. Secondary Double DTMF diagnostic reports do not trigger actions;
+digits; both start with no action. A–D have no keys and are ignored. Secondary Double DTMF diagnostic reports do not trigger actions;
 separate primary reports, including repeated digits, remain separate inputs.
 
 ## Lifecycle and diagnostics

@@ -111,8 +111,8 @@ final class PorchCoreTests: XCTestCase {
         for digit in CallSlots.digits { XCTAssertEqual(CallSlots.digit(forSymbol: CallSlots.symbol(for: digit)), digit) }
         for symbol in ["10", "11", "A", "D", "", "١", "**", " 1"] { XCTAssertNil(CallSlots.digit(forSymbol: symbol), symbol) }
         let slots = CallSlots()
-        XCTAssertEqual(slots.action(for: CallSlots.star), .person); XCTAssertNil(slots.contact(for: CallSlots.star))
-        XCTAssertEqual(slots.action(for: CallSlots.pound), .person); XCTAssertNil(slots.contact(for: CallSlots.pound))
+        XCTAssertEqual(slots.action(for: CallSlots.star), .unassigned); XCTAssertNil(slots.contact(for: CallSlots.star))
+        XCTAssertEqual(slots.action(for: CallSlots.pound), .unassigned); XCTAssertNil(slots.contact(for: CallSlots.pound))
     }
 
     func testStarAndPoundSaveBesideTheTenDigitsSoEarlierBuildsCanStillReadThem() throws {
@@ -513,6 +513,20 @@ final class BedsideAndKeypadTests: XCTestCase {
         let loaded = try CallSlots.load(from: prefs)
         XCTAssertEqual(loaded.digit(for: .callControl), 4); XCTAssertNil(loaded.contact(for: 4))
         XCTAssertEqual(loaded.action(for: 7), .toggleVideo); XCTAssertEqual(loaded.contact(for: 0), person)
+    }
+    func testKeysStartWithNoActionAndCanBeClearedAgain() throws {
+        let prefs = defaults(); var slots = CallSlots()
+        for digit in CallSlots.digits where digit != 9 && digit != 0 { XCTAssertEqual(slots.action(for: digit), .unassigned) }
+        let person = try CallContact(name: "Pat", nativeCall: NativeCall(room: "pat", mode: .video))
+        try slots.setContact(person, for: 1); try slots.setAction(.messages, for: 2)
+        for digit in [1, 2, 9, 0] { try slots.setAction(.unassigned, for: digit) }
+        for digit in [1, 2, 9, 0] { XCTAssertEqual(slots.action(for: digit), .unassigned); XCTAssertNil(slots.contact(for: digit)) }
+        XCTAssertNil(slots.digit(for: .callControl))
+        try slots.save(to: prefs)
+        XCTAssertEqual(try CallSlots.load(from: prefs), slots)
+        // Builds from before No action read a key with no action as an empty person key.
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(prefs.data(forKey: "porch.slots.v2"))) as? [[String: Any]])
+        XCTAssertEqual(Set(saved.compactMap { $0["action"] as? String }), ["person"])
     }
     func testMessagesKeySurvivesRelaunchAndBedsideQueueDecodes() throws {
         let prefs = defaults(); var slots = CallSlots()

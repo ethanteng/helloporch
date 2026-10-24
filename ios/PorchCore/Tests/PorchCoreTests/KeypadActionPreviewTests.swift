@@ -67,7 +67,7 @@ final class KeypadActionPreviewTests: XCTestCase {
         let snapshot = try CallSlots.snapshot(from: bytes, symbols: symbols)
         XCTAssertEqual(snapshot, slots)
         XCTAssertEqual(snapshot.action(for: CallSlots.pound), .callControl)
-        XCTAssertEqual(try CallSlots.snapshot(from: bytes).action(for: CallSlots.pound), .person, "A snapshot from before * and # leaves them empty")
+        XCTAssertEqual(try CallSlots.snapshot(from: bytes).action(for: CallSlots.pound), .unassigned, "A snapshot from before * and # leaves them empty")
         XCTAssertEqual(defaults.data(forKey: "porch.slots.v2"), bytes)
         XCTAssertThrowsError(try CallSlots.snapshot(from: Data("[]".utf8)))
     }
