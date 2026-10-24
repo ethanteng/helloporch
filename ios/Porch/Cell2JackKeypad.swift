@@ -231,8 +231,12 @@ final class Cell2JackKeypad {
         record(["kind": "hangUp", "outcome": outcome, "rawLine": line, "attempt": attempt])
         guard outcome == Cell2JackDigitRouter.transitioning, attempt < 6 else { return }
         enqueueRetry(0.4, DispatchWorkItem { [weak self, weak root] in
-            guard let self, let root, self.generation == token, self.wanted, !self.stopping, self.sceneActive,
-                  self.windowScene?.activationState == .foregroundActive else { return }
+            guard let self else { return }
+            guard let root, self.generation == token, self.wanted, !self.stopping, self.sceneActive,
+                  self.windowScene?.activationState == .foregroundActive else {
+                self.record(["kind": "hangUp", "outcome": "dropped: session or foreground gate", "rawLine": line, "attempt": attempt + 1])
+                return
+            }
             self.deliverHangUp(line, root: root, token: token, attempt: attempt + 1)
         })
     }

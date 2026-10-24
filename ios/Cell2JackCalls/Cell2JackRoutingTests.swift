@@ -463,6 +463,7 @@ final class Cell2JackRoutingTests: XCTestCase {
         call.appearing = false
         retries.removeFirst().perform()
         XCTAssertEqual(call.hangUps, 1)
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, "dropped: session or foreground gate")
         transport.update(.finished("/q sent"))
     }
 

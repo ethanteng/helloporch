@@ -414,9 +414,15 @@ A key pressed while a screen opens or closes is dropped and can be pressed
 again, but a hang-up can't be repeated without lifting the receiver. So a
 hang-up that finds a screen transitioning is tried again every 0.4 seconds,
 up to six tries (about two seconds), and each try is recorded with its
-`attempt`. That covers a call screen animating in, and the clock's wait for
-the presence camera to stop before a new call screen appears (it reports that
-wait as a transition too). Leaving Porch drops a waiting retry.
+`attempt`. That covers a screen animating in or out. Leaving Porch drops a
+waiting retry, recorded as `dropped: session or foreground gate`.
+
+Before a new screen appears, the clock first waits for the presence camera to
+stop, which has no fixed length. A hang-up in that wait is held for that
+screen and given to it once it has appeared, recorded as `heldHangUp`. Only
+the screen that was waiting gets it; a later screen never does. The simulator's
+presence camera stops at once, so unit tests can't open this wait; it needs a
+check on the iPad with waiting messages and presence detection on.
 
 Saved captures replay as expected: the pickup tests' two hang-ups and the
 full-keypad test's final hang-up are found, and three plug-in starts produce
