@@ -1,9 +1,10 @@
 import Foundation
 
 public enum KeypadAction: String, Codable, CaseIterable {
-    case person, callControl, toggleVideo, messages
+    case unassigned, person, callControl, toggleVideo, messages
     public var title: String {
         switch self {
+        case .unassigned: return "No action"
         case .person: return "Call a person"
         case .callControl: return "Answer / decline / hang up"
         case .toggleVideo: return "Turn video off / on"
@@ -14,7 +15,7 @@ public enum KeypadAction: String, Codable, CaseIterable {
 
 /// Stable physical keys: the digits in telephone order, then * and #, numbered 10 and 11 as DTMF
 /// events are. Older six-person setups migrate without moving anyone; 9 and 0 are initially
-/// reserved for call controls, and * and # start as empty person keys.
+/// reserved for call controls, and the other keys start with no action.
 public struct CallSlots: Equatable {
     public static let star = 10, pound = 11
     public static let digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, star, pound]
@@ -28,6 +29,8 @@ public struct CallSlots: Equatable {
     /// those two keys can still read the keypad.
     private static let digitSlots = 10
     private static let symbolsStorageKey = "porch.slots.v2.symbols"
+    /// A key with no action is saved as a person key with no one on it, the way builds from before
+    /// No action saved an empty key, so they can still read the keypad.
     private struct Slot: Codable, Equatable { var action: KeypadAction; var contact: CallContact? }
     private var slots: [Slot]
     public var contacts: [CallContact?] { slots.map { $0.action == .person ? $0.contact : nil } }
@@ -36,7 +39,9 @@ public struct CallSlots: Equatable {
         slots = Self.digits.map { Slot(action: $0 == 0 ? .callControl : $0 == 9 ? .toggleVideo : .person) }
     }
     private func index(_ digit: Int) -> Int? { Self.digits.firstIndex(of: digit) }
-    public func action(for digit: Int) -> KeypadAction? { index(digit).map { slots[$0].action } }
+    public func action(for digit: Int) -> KeypadAction? {
+        index(digit).map { slots[$0].action == .person && slots[$0].contact == nil ? .unassigned : slots[$0].action }
+    }
     public func contact(for digit: Int) -> CallContact? {
         guard let index = index(digit), slots[index].action == .person else { return nil }
         return slots[index].contact
@@ -44,7 +49,7 @@ public struct CallSlots: Equatable {
     public func digit(for action: KeypadAction) -> Int? { Self.digits.first { self.action(for: $0) == action } }
     public mutating func setAction(_ action: KeypadAction, for digit: Int) throws {
         guard let index = index(digit) else { throw ValidationError.invalidSlot }
-        slots[index].action = action
+        slots[index].action = action == .unassigned ? .person : action
         if action != .person { slots[index].contact = nil }
     }
     public mutating func setContact(_ contact: CallContact?, for digit: Int) throws {

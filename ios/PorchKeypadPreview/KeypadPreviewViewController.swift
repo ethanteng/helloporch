@@ -145,7 +145,7 @@ final class KeypadPreviewViewController: UIViewController {
                 let digit = CallSlots.digit(forSymbol: symbol)
                 let action = digit.flatMap { slots.action(for: $0) }
                 let person = digit.flatMap { slots.contact(for: $0) }
-                button.configuration?.subtitle = person?.name ?? (action == .person ? "Unassigned" : action?.title ?? "No action")
+                button.configuration?.subtitle = person?.name ?? action?.title ?? "No action"
                 button.accessibilityLabel = "Key \(symbol), \(button.configuration?.subtitle ?? "")"
                 if let person {
                     let color = RecipientAppearance.color(hex: person.buttonColorHex)

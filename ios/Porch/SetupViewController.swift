@@ -45,8 +45,8 @@ final class SlotsViewController: UITableViewController {
             let number = CallSlots.digits[indexPath.row]
             let key = CallSlots.symbol(for: number)
             let person = slots.contact(for: number)
-            let action = slots.action(for: number) ?? .person
-            content.text = action == .person ? (person?.name ?? "Add a person") : action.title
+            let action = slots.action(for: number) ?? .unassigned
+            content.text = person?.name ?? action.title
             let badge = number == CallSlots.star ? "asterisk" : number == CallSlots.pound ? "number" : key
             content.image = UIImage(systemName: "\(badge).circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 32))
             if let photo = RecipientAppearance.photo(person?.photoData) {
@@ -63,7 +63,7 @@ final class SlotsViewController: UITableViewController {
                 return "Finish Porch setup"
             } ?? "Assign key \(key)"
             switch action {
-            case .person: break
+            case .unassigned, .person: break
             case .callControl: content.secondaryText = "Tap to answer or hang up. Hold to decline a ringing call."
             case .toggleVideo: content.secondaryText = "Toggle your camera during a video call."
             case .messages: content.secondaryText = "Play or stop family messages."
@@ -104,7 +104,7 @@ final class SlotsViewController: UITableViewController {
         ["Keypad · people & controls", "Settings", "Device mode", "About"][section]
     }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0 ? "Twelve keys, each with its own action. By default 1–8 call people, 9 toggles video, 0 answers or hangs up, and * and # are free. Any key can be reassigned. Saving never places a call." : nil
+        section == 0 ? "Twelve keys, each with its own action. By default 9 toggles video, 0 answers or hangs up, and the other keys have no action until you assign them. Any key can be reassigned or set back to No action. Saving never places a call." : nil
     }
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = PorchStyle.secondary
@@ -121,7 +121,7 @@ final class SlotsViewController: UITableViewController {
         if indexPath.section == 2 { offerExperienceChange(on: self); return }
         if indexPath.section == 3 { showPrivacyPolicy(on: self); return }
         let number = CallSlots.digits[indexPath.row]
-        let editor = SetupViewController(slot: number, contact: slots.contact(for: number), action: slots.action(for: number) ?? .person)
+        let editor = SetupViewController(slot: number, contact: slots.contact(for: number), action: slots.action(for: number) ?? .unassigned)
         editor.onSaveSlot = { [weak self] action, contact in
             guard let self else { return }
             var updated = self.slots
@@ -141,7 +141,7 @@ final class SlotsViewController: UITableViewController {
 final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate, PHPickerViewControllerDelegate, UIColorPickerViewControllerDelegate {
     var onSave: ((CallContact?) throws -> Void)?
     var onSaveSlot: ((KeypadAction, CallContact?) throws -> Void)?
-    private let actionControl = UISegmentedControl(items: ["Person", "Call control", "Video toggle", "Messages"])
+    private let actionControl = UISegmentedControl(items: ["No action", "Person", "Call control", "Video toggle", "Messages"])
     private let actionDetail = PorchStyle.label("", size: 16)
     private var personGroup = UIView()
     private var fallbackGroup = UIView()
@@ -459,6 +459,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         updatePhoneDropIn()
         setKeyboardControlVisible(person)
         switch chosenAction {
+        case .unassigned: actionDetail.text = "Pressing this key does nothing except remind them to choose another number. This replaces any person assigned to this key."
         case .person: actionDetail.text = "Call the person below using their default calling mode."
         case .callControl: actionDetail.text = "Tap to answer an incoming call or hang up. Hold for one second to decline a ringing call. Tap during a drop-in countdown to stop it. This replaces any person assigned to this key."
         case .toggleVideo: actionDetail.text = "Turn your camera off or on during a video call. Voice-only and regular phone calls keep the camera off. This replaces any person assigned to this key."
@@ -615,7 +616,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
                     self.phoneDropInTouched = true; self.phoneDropInSwitch.isOn = false
                     try await self.syncPhoneDropIn(number: nil, name: "")
                     try self.onSave?(nil)
-                    try self.onSaveSlot?(.person, nil)
+                    try self.onSaveSlot?(.unassigned, nil)
                     self.navigationController?.popViewController(animated: true)
                 } catch {
                     let errorAlert = UIAlertController(title: "Couldn't save", message: error.localizedDescription, preferredStyle: .alert)

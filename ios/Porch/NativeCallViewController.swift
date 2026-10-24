@@ -306,7 +306,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         case .callControl: endCall()
         case .toggleVideo:
             if call.mode == .video && !isPhoneCall && cameraButton.isEnabled { toggleCamera() }
-        case .person, .messages: break
+        case .unassigned, .person, .messages: break
         }
     }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {

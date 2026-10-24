@@ -589,11 +589,13 @@ final class CallViewController: UIViewController {
         }
         guard !opening, presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
-        if slots.action(for: slot) == .messages { playMessages(); return }
-        guard slots.action(for: slot) == .person else {
-            displayStatus(BedsideText.string(slots.action(for: slot) == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call."), temporary: true)
+        let action = slots.action(for: slot)
+        if action == .messages { playMessages(); return }
+        if action == .callControl || action == .toggleVideo {
+            displayStatus(BedsideText.string(action == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call."), temporary: true)
             return
         }
+        // A key with no action has no one to call either.
         guard let contact = slots.contact(for: slot) else {
             displayStatus(BedsideText.string("No one is assigned to %@.\nPlease choose another number.", CallSlots.symbol(for: slot)), temporary: true)
             return
