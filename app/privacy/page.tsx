@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "What the Porch app and the HelloPorch website collect, why, who helps us run Porch, how long we keep information, and how to have it deleted.",
 };
 
-const updated = "October 22, 2026";
+const updated = "October 24, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -36,6 +36,7 @@ const providers: [name: string, role: string, receives: string][] = [
   ["Apple", "Delivers call and message notifications through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
   ["ElevenLabs", "Turns short announcements into natural speech, when a household uses a natural voice.", "Only the sentence to be spoken, which may include a family member’s name."],
   ["MailerLite", "Sends waitlist emails.", "Your email address and your waitlist answer."],
+  ["Google", "Google Analytics counts visits to the website, so we can see which pages help people. It isn’t used in the Porch app.", "The pages you visit, the site that sent you, browser and device details, and your IP address, which it uses to estimate your general location."],
 ];
 
 const retention: [what: string, howLong: string][] = [
@@ -50,6 +51,7 @@ const retention: [what: string, howLong: string][] = [
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
   ["Waitlist email", "Until you unsubscribe or ask us to remove it."],
+  ["Website analytics", "Up to 14 months in Google Analytics, then deleted."],
   ["Website and server request logs", "A short time, for security and troubleshooting."],
 ];
 
@@ -80,7 +82,7 @@ export default function PrivacyPage() {
             <li>Calls go live between devices and aren’t recorded. Only messages and voicemail that someone chooses to leave are saved.</li>
             <li>Unplayed messages are deleted after 7 days, and played ones after 90 days.</li>
             <li>When the bedside notices someone in front of it, that happens on the iPad. No image leaves it.</li>
-            <li>A few service providers help us run calls, phone service, storage and notifications. They get only what they need.</li>
+            <li>A few service providers help us run calls, phone service, storage, notifications and website analytics. They get only what they need.</li>
             <li>
               Email <a href={`mailto:${contact}`}>{contact}</a> any time to see or delete your family’s information.
             </li>
@@ -109,9 +111,14 @@ export default function PrivacyPage() {
             </p>
             <p>
               Like any website, our hosting provider receives your IP address and browser details when you visit, and
-              keeps request logs for a short time. The website doesn’t use advertising or analytics cookies, and it
-              doesn’t load trackers from other companies. Our social media icons are plain links, and those sites have
-              their own policies.
+              keeps request logs for a short time. Our social media icons are plain links, and those sites have their
+              own policies.
+            </p>
+            <p>
+              The website uses Google Analytics to count visits and see which pages are useful. It sets cookies in your
+              browser and tells Google which pages you visit, the site that sent you, and your browser and device. We
+              use it only to understand the website, not for advertising, and the website doesn’t use advertising
+              cookies.
             </p>
 
             <h3>In the Porch app</h3>
@@ -319,6 +326,10 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Waitlist emails.</strong> Use the unsubscribe link in any email.
+              </li>
+              <li>
+                <strong>Website analytics.</strong> Block cookies for helloporch.store in your browser, or install
+                Google’s <a href="https://tools.google.com/dlpage/gaoptout">Analytics opt-out add-on</a>.
               </li>
             </ul>
             <p>

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Sans, Newsreader } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 
 const serif = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], axes: ["opsz"], variable: "--font-serif" });
@@ -20,6 +21,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable} ${brand.variable}`}>
       <body>{children}</body>
+      {/* Only the production deployment reports to Google Analytics, so local dev and preview visits stay out. */}
+      {process.env.VERCEL_ENV === "production" && <GoogleAnalytics gaId="G-84FVKFX34W" />}
     </html>
   );
 }
