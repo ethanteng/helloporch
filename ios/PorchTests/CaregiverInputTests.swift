@@ -952,7 +952,28 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")
         let sam = FamilyPersonViewController(personID: "sam", admin: admin); sam.loadViewIfNeeded()
         XCTAssertEqual(buttons(in: sam.view).filter { $0.configuration?.title == "Remove access" }.count, 1)
-        XCTAssertTrue(switches(sam.view).allSatisfy(\.isEnabled))
+        XCTAssertEqual(switches(sam.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Drop in when they call"], "Calls drop in only as a drop-in they're approved for")
+    }
+
+    @MainActor func testCaregiverModeSetsWhoseOrdinaryCallsDropIn() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
+            ["id": "mia", "name": "Mia", "role": "family", "permissions": ["audio": true, "video": true], "online": true, "caregiver": false, "autoDropIn": true],
+            ["id": "ana", "name": "Ana", "role": "family", "permissions": ["audio": true, "video": false], "online": true, "caregiver": false, "autoDropIn": false]]])
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video · Calls drop in" })
+        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Mia. Porch is open. Audio and video drop-in · Calls drop in." })
+        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Ana, Porch app, Audio" })
+        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
+        func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
+        let mia = FamilyPersonViewController(personID: "mia", admin: admin); mia.loadViewIfNeeded()
+        let calls = try XCTUnwrap(switches(mia.view).first { $0.accessibilityIdentifier == "person.autoDropIn" })
+        XCTAssertTrue(calls.isOn); XCTAssertTrue(calls.isEnabled)
+        XCTAssertTrue(labels(mia.view).contains("Their audio and video calls drop in too."))
+        let ana = FamilyPersonViewController(personID: "ana", admin: admin); ana.loadViewIfNeeded()
+        XCTAssertEqual(switches(ana.view).first { $0.accessibilityIdentifier == "person.autoDropIn" }?.isOn, false)
+        XCTAssertTrue(labels(ana.view).contains("Their audio calls drop in too. Video calls ring."))
     }
 
     @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {
