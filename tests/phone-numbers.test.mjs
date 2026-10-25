@@ -250,6 +250,28 @@ test("on the server, the poll's retry runs after the iPad has its answer, and a 
   assert.equal(f.afterwards.length, 0);
 });
 
+test('a second poll queued while a try is still due does not buy after that try gave up', async () => {
+  const f = fixture({ afterResponse: true }), mom = await f.household();
+  f.numbers.state.failSearch = true;
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '415' }, mom.bedside.credential, pin)).pending, true);
+  f.numbers.state.failSearch = false;
+  f.numbers.state.inventory[415] = [];
+  f.advance(60);
+  // The iPad polls every two seconds, so a second poll can queue before the first try records its result.
+  await f.poll(mom.bedside.credential);
+  await f.poll(mom.bedside.credential);
+  assert.equal(f.afterwards.length, 2);
+  await f.afterwards.shift()();
+  assert.equal((await f.house(mom.id)).phoneSetup.needsChoice, true);
+  assert.equal((await f.house(mom.id)).phoneSetup.attempts, 2);
+  f.numbers.state.inventory[415] = ['+14155550101'];
+  await f.afterwards.shift()();
+  assert.equal(f.numbers.state.buys.length, 0, 'the area code was already given back to the caregiver');
+  assert.equal((await f.house(mom.id)).phoneSetup.attempts, 2);
+  assert.equal((await f.poll(mom.bedside.credential)).state.phoneSetup.needsChoice, true);
+  assert.equal(f.afterwards.length, 0);
+});
+
 test('two requests at once buy one number', async () => {
   const f = fixture(), mom = await f.household();
   let release; const waiting = new Promise(resolve => { release = resolve; });

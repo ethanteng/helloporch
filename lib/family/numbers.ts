@@ -168,16 +168,28 @@ async function sharedInboundTrunk(store: FamilyStore, sip: NumberServices["sip"]
  * try picks up where a failed or interrupted one stopped, and the saved order keeps a bought number from being bought twice.
  * Returns the household, without a number if another request is setting it up right now. */
 export async function ensurePorchNumber(store: FamilyStore, householdID: string, now: number, settings: NumberSettings, services: NumberServices): Promise<Household> {
-  const raw = await store.get(`house:${householdID}`);
-  requireValue(raw, "This household was not found.", 404);
-  const house: Household = JSON.parse(raw);
+  const read = async () => {
+    const raw = await store.get(`house:${householdID}`);
+    requireValue(raw, "This household was not found.", 404);
+    return JSON.parse(raw) as Household;
+  };
+  // The bedside polls every couple of seconds, and each poll can queue a try from the household it read.
+  // A try that already moved the wait, or asked for another area code, has to be the last one to buy.
+  let house = await read();
   if (house.porchNumber) return house;
-  const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
-  requireValue(bedside && house.phoneSetup, "Choose an area code for this Porch's number on the bedside iPad.", 409);
-  const { areaCode } = house.phoneSetup;
+  // Not due: the last try asked for another area code, or its wait has not finished. A missing setup is a caller error.
+  if (!porchNumberDue(house, now)) {
+    requireValue(house.members.some(m => m.role === "bedside" && !m.revoked) && house.phoneSetup, "Choose an area code for this Porch's number on the bedside iPad.", 409);
+    return house;
+  }
   const lockKey = `number-lock:${householdID}`, lock = await claim(store, lockKey, now, 90);
   if (!lock) return house;
   try {
+    house = await read();
+    if (house.porchNumber || !porchNumberDue(house, now)) return house;
+    const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
+    requireValue(bedside && house.phoneSetup, "Choose an area code for this Porch's number on the bedside iPad.", 409);
+    const { areaCode } = house.phoneSetup;
     const orderKey = `number-order:${householdID}`;
     let order: OwnedNumber | null = JSON.parse(await store.get(orderKey) ?? "null");
     if (!order) {
@@ -270,13 +282,17 @@ export function porchNumberDue(house: Household, now: number): boolean {
   return !house.porchNumber && !!house.phoneSetup && !house.phoneSetup.needsChoice && house.phoneSetup.retryAt <= now;
 }
 
-/** The bedside's poll tries again for a number that isn't set up yet, once its wait is over. */
+/** The bedside's poll tries again for a number that isn't set up yet, once its wait is over.
+ * The household is read again here: the poll that queued this try may have loaded it before another try finished. */
 export async function retryPorchNumber(store: FamilyStore, house: Household, now: number, services?: (settings: NumberSettings) => NumberServices): Promise<Household | undefined> {
-  if (!porchNumberDue(house, now)) return undefined;
-  const settings = numberSettings();
-  if (!settings) return undefined;
-  try { return await ensurePorchNumber(store, house.id, now, settings, (services ?? numberServices)(settings)); }
-  catch { return undefined; } // Recorded on the household for the next try.
+  try {
+    const raw = await store.get(`house:${house.id}`);
+    const latest: Household | undefined = raw ? JSON.parse(raw) as Household : undefined;
+    if (!latest || !porchNumberDue(latest, now)) return undefined;
+    const settings = numberSettings();
+    if (!settings) return undefined;
+    return await ensurePorchNumber(store, house.id, now, settings, (services ?? numberServices)(settings));
+  } catch { return undefined; } // Recorded on the household for the next try.
 }
 
 /** What the bedside and caregivers see of a number still being set up. */
