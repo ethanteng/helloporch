@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { test, beforeEach, afterEach } from 'node:test';
 import { authorizeBedsideCalling, handleFamily } from '../lib/family/service.ts';
-import { twilioNumbers } from '../lib/family/numbers.ts';
+import { PurchaseRefused, twilioNumbers } from '../lib/family/numbers.ts';
 
 // Fake Twilio, LiveKit and storage: these tests never buy a number or place a call.
 class MemoryStore {
@@ -33,6 +33,9 @@ function providers() {
     },
     async buy(number, options) {
       await state.onBuy?.();
+      // Before any sale: Twilio saying no, or a request whose outcome Porch never learns.
+      if (state.refuseBuy) { state.refuseBuy = false; throw new PurchaseRefused('Twilio request failed (400).'); }
+      if (state.buyUnanswered) { state.buyUnanswered = false; throw Error('timed out'); }
       const owned = { sid: `PN${String(state.owned.length + 1).padStart(32, '0')}`, number, ...options };
       state.owned.push(owned); state.buys.push(owned);
       if (state.loseBuyResponse) { state.loseBuyResponse = false; throw Error('timed out after Twilio sold it'); }
@@ -167,9 +170,14 @@ test("Twilio requests search US local numbers, buy with Porch's voice webhook, a
   next = [respond(200, { incoming_phone_numbers: [] })];
   assert.equal(await twilio.find('Porch nobody'), undefined);
 
+  // A refusal sold nothing. A server error or a timeout may have, so it isn't one.
+  const options = { voiceURL: 'https://porch.example/api/calls/inbound/voice', label: 'Porch house' };
   next = [respond(400, { code: 21422, message: 'Phone number +14155550101 is not available.' })];
-  await assert.rejects(twilio.buy('+14155550101', { voiceURL: 'https://porch.example/api/calls/inbound/voice', label: 'Porch house' }),
-    error => !error.message.includes('555') && error.message.includes('400'));
+  await assert.rejects(twilio.buy('+14155550101', options), error => error instanceof PurchaseRefused && !error.message.includes('555') && error.message.includes('400'));
+  next = [respond(503, { message: 'Service unavailable' })];
+  await assert.rejects(twilio.buy('+14155550101', options), error => !(error instanceof PurchaseRefused));
+  next = [respond(400, { message: 'bad request' })];
+  await assert.rejects(twilio.search({ areaCode: '415' }), error => !(error instanceof PurchaseRefused));
 });
 
 test('only the bedside, with the caregiver PIN, sets up its number, and only when the server can', async () => {
@@ -325,6 +333,21 @@ test("Porch's limit on numbers stops new ones, never a household that already ha
   assert.equal(refused.status, 503); assert.equal((await refused.json()).errorCode, 'numberLimit');
   f.advance(60);
   assert.equal((await f.poll(mom.bedside.credential)).state.porchNumber, '+14155550101');
+  assert.equal(f.numbers.state.buys.length, 1);
+});
+
+test("a purchase Twilio turns down gives its place back; one that may have gone through keeps it", async () => {
+  process.env.PORCH_MAX_PHONE_NUMBERS = '1';
+  const f = fixture(), mom = await f.household(), dad = await f.household('Dad');
+  f.numbers.state.refuseBuy = true;
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '415' }, mom.bedside.credential, pin)).pending, true);
+  assert.deepEqual(JSON.parse(await f.store.get('numbers:households') ?? '[]'), []);
+  f.numbers.state.buyUnanswered = true;
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '415' }, dad.bedside.credential, pin)).pending, true);
+  const refused = await f.send('assignPhoneNumber', { areaCode: '415' }, mom.bedside.credential, pin);
+  assert.equal(refused.status, 503); assert.equal((await refused.json()).errorCode, 'numberLimit', "Dad's place stays: Twilio may have sold it");
+  f.advance(60);
+  assert.equal((await f.poll(dad.bedside.credential)).state.porchNumber, '+14155550101');
   assert.equal(f.numbers.state.buys.length, 1);
 });
 

@@ -25,9 +25,12 @@ const retrySeconds = (attempts: number) => Math.min(3600, 60 * 2 ** Math.max(0, 
 export type AvailableNumber = { number: string; locality?: string; region?: string };
 export type OwnedNumber = { sid: string; number: string };
 export type NumberQuery = { areaCode: string } | { near: { latitude: number; longitude: number } };
+/** A purchase Twilio turned down, such as a number someone else bought first. Nothing was sold. */
+export class PurchaseRefused extends Error {}
 /** Twilio's phone-number API. Tests fake it, so they never buy a number. */
 export type NumberProvider = {
   search(query: NumberQuery): Promise<AvailableNumber[]>;
+  /** Throws `PurchaseRefused` only when Twilio certainly sold nothing. */
   buy(number: string, options: { voiceURL: string; label: string }): Promise<OwnedNumber>;
   find(label: string): Promise<OwnedNumber | undefined>;
 };
@@ -54,6 +57,11 @@ export function numberSettings(): NumberSettings | undefined {
   } catch { return undefined; }
 }
 
+class TwilioError extends Error {
+  status: number;
+  constructor(status: number) { super(`Twilio request failed (${status}).`); this.status = status; }
+}
+
 // https://www.twilio.com/docs/phone-numbers/api
 export function twilioNumbers(accountSID: string, authToken: string, fetcher: typeof fetch = fetch): NumberProvider {
   const base = `https://api.twilio.com/2010-04-01/Accounts/${accountSID}`;
@@ -62,7 +70,7 @@ export function twilioNumbers(accountSID: string, authToken: string, fetcher: ty
     const response = await fetcher(base + path, { method: form ? "POST" : "GET", body: form, redirect: "error", signal: AbortSignal.timeout(15_000),
       headers: { authorization, ...(form ? { "content-type": "application/x-www-form-urlencoded" } : {}) } });
     // Twilio's error text can include the number, so only the status is kept.
-    if (!response.ok) throw new Error(`Twilio request failed (${response.status}).`);
+    if (!response.ok) throw new TwilioError(response.status);
     return await response.json() as Record<string, unknown>;
   };
   const list = (value: unknown) => Array.isArray(value) ? value as Record<string, unknown>[] : [];
@@ -79,7 +87,11 @@ export function twilioNumbers(accountSID: string, authToken: string, fetcher: ty
         ? [{ number: n.phone_number, ...(typeof n.locality === "string" ? { locality: n.locality } : {}), ...(typeof n.region === "string" ? { region: n.region } : {}) }] : []);
     },
     async buy(number, options) {
-      const bought = owned(await call("/IncomingPhoneNumbers.json", new URLSearchParams({ PhoneNumber: number, VoiceUrl: options.voiceURL, VoiceMethod: "POST", FriendlyName: options.label })));
+      let body: Record<string, unknown>;
+      try { body = await call("/IncomingPhoneNumbers.json", new URLSearchParams({ PhoneNumber: number, VoiceUrl: options.voiceURL, VoiceMethod: "POST", FriendlyName: options.label })); }
+      // A 4xx is Twilio saying no. A 5xx or a timeout may still have sold it.
+      catch (error) { throw error instanceof TwilioError && error.status < 500 ? new PurchaseRefused(error.message) : error; }
+      const bought = owned(body);
       if (!bought) throw new Error("Twilio didn't return the number it sold.");
       return bought;
     },
@@ -123,6 +135,15 @@ export async function holdPlace(store: FamilyStore, householdID: string, limit: 
     if (raw ? await store.compareAndSet(holdersKey, raw, updated) : await store.create(holdersKey, updated)) return;
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
+}
+/** Gives back a place no number came of. */
+async function givePlaceBack(store: FamilyStore, householdID: string) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const raw = await store.get(holdersKey);
+    const holders: string[] = raw ? JSON.parse(raw) : [];
+    if (!raw || !holders.includes(householdID)) return;
+    if (await store.compareAndSet(holdersKey, raw, JSON.stringify(holders.filter(id => id !== householdID)))) return;
+  }
 }
 
 /** The LiveKit inbound trunk every bought number shares, made with the first one. It takes calls only from Porch's
@@ -198,10 +219,14 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
       if (!order) {
         const [choice] = await services.provider.search({ areaCode });
         if (!choice) throw new FamilyError(`There are no numbers in area code ${areaCode} right now. Try a nearby area code.`, 409, "noNumbers");
-        // Counted only now, so a search that finds nothing, or fails, holds no place. A purchase whose outcome is
-        // unknown keeps its place, since Twilio may have sold the number.
+        // Counted only now, so a search that finds nothing, or fails, holds no place. A purchase Twilio turned down
+        // gives it back. One whose outcome is unknown, such as a timeout, keeps it: Twilio may have sold the number.
         await holdPlace(store, householdID, settings.limit);
-        order = await services.provider.buy(choice.number, { voiceURL: settings.voiceURL, label: label(householdID) });
+        try { order = await services.provider.buy(choice.number, { voiceURL: settings.voiceURL, label: label(householdID) }); }
+        catch (error) {
+          if (error instanceof PurchaseRefused) { try { await givePlaceBack(store, householdID); } catch { /* the next try counts it again */ } }
+          throw error;
+        }
       }
       if (!await store.create(orderKey, JSON.stringify(order))) order = JSON.parse((await store.get(orderKey))!) as OwnedNumber;
     }
