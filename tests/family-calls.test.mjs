@@ -126,6 +126,28 @@ test('a caregiver can have a family member\'s ordinary calls drop in, for the dr
  assert.equal((await f.json('setAutoDropIn',{memberID,enabled:false},bedside.credential,pin)).admin.people[0].autoDropIn,false);
  assert.equal((await call('voice')).kind,'call');
 });
+test('an earlier poll arriving late cannot make the bedside look open again',async()=>{
+ const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push(call);return {delivered:true};}}),{bedside,family}=await f.setup({audio:true,video:false});
+ const pin=env.PORCH_CONTACT_SETUP_CODE,launch=randomUUID();
+ await f.json('setDropIn',{enabled:true},bedside.credential,pin);
+ await f.json('setAutoDropIn',{memberID:family.state.me.id,enabled:true},bedside.credential,pin);
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},bedside.credential);
+ const open=async()=>(await f.json('poll',{available:true},family.credential)).state.people[0].online;
+ await f.json('poll',{available:true,launch,sequence:1},bedside.credential);
+ // Porch closes, and the poll it sent just before overtakes the one it sent as it closed.
+ await f.json('poll',{available:false,launch,sequence:3},bedside.credential);
+ await f.json('poll',{available:true,launch,sequence:2},bedside.credential);
+ assert.equal(await open(),false);
+ const created=await f.json('startCall',{targetID:bedside.state.me.id,mode:'voice',kind:'call'},family.credential);
+ assert.equal(created.state.call.kind,'call','a closed bedside rings by push instead of waiting for a drop-in');
+ assert.equal(pushes.length,1);
+ await f.json('endCall',{callID:created.state.call.id},family.credential);
+ // A new launch starts its own numbering, and builds that don't number polls work as before.
+ await f.json('poll',{available:true,launch:randomUUID(),sequence:1},bedside.credential);
+ assert.equal(await open(),true);
+ await f.json('poll',{available:false},bedside.credential); assert.equal(await open(),false);
+ await f.json('poll',{available:true},bedside.credential); assert.equal(await open(),true);
+});
 test('announcement precedes automatic answer; voice tokens cannot publish a camera',async()=>{
  const f=fixture(),{bedside,family}=await f.setup();
  await f.json('setDropIn',{enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);

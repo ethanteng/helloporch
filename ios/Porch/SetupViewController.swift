@@ -71,6 +71,8 @@ final class SlotsViewController: UITableViewController {
             case .messages: content.secondaryText = "Play or stop family messages."
             }
             cell.accessibilityLabel = "Key \(key), \(content.text ?? "")"
+            // Read after the name, so VoiceOver also hears what's on, such as Porch calls drop in.
+            cell.accessibilityValue = content.secondaryText
         } else if indexPath.section == 1, indexPath.row == 0 {
             content.text = "Family & drop-in"
             content.secondaryText = "Pair devices, invite people, and approve access"

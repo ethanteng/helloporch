@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-export type CallServer = { apiKey: string; apiSecret: string; serverUrl: string; householdID?: string };
+/** `fromNumber`: the caller ID for a household's calls to regular phones, its own Porch number when it has one. */
+export type CallServer = { apiKey: string; apiSecret: string; serverUrl: string; householdID?: string; fromNumber?: string };
 
 export function callJSON(body: object, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });

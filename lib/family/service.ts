@@ -4,10 +4,11 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
+import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, retryPorchNumber, type NumberServices, type NumberSettings } from "./numbers.ts";
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, phoneGuestActions, phoneGuestReapSeconds, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
@@ -16,7 +17,9 @@ import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screen
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize;
-  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices };
+  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
+  /** Keeps work going once the device has its answer (Next's `after`). Without it, that work runs before answering. */
+  afterResponse?: (task: () => Promise<unknown>) => void };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -55,7 +58,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", ...screeningActions];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
   const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, ...result } = call;
@@ -94,9 +97,13 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     return caller ? displayName(caller) : "Family";
   };
   // Approved numbers are caregiver data: only the bedside and PIN-checked admin state carry them.
+  const phoneSetup = me.role === "bedside" || me.caregiver ? publicPhoneSetup(house) : undefined;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false,
     // Family phones ring the bedside this long before offering voicemail.
     ringSeconds: ringSeconds(house),
+    // The number regular phones call to reach this Porch, which everyone in the family can save. While it's still being
+    // set up, the bedside and caregivers see how that's going.
+    ...(house.porchNumber ? { porchNumber: house.porchNumber.number } : {}), ...(phoneSetup ? { phoneSetup } : {}),
     // The bedside language as the server knows it, so the iPad can tell when to report a change.
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], bedsideLanguage: bedsideLanguage(house) } : {}),
     // Who can ring by phone, and the keypad numbers as the server knows them, so the iPad can tell when to report a change.
@@ -205,7 +212,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       } else await checkCaregiverCode(request, store, now);
       await reserveDevice(store, deviceID, secret, id, "bedside");
       const me: Member = { id: deviceID, name: bedsideName, role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
-      const house: Household = { id, name: me.name, dropInEnabled: false, members: [me], invites: [] };
+      // A bedside set up from the app gets its number in setup, and turns away unknown callers from the start: its new
+      // number may have belonged to someone else, whose callers and robocalls still dial it. Its keypad is known to be
+      // empty, so blocking can be on before the iPad first reports it. Households made by older setups keep their own
+      // number and choice.
+      const house: Household = { id, name: me.name, dropInEnabled: false, members: [me], invites: [],
+        ...(enrolling ? { numberFromSetup: true, blockUnknownCallers: true, keypadNumbers: [] } : {}) };
       if (!await store.create(`house:${id}`, JSON.stringify(house))) {
         const existing: Household = JSON.parse((await store.get(`house:${id}`))!);
         const owner = memberFor(existing, { householdID: id, deviceID, hash: hash(secret) });
@@ -292,6 +304,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       requireValue(raw, "This household was not found.", 404);
       const house: Household = JSON.parse(raw);
       const result = await handleScreeningAction(String(action), { store, now, house, me: memberFor(house, auth), input });
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
+    }
+    if (numberActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handleNumberAction(String(action), { store, now, house, me: memberFor(house, auth), input, headers: request.headers, services: dependencies.numberServices });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
     }
@@ -431,14 +451,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
-        me.seenAt = now; me.available = input.available;
+        me.seenAt = now;
+        if (takesAvailability(me, input.launch, input.sequence)) me.available = input.available;
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.
         if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === call.id) call.receivedAt ??= now;
         const ringing = call?.porchGuests?.find(g => g.id === input.receivedCallID && g.memberID === me.id && g.state === "ringing");
         if (ringing) ringing.receivedAt ??= now;
-        if (input.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
+        if (me.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
       if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "setAutoDropIn" || action === "revoke" || action === "cancelInvites" || action === "cancelInvite" || action === "setCaregiver" || action === "setMessages" || action === "setPhoneDropIn") {
@@ -629,6 +650,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
+      // A number that couldn't be set up yet. Twilio and LiveKit can take longer than the iPad waits for a poll, so
+      // the try runs after this one is answered, and a later poll shows the number.
+      if (porchNumberDue(house, now)) {
+        const retry = () => retryPorchNumber(store, house, now, dependencies.numberServices);
+        if (dependencies.afterResponse) dependencies.afterResponse(retry);
+        else { const numbered = await retry(); if (numbered) Object.assign(house, numbered); }
+      }
     }
     if (removeFromRoom) {
       try { await removeMember(removeFromRoom); }
@@ -674,17 +702,19 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
 
 // Device credentials are sufficient for a paired bedside iPad's phone fallback.
 // Family devices cannot authorize destinations or use the SIP trunk.
-export async function authorizeBedsideCalling(request: Request): Promise<CallServer | Response> {
+// The household's own number is the caller ID, so calling back rings this bedside.
+export async function authorizeBedsideCalling(request: Request, store?: FamilyStore): Promise<CallServer | Response> {
   try {
     const origin = request.headers.get("origin");
     requireValue(!origin || origin === new URL(request.url).origin, "Use your Porch app to place calls.", 403);
-    const store = familyStore();
+    store ??= familyStore();
     const auth = await authenticate(request, store);
     const raw = await store.get(`house:${auth.householdID}`);
     requireValue(raw, "This household was not found.", 401);
-    const member = memberFor(JSON.parse(raw), auth);
+    const house: Household = JSON.parse(raw);
+    const member = memberFor(house, auth);
     requireValue(member.role === "bedside", "Only a bedside device can use phone fallback.", 403);
-    return { ...config(), householdID: auth.householdID };
+    return { ...config(), householdID: auth.householdID, ...(house.porchNumber ? { fromNumber: house.porchNumber.number } : {}) };
   } catch (error) {
     return callJSON({ error: error instanceof FamilyError ? error.message : "Couldn't verify this device." }, error instanceof FamilyError ? error.status : 503);
   }

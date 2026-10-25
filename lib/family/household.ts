@@ -12,8 +12,11 @@ export type Profile = { name?: string; photo?: ProfilePhoto };
 /** A photo upload the server signed that hasn't been saved yet; deleted once `expiresAt` passes. */
 export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
- * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`). */
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+ * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`).
+ * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`). */
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+/** Where a poll falls among those one app launch sent. */
+export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
  * `porchGuests`: other family members rung into it on Porch (see porch-guests.ts).
@@ -42,6 +45,12 @@ export type PhoneDropIn = { number: string; name: string };
 export type BlockedCaller = { number: string; firstCallAt: number; lastCallAt: number; calls: number };
 /** A number a caregiver allowed to ring the bedside although it isn't saved on the keypad. */
 export type AllowedCaller = { number: string; allowedAt: number };
+/** The household's own phone number (see numbers.ts). Calls to it ring the bedside, and its calls out show it.
+ * `sid` is Twilio's ID for a number Porch bought; a number set up by hand before then has none. */
+export type PorchNumber = { number: string; sid?: string; assignedAt: number };
+/** A number the caregiver asked for that Porch hasn't finished setting up. The bedside's poll tries again from `retryAt`.
+ * `needsChoice`: this area code has no numbers, so the poll waits for the caregiver to choose another. */
+export type PhoneSetup = { areaCode: string; attempts: number; retryAt: number; error?: string; needsChoice?: boolean };
 /** Characters sent to the speech service on one UTC day (days since 1970), to cap what a household spends. */
 export type SpeechUsage = { day: number; characters: number };
 /** The bedside's languages: `BedsideLanguage` raw values in the iPad app. */
@@ -50,9 +59,12 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
 /** `speechVoices`: the caregiver's natural voice per bedside language, or null for the iPad's built-in voice; unset is the language's default.
  * `bedsideLanguage`: the language chosen on the iPad, as it last reported it; unset is English.
  * `blockUnknownCallers`: only known callers' phone calls ring the bedside (see screening.ts); unset is off.
- * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does. */
+ * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does.
+ * `porchNumber`: the household's own phone number, and `phoneSetup` while one is still being set up.
+ * `numberFromSetup`: made by the app's setup, which gets the household its number. A household set up by hand, like the
+ * first one, already has a number outside these records; the app never buys it another (see numbers.ts). */
 export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
-  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[] };
+  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
@@ -166,6 +178,15 @@ export function dropInAllowed(house: Household, call: Call): boolean {
   if (call.phone) return call.mode === "voice" && !!phoneDropIn(house, call.phone.callerNumber);
   const caller = house.members.find(m => m.id === call.from);
   return !!caller && !caller.revoked && caller.permissions[call.mode === "voice" ? "audio" : "video"];
+}
+/** Polls can arrive out of order, such as the one sent as Porch closes overtaking the last one sent while it was open.
+ * An earlier poll from the same launch mustn't make the device look open again, so a numbered one only sets
+ * availability if it's the newest so far. Older builds don't number theirs, which always do, as before. */
+export function takesAvailability(member: Member, launch: unknown, sequence: unknown): boolean {
+  if (typeof launch !== "string" || launch.length < 1 || launch.length > 64 || !Number.isSafeInteger(sequence) || (sequence as number) < 0) return true;
+  if (member.lastPoll?.launch === launch && (sequence as number) < member.lastPoll.sequence) return false;
+  member.lastPoll = { launch, sequence: sequence as number };
+  return true;
 }
 /** What a new Porch call becomes. A family member whose calls a caregiver set to drop in drops in with an ordinary
  * call too, whenever they could have chosen that drop-in themselves and the bedside is ready for it. Otherwise it
