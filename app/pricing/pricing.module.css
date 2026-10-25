@@ -1,0 +1,510 @@
+.main {
+  padding-inline: clamp(20px, 5vw, 64px);
+}
+.hero {
+  padding: 58px 0 45px;
+  text-align: center;
+}
+.preview {
+  display: inline-block;
+  padding: 9px 17px;
+  border: 1px solid #d8c8ad;
+  border-radius: 99px;
+  color: var(--brown-ink);
+  font: 500 13px/1.2 var(--sans);
+}
+.hero h1 {
+  margin-top: 23px;
+  font: 400 clamp(62px, 7.7vw, 96px)/.98 var(--serif);
+  letter-spacing: -.045em;
+}
+.hero h1 em, .included h2 em, .faq h2 em {
+  color: var(--tomato-deep);
+  font-weight: 600;
+}
+.lede {
+  margin-top: 24px;
+  color: var(--muted);
+  font: 400 clamp(18px, 2vw, 21px)/1.6 var(--sans);
+  text-wrap: pretty;
+}
+.previewNote {
+  margin-top: 18px;
+  color: var(--muted);
+  font: 400 13px/1.5 var(--sans);
+}
+.billingToggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 30px;
+  padding: 5px;
+  border: 1px solid #d8c8ad;
+  border-radius: 99px;
+  background: var(--paper);
+}
+.billingToggle button {
+  min-height: 47px;
+  padding: 11px 19px;
+  border: 0;
+  border-radius: 99px;
+  color: var(--ink);
+  background: transparent;
+  font: 500 14px/1.4 var(--sans);
+  cursor: pointer;
+}
+.billingToggle button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.billingToggle button > span {
+  margin-left: 7px;
+  color: var(--brown-ink);
+  background: #eed7a8;
+  padding: 4px 7px;
+  border-radius: 99px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.billingToggle button:focus-visible {
+  outline: 3px solid var(--tomato-deep);
+  outline-offset: 3px;
+}
+.screenReaderOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  max-width: 950px;
+  margin-inline: auto;
+}
+.plan {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(26px, 3.5vw, 42px);
+  border: 1px solid #d8c8ad;
+  border-radius: 28px;
+}
+.starter {
+  background: var(--paper);
+  border: 2px solid var(--tomato-deep);
+  box-shadow: 0 12px 35px -28px #64281a66;
+}
+.family {
+  background: #f1e6ce;
+}
+.planTop {
+  min-height: 230px;
+}
+.planLabel, .eyebrow {
+  color: var(--brown-ink);
+  font: 600 11px/1.5 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.plan h2 {
+  margin-top: 13px;
+  font: 400 39px/1.1 var(--serif);
+  letter-spacing: -.035em;
+}
+.planDescription {
+  min-height: 49px;
+  max-width: 320px;
+  margin-top: 12px;
+  font: 400 16px/1.5 var(--sans);
+  color: var(--muted);
+}
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 25px;
+}
+.price > span:first-child {
+  font: 500 clamp(55px, 5.5vw, 68px)/1 var(--brand);
+  letter-spacing: -.065em;
+}
+.period {
+  font: 400 15px/1.5 var(--sans);
+  color: var(--muted);
+}
+.billing {
+  min-height: 21px;
+  margin-top: 9px;
+  color: var(--muted);
+  font: 400 12px/1.6 var(--sans);
+}
+.scope {
+  margin-top: 15px;
+  font: 400 15px/1.5 var(--sans);
+}
+.scope strong {
+  font-weight: 600;
+}
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 18px;
+  margin-top: 25px;
+  border: 1px solid var(--ink);
+  border-radius: 99px;
+  text-align: center;
+  text-decoration: none;
+  font: 500 16px/1.4 var(--sans);
+  transition: background .15s, color .15s;
+}
+.primaryButton {
+  background: var(--ink);
+  color: var(--paper);
+}
+.primaryButton:hover {
+  background: var(--brown-ink);
+}
+.secondaryButton {
+  color: var(--ink);
+  background: transparent;
+}
+.secondaryButton:hover {
+  color: var(--paper);
+  background: var(--ink);
+}
+.button:focus-visible, .faq a:focus-visible, .question summary:focus-visible {
+  outline: 3px solid var(--tomato-deep);
+  outline-offset: 5px;
+}
+.noPayment {
+  margin-top: 9px;
+  text-align: center;
+  font: 400 12px/1.5 var(--sans);
+  color: var(--muted);
+}
+.featureBlock {
+  padding-top: 27px;
+  margin-top: 25px;
+  border-top: 1px solid #d8c8ad;
+}
+.featureHeading {
+  margin-bottom: 18px;
+  font: 600 14px/1.5 var(--sans);
+}
+.features {
+  display: grid;
+  gap: 14px;
+  padding: 0;
+  list-style: none;
+}
+.features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font: 400 15px/1.5 var(--sans);
+}
+.check {
+  flex: 0 0 17px;
+  color: var(--tomato-deep);
+  font-weight: 600;
+}
+.planFootnote {
+  margin-top: auto;
+  padding-top: 27px;
+  color: var(--muted);
+  font: 400 13px/1.55 var(--sans);
+}
+.belowPlans {
+  margin-top: 21px;
+  text-align: center;
+  color: var(--muted);
+  font: 400 13px/1.6 var(--sans);
+}
+.phone {
+  display: flex;
+  align-items: flex-start;
+  gap: 23px;
+  max-width: 950px;
+  margin: 40px auto 0;
+  padding: 30px;
+  border: 1px solid #d8c8ad;
+  border-radius: 23px;
+}
+.phoneIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ead5ae;
+  color: var(--brown-ink);
+}
+.phoneCopy {
+  flex: 1;
+  min-width: 0;
+}
+.phoneCopy h2 {
+  margin: 7px 0 11px;
+  font: 400 29px/1.15 var(--serif);
+  letter-spacing: -.02em;
+}
+.phoneCopy > p {
+  max-width: 560px;
+  color: var(--muted);
+  font: 400 15px/1.6 var(--sans);
+}
+.phoneCopy > .phoneNote {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.phonePrice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+  gap: 4px;
+  padding-top: 19px;
+}
+.phonePrice strong {
+  font: 500 36px/1 var(--brand);
+  letter-spacing: -.06em;
+}
+.phonePrice span {
+  font: 400 12px/1.5 var(--sans);
+  color: var(--muted);
+}
+.included {
+  margin: 84px -14px 0;
+  padding: 53px 42px 48px;
+  border-radius: 38px;
+  background: #eed7a8;
+  text-align: center;
+}
+.included h2, .faq h2 {
+  margin-top: 17px;
+  font: 400 clamp(42px, 5vw, 60px)/1.05 var(--serif);
+  letter-spacing: -.04em;
+}
+.promises {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  margin-top: 42px;
+  text-align: left;
+}
+.promiseNumber {
+  display: block;
+  margin-bottom: 17px;
+  color: var(--brown-ink);
+  font: italic 400 24px/1 var(--serif);
+}
+.promises h3 {
+  font: 500 18px/1.3 var(--sans);
+  letter-spacing: -.02em;
+}
+.promises p {
+  max-width: 280px;
+  margin-top: 10px;
+  color: var(--muted);
+  font: 400 15px/1.65 var(--sans);
+}
+.faq {
+  display: grid;
+  grid-template-columns: 1fr 1.65fr;
+  gap: 50px;
+  max-width: 1050px;
+  margin: 85px auto;
+}
+.faqIntro > p:not(.eyebrow) {
+  margin-top: 26px;
+  color: var(--muted);
+  font: 400 15px/1.6 var(--sans);
+}
+.faqIntro > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 7px;
+  text-underline-offset: 5px;
+  font: 500 15px/1.5 var(--sans);
+}
+.question {
+  border-bottom: 1px solid #d8c8ad;
+}
+.question:first-child {
+  border-top: 1px solid #d8c8ad;
+}
+.question summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 21px 0;
+  cursor: pointer;
+  list-style: none;
+  font: 500 16px/1.5 var(--sans);
+}
+.question summary::-webkit-details-marker {
+  display: none;
+}
+.plus {
+  flex: none;
+  font: 400 25px/1 var(--sans);
+  color: var(--brown-ink);
+}
+.question[open] .plus {
+  transform: rotate(45deg);
+}
+.question > p {
+  padding: 0 30px 23px 0;
+  color: var(--muted);
+  font: 400 15px/1.7 var(--sans);
+  text-wrap: pretty;
+}
+.join {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  margin: 0 -14px 32px;
+  padding: 58px 24px;
+  border-radius: 38px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+  scroll-margin-top: 24px;
+}
+.joinEyebrow {
+  font: 500 11px/1.5 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: #eed7a8;
+}
+.join h2 {
+  font: 400 clamp(50px, 6vw, 76px)/1 var(--serif);
+  letter-spacing: -.04em;
+}
+.join h2 em {
+  color: #eed7a8;
+  font-weight: 600;
+}
+.join > p:not(.joinEyebrow) {
+  max-width: 480px;
+  font: 400 17px/1.6 var(--sans);
+  color: #e3d7c6;
+}
+.signup {
+  width: min(100%, 480px);
+}
+.join > .joinNote {
+  font-size: 12px;
+}
+@media (min-width: 900px) {
+  .hero {
+    padding: 24px 0;
+  }
+  .hero h1 {
+    margin-top: 20px;
+    font-size: clamp(64px, 6vw, 80px);
+  }
+  .hero h1 br, .desktopBreak {
+    display: none;
+  }
+  .lede {
+    margin-top: 18px;
+    font-size: 18px;
+  }
+  .previewNote {
+    margin-top: 12px;
+  }
+  .billingToggle {
+    margin-bottom: 25px;
+  }
+}
+@media (max-width: 720px) {
+  .hero {
+    padding: 35px 0;
+  }
+  .desktopBreak {
+    display: none;
+  }
+  .plans {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    max-width: 470px;
+  }
+  .plan {
+    padding: 29px;
+  }
+  .planTop {
+    min-height: 0;
+  }
+  .planDescription {
+    min-height: 0;
+  }
+  .phone {
+    flex-wrap: wrap;
+    gap: 18px;
+    padding: 25px;
+  }
+  .phoneCopy {
+    flex-basis: calc(100% - 74px);
+  }
+  .phonePrice {
+    align-items: flex-start;
+    padding-top: 0;
+    margin-left: 74px;
+  }
+  .included {
+    margin-top: 55px;
+    padding: 40px 27px;
+  }
+  .promises {
+    grid-template-columns: 1fr;
+    gap: 27px;
+  }
+  .promises > div {
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    column-gap: 13px;
+  }
+  .promiseNumber {
+    grid-row: span 2;
+    margin-top: 3px;
+  }
+  .promises p {
+    max-width: none;
+  }
+  .faq {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    margin-block: 55px;
+  }
+  .join {
+    padding: 45px 22px;
+  }
+}
+@media (max-width: 390px) {
+  .billingToggle button {
+    padding-inline: 12px;
+    font-size: 13px;
+  }
+  .billingToggle button > span {
+    display: block;
+    width: fit-content;
+    margin: 4px auto 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}
