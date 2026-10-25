@@ -486,6 +486,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 }
             }
             try Task.checkCancellation()
+            // Joining switches the audio session to a call, which cuts the bedside's voice off mid-sentence.
+            await announcement?.finished()
+            try Task.checkCancellation()
             try await room.connect(url: join.serverUrl, token: join.token)
             try Task.checkCancellation()
             #if DEBUG && targetEnvironment(simulator)
@@ -957,6 +960,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 throw CallError(message: "The calling server returned invalid phone call settings.")
             }
             phoneControlToken = ticket
+            try Task.checkCancellation()
+            await announcement?.finished()
             try Task.checkCancellation()
             try await room.connect(url: join.serverUrl, token: join.token)
             try Task.checkCancellation()

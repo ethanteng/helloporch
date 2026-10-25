@@ -338,7 +338,7 @@ extension PorchIncomingAudio: OutgoingCallSpeaking {
 }
 
 /// Says who the bedside is calling the moment a key is pressed, while the call is still being set up.
-/// The call screen's ringing, and the message screen for someone who can't take calls, wait for the sentence.
+/// The call screen's ringing, its audio, and the message screen for someone who can't take calls wait for the sentence.
 @MainActor final class OutgoingCallAnnouncement {
     static func message(name: String, language: BedsideLanguage) -> String { language.format("Calling %@.", arguments: [name]) }
     private let audio: OutgoingCallSpeaking
@@ -347,17 +347,18 @@ extension PorchIncomingAudio: OutgoingCallSpeaking {
     init(calling name: String, audio: OutgoingCallSpeaking? = nil) {
         self.audio = audio ?? PorchIncomingAudio()
         let language = BedsideText.language
-        self.audio.speak(Self.message(name: name, language: language), language: language) { [weak self] _ in self?.end() }
+        self.audio.speak(Self.message(name: name, language: language), language: language) { [weak self] said in self?.end(said ? "said" : "not said") }
     }
     /// Runs `next` once the sentence is over: said, couldn't be said, or stopped.
     func then(_ next: @escaping () -> Void) {
         if isFinished { next() } else { waiting.append(next) }
     }
     func finished() async { await withCheckedContinuation { continuation in then { continuation.resume() } } }
-    func stop() { audio.stop(); end() }
-    private func end() {
+    func stop() { audio.stop(); end("stopped") }
+    private func end(_ outcome: String) {
         guard !isFinished else { return }
         isFinished = true
+        Cell2JackKeypad.shared.record(["kind": "callAnnouncementEnded", "outcome": outcome])
         let next = waiting; waiting = []
         next.forEach { $0() }
     }
