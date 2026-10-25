@@ -90,7 +90,7 @@ A caregiver can bring a regular phone into their call with the bedside, for exam
 - One phone at a time, up to five per call. **Keypad** sends key presses for its menus ("press 1 for…"). **Hang up Bank** ends just that phone. If the bank hangs up or doesn't answer, the screen says so and you can add another number.
 - The phone belongs to the caregiver who added it. If they hang up, or their phone goes offline, the phone hangs up too, and the call ends unless two family members are still on it, so Mom is never left alone with a caller she didn't choose. If Mom presses her hang-up key while the caregiver is still on, only Mom leaves; the caregiver keeps talking to the bank and ends the call when done. Mom can't rejoin that call, and her Porch shows as busy until it ends.
 - Keep Porch open on your phone during a call you placed to Mom: like other outgoing Porch calls, leaving Porch or locking the phone ends it, phone number included. A call Mom placed to you, answered with **Answer**, keeps going behind the lock screen.
-- The bank sees the outbound trunk's number as caller ID. For a household whose Porch number is that trunk number, calling it back rings the bedside.
+- The bank sees the household's own Porch number as caller ID, so calling it back rings the bedside. A household without a Porch number shows the outbound trunk's number. See [a number for each household](INBOUND-PHONE-CALLS.md#a-number-for-each-household).
 - A silent hold doesn't trip the bedside's **Disconnect after silence** while a phone is on the call. A call with a phone number lasts up to an hour from when the number was dialed, and the phone itself is cut off after an hour.
 
 ## Keypad actions

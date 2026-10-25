@@ -145,6 +145,8 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   try {
     await services.sip.createSipParticipant(trunk, guest.number, room, {
       participantIdentity: identity, participantName: label,
+      // The household's own number, so the bank sees which Porch called and calling back rings it.
+      ...(house.porchNumber ? { fromNumber: house.porchNumber.number } : {}),
       // Everyone on the call hears it ring, as on a regular three-way call.
       hidePhoneNumber: true, playDialtone: true, waitUntilAnswered: false,
       ringingTimeout: phoneGuestLimits.ringSeconds, maxCallDuration: phoneGuestLimits.callSeconds, timeout: 10,

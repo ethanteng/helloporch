@@ -87,12 +87,22 @@ test('a caregiver on an answered call adds a number; the bedside sees its name, 
   assert.equal(dial.options.participantName,'Bank');
   assert.equal(dial.options.hidePhoneNumber,true); assert.equal(dial.options.playDialtone,true); assert.equal(dial.options.waitUntilAnswered,false);
   assert.equal(dial.options.maxCallDuration,phoneGuestLimits.callSeconds);
+  assert.equal(dial.options.fromNumber,undefined,"a household without its own number calls out from the trunk's");
   assert.equal(added.state.call.phoneGuest.number,bank);
   assert.ok(added.state.call.expiresAt>=f.now()+phoneGuestLimits.callSeconds && added.state.call.expiresAt>before,'a bank hold can outlast the usual call limit');
   const mom=await f.json('poll',{available:true},bedside.credential);
   assert.deepEqual(mom.state.call.phoneGuest,{id:added.phoneGuest.id,label:'Bank',addedBy:family.state.me.id});
   assert.ok(!JSON.stringify(mom).includes(bank.slice(2)),'the bedside never receives the number');
   assert.ok(!JSON.stringify(mom).includes('guests'));
+});
+
+test("a phone added to the call sees the household's own Porch number, so calling back rings Mom",async()=>{
+  const f=fixture(),{bedside,family,callID}=await f.connected();
+  const key=`house:${bedside.state.householdID}`, house=JSON.parse(await f.store.get(key));
+  house.porchNumber={number:'+16285550101',sid:`PN${'1'.repeat(32)}`,assignedAt:f.now()};
+  f.store.values.set(key,JSON.stringify(house));
+  await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+  assert.equal(f.livekit.dialed[0].options.fromNumber,'+16285550101');
 });
 
 test('only family caregivers can add numbers, only on an answered call and with the trunk configured',async()=>{

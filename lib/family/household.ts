@@ -42,6 +42,11 @@ export type PhoneDropIn = { number: string; name: string };
 export type BlockedCaller = { number: string; firstCallAt: number; lastCallAt: number; calls: number };
 /** A number a caregiver allowed to ring the bedside although it isn't saved on the keypad. */
 export type AllowedCaller = { number: string; allowedAt: number };
+/** The household's own phone number (see numbers.ts). Calls to it ring the bedside, and its calls out show it.
+ * `sid` is Twilio's ID for a number Porch bought; a number set up by hand before then has none. */
+export type PorchNumber = { number: string; sid?: string; assignedAt: number };
+/** A number the caregiver asked for that Porch hasn't finished setting up. The bedside's poll tries again from `retryAt`. */
+export type PhoneSetup = { areaCode: string; attempts: number; retryAt: number; error?: string };
 /** Characters sent to the speech service on one UTC day (days since 1970), to cap what a household spends. */
 export type SpeechUsage = { day: number; characters: number };
 /** The bedside's languages: `BedsideLanguage` raw values in the iPad app. */
@@ -50,9 +55,10 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
 /** `speechVoices`: the caregiver's natural voice per bedside language, or null for the iPad's built-in voice; unset is the language's default.
  * `bedsideLanguage`: the language chosen on the iPad, as it last reported it; unset is English.
  * `blockUnknownCallers`: only known callers' phone calls ring the bedside (see screening.ts); unset is off.
- * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does. */
+ * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does.
+ * `porchNumber`: the household's own phone number, and `phoneSetup` while one is still being set up. */
 export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
-  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[] };
+  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }

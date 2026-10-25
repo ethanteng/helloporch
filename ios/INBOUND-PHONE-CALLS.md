@@ -2,7 +2,51 @@
 
 A regular phone can dial a household's Twilio number and ring its paired bedside iPad. The caller needs no Porch app. The call is always microphone-only. It requires Answer on the screen or the configured keypad call-control key, unless the caregiver approved the caller's number for [audio drop-in](#audio-drop-in-by-phone) and the caller's phone company verified that number. Caller ID by itself never grants drop-in or automatic answer.
 
-Each household has its own number. Managed Redis stores `phone-number:<E.164 number>` with `{ householdID, bedsideID, trunkID }`. Routing uses the number dialed, not the caller's phone number. The initial setup reuses the existing Twilio outbound caller-ID number. It does not purchase or port a number. Multiple households can share the Porch backend and LiveKit project while their calls remain isolated.
+Each household has its own number. Managed Redis stores `phone-number:<E.164 number>` with `{ householdID, bedsideID, trunkID }`. Routing uses the number dialed, not the caller's phone number. Households set up from the app get their number automatically ([below](#a-number-for-each-household)). The first household reused the existing Twilio outbound caller-ID number, configured by hand as described [further down](#configure-the-existing-number). Multiple households can share the Porch backend and LiveKit project while their calls remain isolated.
+
+## A number for each household
+
+A bedside sets up its number from caregiver mode with the `assignPhoneNumber` action, choosing an area code. `phoneNumberOptions` suggests area codes near the iPad, from where Vercel places its internet address, and only in the US. Porch then:
+
+1. Buys a local US number from Twilio, with its voice webhook set to `/api/calls/inbound/voice` on `PORCH_SERVER_ORIGIN`. The number works in [voicemail mode](#voicemail) from its first call.
+2. Adds it to **Porch inbound (shared)**, one LiveKit inbound trunk for every number Porch buys. The first number creates the trunk, with the same settings as `configure-inbound.mjs --voicemail`: the digest login, the forwarded caller-verification header, a 120-second ringing cap and a 30-minute limit. It also creates one individual dispatch rule for it. Like the setup script, Porch refuses while a dispatch rule without trunks exists.
+3. Adds it to the outbound trunk, so the household's phone fallback and the numbers caregivers [add to a call](FAMILY-SETUP.md#adding-a-phone-number-to-a-call) show it as caller ID. Calling back rings that bedside.
+4. Saves the `phone-number:` route, and the number on the household. Everyone in the family sees it in Porch.
+
+Each step can be repeated:
+- **If Twilio or LiveKit fails,** the bedside's poll tries again after a minute, then waits twice as long each time, up to an hour. It picks up where it stopped.
+- **A number Twilio already sold is never bought twice,** even when the response was lost. Each number is named "Porch" and the household ID in Twilio, so a later try finds it.
+- **An area code with no numbers** asks the caregiver for another.
+
+Turn it on in the calling project's production environment:
+
+- `PORCH_SERVER_ORIGIN`: the live HTTPS address, such as `https://porch-calling-prototype.vercel.app`. Twilio calls this webhook for as long as the number exists, so never use a deployment's own URL.
+- `PORCH_MAX_PHONE_NUMBERS`: the most numbers Porch may hold. Without it Porch buys none. A household that already has its place keeps it when the limit is lowered.
+- The [voicemail](#turn-on-voicemail) variables (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `LIVEKIT_SIP_URI`) and `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`.
+
+The Twilio account must be upgraded, since a trial account owns only one number. Twilio bills each number monthly. Numbers are released only when a household is deleted, which isn't built yet.
+
+Bedsides set up from the app also start with [unknown callers blocked](#blocking-unknown-callers), because a recycled number still gets calls meant for its previous owner.
+
+### Households set up before automatic numbers
+
+`scripts/provision-number.mjs` gives a household without a Porch number one:
+
+```sh
+# The number configure-inbound.mjs already routes to it becomes its Porch number. Nothing is bought.
+node --env-file=.env.inbound-production.local --env-file=.env.local --env-file=.env.inbound-setup.local \
+  scripts/provision-number.mjs --household=HOUSEHOLD_UUID --adopt
+
+# A new number, bought the same way setup does.
+node --env-file=.env.inbound-production.local --env-file=.env.local \
+  scripts/provision-number.mjs --household=HOUSEHOLD_UUID --area-code=415
+```
+
+Both print a read-only plan that names the bedside; add `--apply` to save it.
+- `--adopt` needs the number to be on the outbound trunk already. For the household whose number is the trunk's own, calls out keep the same caller ID.
+- Vercel may omit sensitive values such as `TWILIO_AUTH_TOKEN` when pulling, so keep them in `.env.local` for `--area-code`.
+
+**Before a second number goes on the outbound trunk,** give every household that calls regular phones its Porch number. A household without one calls out without naming a number, and LiveKit doesn't document which of the trunk's numbers it then uses.
 
 ## Call behavior
 
@@ -36,7 +80,7 @@ Removing a number, or turning off **Allow approved drop-ins**, ends that phone d
 
 ## Blocking unknown callers
 
-A caregiver can turn on **Family & drop-in → Phone calls → Block unknown callers**, on the bedside iPad or from caregiver mode on a family phone. While it's on, a regular phone call rings the bedside only if its caller ID is:
+A caregiver can turn on **Family & drop-in → Phone calls → Block unknown callers**, on the bedside iPad or from caregiver mode on a family phone. Bedsides set up from the app start with it on. While it's on, a regular phone call rings the bedside only if its caller ID is:
 
 - one of a keypad person's numbers, with **Call their phone** on: their primary number or any of their **Other numbers** (such as home and mobile),
 - approved for [audio drop-in by phone](#audio-drop-in-by-phone), or
@@ -44,7 +88,7 @@ A caregiver can turn on **Family & drop-in → Phone calls → Block unknown cal
 
 Every other caller is rejected without being answered, so they can't leave voicemail and the bedside never rings. They hear their phone company's standard message for a call that can't go through, such as "your call cannot be completed as dialed" or "not in service". Twilio asks for its "rejected" response (`<Reject reason="rejected"/>`); the exact words depend on the caller's carrier. Rejected calls aren't answered, so Twilio doesn't bill them, and robocallers don't learn that a person picked up. The number is added to **Blocked numbers**, newest first, with how many times it called. It stays blocked until a caregiver taps **Allow**, which moves it to **Allowed**. **Remove** on an allowed number blocks it again, and its earlier calls reappear. **Clear this list** forgets the blocked numbers; they stay blocked, and one that calls again is listed again. The list keeps the 30 most recent numbers. Up to 50 numbers can be allowed. Withheld caller ID is always blocked and isn't listed, since there's no number to allow. Calls from the Porch app aren't affected.
 
-Keypad contacts live on the bedside iPad, so the iPad reports all of their phone numbers to the server with the caregiver PIN whenever they change. Until it has reported them once, blocking can't be turned on, so the people saved there are never turned away. If a report fails, it is retried after 30 seconds, or after 10 minutes for a rejected PIN, so a stale PIN can't use up the caregivers' PIN attempts.
+Keypad contacts live on the bedside iPad, so the iPad reports all of their phone numbers to the server with the caregiver PIN whenever they change. Until it has reported them once, blocking can't be turned on, so the people saved there are never turned away. A bedside set up from the app starts with an empty keypad, which the server already knows, so its blocking can be on from the start. If a report fails, it is retried after 30 seconds, or after 10 minutes for a rejected PIN, so a stale PIN can't use up the caregivers' PIN attempts.
 
 This is caller ID matching, the same check most phones use for blocking. It stops robocalls and strangers. It doesn't stop someone who fakes a saved number. Carrier verification isn't required, because many landlines, VoIP services and international callers never get it. The check runs in the voice webhook before LiveKit is dialed. It runs again when LiveKit reports the caller, for numbers routed straight to the SIP trunk, and before voicemail, for a number blocked while it was ringing.
 

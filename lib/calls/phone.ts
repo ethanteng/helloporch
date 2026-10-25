@@ -18,7 +18,7 @@ type PhoneServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "updateParticipant" | "deleteRoom">;
   sip: Pick<SipClient, "createSipParticipant">;
 };
-type Dependencies = { services?: (config: CallServer) => PhoneServices; now?: () => number };
+type Dependencies = { services?: (config: CallServer) => PhoneServices; now?: () => number; authorize?: (request: Request) => Promise<CallServer | Response> };
 type Action = "prepare" | "start" | "end";
 
 function services(config: CallServer): PhoneServices {
@@ -69,7 +69,7 @@ function approvedNumbers(): string[] | undefined {
 }
 
 export async function handlePhoneCall(request: Request, action: Action, dependencies: Dependencies = {}) {
-  const config = await authorizeNativeOrBedside(request);
+  const config = await (dependencies.authorize ?? authorizeNativeOrBedside)(request);
   if (config instanceof Response) return config;
   const input = await callInput(request);
   if (input instanceof Response) return input;
@@ -130,6 +130,8 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
     await client.rooms.updateParticipant(room, identity, { attributes: { [dialMarker]: "true" } });
     await client.sip.createSipParticipant(trunk, ticket.phoneNumber, room, {
       participantIdentity: phoneIdentity, participantName: ticket.name,
+      // The bedside household's own number; otherwise the trunk's.
+      ...(config.fromNumber ? { fromNumber: config.fromNumber } : {}),
       // Updated iPads play local ringback immediately; older builds retain SIP ringback.
       hidePhoneNumber: true, playDialtone: ticket.localRingback !== true, waitUntilAnswered: false,
       ringingTimeout: 45, maxCallDuration: 900, timeout: 10,

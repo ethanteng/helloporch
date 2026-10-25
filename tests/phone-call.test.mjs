@@ -148,6 +148,19 @@ test("dialing uses the configured trunk, a fixed destination, and bounded durati
   assert.equal(f.calls.dial.length, 1);
 });
 
+test("a bedside household's calls out show its own Porch number; otherwise the trunk's", async () => {
+  const shared = fixture();
+  const session = await shared.prepare();
+  assert.equal((await shared.send("start", { controlToken: session.controlToken })).status, 200);
+  assert.equal(shared.calls.dial[0][3].fromNumber, undefined, "the shared access code belongs to no household");
+  const household = fixture();
+  const authorize = async () => ({ apiKey: configuration.LIVEKIT_API_KEY, apiSecret: configuration.LIVEKIT_API_SECRET, serverUrl: configuration.LIVEKIT_URL,
+    householdID: "a-household", fromNumber: "+16285550101" });
+  const prepared = await (await household.send("prepare", { phoneNumber: "+14155550123", name: "David" }, { authorize })).json();
+  assert.equal((await household.send("start", { controlToken: prepared.controlToken }, { authorize })).status, 200);
+  assert.equal(household.calls.dial[0][3].fromNumber, "+16285550101");
+});
+
 test("concurrent dial submissions in one process cannot create a second telephone leg", async () => {
   const f = fixture();
   const session = await f.prepare();
