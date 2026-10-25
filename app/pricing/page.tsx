@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 const questions = [
   {
     question: "What counts as a Porch contact?",
-    answer: "A Porch contact is someone you invite to connect with the bedside iPad through the Porch app on their iPhone or iPad. Starter includes two contacts; Family includes up to ten. The bedside iPad doesn’t count toward that limit.",
+    answer: "A Porch contact is someone you invite to connect with the bedside iPad through the Porch app on their iPhone or iPad. Starter includes two contacts; Family and Family + Phone include up to ten. The bedside iPad doesn’t count toward that limit.",
   },
   {
     question: "Do family members pay separately?",
@@ -23,7 +23,11 @@ const questions = [
   },
   {
     question: "Is there a calling-minute limit?",
-    answer: "Neither proposed plan has a monthly minute allowance or per-minute charges for Porch app calls and drop-ins. Calls to regular phone numbers are separate and use the phone add-on’s allowance.",
+    answer: "All three proposed plans include unlimited Porch app calls and drop-ins, with no monthly minute allowance or per-minute charges. Family + Phone also includes 200 telephone minutes each month for calls to and from regular phone numbers. Additional telephone usage pricing is still being worked out.",
+  },
+  {
+    question: "What does Family + Phone include?",
+    answer: "Everything in Family, plus a household phone number, incoming calls from regular phones, phone fallback when a Porch call isn’t answered, and telephone voicemail. The 200 telephone minutes are shared across incoming and outgoing calls each month, including when you pay annually. Unlimited Porch app calls and drop-ins don’t use that allowance.",
   },
   {
     question: "Does the price include an iPad or a keypad?",
@@ -35,7 +39,7 @@ const questions = [
   },
   {
     question: "How does annual billing work?",
-    answer: "The proposed annual Starter plan is $108 a year, equivalent to $9 a month. Family is $420 a year, equivalent to $35 a month. The full annual amount would be charged once a year. The optional phone add-on is $108 a year. Monthly billing remains available.",
+    answer: "The proposed annual Starter plan is $108 a year, equivalent to $9 a month. Family is $420 a year, equivalent to $35 a month. Family + Phone is $528 a year, equivalent to $44 a month. The full annual amount would be charged once a year. Monthly billing remains available.",
   },
   {
     question: "Can I subscribe today?",

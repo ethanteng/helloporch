@@ -82,15 +82,15 @@
 }
 .plans {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px;
-  max-width: 950px;
+  max-width: 1152px;
   margin-inline: auto;
 }
 .plan {
   display: flex;
   flex-direction: column;
-  padding: clamp(26px, 3.5vw, 42px);
+  padding: 28px;
   border: 1px solid #d8c8ad;
   border-radius: 28px;
 }
@@ -103,7 +103,7 @@
   background: #f1e6ce;
 }
 .planTop {
-  min-height: 230px;
+  min-height: 310px;
 }
 .planLabel, .eyebrow {
   color: var(--brown-ink);
@@ -113,7 +113,7 @@
 }
 .plan h2 {
   margin-top: 13px;
-  font: 400 39px/1.1 var(--serif);
+  font: 400 clamp(29px, 2.8vw, 36px)/1.1 var(--serif);
   letter-spacing: -.035em;
 }
 .planDescription {
@@ -228,58 +228,9 @@
   color: var(--muted);
   font: 400 13px/1.6 var(--sans);
 }
-.phone {
-  display: flex;
-  align-items: flex-start;
-  gap: 23px;
-  max-width: 950px;
-  margin: 40px auto 0;
-  padding: 30px;
-  border: 1px solid #d8c8ad;
-  border-radius: 23px;
-}
-.phoneIcon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #ead5ae;
-  color: var(--brown-ink);
-}
-.phoneCopy {
-  flex: 1;
-  min-width: 0;
-}
-.phoneCopy h2 {
-  margin: 7px 0 11px;
-  font: 400 29px/1.15 var(--serif);
-  letter-spacing: -.02em;
-}
-.phoneCopy > p {
-  max-width: 560px;
-  color: var(--muted);
-  font: 400 15px/1.6 var(--sans);
-}
-.phoneCopy > .phoneNote {
-  margin-top: 10px;
-  font-size: 12px;
-}
-.phonePrice {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  flex: none;
-  gap: 4px;
-  padding-top: 19px;
-}
-.phonePrice strong {
-  font: 500 36px/1 var(--brand);
-  letter-spacing: -.06em;
-}
-.phonePrice span {
-  font: 400 12px/1.5 var(--sans);
-  color: var(--muted);
+.withPhone {
+  background: #f3dfd2;
+  border-color: #cba48c;
 }
 .included {
   margin: 84px -14px 0;
@@ -429,13 +380,7 @@
     margin-bottom: 25px;
   }
 }
-@media (max-width: 720px) {
-  .hero {
-    padding: 35px 0;
-  }
-  .desktopBreak {
-    display: none;
-  }
+@media (max-width: 1000px) {
   .plans {
     grid-template-columns: 1fr;
     gap: 20px;
@@ -447,21 +392,16 @@
   .planTop {
     min-height: 0;
   }
+}
+@media (max-width: 720px) {
+  .hero {
+    padding: 35px 0;
+  }
+  .desktopBreak {
+    display: none;
+  }
   .planDescription {
     min-height: 0;
-  }
-  .phone {
-    flex-wrap: wrap;
-    gap: 18px;
-    padding: 25px;
-  }
-  .phoneCopy {
-    flex-basis: calc(100% - 74px);
-  }
-  .phonePrice {
-    align-items: flex-start;
-    padding-top: 0;
-    margin-left: 74px;
   }
   .included {
     margin-top: 55px;
