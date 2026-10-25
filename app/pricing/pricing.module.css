@@ -81,29 +81,21 @@
   white-space: nowrap;
 }
 .plans {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 22px;
-  max-width: 1152px;
+  max-width: 980px;
   margin-inline: auto;
 }
 .plan {
-  display: flex;
-  flex-direction: column;
-  padding: 28px;
-  border: 1px solid #d8c8ad;
-  border-radius: 28px;
-}
-.starter {
-  background: var(--paper);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 45px;
+  padding: 40px;
   border: 2px solid var(--tomato-deep);
+  border-radius: 28px;
+  background: var(--paper);
   box-shadow: 0 12px 35px -28px #64281a66;
 }
-.family {
-  background: #f1e6ce;
-}
-.planTop {
-  min-height: 310px;
+.planSummary {
+  min-width: 0;
 }
 .planLabel, .eyebrow {
   color: var(--brown-ink);
@@ -117,8 +109,7 @@
   letter-spacing: -.035em;
 }
 .planDescription {
-  min-height: 49px;
-  max-width: 320px;
+  max-width: 360px;
   margin-top: 12px;
   font: 400 16px/1.5 var(--sans);
   color: var(--muted);
@@ -172,15 +163,7 @@
 .primaryButton:hover {
   background: var(--brown-ink);
 }
-.secondaryButton {
-  color: var(--ink);
-  background: transparent;
-}
-.secondaryButton:hover {
-  color: var(--paper);
-  background: var(--ink);
-}
-.button:focus-visible, .faq a:focus-visible, .question summary:focus-visible {
+.button:focus-visible, .quantity button:focus-visible, .faq a:focus-visible, .question summary:focus-visible {
   outline: 3px solid var(--tomato-deep);
   outline-offset: 5px;
 }
@@ -191,10 +174,23 @@
   color: var(--muted);
 }
 .featureBlock {
-  padding-top: 27px;
-  margin-top: 25px;
-  border-top: 1px solid #d8c8ad;
+  padding: 8px 0 0 35px;
+  border-left: 1px solid #d8c8ad;
 }
+.quantity { display: flex; align-items: center; gap: 18px; margin-top: 23px; }
+.quantity button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d8c8ad;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  font: 400 23px/1 var(--sans);
+  cursor: pointer;
+}
+.quantity button:disabled { opacity: .35; cursor: default; }
+.quantity output { min-width: 55px; text-align: center; font: 500 15px/1.5 var(--sans); }
+.bundleNote { margin-top: 13px; color: var(--muted); font: 400 13px/1.65 var(--sans); }
 .featureHeading {
   margin-bottom: 18px;
   font: 600 14px/1.5 var(--sans);
@@ -227,10 +223,6 @@
   text-align: center;
   color: var(--muted);
   font: 400 13px/1.6 var(--sans);
-}
-.withPhone {
-  background: #f3dfd2;
-  border-color: #cba48c;
 }
 .included {
   margin: 84px -14px 0;
@@ -381,19 +373,15 @@
   }
 }
 @media (max-width: 1000px) {
-  .plans {
-    grid-template-columns: 1fr;
-    gap: 20px;
-    max-width: 470px;
-  }
   .plan {
     padding: 29px;
-  }
-  .planTop {
-    min-height: 0;
+    gap: 25px;
   }
 }
 @media (max-width: 720px) {
+  .plans { max-width: 470px; }
+  .plan { grid-template-columns: 1fr; }
+  .featureBlock { padding: 25px 0 0; border-left: 0; border-top: 1px solid #d8c8ad; }
   .hero {
     padding: 35px 0;
   }
