@@ -283,6 +283,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     /// the bedside records a message. A call that rang through to a regular phone never does:
     /// that phone's own voicemail can answer instead.
     var onUnanswered: (() -> Void)?
+    /// Who the bedside is calling, which may still be being said as this screen opens. Ringing waits for it.
+    var announcement: OutgoingCallAnnouncement? {
+        didSet { if let announcement { ringback.hold(until: announcement) } }
+    }
     private var endedByCaller = false
     /// True while this close will offer that message. A receiver hang-up in this window
     /// cannot be pressed again once the message screen appears, so it cancels the handoff.
@@ -605,7 +609,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     private func playConnectionCue() {
         guard !connectionCuePlayed else { return }
-        connectionCuePlayed = true; connectionCue.play(.connected)
+        connectionCuePlayed = true; announcement?.stop(); connectionCue.play(.connected)
     }
 
     @objc private func familyChanged() {
@@ -701,6 +705,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted && !isPhoneCall && !isSwitchingToPhone ? onUnanswered : nil
         willOfferUnansweredMessage = unanswered != nil
         ringback.stop()
+        announcement?.stop()
         connectionCue.stop()
         connectionTask?.cancel()
         fallbackTask?.cancel()

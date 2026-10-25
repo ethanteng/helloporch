@@ -157,9 +157,9 @@ import PorchCore
     /// Set when a newer snapshot arrives while a pass is already reading sentences, so that pass runs once more.
     private static var prefetchAgain = false
     /// Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone
-    /// who may drop in, prompts and confirmations for leaving family a message, and the notice and
-    /// announcements for waiting messages.
-    /// A drop-in never waits for a clip, so this is how its announcement gets the natural voice.
+    /// who may drop in, who it's calling for everyone on its keypad, prompts and confirmations for leaving
+    /// family a message, and the notice and announcements for waiting messages.
+    /// A drop-in or a call never waits for a clip, so this is how its announcement gets the natural voice.
     /// A sentence that couldn't be prepared is tried again after ten minutes.
     static func prefetch(_ state: FamilySnapshot, slots: CallSlots) {
         let language = BedsideText.language
@@ -179,6 +179,7 @@ import PorchCore
                 texts.append(PorchIncomingAudio.message(name: name, video: false, language: language))
             }
         }
+        for contact in contacts where contact.nativeCall != nil { texts.append(OutgoingCallAnnouncement.message(name: contact.name, language: language)) }
         if state.messagesEnabled != false {
             for contact in contacts where contact.familyMemberID != nil {
                 texts += BedsideVoicemailViewController.Reason.allCases.map { $0.prompt(for: contact.name) }
@@ -238,7 +239,8 @@ import PorchCore
     }
 }
 
-/// Plays only on this device, before joining a room or enabling its camera/mic.
+/// Plays only on this device: a drop-in's announcement before joining a room or enabling its camera/mic,
+/// and who the bedside is calling as its call starts.
 @MainActor final class PorchIncomingAudio: NSObject, IncomingCallAudioPlaying, AVSpeechSynthesizerDelegate {
     private let tone = PorchTonePlayer()
     private let clip = PorchClipPlayer()
@@ -262,6 +264,11 @@ import PorchCore
     /// An explicit choice lets settings preview unsaved changes, including System default. A preview waits a few
     /// seconds for a natural clip; a drop-in never waits, so it uses the natural voice only once the clip is here.
     func announce(name: String, video: Bool, language: BedsideLanguage, voiceIdentifier: String?, naturalVoice: String?, naturalWait: TimeInterval = 0, completion: @escaping (Bool) -> Void) {
+        speak(Self.message(name: name, video: video, language: language), language: language, voiceIdentifier: voiceIdentifier,
+              naturalVoice: naturalVoice, naturalWait: naturalWait, completion: completion)
+    }
+    /// The announcement chime, then the sentence.
+    func speak(_ message: String, language: BedsideLanguage, voiceIdentifier: String?, naturalVoice: String?, naturalWait: TimeInterval = 0, completion: @escaping (Bool) -> Void) {
         stop()
         if PorchTonePlayer.isSilentPreview { completion(true); return }
         self.completion = completion
@@ -269,7 +276,6 @@ import PorchCore
         catch { finish(false); return }
         let voice = PorchAnnouncementVoice.resolve(for: language, identifier: voiceIdentifier)
         guard tone.play(.announcement), voice != nil || naturalVoice != nil else { finish(false); return }
-        let message = Self.message(name: name, video: video, language: language)
         utterance = voice.map { voice in
             let utterance = AVSpeechUtterance(string: message)
             utterance.voice = voice; utterance.rate = AVSpeechUtteranceDefaultSpeechRate
@@ -316,5 +322,43 @@ import PorchCore
     }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in if self?.utterance === utterance { self?.finish(false) } }
+    }
+}
+
+@MainActor protocol OutgoingCallSpeaking: AnyObject {
+    func speak(_ message: String, language: BedsideLanguage, completion: @escaping (Bool) -> Void)
+    func stop()
+}
+extension PorchIncomingAudio: OutgoingCallSpeaking {
+    /// In the bedside's saved voice. Like a drop-in, a call never waits for a natural clip that isn't here yet.
+    func speak(_ message: String, language: BedsideLanguage, completion: @escaping (Bool) -> Void) {
+        speak(message, language: language, voiceIdentifier: BedsidePreferences.load().announcementVoiceIdentifier(for: language),
+              naturalVoice: PorchNaturalVoice.selected(for: language), completion: completion)
+    }
+}
+
+/// Says who the bedside is calling the moment a key is pressed, while the call is still being set up.
+/// The call screen's ringing, and the message screen for someone who can't take calls, wait for the sentence.
+@MainActor final class OutgoingCallAnnouncement {
+    static func message(name: String, language: BedsideLanguage) -> String { language.format("Calling %@.", arguments: [name]) }
+    private let audio: OutgoingCallSpeaking
+    private var waiting: [() -> Void] = []
+    private(set) var isFinished = false
+    init(calling name: String, audio: OutgoingCallSpeaking? = nil) {
+        self.audio = audio ?? PorchIncomingAudio()
+        let language = BedsideText.language
+        self.audio.speak(Self.message(name: name, language: language), language: language) { [weak self] _ in self?.end() }
+    }
+    /// Runs `next` once the sentence is over: said, couldn't be said, or stopped.
+    func then(_ next: @escaping () -> Void) {
+        if isFinished { next() } else { waiting.append(next) }
+    }
+    func finished() async { await withCheckedContinuation { continuation in then { continuation.resume() } } }
+    func stop() { audio.stop(); end() }
+    private func end() {
+        guard !isFinished else { return }
+        isFinished = true
+        let next = waiting; waiting = []
+        next.forEach { $0() }
     }
 }

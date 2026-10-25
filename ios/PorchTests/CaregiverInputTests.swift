@@ -507,6 +507,30 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(buttons(in: controller.view).contains { $0.configuration?.title == "接聽視訊" && !$0.isHidden })
         XCTAssertTrue(labels(in: controller.view).contains { $0.text?.contains("接聽，長按") == true })
     }
+    @MainActor func testOutgoingCallSaysWhoItIsCallingAndWhatFollowsWaitsForTheSentence() async {
+        let restore = localizedBedside(.spanish); defer { restore() }
+        let audio = TestCallSpeaker()
+        let announcement = OutgoingCallAnnouncement(calling: "María 陳", audio: audio)
+        XCTAssertEqual(audio.message, "Llamando a María 陳."); XCTAssertEqual(audio.language, .spanish)
+        var followed = 0
+        announcement.then { followed += 1 }
+        XCTAssertEqual(followed, 0, "Ringing and the message prompt must not talk over the name")
+        audio.completion?(true)
+        XCTAssertTrue(announcement.isFinished); XCTAssertEqual(followed, 1)
+        announcement.then { followed += 1 }
+        await announcement.finished()
+        XCTAssertEqual(followed, 2, "Once it has been said, nothing waits")
+        // A voice that couldn't speak never holds up the call.
+        let unspoken = OutgoingCallAnnouncement(calling: "María 陳", audio: audio)
+        audio.completion?(false)
+        XCTAssertTrue(unspoken.isFinished)
+        // Hanging up while the call is still opening silences it, and what was waiting goes on.
+        let stopped = OutgoingCallAnnouncement(calling: "María 陳", audio: audio)
+        var resumed = false
+        stopped.then { resumed = true }
+        stopped.stop()
+        XCTAssertTrue(resumed); XCTAssertEqual(audio.stopCount, 1)
+    }
     @MainActor func testLargeClockFitsPortraitAndLandscapeWithoutCoveringCallButton() {
         func find(_ identifier: String, in view: UIView) -> UIView? {
             if view.accessibilityIdentifier == identifier { return view }
@@ -1137,6 +1161,17 @@ final class CaregiverInputTests: XCTestCase {
     func stop() { stopCount += 1; completion = nil }
 }
 
+@MainActor private final class TestCallSpeaker: OutgoingCallSpeaking {
+    var stopCount = 0
+    var message: String?
+    var language: BedsideLanguage?
+    var completion: ((Bool) -> Void)?
+    func speak(_ message: String, language: BedsideLanguage, completion: @escaping (Bool) -> Void) {
+        self.message = message; self.language = language; self.completion = completion
+    }
+    func stop() { stopCount += 1; completion = nil }
+}
+
 
 /// Exercise the pinned SDK's real teardown: identity/attributes disappear as
 /// soon as the delegate returns, before a queued main-actor callback can run.
@@ -1177,6 +1212,14 @@ final class PhoneFallbackHangupTests: XCTestCase {
         try deliverAndReset(phone) { screen.handleParticipantDisconnect(phone, in: room) }
         await drainCallbacks()
         XCTAssertTrue(screen.isEnding, "The disconnected phone must end the call even after its identity is cleared")
+    }
+
+    @MainActor func testEndingTheCallStopsSayingWhoItIsCalling() throws {
+        let screen = try fixture(), audio = TestCallSpeaker()
+        let announcement = OutgoingCallAnnouncement(calling: "Family", audio: audio)
+        screen.announcement = announcement
+        screen.finish()
+        XCTAssertTrue(announcement.isFinished); XCTAssertEqual(audio.stopCount, 1)
     }
 
     @MainActor func testExplicitSIPHangupEndsFallbackBeforeParticipantRemoval() async throws {
