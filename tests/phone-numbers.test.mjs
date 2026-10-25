@@ -258,6 +258,21 @@ test("Porch's limit on numbers stops new ones, never a household that already ha
   assert.equal(f.numbers.state.buys.length, 1);
 });
 
+test("a search that finds nothing, or fails, takes none of Porch's places for numbers", async () => {
+  process.env.PORCH_MAX_PHONE_NUMBERS = '1';
+  const f = fixture(), mom = await f.household(), dad = await f.household('Dad');
+  assert.equal((await f.send('assignPhoneNumber', { areaCode: '212' }, mom.bedside.credential, pin)).status, 409);
+  f.numbers.state.failSearch = true;
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '415' }, mom.bedside.credential, pin)).pending, true);
+  f.numbers.state.failSearch = false;
+  // Mom gave up on her number partway through; Dad can still get the only one.
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '415' }, dad.bedside.credential, pin)).porchNumber, '+14155550101');
+  f.advance(60);
+  await f.poll(mom.bedside.credential);
+  assert.equal((await f.house(mom.id)).porchNumber, undefined, 'the limit is reached now');
+  assert.equal(f.numbers.state.buys.length, 1);
+});
+
 test('area codes are suggested from where the iPad is, in the US only', async () => {
   const f = fixture(), mom = await f.household();
   const near = { 'x-vercel-ip-country': 'US', 'x-vercel-ip-latitude': '37.7749', 'x-vercel-ip-longitude': '-122.4194' };

@@ -169,7 +169,6 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
   const lockKey = `number-lock:${householdID}`, lock = await claim(store, lockKey, now, 90);
   if (!lock) return house;
   try {
-    await holdPlace(store, householdID, settings.limit);
     const orderKey = `number-order:${householdID}`;
     let order: OwnedNumber | null = JSON.parse(await store.get(orderKey) ?? "null");
     if (!order) {
@@ -178,6 +177,9 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
       if (!order) {
         const [choice] = await services.provider.search({ areaCode });
         if (!choice) throw new FamilyError(`There are no numbers in area code ${areaCode} right now. Try a nearby area code.`, 409, "noNumbers");
+        // Counted only now, so a search that finds nothing, or fails, holds no place. A purchase whose outcome is
+        // unknown keeps its place, since Twilio may have sold the number.
+        await holdPlace(store, householdID, settings.limit);
         order = await services.provider.buy(choice.number, { voiceURL: settings.voiceURL, label: label(householdID) });
       }
       if (!await store.create(orderKey, JSON.stringify(order))) order = JSON.parse((await store.get(orderKey))!) as OwnedNumber;

@@ -165,8 +165,8 @@ New `lib/family/numbers.ts`, calling Twilio's REST API with `fetch` the way [voi
 
 `ensurePorchNumber(store, householdID, …)` runs these steps under a short per-household lock, so two requests can't buy two numbers. Each step is safe to repeat:
 
-1. Count the household against `PORCH_MAX_PHONE_NUMBERS` (`numbers:households`), once.
-2. Use the saved `number-order:<householdID>` if there is one. Otherwise look the number up by `FriendlyName`, in case a purchase went through but its response was lost. Otherwise search the area code and buy, then save the order.
+1. Use the saved `number-order:<householdID>` if there is one.
+2. Otherwise look the number up by `FriendlyName`, in case a purchase went through but its response was lost. Otherwise search the area code, count the household against `PORCH_MAX_PHONE_NUMBERS` (`numbers:households`) once, and buy, then save the order. A search that finds nothing, or fails, takes no place.
 3. Add it to the shared inbound trunk, making the trunk with the first number (1.2).
 4. Add it to the outbound trunk.
 5. Create `phone-number:<n>` → `{ householdID, bedsideID, trunkID }`, failing if the route belongs to another household.
