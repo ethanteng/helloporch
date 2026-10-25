@@ -342,33 +342,23 @@ extension PorchIncomingAudio: OutgoingCallSpeaking {
 @MainActor final class OutgoingCallAnnouncement {
     static func message(name: String, language: BedsideLanguage) -> String { language.format("Calling %@.", arguments: [name]) }
     private let audio: OutgoingCallSpeaking
-    /// Not stored on self. Speech can finish before init returns, and a weak capture of self is nil until
-    /// then, which would leave ringback and the message screen waiting for a sentence that already ended.
-    private let outcome = Outcome()
-    var isFinished: Bool { outcome.isFinished }
+    private var waiting: [() -> Void] = []
+    private(set) var isFinished = false
     init(calling name: String, audio: OutgoingCallSpeaking? = nil) {
-        let speaker = audio ?? PorchIncomingAudio()
-        self.audio = speaker
+        self.audio = audio ?? PorchIncomingAudio()
         let language = BedsideText.language
-        let outcome = self.outcome
-        speaker.speak(Self.message(name: name, language: language), language: language) { _ in outcome.finish() }
+        self.audio.speak(Self.message(name: name, language: language), language: language) { [weak self] _ in self?.end() }
     }
     /// Runs `next` once the sentence is over: said, couldn't be said, or stopped.
     func then(_ next: @escaping () -> Void) {
-        if outcome.isFinished { next() } else { outcome.waiting.append(next) }
+        if isFinished { next() } else { waiting.append(next) }
     }
     func finished() async { await withCheckedContinuation { continuation in then { continuation.resume() } } }
-    func stop() { audio.stop(); outcome.finish() }
-
-    private final class Outcome {
-        var waiting: [() -> Void] = []
-        private(set) var isFinished = false
-        func finish() {
-            guard !isFinished else { return }
-            isFinished = true
-            let next = waiting
-            waiting = []
-            next.forEach { $0() }
-        }
+    func stop() { audio.stop(); end() }
+    private func end() {
+        guard !isFinished else { return }
+        isFinished = true
+        let next = waiting; waiting = []
+        next.forEach { $0() }
     }
 }

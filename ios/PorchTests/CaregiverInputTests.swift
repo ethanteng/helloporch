@@ -532,8 +532,7 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(resumed); XCTAssertEqual(audio.stopCount, 1)
     }
     @MainActor func testOutgoingCallThatCannotSpeakDoesNotHoldUpWhatFollows() {
-        // No installed voice, a failed chime, or the silent simulator finishes inside init.
-        // A weak self there is nil, so the sentence has to record that without one.
+        // No installed voice, a failed chime, or the silent simulator finishes before init returns.
         let announcement = OutgoingCallAnnouncement(calling: "David", audio: ImmediateCallSpeaker())
         XCTAssertTrue(announcement.isFinished, "Speech that ends while the announcement is created must not leave ringback waiting")
         var followed = false
