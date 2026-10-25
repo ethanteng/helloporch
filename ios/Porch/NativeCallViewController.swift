@@ -523,8 +523,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return
             }
             hasFailed = true
-            ringback.stop()
-            announcement?.stop()
+            ringback.stop(); announcement?.stop()
             await room.disconnect()
             stage.show([])
             localVideo.track = nil
@@ -979,8 +978,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         } catch {
             if Task.isCancelled || isEnding { return }
             hasFailed = true
-            ringback.stop()
-            announcement?.stop()
+            ringback.stop(); announcement?.stop()
             await room.disconnect()
             isSwitchingToPhone = false
             statusLabel.text = BedsideText.string("Couldn't connect their phone.")
