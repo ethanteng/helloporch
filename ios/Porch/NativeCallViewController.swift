@@ -487,6 +487,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
             try Task.checkCancellation()
             // Joining switches the audio session to a call, which cuts the bedside's voice off mid-sentence.
+            // Ringback waits with it: a tone started on the playback session is silenced by that switch.
+            if announcement != nil { ringback.suspendForCallJoin() }
             await announcement?.finished()
             try Task.checkCancellation()
             try await room.connect(url: join.serverUrl, token: join.token)
@@ -505,6 +507,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
             cameraButton.configuration?.title = BedsideText.string(room.localParticipant.isCameraEnabled() ? "Camera off" : "Camera on")
             try Task.checkCancellation()
+            if announcement != nil { ringback.resumeAfterCallJoin() }
             mediaReady = true
             microphoneButton.isEnabled = true
             cameraButton.isEnabled = true
@@ -961,6 +964,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
             phoneControlToken = ticket
             try Task.checkCancellation()
+            if announcement != nil { ringback.suspendForCallJoin() }
             await announcement?.finished()
             try Task.checkCancellation()
             try await room.connect(url: join.serverUrl, token: join.token)
@@ -968,6 +972,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             try await room.localParticipant.setMicrophone(enabled: microphoneEnabled)
             try Task.checkCancellation()
             microphoneButton.configuration?.title = BedsideText.string(microphoneEnabled ? "Mute" : "Unmute")
+            if announcement != nil { ringback.resumeAfterCallJoin() }
             ringback.start()
             try await phoneAction("start", ticket: ticket)
             try Task.checkCancellation()
