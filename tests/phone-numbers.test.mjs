@@ -63,13 +63,14 @@ function providers() {
   return { state, services: () => ({ provider, sip }) };
 }
 
-function fixture() {
-  const store = new MemoryStore(), numbers = providers();
+// `afterResponse`: hold work the route hands to Next's `after`, to run once the test says so.
+function fixture({ afterResponse = false } = {}) {
+  const store = new MemoryStore(), numbers = providers(), afterwards = [];
   let now = 1_800_000_000;
   const send = (action, values = {}, credential, code, headers = {}) => handleFamily(new Request('https://porch.example/api/family', { method: 'POST',
     headers: { ...(credential ? { Authorization: `Bearer ${credential}` } : {}), ...(code ? { 'X-Porch-Setup-Code': code } : {}), ...headers },
     body: JSON.stringify({ action, ...(['claimInvite', 'createHousehold', 'enrollBedside'].includes(action) ? { deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') } : {}), ...values }) }),
-  { store, now: () => now, numberServices: numbers.services });
+  { store, now: () => now, numberServices: numbers.services, ...(afterResponse ? { afterResponse: task => afterwards.push(task) } : {}) });
   const json = async (...args) => { const response = await send(...args); assert.equal(response.status, 200, await response.clone().text()); return response.json(); };
   // A bedside set up the way the app does, which gets its number in setup.
   const household = async (name = 'Mom') => {
@@ -80,7 +81,8 @@ function fixture() {
   };
   const house = async id => JSON.parse(await store.get(`house:${id}`));
   const poll = credential => json('poll', { available: true }, credential);
-  return { store, numbers, send, json, household, house, poll, advance: seconds => { now += seconds; }, now: () => now };
+  const finish = async () => { while (afterwards.length) await afterwards.shift()(); };
+  return { store, numbers, send, json, household, house, poll, finish, afterwards, advance: seconds => { now += seconds; }, now: () => now };
 }
 
 test('a bedside gets a local number that rings it and is its caller ID', async () => {
@@ -223,6 +225,29 @@ test('when LiveKit fails after buying, polls keep trying with a growing wait and
   const dad = await f.household('Dad');
   f.advance(3600); await f.poll(dad.bedside.credential);
   assert.equal(f.numbers.state.buys.length, 1);
+});
+
+test("on the server, the poll's retry runs after the iPad has its answer, and a later poll shows the number", async () => {
+  const f = fixture({ afterResponse: true }), mom = await f.household();
+  f.numbers.state.liveKitDown = true;
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '415' }, mom.bedside.credential, pin)).pending, true);
+  f.numbers.state.liveKitDown = false;
+  await f.finish();
+  f.advance(60);
+  let slow = false;
+  f.numbers.state.onBuy = () => { slow = true; };
+  const answered = await f.poll(mom.bedside.credential);
+  assert.equal(answered.state.porchNumber, undefined, 'answered before Porch tries again');
+  assert.equal(f.numbers.state.inboundAdds.length + f.numbers.state.trunks.length, 0, 'nothing ran yet');
+  assert.equal(f.afterwards.length, 1);
+  await f.finish();
+  assert.equal(slow, false, 'the number bought before is used, not a new one');
+  assert.equal((await f.poll(mom.bedside.credential)).state.porchNumber, '+14155550101');
+  assert.equal(f.numbers.state.buys.length, 1);
+  // A family phone's poll never tries.
+  assert.equal(f.afterwards.length, 0);
+  await f.poll(mom.family.credential);
+  assert.equal(f.afterwards.length, 0);
 });
 
 test('two requests at once buy one number', async () => {

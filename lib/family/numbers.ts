@@ -142,8 +142,6 @@ async function sharedInboundTrunk(store: FamilyStore, sip: NumberServices["sip"]
     const rules = await sip.listSipDispatchRule();
     // A rule without trunks would send these calls, and every other household's, to rooms of its own.
     if (rules.some(rule => rule.trunkIds.length === 0)) throw new Error("A wildcard SIP dispatch rule needs reviewing first.");
-    const ready = await store.get(sharedTrunkKey);
-    if (ready) return attach(ready);
     // A trunk made by a try that stopped before saving its ID.
     const halfMade = (await sip.listSipInboundTrunk()).find(trunk => trunk.name === sharedTrunkName);
     const login = sipInboundCredentials(apiSecret);
@@ -267,9 +265,14 @@ export async function handleNumberAction(action: string, { store, now, house, me
   }
 }
 
+/** Whether the bedside's poll should try again now for a number that isn't set up yet. */
+export function porchNumberDue(house: Household, now: number): boolean {
+  return !house.porchNumber && !!house.phoneSetup && !house.phoneSetup.needsChoice && house.phoneSetup.retryAt <= now;
+}
+
 /** The bedside's poll tries again for a number that isn't set up yet, once its wait is over. */
 export async function retryPorchNumber(store: FamilyStore, house: Household, now: number, services?: (settings: NumberSettings) => NumberServices): Promise<Household | undefined> {
-  if (house.porchNumber || !house.phoneSetup || house.phoneSetup.needsChoice || house.phoneSetup.retryAt > now) return undefined;
+  if (!porchNumberDue(house, now)) return undefined;
   const settings = numberSettings();
   if (!settings) return undefined;
   try { return await ensurePorchNumber(store, house.id, now, settings, (services ?? numberServices)(settings)); }

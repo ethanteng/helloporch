@@ -8,7 +8,7 @@ import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
-import { handleNumberAction, numberActions, publicPhoneSetup, retryPorchNumber, type NumberServices, type NumberSettings } from "./numbers.ts";
+import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, retryPorchNumber, type NumberServices, type NumberSettings } from "./numbers.ts";
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, phoneGuestActions, phoneGuestReapSeconds, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
@@ -17,7 +17,9 @@ import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screen
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize;
-  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices };
+  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
+  /** Keeps work going once the device has its answer (Next's `after`). Without it, that work runs before answering. */
+  afterResponse?: (task: () => Promise<unknown>) => void };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -648,9 +650,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
-      // A number that couldn't be set up yet. This poll's state shows it if this try works.
-      const numbered = await retryPorchNumber(store, house, now, dependencies.numberServices);
-      if (numbered) Object.assign(house, numbered);
+      // A number that couldn't be set up yet. Twilio and LiveKit can take longer than the iPad waits for a poll, so
+      // the try runs after this one is answered, and a later poll shows the number.
+      if (porchNumberDue(house, now)) {
+        const retry = () => retryPorchNumber(store, house, now, dependencies.numberServices);
+        if (dependencies.afterResponse) dependencies.afterResponse(retry);
+        else { const numbered = await retry(); if (numbered) Object.assign(house, numbered); }
+      }
     }
     if (removeFromRoom) {
       try { await removeMember(removeFromRoom); }

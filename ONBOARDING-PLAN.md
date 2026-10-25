@@ -173,7 +173,7 @@ New `lib/family/numbers.ts`, calling Twilio's REST API with `fetch` the way [voi
 5. Create `phone-number:<n>` → `{ householdID, bedsideID, trunkID }`, failing if the route belongs to another household.
 6. Save `porchNumber: { number, sid, assignedAt }` on the household with `mutate`, and clear `phoneSetup`.
 
-A failure records `phoneSetup: { areaCode, attempts, retryAt, error }`. Retries ride on the bedside's existing poll: once `retryAt` has passed, the poll calls `ensurePorchNumber` again, after a minute, then twice as long each time, up to an hour. No separate job is needed. Only households that asked for a number are retried, so nobody is sold one by their polls alone. A household never gets a second number.
+A failure records `phoneSetup: { areaCode, attempts, retryAt, error }`. Retries ride on the bedside's existing poll: once `retryAt` has passed, the poll calls `ensurePorchNumber` again, after a minute, then twice as long each time, up to an hour. The retry runs after the poll is answered (Next's `after`), since Twilio and LiveKit can take longer than the iPad's 12-second poll timeout, and the family route allows 60 seconds. An area code with no numbers (`needsChoice`) waits for the caregiver instead. No separate job is needed. Only households that asked for a number are retried, so nobody is sold one by their polls alone. A household never gets a second number.
 
 ### 1.4 New API actions
 
@@ -317,7 +317,7 @@ Size: large. Depends on phases 1, 2 and 4.
   - **Set up** asks for the setup link from the invitation, unless Porch was opened by it. Without one it says "Ask whoever invited you for your setup link."
   - On an iPhone, it explains that the bedside runs on the iPad that stays with them.
 - **5.2 Bedside setup.** The steps above replace the creation form in `CaregiverPINViewController` ([PorchContainerViewController.swift:182](ios/Porch/PorchContainerViewController.swift:182)).
-  - The number step can't be skipped. If buying is still pending because Twilio failed, **Continue** is allowed with "Porch will keep trying and let you know", so pairing family isn't blocked. The checklist shows the pending number.
+  - The number step can't be skipped. Call `assignPhoneNumber` with a longer timeout than the usual 12 seconds, such as 45, since the first number also makes the shared trunk. If buying is still pending because Twilio failed, **Continue** is allowed with "Porch will keep trying and let you know", so pairing family isn't blocked. The checklist shows the pending number.
   - The **Done** screen explains that unknown callers are blocked (1.6).
 - **5.3 Connect the phone** (Cell2Jack):
   - **Model check:** check the iPad's model identifier (`hw.machine`) against known M-series iPads. On a known non-M iPad, such as an iPad mini or the base iPad, say the phone keypad needs an M-series iPad and continue with touch. An unknown model gets a try.
