@@ -31,7 +31,7 @@ const questions = [
   },
   {
     question: "Does the price include an iPad or a keypad?",
-    answer: "These are software subscriptions. You bring a compatible iPad, home Wi-Fi and, if you want one, a keypad. The touchscreen works too. Our pilot guide explains the equipment options and which iPads work with them.",
+    answer: "No. This is a software subscription. You’ll need a compatible iPad and home Wi-Fi. A keypad is optional; you can also use the touchscreen. Our pilot guide explains the equipment options and which iPads work with them.",
   },
   {
     question: "What happens if we replace the iPad?",
@@ -39,7 +39,7 @@ const questions = [
   },
   {
     question: "How does annual billing work?",
-    answer: "Pay for eleven months and get twelve. One loved-one iPad is $429 a year, paid once annually. Each additional loved-one iPad is $330 a year. The monthly option starts at $39, plus $30 for each additional iPad.",
+    answer: "Annual billing includes twelve months of service for the price of eleven. One loved-one iPad is $429 a year, paid once annually. Each additional loved-one iPad is $330 a year. The monthly option starts at $39, plus $30 for each additional iPad.",
   },
   {
     question: "Can I subscribe today?",
@@ -54,29 +54,29 @@ export default function PricingPage() {
         <SiteNav />
         <main id="main-content" className={styles.main}>
           <header className={styles.hero}>
-            <span className={styles.preview}>A first look at pricing</span>
-            <h1>A little closer.<br />{" "}<em>Every day.</em></h1>
-            <p className={styles.lede}>One simple subscription for their bedside iPad.<br className={styles.desktopBreak} /> More ways to be there for someone you love.</p>
+            <span className={styles.preview}>Pricing preview</span>
+            <h1>Stay in touch with<br />{" "}your loved one.</h1>
+            <p className={styles.lede}>One subscription for your loved one’s bedside iPad.<br className={styles.desktopBreak} /> Family members can call from their own devices at no extra charge.</p>
             <p className={styles.previewNote}>Proposed software pricing · Porch is currently in its pilot</p>
           </header>
 
           <PricingPlans />
 
           <section className={styles.included} aria-labelledby="included-title">
-            <p className={styles.eyebrow}>Included for everyone</p>
-            <h2 id="included-title">Easy to use.<br /><em>Yours to control.</em></h2>
+            <p className={styles.eyebrow}>Calling and privacy</p>
+            <h2 id="included-title">You choose who can<br />call or drop in.</h2>
             <div className={styles.promises}>
-              <div><span className={styles.promiseNumber}>01</span><h3>A simpler way to call</h3><p>One press starts a call. Use the touchscreen or add a compatible keypad.</p></div>
-              <div><span className={styles.promiseNumber}>02</span><h3>Your family, your say</h3><p>You choose who can connect and which contacts may drop in with audio or video.</p></div>
-              <div><span className={styles.promiseNumber}>03</span><h3>Room for real conversations</h3><p>No minute allowances or call-length limits. Stay for another story.</p></div>
+              <div><span className={styles.promiseNumber}>01</span><h3>One-press calling</h3><p>Start a call with the touchscreen or a compatible keypad.</p></div>
+              <div><span className={styles.promiseNumber}>02</span><h3>Control who can connect</h3><p>Manage contacts and choose who may start an audio or video drop-in.</p></div>
+              <div><span className={styles.promiseNumber}>03</span><h3>No call-length limits</h3><p>Talk for as long as you like, with no monthly minute allowance or automatic cutoff.</p></div>
             </div>
           </section>
 
           <section className={styles.faq} aria-labelledby="faq-title">
             <div className={styles.faqIntro}>
-              <p className={styles.eyebrow}>A few things to know</p>
-              <h2 id="faq-title">Let’s make<br /><em>it simple.</em></h2>
-              <p>Wondering about the iPad or keypad?</p>
+              <p className={styles.eyebrow}>Common questions</p>
+              <h2 id="faq-title">How the<br />subscription works.</h2>
+              <p>For help choosing an iPad or keypad, read our setup guide.</p>
               <Link href="/pilot">See the setup guide <Arrow /></Link>
             </div>
             <div className={styles.questions}>
@@ -90,11 +90,11 @@ export default function PricingPage() {
           </section>
 
           <section id="join" className={styles.join} aria-labelledby="join-title">
-            <p className={styles.joinEyebrow}>A little more connection starts here</p>
-            <h2 id="join-title">Be there.<br /><em>Even from here.</em></h2>
-            <p>Join the waitlist for Porch updates and news about our launch plans.</p>
+            <p className={styles.joinEyebrow}>Porch is currently in its pilot</p>
+            <h2 id="join-title">Get launch updates.</h2>
+            <p>Leave your email and we’ll let you know when subscriptions are available.</p>
             <div className={styles.signup}><JoinWaitlist /></div>
-            <p className={styles.joinNote}>No payment. No commitment. Just a place on the list.</p>
+            <p className={styles.joinNote}>Joining the waitlist is free and doesn’t start a subscription.</p>
           </section>
         </main>
         <SiteFooter />
