@@ -86,6 +86,8 @@ final class BedsideLanguageTests: XCTestCase {
         XCTAssertEqual(BedsideLanguage.simplifiedChinese.format("Video drop-in\nConnecting in %d…", arguments: [5]), "视频自动接听\n5 秒后接通…")
         XCTAssertEqual(BedsideLanguage.spanish.format("Tap %@ to answer. Hold %@ to decline.", arguments: ["#", "#"]), "Pulse # para contestar. Mantenga pulsado # para rechazar.")
         XCTAssertEqual(BedsideLanguage.english.text("End call"), "End call")
+        XCTAssertEqual(BedsideLanguage.cantonese.format("Calling %@.", arguments: ["陳先生"]), "打緊畀陳先生。")
+        XCTAssertEqual(BedsideLanguage.english.format("Calling %@.", arguments: ["David"]), "Calling David.")
     }
     func testNewLanguageDatesKeepTheLocalDateAndWeekday() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!

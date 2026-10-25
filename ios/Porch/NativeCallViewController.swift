@@ -283,6 +283,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     /// the bedside records a message. A call that rang through to a regular phone never does:
     /// that phone's own voicemail can answer instead.
     var onUnanswered: (() -> Void)?
+    /// Who the bedside is calling, which may still be being said as this screen opens. Ringing waits for it.
+    var announcement: OutgoingCallAnnouncement? {
+        didSet { if let announcement { ringback.hold(until: announcement) } }
+    }
     private var endedByCaller = false
     /// True while this close will offer that message. A receiver hang-up in this window
     /// cannot be pressed again once the message screen appears, so it cancels the handoff.
@@ -519,7 +523,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return
             }
             hasFailed = true
-            ringback.stop()
+            ringback.stop(); announcement?.stop()
             await room.disconnect()
             stage.show([])
             localVideo.track = nil
@@ -605,7 +609,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     private func playConnectionCue() {
         guard !connectionCuePlayed else { return }
-        connectionCuePlayed = true; connectionCue.play(.connected)
+        connectionCuePlayed = true; announcement?.stop(); connectionCue.play(.connected)
     }
 
     @objc private func familyChanged() {
@@ -701,6 +705,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted && !isPhoneCall && !isSwitchingToPhone ? onUnanswered : nil
         willOfferUnansweredMessage = unanswered != nil
         ringback.stop()
+        announcement?.stop()
         connectionCue.stop()
         connectionTask?.cancel()
         fallbackTask?.cancel()
@@ -876,7 +881,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private func switchToPhone() async {
         guard let phoneNumber = contact.phoneNumber, !isEnding, !hasFailed, !hasConnectedPeer, !familyAccepted else { return }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
-            hasFailed = true; ringback.stop()
+            hasFailed = true; ringback.stop(); announcement?.stop()
             statusLabel.text = BedsideText.string("Microphone access is required.")
             placeholder.text = BedsideText.string("Allow Porch's microphone in Settings to make a phone call.")
             endButton.configuration?.title = BedsideText.string("Back to clock")
@@ -895,7 +900,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             } catch {
                 isSwitchingToPhone = false
                 if (error as? FamilyServiceError)?.code == "answered" {
-                    familyAccepted = true; waitTask?.cancel()
+                    familyAccepted = true; waitTask?.cancel(); ringback.stop()
                     if !mediaReady { finish(message: "They answered Porch, but this device couldn't connect. Please try again.") }
                     else {
                         waitTask = Task { [weak self] in
@@ -905,7 +910,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                         }
                     }
                 } else {
-                    hasFailed = true; ringback.stop()
+                    hasFailed = true; ringback.stop(); announcement?.stop()
                     statusLabel.text = BedsideText.string("Couldn't switch to their phone.")
                     placeholder.text = BedsideText.error(error.localizedDescription)
                     endButton.configuration?.title = BedsideText.string("Back to clock")
@@ -973,7 +978,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         } catch {
             if Task.isCancelled || isEnding { return }
             hasFailed = true
-            ringback.stop()
+            ringback.stop(); announcement?.stop()
             await room.disconnect()
             isSwitchingToPhone = false
             statusLabel.text = BedsideText.string("Couldn't connect their phone.")

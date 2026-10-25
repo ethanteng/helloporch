@@ -134,6 +134,16 @@ final class CallPreferencesViewController: CaregiverFormViewController {
 /// Playback shares LiveKit's audio session; it never publishes an audio track.
 @MainActor final class PorchRingback {
     private let player = PorchTonePlayer()
-    func start() { player.play(.ringback) }
-    func stop() { player.stop() }
+    private var ringing = false, held = false
+    func start() { ringing = true; if !held { player.play(.ringback) } }
+    func stop() { ringing = false; player.stop() }
+    /// Rings once the bedside has said who it's calling, rather than over it.
+    func hold(until announcement: OutgoingCallAnnouncement) {
+        held = true
+        announcement.then { [weak self] in
+            guard let self else { return }
+            self.held = false
+            if self.ringing { self.player.play(.ringback) }
+        }
+    }
 }

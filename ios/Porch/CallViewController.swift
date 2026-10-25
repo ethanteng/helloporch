@@ -14,6 +14,8 @@ final class CallViewController: UIViewController {
     private var trigger = CallTrigger()
     private var opening = false
     private var cancelOpening = false
+    /// Who a call that's opening is for, said aloud. The call screen takes it over once it appears.
+    private var announcement: OutgoingCallAnnouncement?
     /// Plays waiting messages when someone sits down in front of the iPad, if a caregiver turned it on.
     private let presence = BedsidePresence()
     private var notice: MessageNoticeView?
@@ -358,7 +360,7 @@ final class CallViewController: UIViewController {
         presence.stop()
         notice?.end(); notice = nil
         trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil
-        if opening { cancelOpening = true }
+        if opening { cancelOpening = true; announcement?.stop() }
     }
 
     @objc private func resetClock() {
@@ -629,9 +631,12 @@ final class CallViewController: UIViewController {
         cancelOpening = false
         Cell2JackKeypad.shared.record(["kind": "callStartRequested", "digitSource": "shared touch/keyboard/USB handler"])
         opening = true; refreshCallButton(); refreshPresence()
+        // Said while the call is set up, so whoever pressed the key hears straight away who they're calling.
+        let announcement = OutgoingCallAnnouncement(calling: contact.name)
+        self.announcement = announcement
         Task { [weak self] in
             guard let self else { return }
-            defer { self.opening = false; self.refreshCallButton(); self.refreshPresence() }
+            defer { self.opening = false; self.announcement = nil; self.refreshCallButton(); self.refreshPresence() }
             do {
                 let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
                 if self.cancelOpening {
@@ -640,9 +645,10 @@ final class CallViewController: UIViewController {
                     return
                 }
                 Cell2JackKeypad.shared.record(["kind": "callSessionCreated"])
-                guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
+                guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { announcement.stop(); await session.end(); return }
                 let screen = try NativeCallViewController.paired(session, contact: contact)
                 if let memberID { screen.onUnanswered = { [weak self] in self?.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unanswered) } }
+                screen.announcement = announcement
                 self.present(screen, animated: true)
             } catch {
                 if self.cancelOpening { return }
@@ -650,12 +656,18 @@ final class CallViewController: UIViewController {
                 // A lost response may still have created a Porch call. Only a
                 // confirmed offline result permits an unpaired phone handoff.
                 if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
-                    do { self.present(try NativeCallViewController.phoneFallback(contact), animated: true) }
-                    catch { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
+                    do {
+                        let screen = try NativeCallViewController.phoneFallback(contact)
+                        screen.announcement = announcement
+                        self.present(screen, animated: true)
+                    } catch { announcement.stop(); self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
                 } else if let memberID, (error as? FamilyServiceError)?.code == "offline", CallPreferences.leaveMessageWhenUnanswered() {
                     // Their Porch app can't ring and there's no phone to try: leave a message, as for a missed call.
+                    // The message screen says they aren't available, so it waits for who was called to be said.
+                    await announcement.finished()
+                    if self.cancelOpening { return }
                     self.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unavailable)
-                } else { self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
+                } else { announcement.stop(); self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
             }
         }
     }
@@ -871,7 +883,7 @@ extension CallViewController: Cell2JackDigitReceiving {
         return "held for the screen that is opening"
     }
     private func cancelPendingCall() -> String {
-        cancelOpening = true
+        cancelOpening = true; announcement?.stop()
         displayStatus(BedsideText.string("Ending call…"))
         return "cancel pending call requested"
     }
