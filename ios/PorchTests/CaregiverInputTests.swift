@@ -531,6 +531,15 @@ final class CaregiverInputTests: XCTestCase {
         stopped.stop()
         XCTAssertTrue(resumed); XCTAssertEqual(audio.stopCount, 1)
     }
+    @MainActor func testOutgoingCallThatCannotSpeakDoesNotHoldUpWhatFollows() {
+        // No installed voice, a failed chime, or the silent simulator finishes inside init.
+        // A weak self there is nil, so the sentence has to record that without one.
+        let announcement = OutgoingCallAnnouncement(calling: "David", audio: ImmediateCallSpeaker())
+        XCTAssertTrue(announcement.isFinished, "Speech that ends while the announcement is created must not leave ringback waiting")
+        var followed = false
+        announcement.then { followed = true }
+        XCTAssertTrue(followed)
+    }
     @MainActor func testLargeClockFitsPortraitAndLandscapeWithoutCoveringCallButton() {
         func find(_ identifier: String, in view: UIView) -> UIView? {
             if view.accessibilityIdentifier == identifier { return view }
@@ -1170,6 +1179,11 @@ final class CaregiverInputTests: XCTestCase {
         self.message = message; self.language = language; self.completion = completion
     }
     func stop() { stopCount += 1; completion = nil }
+}
+
+@MainActor private final class ImmediateCallSpeaker: OutgoingCallSpeaking {
+    func speak(_ message: String, language: BedsideLanguage, completion: @escaping (Bool) -> Void) { completion(false) }
+    func stop() {}
 }
 
 
