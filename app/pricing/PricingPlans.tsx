@@ -31,9 +31,9 @@ export default function PricingPlans() {
       <section className={styles.plans} aria-label="Proposed Porch software subscription">
         <article className={styles.plan} aria-labelledby="porch-title">
           <div className={styles.planSummary}>
-            <span className={styles.planLabel}>One plan. The whole family.</span>
+            <span className={styles.planLabel}>One plan, all features</span>
             <h2 id="porch-title">Porch</h2>
-            <p className={styles.planDescription}>For the iPad beside someone you love.<br />Every way to stay close, included.</p>
+            <p className={styles.planDescription}>Calling, drop-ins and messages for your loved one’s bedside iPad.</p>
             <p className={styles.price} aria-live="polite" aria-atomic="true"><span>{dollars.format(annual ? yearly : monthly)}</span><span className={styles.period}>/ {annual ? "year" : "month"}</span></p>
             <p className={styles.billing}>{annual ? `${dollars.format(yearly)} billed annually · Save ${dollars.format(monthly)} a year` : `${dollars.format(monthly)} billed monthly`}</p>
             <p className={styles.scope}><strong>{scope}</strong><br />Unlimited family members and their devices</p>
@@ -42,7 +42,7 @@ export default function PricingPlans() {
               <output aria-live="polite">{ipads} {ipads === 1 ? "iPad" : "iPads"}</output>
               <button type="button" onClick={() => setIpads((count) => count + 1)} aria-label="Add one loved-one iPad">+</button>
             </div>
-            <p className={styles.bundleNote}>Another loved one? Add an iPad for {annual ? "$330/year" : "$30/month"}.<br />Same plan. Every feature. One bill.</p>
+            <p className={styles.bundleNote}>Each additional bedside iPad is {annual ? "$330/year" : "$30/month"}.<br />All iPads share one bill and include the same features.</p>
             <a className={`${styles.button} ${styles.primaryButton}`} href="#join">Join the waitlist <Arrow /></a>
             <p className={styles.noPayment}>No payment today</p>
           </div>
@@ -53,7 +53,7 @@ export default function PricingPlans() {
           </div>
         </article>
       </section>
-      <p className={styles.belowPlans}>Software only. Bring your own compatible iPad and Wi-Fi. iPads and accessories are sold separately.</p>
+      <p className={styles.belowPlans}>Use your own compatible iPad and home Wi-Fi. Hardware isn’t included.</p>
     </>
   );
 }
