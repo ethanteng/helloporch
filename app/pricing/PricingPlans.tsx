@@ -3,97 +3,59 @@
 import { useState } from "react";
 import styles from "./pricing.module.css";
 
-const sharedFeatures = [
+const features = [
+  "Unlimited family members, at no extra charge",
   "Unlimited Porch audio and video calls",
   "Unlimited approved audio and video drop-ins",
-  "One-press calling with touch or a keypad",
+  "Regular phone calls and a phone number included",
+  "No minute allowances or call-length limits",
+  "Audio and video messages, plus telephone voicemail",
+  "One-press calling with touch or a compatible keypad",
   "Caregiver controls and privacy settings",
-  "Bedside clock and built-in announcement voices",
 ];
+const dollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export default function PricingPlans() {
   const [annual, setAnnual] = useState(false);
+  const [ipads, setIpads] = useState(1);
+  const monthly = 39 + (ipads - 1) * 30;
+  const yearly = monthly * 11;
+  const scope = `${ipads} loved-one ${ipads === 1 ? "iPad" : "iPads"}`;
+
   return (
     <>
       <div className={styles.billingToggle} role="group" aria-label="Billing frequency">
         <button type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Pay monthly</button>
-        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Pay annually <span>Save about 10%</span></button>
+        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Pay annually <span>1 month free</span></button>
       </div>
-      <p className={styles.screenReaderOnly} role="status">{annual ? "Annual billing selected. Starter is 108 dollars per year; Family is 420 dollars per year; Family plus Phone is 528 dollars per year." : "Monthly billing selected. Starter is 9 dollars and 99 cents per month; Family is 39 dollars per month; Family plus Phone is 49 dollars per month."}</p>
-      <section className={styles.plans} aria-label="Proposed software plans">
-        <article className={`${styles.plan} ${styles.starter}`} aria-labelledby="starter-title">
-          <div className={styles.planTop}>
-            <span className={styles.planLabel}>A close circle</span>
-            <h2 id="starter-title">Porch Starter</h2>
-            <p className={styles.price}><span>{annual ? "$9" : "$9.99"}</span><span className={styles.period}>/ month</span></p>
-            <p className={styles.billing}>{annual ? "$108 billed annually · Save $11.88 a year" : "$9.99 billed monthly"}</p>
-            <p className={styles.planDescription}>For your loved one, you, and one more familiar face.</p>
-            <p className={styles.scope}>1 bedside iPad<br /><strong>2 Porch contacts</strong></p>
+      <section className={styles.plans} aria-label="Proposed Porch software subscription">
+        <article className={styles.plan} aria-labelledby="porch-title">
+          <div className={styles.planSummary}>
+            <span className={styles.planLabel}>One plan. The whole family.</span>
+            <h2 id="porch-title">Porch</h2>
+            <p className={styles.planDescription}>For the iPad beside someone you love.<br />Every way to stay close, included.</p>
+            <p className={styles.price} aria-live="polite" aria-atomic="true"><span>{dollars.format(annual ? yearly : monthly)}</span><span className={styles.period}>/ {annual ? "year" : "month"}</span></p>
+            <p className={styles.billing}>{annual ? `${dollars.format(yearly)} billed annually · Save ${dollars.format(monthly)} a year` : `${dollars.format(monthly)} billed monthly`}</p>
+            <p className={styles.scope}><strong>{scope}</strong><br />Unlimited family members and their devices</p>
+            <div className={styles.quantity} role="group" aria-label="Number of loved-one iPads">
+              <button type="button" onClick={() => setIpads((count) => count - 1)} disabled={ipads === 1} aria-label="Remove one loved-one iPad">−</button>
+              <output aria-live="polite">{ipads} {ipads === 1 ? "iPad" : "iPads"}</output>
+              <button type="button" onClick={() => setIpads((count) => count + 1)} aria-label="Add one loved-one iPad">+</button>
+            </div>
+            <p className={styles.bundleNote}>Another loved one? Add an iPad for {annual ? "$330/year" : "$30/month"}.<br />Same plan. Every feature. One bill.</p>
+            <a className={`${styles.button} ${styles.primaryButton}`} href="#join">Join the waitlist <Arrow /></a>
+            <p className={styles.noPayment}>No payment today</p>
           </div>
-          <a className={`${styles.button} ${styles.primaryButton}`} href="#join">Join the waitlist <Arrow /></a>
-          <p className={styles.noPayment}>No payment today</p>
           <div className={styles.featureBlock}>
-            <p className={styles.featureHeading}>The everyday essentials</p>
-            <FeatureList features={sharedFeatures} />
+            <p className={styles.featureHeading}>Everything is included</p>
+            <ul className={styles.features}>{features.map((feature) => <li key={feature}><span aria-hidden="true" className={styles.check}>✓</span><span>{feature}</span></li>)}</ul>
+            <p className={styles.planFootnote}>Family members connect free from their own devices. You choose who can call and who may drop in.</p>
           </div>
-          <p className={styles.planFootnote}>The two contacts you choose can change whenever you need.</p>
-        </article>
-
-        <article className={`${styles.plan} ${styles.family}`} aria-labelledby="family-title">
-          <div className={styles.planTop}>
-            <span className={styles.planLabel}>Bring everyone closer</span>
-            <h2 id="family-title">Porch Family</h2>
-            <p className={styles.price}><span>{annual ? "$35" : "$39"}</span><span className={styles.period}>/ month</span></p>
-            <p className={styles.billing}>{annual ? "$420 billed annually · Save $48 a year" : "$39 billed monthly"}</p>
-            <p className={styles.planDescription}>More familiar faces. Little messages between the calls.</p>
-            <p className={styles.scope}>1 bedside iPad<br /><strong>Up to 10 Porch contacts</strong></p>
-          </div>
-          <a className={`${styles.button} ${styles.secondaryButton}`} href="#join">Join the waitlist <Arrow /></a>
-          <p className={styles.noPayment}>No payment today</p>
-          <div className={styles.featureBlock}>
-            <p className={styles.featureHeading}>Everything in Starter, plus</p>
-            <FeatureList features={[
-              "Room for up to 10 Porch contacts",
-              "Recorded audio and video messages",
-              "Messages from the bedside when a call is missed",
-              "Caregiver-approved message autoplay",
-            ]} />
-          </div>
-          <p className={styles.planFootnote}>Family members use the Porch app at no extra charge.</p>
-        </article>
-
-        <article className={`${styles.plan} ${styles.withPhone}`} aria-labelledby="phone-title">
-          <div className={styles.planTop}>
-            <span className={styles.planLabel}>Porch and regular phones</span>
-            <h2 id="phone-title">Family + Phone</h2>
-            <p className={styles.price}><span>{annual ? "$44" : "$49"}</span><span className={styles.period}>/ month</span></p>
-            <p className={styles.billing}>{annual ? "$528 billed annually · Save $60 a year" : "$49 billed monthly"}</p>
-            <p className={styles.planDescription}>The whole family on Porch, with regular phone calls included.</p>
-            <p className={styles.scope}>1 bedside iPad<br /><strong>Up to 10 Porch contacts</strong></p>
-          </div>
-          <a className={`${styles.button} ${styles.secondaryButton}`} href="#join">Join the waitlist <Arrow /></a>
-          <p className={styles.noPayment}>No payment today</p>
-          <div className={styles.featureBlock}>
-            <p className={styles.featureHeading}>Everything in Family, plus</p>
-            <FeatureList features={[
-              "A household phone number",
-              "Incoming calls from regular phones",
-              "Phone fallback when Porch isn’t answered",
-              "Telephone voicemail",
-              "200 telephone minutes each month",
-            ]} />
-          </div>
-          <p className={styles.planFootnote}>Telephone minutes are shared across incoming and outgoing calls. Additional usage pricing is still being worked out.</p>
         </article>
       </section>
-
-      <p className={styles.belowPlans}>Unlimited Porch app calls and drop-ins on all three plans. Regular-phone calls use the telephone allowance. Your iPad and accessories are separate.</p>
+      <p className={styles.belowPlans}>Software only. Bring your own compatible iPad and Wi-Fi. iPads and accessories are sold separately.</p>
     </>
   );
-}
-
-function FeatureList({ features }: { features: string[] }) {
-  return <ul className={styles.features}>{features.map((feature) => <li key={feature}><span aria-hidden="true" className={styles.check}>✓</span><span>{feature}</span></li>)}</ul>;
 }
 
 function Arrow() {
