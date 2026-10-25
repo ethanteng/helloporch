@@ -30,6 +30,7 @@ Settled on 2026-10-24.
 | QR code to add the caregiver's phone | Yes |
 | Countries | US only at launch |
 | Hainie's phone routing | Stays on its own trunk |
+| Mom's current number | Hainie keeps it for good. The app can never buy Hainie a new number, and Porch never releases a number it didn't buy itself |
 
 ## What needs you today
 
@@ -195,6 +196,8 @@ The snapshot ([service.ts](lib/family/service.ts)) adds `porchNumber` for every 
 [scripts/provision-number.mjs](scripts/provision-number.mjs) prints a read-only plan that names the bedside, then saves it with `--apply`.
 
 - **Hainie:** `--adopt` saves the number its route already uses as its `porchNumber`, without changing any routing. It needs that number to be on the outbound trunk, so outgoing calls keep the same caller ID.
+  - Mom's number is safe even before that: only households made by the app's setup (`numberFromSetup`) can get a number from the app, so Hainie can never be sold a new one, whatever the app shows.
+  - Nothing in this PR releases a number.
 - **Bella Vista:** `--area-code=…` buys it a number the way setup does, or delete it from the admin page once phase 6.1 exists, if it's only a test household. Do one or the other before any other household gets a number (1.1).
 
 ### 1.8 Tests
@@ -350,10 +353,10 @@ New `deleteHousehold` action:
 - revokes every device
 - deletes message, photo, speech and keypad-backup media in Blob. Check whether media paths include the household ID; add a per-household prefix if they don't.
 - deletes the Redis records: the household, its devices and invites, its route, its keypad backup, the PIN and lockout keys, and its entries in `households` and `numbers:households`. The store needs a `delete` for this.
-- releases the number:
+- releases the number, **only if Porch bought it**, meaning it has a `sid` and Twilio names it "Porch" and the household ID:
   - takes it off the shared inbound trunk and the outbound trunk, but never leaves either empty, since an empty inbound trunk takes calls to any number and an empty outbound trunk has no caller ID
   - releases it in Twilio by its `sid` (`DELETE IncomingPhoneNumbers/<sid>.json`)
-  - for a number set up by hand, like Hainie's, which has no `sid`, leaves Twilio and its own trunk alone and says so
+  - for a number set up by hand, like Mom's, leaves Twilio, its trunk and the outbound trunk alone, and says so. Deleting Hainie would keep Mom's number in Twilio for a new bedside.
 - marks its invitation on the admin page as deleted
 
 Family phones and the bedside show "This Porch was deleted" and return to the welcome screen. When you delete it, caregivers' phones also get a notification first.
@@ -463,7 +466,7 @@ PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; t
 - **Deleting a household,** once by its caregiver and once from the admin page: the number is released, family phones are told, and calling the old number no longer rings anything.
 - **Replacing a bedside:** the keypad, photos and settings come back, and the Cell2Jack connects again.
 - **Resetting a forgotten PIN,** from a caregiver phone and from the admin page.
-- **Mom's iPad:** incoming calls to Hainie's number, outgoing caller ID, blocking setting and the Cell2Jack keypad all unchanged, and its keypad backup saved.
+- **Mom's iPad:** incoming calls to Hainie's number, outgoing caller ID, blocking setting and the Cell2Jack keypad all unchanged, and its keypad backup saved. Her number is still in Twilio with its voice webhook unchanged.
 
 ## Later: open sign-up
 

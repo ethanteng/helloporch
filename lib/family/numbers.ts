@@ -226,6 +226,9 @@ async function nearbyAreaCodes(headers: Headers, provider: NumberProvider): Prom
 export async function handleNumberAction(action: string, { store, now, house, me, input, headers, services }: NumberContext): Promise<object> {
   requireValue(me.role === "bedside", "Set up this Porch's phone number on the bedside iPad.", 403);
   if (house.porchNumber) return { porchNumber: house.porchNumber.number };
+  // A household set up by hand, like the first one, keeps the number it has. Only provision-number.mjs records it,
+  // so the app can never buy it a new one.
+  if (!house.numberFromSetup) throw new FamilyError("This Porch's phone number was set up by hand, so it can't be changed here.", 403, "numberSetByHand");
   const settings = numberSettings();
   requireValue(settings, "Porch phone numbers aren't set up on this server yet.", 503);
   const resolved = (services ?? numberServices)(settings);

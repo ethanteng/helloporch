@@ -59,9 +59,11 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
  * `bedsideLanguage`: the language chosen on the iPad, as it last reported it; unset is English.
  * `blockUnknownCallers`: only known callers' phone calls ring the bedside (see screening.ts); unset is off.
  * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does.
- * `porchNumber`: the household's own phone number, and `phoneSetup` while one is still being set up. */
+ * `porchNumber`: the household's own phone number, and `phoneSetup` while one is still being set up.
+ * `numberFromSetup`: made by the app's setup, which gets the household its number. A household set up by hand, like the
+ * first one, already has a number outside these records; the app never buys it another (see numbers.ts). */
 export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
-  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup };
+  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }

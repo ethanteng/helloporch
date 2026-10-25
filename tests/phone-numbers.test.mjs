@@ -14,7 +14,8 @@ class MemoryStore {
 const env = { LIVEKIT_URL: 'wss://test.livekit.cloud', LIVEKIT_API_KEY: 'test-key', LIVEKIT_API_SECRET: 'test-secret-not-real', PORCH_CONTACT_SETUP_CODE: 'private-test-caregiver-secret',
   LIVEKIT_SIP_OUTBOUND_TRUNK_ID: 'ST_outbound', LIVEKIT_SIP_URI: 'sip:test.sip.livekit.cloud', TWILIO_ACCOUNT_SID: `AC${'0'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'test-twilio-token',
   PORCH_SERVER_ORIGIN: 'https://porch.example', PORCH_MAX_PHONE_NUMBERS: '5' };
-const pin = env.PORCH_CONTACT_SETUP_CODE;
+// The server's setup code authorizes a new bedside here in place of an activation link; each household then has its PIN.
+const setupCode = env.PORCH_CONTACT_SETUP_CODE, pin = '135790';
 let previous;
 beforeEach(() => { previous = Object.fromEntries(Object.keys(env).map(k => [k, process.env[k]])); Object.assign(process.env, env); });
 afterEach(() => { for (const [k, v] of Object.entries(previous)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
@@ -70,8 +71,9 @@ function fixture() {
     body: JSON.stringify({ action, ...(['claimInvite', 'createHousehold', 'enrollBedside'].includes(action) ? { deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') } : {}), ...values }) }),
   { store, now: () => now, numberServices: numbers.services });
   const json = async (...args) => { const response = await send(...args); assert.equal(response.status, 200, await response.clone().text()); return response.json(); };
+  // A bedside set up the way the app does, which gets its number in setup.
   const household = async (name = 'Mom') => {
-    const bedside = await json('createHousehold', { name }, undefined, pin);
+    const bedside = await json('enrollBedside', { name, pin }, undefined, setupCode);
     const invitation = await json('createInvite', { name: 'Ethan', permissions: { audio: true, video: false } }, bedside.credential, pin);
     const family = await json('claimInvite', { code: invitation.code });
     return { bedside, family, id: bedside.state.householdID };
@@ -300,14 +302,32 @@ test("the bedside's phone fallback calls out from its own number", async () => {
 
 test('a bedside set up in the app blocks unknown callers from the start; older setups keep theirs', async () => {
   const f = fixture();
-  const enrolled = await f.json('enrollBedside', { pin: '123456', name: 'Pat' }, undefined, pin);
+  const { bedside: enrolled } = await f.household('Pat');
   assert.equal(enrolled.state.callScreening.enabled, true);
   assert.deepEqual(enrolled.state.callScreening.keypadNumbers, []);
   // The keypad report and the caregiver's switch work as before.
-  await f.json('setKeypadNumbers', { numbers: ['+14155550199'] }, enrolled.credential, '123456');
-  await f.json('setBlockUnknownCallers', { enabled: false }, enrolled.credential, '123456');
+  await f.json('setKeypadNumbers', { numbers: ['+14155550199'] }, enrolled.credential, pin);
+  await f.json('setBlockUnknownCallers', { enabled: false }, enrolled.credential, pin);
   assert.equal((await f.poll(enrolled.credential)).state.callScreening.enabled, false);
-  const { bedside } = await f.household();
-  assert.equal(bedside.state.callScreening.enabled, false);
-  assert.equal(bedside.state.callScreening.keypadNumbers, null);
+  const byHand = await f.json('createHousehold', { name: 'Grandpa' }, undefined, setupCode);
+  assert.equal(byHand.state.callScreening.enabled, false);
+  assert.equal(byHand.state.callScreening.keypadNumbers, null);
+});
+
+test('a household set up by hand keeps its number: the app never buys it another', async () => {
+  const f = fixture();
+  const mom = await f.json('createHousehold', { name: 'Mom' }, undefined, setupCode);
+  for (const action of ['assignPhoneNumber', 'phoneNumberOptions']) {
+    const refused = await f.send(action, { areaCode: '415' }, mom.credential, setupCode, { 'x-vercel-ip-country': 'US', 'x-vercel-ip-latitude': '37.7', 'x-vercel-ip-longitude': '-122.4' });
+    assert.equal(refused.status, 403, action);
+    assert.equal((await refused.json()).errorCode, 'numberSetByHand');
+  }
+  f.advance(3600); await f.poll(mom.credential);
+  assert.deepEqual(f.numbers.state.searches, []); assert.deepEqual(f.numbers.state.buys, []);
+  // Once provision-number.mjs --adopt records the number it already has, that's the one it shows and calls out from.
+  const key = `house:${mom.state.householdID}`, house = JSON.parse(await f.store.get(key));
+  house.porchNumber = { number: '+14155550123', assignedAt: f.now() };
+  f.store.values.set(key, JSON.stringify(house));
+  assert.equal((await f.json('assignPhoneNumber', { areaCode: '628' }, mom.credential, setupCode)).porchNumber, '+14155550123');
+  assert.deepEqual(f.numbers.state.buys, []);
 });

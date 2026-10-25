@@ -24,11 +24,13 @@ Turn it on in the calling project's production environment:
 - `PORCH_MAX_PHONE_NUMBERS`: the most numbers Porch may hold. Without it Porch buys none. A household that already has its place keeps it when the limit is lowered.
 - The [voicemail](#turn-on-voicemail) variables (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `LIVEKIT_SIP_URI`) and `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`.
 
-The Twilio account must be upgraded, since a trial account owns only one number. Twilio bills each number monthly. Numbers are released only when a household is deleted, which isn't built yet.
+The Twilio account must be upgraded, since a trial account owns only one number. Twilio bills each number monthly. Numbers are released only when a household is deleted, which isn't built yet, and only numbers Porch bought itself: one set up by hand is never released by Porch.
 
 Bedsides set up from the app also start with [unknown callers blocked](#blocking-unknown-callers), because a recycled number still gets calls meant for its previous owner.
 
 ### Households set up before automatic numbers
+
+A household set up by hand, like the first one, keeps the number it already has. The app never buys it a new one: only bedsides set up from the app can use `assignPhoneNumber`, and others get "set up by hand" (403, `numberSetByHand`). Their routing and trunk are left as they are.
 
 `scripts/provision-number.mjs` gives a household without a Porch number one:
 

@@ -210,10 +210,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       } else await checkCaregiverCode(request, store, now);
       await reserveDevice(store, deviceID, secret, id, "bedside");
       const me: Member = { id: deviceID, name: bedsideName, role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
-      // A bedside set up from the app turns away unknown callers from the start: its new number may have belonged to
-      // someone else, whose callers and robocalls still dial it. Its keypad is known to be empty, so blocking can be on
-      // before the iPad first reports it. Households made by older setups keep their own choice.
-      const house: Household = { id, name: me.name, dropInEnabled: false, members: [me], invites: [], ...(enrolling ? { blockUnknownCallers: true, keypadNumbers: [] } : {}) };
+      // A bedside set up from the app gets its number in setup, and turns away unknown callers from the start: its new
+      // number may have belonged to someone else, whose callers and robocalls still dial it. Its keypad is known to be
+      // empty, so blocking can be on before the iPad first reports it. Households made by older setups keep their own
+      // number and choice.
+      const house: Household = { id, name: me.name, dropInEnabled: false, members: [me], invites: [],
+        ...(enrolling ? { numberFromSetup: true, blockUnknownCallers: true, keypadNumbers: [] } : {}) };
       if (!await store.create(`house:${id}`, JSON.stringify(house))) {
         const existing: Household = JSON.parse((await store.get(`house:${id}`))!);
         const owner = memberFor(existing, { householdID: id, deviceID, hash: hash(secret) });
