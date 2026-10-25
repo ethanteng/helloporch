@@ -129,21 +129,32 @@ export async function holdPlace(store: FamilyStore, householdID: string, limit: 
  * voice webhook, which signs in with the same digest login as voicemail mode (configure-inbound.mjs --voicemail).
  * A trunk with no numbers would take calls to any number, so it's never made empty. */
 async function sharedInboundTrunk(store: FamilyStore, sip: NumberServices["sip"], number: string, now: number, apiSecret: string): Promise<string> {
-  const saved = await store.get(sharedTrunkKey);
-  if (saved) { await sip.updateSipInboundTrunkFields(saved, { numbers: adding(number) }); return saved; }
-  const lock = await claim(store, `${sharedTrunkKey}:lock`, now, 60);
+  const attach = async (id: string) => { await sip.updateSipInboundTrunkFields(id, { numbers: adding(number) }); return id; };
+  const existing = await store.get(sharedTrunkKey);
+  if (existing) return attach(existing);
+  // Held across the LiveKit calls. Two households can both see no trunk; the one that gets the lock second
+  // must use the trunk the other just saved, not make a second one and put this number on both.
+  const lock = await claim(store, `${sharedTrunkKey}:lock`, now, 180);
   requireValue(lock, "Porch is setting up phone numbers. It will try again shortly.", 409);
   try {
+    const won = await store.get(sharedTrunkKey);
+    if (won) return attach(won);
     const rules = await sip.listSipDispatchRule();
     // A rule without trunks would send these calls, and every other household's, to rooms of its own.
     if (rules.some(rule => rule.trunkIds.length === 0)) throw new Error("A wildcard SIP dispatch rule needs reviewing first.");
+    const ready = await store.get(sharedTrunkKey);
+    if (ready) return attach(ready);
     // A trunk made by a try that stopped before saving its ID.
     const halfMade = (await sip.listSipInboundTrunk()).find(trunk => trunk.name === sharedTrunkName);
     const login = sipInboundCredentials(apiSecret);
     let trunk = halfMade ?? await sip.createSipInboundTrunk(sharedTrunkName, [number], { authUsername: login.username, authPassword: login.password,
       ringingTimeout: inboundRingLimitSeconds, headersToAttributes: { [forwardedVerificationHeader]: callerVerificationAttribute } });
-    // Create can't set a call limit. Update the full trunk, as the setup script does; it's not in use until saved below.
+    // Replace clears any field left out, and listing a trunk can come back without its password. Set the voicemail
+    // login again, as the setup script does. Create can't set a call limit. It's not in use until saved below.
     trunk.numbers = [...new Set([...trunk.numbers, number])];
+    trunk.authUsername = login.username; trunk.authPassword = login.password; trunk.allowedAddresses = [];
+    trunk.headersToAttributes = { [forwardedVerificationHeader]: callerVerificationAttribute };
+    trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingLimitSeconds) } }).ringingTimeout;
     trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
     trunk = await sip.updateSipInboundTrunk(trunk.sipTrunkId, trunk);
     if (!rules.some(rule => rule.trunkIds.includes(trunk.sipTrunkId))) {
@@ -184,11 +195,16 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
       }
       if (!await store.create(orderKey, JSON.stringify(order))) order = JSON.parse((await store.get(orderKey))!) as OwnedNumber;
     }
+    // A number that already rings someone else must not be added to the shared trunks first. A retry would
+    // keep adding it, and LiveKit could deliver those calls to either trunk.
+    const routeKey = `phone-number:${order.number}`;
+    const claimed = await store.get(routeKey);
+    if (claimed) requireValue((JSON.parse(claimed) as InboundRoute).householdID === householdID, "This number already rings another Porch. Check its route before trying again.", 409);
     const trunkID = await sharedInboundTrunk(store, services.sip, order.number, now, settings.apiSecret);
     await services.sip.updateSipOutboundTrunkFields(settings.outboundTrunkID, { numbers: adding(order.number) });
     const route: InboundRoute = { householdID, bedsideID: bedside.id, trunkID };
-    if (!await store.create(`phone-number:${order.number}`, JSON.stringify(route))) {
-      const existing: InboundRoute = JSON.parse((await store.get(`phone-number:${order.number}`))!);
+    if (!await store.create(routeKey, JSON.stringify(route))) {
+      const existing: InboundRoute = JSON.parse((await store.get(routeKey))!);
       requireValue(existing.householdID === householdID, "This number already rings another Porch. Check its route before trying again.", 409);
     }
     const bought = order;
@@ -202,8 +218,12 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
       await mutate(store, householdID, latest => {
         if (latest.porchNumber || !latest.phoneSetup) return;
         const attempts = latest.phoneSetup.attempts + 1;
-        latest.phoneSetup = { ...latest.phoneSetup, attempts, retryAt: now + retrySeconds(attempts),
-          error: error instanceof FamilyError ? error.message : "Porch couldn't get a phone number yet. It will keep trying." };
+        // No inventory is the caregiver's to resolve. Leaving a retry would buy that area code later, after they
+        // were told to choose another. Anything else, including the number limit, keeps its growing wait.
+        const needsChoice = error instanceof FamilyError && error.code === "noNumbers";
+        latest.phoneSetup = { areaCode: latest.phoneSetup.areaCode, attempts, retryAt: needsChoice ? latest.phoneSetup.retryAt : now + retrySeconds(attempts),
+          error: error instanceof FamilyError ? error.message : "Porch couldn't get a phone number yet. It will keep trying.",
+          ...(needsChoice ? { needsChoice: true } : {}) };
       });
     } catch { /* the next try records it */ }
     throw error;
@@ -249,7 +269,7 @@ export async function handleNumberAction(action: string, { store, now, house, me
 
 /** The bedside's poll tries again for a number that isn't set up yet, once its wait is over. */
 export async function retryPorchNumber(store: FamilyStore, house: Household, now: number, services?: (settings: NumberSettings) => NumberServices): Promise<Household | undefined> {
-  if (house.porchNumber || !house.phoneSetup || house.phoneSetup.retryAt > now) return undefined;
+  if (house.porchNumber || !house.phoneSetup || house.phoneSetup.needsChoice || house.phoneSetup.retryAt > now) return undefined;
   const settings = numberSettings();
   if (!settings) return undefined;
   try { return await ensurePorchNumber(store, house.id, now, settings, (services ?? numberServices)(settings)); }
@@ -259,5 +279,5 @@ export async function retryPorchNumber(store: FamilyStore, house: Household, now
 /** What the bedside and caregivers see of a number still being set up. */
 export function publicPhoneSetup(house: Household) {
   const setup = house.phoneSetup;
-  return setup && !house.porchNumber ? { areaCode: setup.areaCode, ...(setup.error ? { error: setup.error } : {}) } : undefined;
+  return setup && !house.porchNumber ? { areaCode: setup.areaCode, ...(setup.error ? { error: setup.error } : {}), ...(setup.needsChoice ? { needsChoice: true } : {}) } : undefined;
 }

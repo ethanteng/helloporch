@@ -99,7 +99,8 @@ test('a bedside gets a local number that rings it and is its caller ID', async (
   assert.deepEqual(trunk.numbers, ['+14155550101']);
   assert.equal(trunk.authUsername, 'porch'); assert.ok(trunk.authPassword.length > 20);
   assert.deepEqual(trunk.headersToAttributes, { 'X-Porch-VerStat': 'porch.callerVerification' });
-  assert.equal(trunk.ringingTimeout, 120); assert.equal(trunk.maxCallDuration.seconds, 1800n);
+  assert.equal(trunk.ringingTimeout.seconds, 120n); assert.equal(trunk.maxCallDuration.seconds, 1800n);
+  assert.deepEqual(trunk.allowedAddresses, []);
   assert.equal(f.numbers.state.rules.length, 1);
   assert.deepEqual(f.numbers.state.rules[0].trunkIds, [trunk.sipTrunkId]);
   assert.equal(f.numbers.state.rules[0].rule.roomPrefix, 'porch-inbound-');
@@ -244,7 +245,27 @@ test('an area code with no numbers asks for another', async () => {
   assert.equal(response.status, 409);
   const body = await response.json();
   assert.equal(body.errorCode, 'noNumbers'); assert.match(body.error, /212/);
+  // The poll must not buy that area code later. The caregiver has to choose another.
+  f.advance(3600); await f.poll(mom.bedside.credential);
+  assert.equal(f.numbers.state.buys.length, 0);
+  assert.equal((await f.poll(mom.bedside.credential)).state.phoneSetup.needsChoice, true);
   assert.equal((await f.json('assignPhoneNumber', { areaCode: '628' }, mom.bedside.credential, pin)).porchNumber, '+16285550101');
+});
+
+test("a number that already rings another Porch is not added to the shared trunks", async () => {
+  const f = fixture(), mom = await f.household(), dad = await f.household('Dad');
+  const number = '+14155550101';
+  f.numbers.state.owned.push({ sid: `PN${'9'.repeat(32)}`, number, label: `Porch ${mom.id}` });
+  await f.store.create(`phone-number:${number}`, JSON.stringify({ householdID: dad.id, bedsideID: dad.bedside.state.me.id, trunkID: 'ST_other' }));
+  const pending = await f.json('assignPhoneNumber', { areaCode: '415' }, mom.bedside.credential, pin);
+  assert.equal(pending.pending, true);
+  assert.equal(f.numbers.state.buys.length, 0);
+  assert.equal(f.numbers.state.trunks.length, 0);
+  assert.equal(f.numbers.state.outboundAdds.length, 0);
+  f.advance(3600); await f.poll(mom.bedside.credential);
+  assert.equal(f.numbers.state.trunks.length, 0);
+  assert.equal(f.numbers.state.outboundAdds.length, 0);
+  assert.equal((await f.house(dad.id)).porchNumber, undefined);
 });
 
 test("Porch's limit on numbers stops new ones, never a household that already has its place", async () => {

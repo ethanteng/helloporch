@@ -48,8 +48,9 @@ export type AllowedCaller = { number: string; allowedAt: number };
 /** The household's own phone number (see numbers.ts). Calls to it ring the bedside, and its calls out show it.
  * `sid` is Twilio's ID for a number Porch bought; a number set up by hand before then has none. */
 export type PorchNumber = { number: string; sid?: string; assignedAt: number };
-/** A number the caregiver asked for that Porch hasn't finished setting up. The bedside's poll tries again from `retryAt`. */
-export type PhoneSetup = { areaCode: string; attempts: number; retryAt: number; error?: string };
+/** A number the caregiver asked for that Porch hasn't finished setting up. The bedside's poll tries again from `retryAt`.
+ * `needsChoice`: this area code has no numbers, so the poll waits for the caregiver to choose another. */
+export type PhoneSetup = { areaCode: string; attempts: number; retryAt: number; error?: string; needsChoice?: boolean };
 /** Characters sent to the speech service on one UTC day (days since 1970), to cap what a household spends. */
 export type SpeechUsage = { day: number; characters: number };
 /** The bedside's languages: `BedsideLanguage` raw values in the iPad app. */
