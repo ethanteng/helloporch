@@ -523,7 +523,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return
             }
             hasFailed = true
-            ringback.stop()
+            ringback.stop(); announcement?.stop()
             await room.disconnect()
             stage.show([])
             localVideo.track = nil
@@ -881,7 +881,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private func switchToPhone() async {
         guard let phoneNumber = contact.phoneNumber, !isEnding, !hasFailed, !hasConnectedPeer, !familyAccepted else { return }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
-            hasFailed = true; ringback.stop()
+            hasFailed = true; ringback.stop(); announcement?.stop()
             statusLabel.text = BedsideText.string("Microphone access is required.")
             placeholder.text = BedsideText.string("Allow Porch's microphone in Settings to make a phone call.")
             endButton.configuration?.title = BedsideText.string("Back to clock")
@@ -910,7 +910,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                         }
                     }
                 } else {
-                    hasFailed = true; ringback.stop()
+                    hasFailed = true; ringback.stop(); announcement?.stop()
                     statusLabel.text = BedsideText.string("Couldn't switch to their phone.")
                     placeholder.text = BedsideText.error(error.localizedDescription)
                     endButton.configuration?.title = BedsideText.string("Back to clock")
@@ -978,7 +978,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         } catch {
             if Task.isCancelled || isEnding { return }
             hasFailed = true
-            ringback.stop()
+            ringback.stop(); announcement?.stop()
             await room.disconnect()
             isSwitchingToPhone = false
             statusLabel.text = BedsideText.string("Couldn't connect their phone.")
