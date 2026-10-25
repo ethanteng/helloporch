@@ -20,18 +20,18 @@ export default function PricingPlans() {
   const [ipads, setIpads] = useState(1);
   const monthly = 39 + (ipads - 1) * 30;
   const yearly = monthly * 11;
-  const scope = `${ipads} loved-one ${ipads === 1 ? "iPad" : "iPads"}`;
+  const scope = ipads === 1 ? "1 iPad for your loved one" : `${ipads} iPads for your loved ones`;
 
   return (
     <>
       <div className={styles.billingToggle} role="group" aria-label="Billing frequency">
-        <button type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Pay monthly</button>
-        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Pay annually <span>1 month free</span></button>
+        <button type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Monthly</button>
+        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Annually <span>1 month free</span></button>
       </div>
       <section className={styles.plans} aria-label="Proposed Porch software subscription">
         <article className={styles.plan} aria-labelledby="porch-title">
           <div className={styles.planSummary}>
-            <span className={styles.planLabel}>One plan, all features</span>
+            <p className={styles.planLabel}>One plan, all features</p>
             <h2 id="porch-title">Porch</h2>
             <p className={styles.planDescription}>Calling, drop-ins and messages for your loved one’s iPad.</p>
             <p className={styles.price} aria-live="polite" aria-atomic="true"><span>{dollars.format(annual ? yearly : monthly)}</span><span className={styles.period}>/ {annual ? "year" : "month"}</span></p>
@@ -43,11 +43,11 @@ export default function PricingPlans() {
               <button type="button" onClick={() => setIpads((count) => count + 1)} aria-label="Add one loved-one iPad">+</button>
             </div>
             <p className={styles.bundleNote}>Each additional iPad for a loved one is {annual ? "$330/year" : "$30/month"}.<br />All iPads share one bill and include the same features.</p>
-            <a className={`${styles.button} ${styles.primaryButton}`} href="#join">Join the waitlist <Arrow /></a>
+            <a className={styles.button} href="#join">Join the waitlist <Arrow /></a>
             <p className={styles.noPayment}>No payment today</p>
           </div>
           <div className={styles.featureBlock}>
-            <p className={styles.featureHeading}>Everything is included</p>
+            <h3 className={styles.featureHeading}>Included with every iPad</h3>
             <ul className={styles.features}>{features.map((feature) => <li key={feature}><span aria-hidden="true" className={styles.check}>✓</span><span>{feature}</span></li>)}</ul>
             <p className={styles.planFootnote}>Family members connect free from their own devices. You choose who can call and who may drop in.</p>
           </div>
