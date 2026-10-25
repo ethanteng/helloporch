@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "What the Porch app and the HelloPorch website collect, why, who helps us run Porch, how long we keep information, and how to have it deleted.",
 };
 
-const updated = "October 24, 2026";
+const updated = "October 25, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -40,9 +40,9 @@ const providers: [name: string, role: string, receives: string][] = [
 ];
 
 const retention: [what: string, howLong: string][] = [
-  ["Messages waiting for the bedside", "Until they’re played. Deleted after 7 days if nobody plays them."],
+  ["Messages waiting for your loved one", "Until they’re played. Deleted after 7 days if nobody plays them."],
   ["Played messages", "Kept 90 days so they can be replayed, then deleted."],
-  ["Messages the bedside leaves for family", "90 days from when they were left."],
+  ["Messages sent from your loved one’s iPad to family", "90 days from when they were left."],
   ["Unsent or removed messages", "Deleted right away."],
   ["Voicemail from phone callers", "The same as other messages. Twilio’s copy is deleted as soon as we’ve saved it."],
   ["Someone who leaves or is removed", "Their profile, photos, notification tokens and messages are deleted. We keep a small record that their device was removed, so it can’t reconnect."],
@@ -81,7 +81,7 @@ export default function PrivacyPage() {
             <li>We don’t sell your information, show ads, or track you across other apps and websites.</li>
             <li>Calls go live between devices and aren’t recorded. Only messages and voicemail that someone chooses to leave are saved.</li>
             <li>Unplayed messages are deleted after 7 days, and played ones after 90 days.</li>
-            <li>When the bedside notices someone in front of it, that happens on the iPad. No image leaves it.</li>
+            <li>When Porch notices someone in front of the iPad, detection happens on the device. No image leaves it.</li>
             <li>A few service providers help us run calls, phone service, storage, notifications and website analytics. They get only what they need.</li>
             <li>
               Email <a href={`mailto:${contact}`}>{contact}</a> any time to see or delete your family’s information.
@@ -128,9 +128,9 @@ export default function PrivacyPage() {
             </p>
             <ul>
               <li>
-                <strong>Household details.</strong> The household’s name, the bedside’s name, each person’s name as
-                it’s entered, who is a caregiver, and the settings you choose, such as drop-in permissions, ring time,
-                bedside language and announcement voice.
+                <strong>Household details.</strong> The household’s name, the name used for your loved one’s iPad,
+                each person’s name as it’s entered, who is a caregiver, and the settings you choose, such as drop-in
+                permissions, ring time, and the language and announcement voice on your loved one’s iPad.
               </li>
               <li>
                 <strong>Profile photos.</strong> A photo each person adds for themselves, or that a caregiver adds for
@@ -150,7 +150,7 @@ export default function PrivacyPage() {
                 message has arrived.
               </li>
               <li>
-                <strong>Phone numbers.</strong> Numbers saved on the bedside keypad or for calling a regular phone,
+                <strong>Phone numbers.</strong> Numbers saved on the Porch keypad or for calling a regular phone,
                 numbers a caregiver approves to call or drop in, and numbers a caregiver adds to a call, with the label
                 they give it.
               </li>
@@ -159,8 +159,8 @@ export default function PrivacyPage() {
                 up or is under way. We keep only the current or most recent call, not a call history.
               </li>
               <li>
-                <strong>Messages.</strong> Audio and video messages that family members and the bedside choose to
-                record for each other, with who sent them, when, and whether they’ve been played.
+                <strong>Messages.</strong> Audio and video messages that family members record for each other,
+                including on your loved one’s iPad, with who sent them, when, and whether they’ve been played.
               </li>
             </ul>
             <p>Call audio and video travel live between devices through our calling provider. We don’t record calls.</p>
@@ -188,8 +188,8 @@ export default function PrivacyPage() {
             <h2 id="device-title">What stays on your device</h2>
             <ul>
               <li>
-                <strong>Noticing someone at the bedside.</strong> If a caregiver turns this on, the bedside iPad uses
-                its camera to notice that a face is in view, so it can start waiting messages. This happens on the
+                <strong>Noticing someone in front of the iPad.</strong> If a caregiver turns this on, your loved one’s
+                iPad uses its camera to notice that a face is in view, so it can start waiting messages. This happens on the
                 iPad. It doesn’t recognize who the person is, no image is saved or sent anywhere, and nothing is
                 reported to anyone.
               </li>
@@ -202,7 +202,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Keypad and display settings.</strong> Contact buttons, photos on the keypad and display
-                preferences stay on the device. The phone numbers on the bedside keypad are also sent to our server,
+                preferences stay on the device. The phone numbers on the Porch keypad are also sent to our server,
                 so calls from those numbers are recognized.
               </li>
               <li>
@@ -238,8 +238,9 @@ export default function PrivacyPage() {
             <h3>People in your household</h3>
             <p>
               People in a household see each other’s names, photos and whether they’re available. A message goes to
-              the person it’s for, and a message for the bedside can be heard by whoever is there. Caregivers can see
-              household settings and approved numbers, and can review messages and voicemail waiting for the bedside.
+              the person it’s for, and a message for your loved one can be heard by whoever is near their iPad.
+              Caregivers can see household settings and approved numbers, and can review messages and voicemail
+              waiting for your loved one.
               When Porch calls a regular phone, the person who answers sees a Porch phone number as the caller ID.
             </p>
 
@@ -304,7 +305,7 @@ export default function PrivacyPage() {
                 calls never turn on the camera.
               </li>
               <li>
-                <strong>Noticing someone at the bedside</strong> is off unless a caregiver turns it on.
+                <strong>Noticing someone in front of the iPad</strong> is off unless a caregiver turns it on.
               </li>
               <li>
                 <strong>Drop-in</strong> works only for people a caregiver approves, and can be turned off at any time.

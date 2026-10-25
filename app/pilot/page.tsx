@@ -257,7 +257,7 @@ export default function PilotPage() {
                 </p>
               </li>
               <li>
-                <h3>Set up the bedside.</h3>
+                <h3>Set up the iPad.</h3>
                 <p>
                   I’ll send a private link that makes the iPad your family’s Porch. Then you choose a caregiver
                   PIN and invite each person from inside the app. If I’m setting up your iPad, we’ll do this

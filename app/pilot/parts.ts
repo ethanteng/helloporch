@@ -18,7 +18,7 @@ export const shared: Part[] = [
       "A spare iPad is perfect. It stays plugged in and on your home Wi-Fi. Which models work depends on the keypad you choose.",
     photo: {
       src: "/pilot/ipad.jpg",
-      alt: "An iPad in its stand, showing Porch’s bedside clock and a Call someone button.",
+      alt: "An iPad in its stand, showing Porch’s clock and a Call someone button.",
     },
   },
   {

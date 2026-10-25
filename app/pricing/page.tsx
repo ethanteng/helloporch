@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 const questions = [
   {
     question: "What does one subscription cover?",
-    answer: "The $39 monthly subscription covers one loved one’s bedside iPad and every Porch feature. Invite as many family members as you like. Their devices don’t count as extra bedside iPads.",
+    answer: "The $39 monthly subscription covers one loved one’s iPad and every Porch feature. Invite as many family members as you like; they can connect from their own devices at no extra charge.",
   },
   {
     question: "Do family members pay separately?",
@@ -56,7 +56,7 @@ export default function PricingPage() {
           <header className={styles.hero}>
             <span className={styles.preview}>Pricing preview</span>
             <h1>Stay in touch with<br />{" "}your loved one.</h1>
-            <p className={styles.lede}>One subscription for your loved one’s bedside iPad.<br className={styles.desktopBreak} /> Family members can call from their own devices at no extra charge.</p>
+            <p className={styles.lede}>One subscription for your loved one’s iPad.<br className={styles.desktopBreak} /> Family members can call from their own devices at no extra charge.</p>
             <p className={styles.previewNote}>Proposed software pricing · Porch is currently in its pilot</p>
           </header>
 
