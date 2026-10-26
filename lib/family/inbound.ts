@@ -163,8 +163,9 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     const expiresAt = createdAt + ringSeconds(house, dropIn ? "dropIn" : "call");
     if (expiresAt <= now) return false;
     replaced = house.call;
+    const approved = phoneDropIn(house, phone.callerNumber)?.name;
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
-      state: "pending", createdAt, expiresAt, phone: session.phone };
+      state: "pending", createdAt, expiresAt, phone: session.phone, ...(approved ? { peerName: approved } : {}) };
     return true;
   });
   const entry = replaced && callLogEntry(house, replaced);

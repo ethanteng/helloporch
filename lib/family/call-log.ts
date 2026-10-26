@@ -27,7 +27,8 @@ export function callLogEntry(house: Household, call: Call): CallLogEntry | undef
   const outgoing = call.from === bedside.id;
   const member = call.phone ? undefined : house.members.find(m => m.id === (outgoing ? call.to : call.from));
   const number = call.phone?.callerNumber;
-  const name = member ? displayName(member) : phoneDropIn(house, number)?.name ?? number ?? (call.phone ? "Unknown caller" : "Family");
+  // The name the call started with. Calls from before it was kept are named as Porch names them now.
+  const name = call.peerName ?? (member ? displayName(member) : phoneDropIn(house, number)?.name ?? number ?? (call.phone ? "Unknown caller" : "Family"));
   // The bedside's part of a call that went on without it, such as Ethan and David talking after Mom hung up.
   const left = call.left?.[bedside.id];
   const endedAt = left !== undefined && (call.endedAt === undefined || left < call.endedAt) ? left : call.endedAt;

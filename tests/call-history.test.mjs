@@ -129,16 +129,29 @@ test('call history needs caregiver access and the PIN', async () => {
   assert.deepEqual((await f.history(family.credential)).map(c => c.id), [call.id]);
 });
 
-test('a call that has run out reads as missed before anyone checks in, and a renamed member keeps their old calls', async () => {
+test('a call that has run out reads as missed before anyone checks in', async () => {
   const f = fixture(), { bedside, family } = await f.setup();
   const first = (await f.json('startCall', { targetID: family.state.me.id, mode: 'voice', kind: 'call', waitSeconds: 20 }, bedside.credential)).state.call;
   f.advance(51);
   assert.deepEqual((await f.history(bedside.credential)).map(c => [c.id, c.outcome]), [[first.id, 'missed']]);
-  await f.json('poll', { available: true }, bedside.credential); await f.json('poll', { available: true }, family.credential);
-  const second = (await f.json('startCall', { targetID: family.state.me.id, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;
-  await f.json('setMemberOverride', { memberID: family.state.me.id, name: 'David' }, bedside.credential, pin);
-  const calls = await f.history(bedside.credential);
-  assert.deepEqual(calls.map(c => [c.id, c.name]), [[second.id, 'David'], [first.id, 'Ethan']], 'saved calls keep the name Porch showed then');
+});
+
+test('calls keep the name they started with, though the person is renamed or removed before the next call', async () => {
+  const f = fixture(), { bedside, family } = await f.setup();
+  const ethan = family.state.me.id;
+  const david = await f.json('claimInvite', { code: (await f.json('createInvite', { name: 'David', permissions: { audio: true, video: true } }, bedside.credential, pin)).code });
+  await f.json('setMemberOverride', { memberID: ethan, name: 'Son' }, bedside.credential, pin);
+  // Mom calls Ethan, and the caregiver renames him while it rings.
+  const first = (await f.json('startCall', { targetID: ethan, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;
+  assert.equal(first.peerName, undefined, 'devices are sent names their own way');
+  await f.json('setMemberOverride', { memberID: ethan, name: 'Ethan T' }, bedside.credential, pin);
+  assert.deepEqual((await f.history(bedside.credential)).map(c => c.name), ['Son']);
+  await f.json('endCall', { callID: first.id }, bedside.credential);
+  // Removing Ethan clears the names he went by. Mom's next call is what saves his to history.
+  await f.json('revoke', { memberID: ethan }, bedside.credential, pin);
+  f.advance(5); await f.talk(0, bedside, david);
+  const second = (await f.json('startCall', { targetID: david.state.me.id, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;
+  assert.deepEqual((await f.history(bedside.credential)).map(c => [c.id, c.name]), [[second.id, 'David'], [first.id, 'Son']]);
 });
 
 test('a Porch call that could not reach the family phone shows as unavailable', async () => {
@@ -174,6 +187,8 @@ test('phone calls in, and the bedside dialing a phone, are in the history', asyn
   const first = await ring('+14155550200');
   f.participants.delete(first.name); f.advance(10);
   await f.json('poll', { available: true }, bedside.credential);
+  // Renaming her approved number afterwards doesn't rename her call.
+  await f.json('setPhoneDropIn', { number: '+14155550200', name: 'May Lee', enabled: true }, bedside.credential, pin);
   await ring('+14155550999');
 
   // Mom's Porch calls a contact's regular phone.

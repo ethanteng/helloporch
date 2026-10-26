@@ -60,7 +60,8 @@ function online(member: Member, now: number) { return !member.revoked && member.
 const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
-  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, ...result } = call;
+  // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
+  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, peerName: _peerName, ...result } = call;
   const phoneGuest = publicPhoneGuest(call, me), porchGuest = publicPorchGuest(house, call);
   const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
   return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(porchGuest ? { porchGuest } : {}),
@@ -550,7 +551,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
         me.seenAt = now;
         replaced = house.call;
-        house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind, state: "pending", createdAt: now, expiresAt: now + wait + 30 };
+        house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind, state: "pending", createdAt: now, expiresAt: now + wait + 30,
+          peerName: displayName(me.role === "bedside" ? target : me) };
         return undefined;
       }
       if (action === "acceptCall" || action === "endCall" || action === "joinCall" || action === "fallback") {
