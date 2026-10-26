@@ -20,9 +20,13 @@ export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
  * `porchGuests`: other family members rung into it on Porch (see porch-guests.ts).
- * `left`: when each of the call's two ends or a family guest hung up while the call went on without them. */
+ * `left`: when each of the call's two ends or a family guest hung up while the call went on without them.
+ * `endedAt`: when it ended. `endedBy`: who hung up before it was answered. The person called declining sets it;
+ * a ring that runs out does not, so call history can tell declined from missed (see call-log.ts).
+ * `peerName`: what Porch called the person on the other end from the bedside when the call started, their name or an
+ * approved phone number's, so a later rename or removal doesn't change the call in history. */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
-  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number> };
+  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string; peerName?: string };
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
  * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
 export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;
@@ -91,9 +95,12 @@ function adoptBedsideLeft(house: Household) {
 export function cancelRingingPorchGuests(call: Call | undefined, now: number) {
   for (const guest of call?.porchGuests ?? []) if (guest.state === "ringing") { guest.state = "cancelled"; guest.endedAt = now; }
 }
-export function finishCall(call: Call, reason: string, now: number) {
-  call.state = "ended"; call.reason = reason; cancelRingingPorchGuests(call, now);
+/** `endedAt` is when it really ended, for a call only noticed later to have run out. */
+export function finishCall(call: Call, reason: string, now: number, endedAt = now) {
+  call.state = "ended"; call.reason = reason; call.endedAt ??= Math.min(now, endedAt); cancelRingingPorchGuests(call, now);
 }
+/** Why a call ended when its push couldn't reach the person called. */
+export const deliveryUnavailable = "Incoming call delivery unavailable.";
 export function expire(house: Household, now: number) {
   const call = house.call;
   if (!call) return;
@@ -101,19 +108,24 @@ export function expire(house: Household, now: number) {
   // The call can end in the same update that is still ringing someone in. A later check-in must not leave that
   // invitation looking answerable: their phone treats it as an ordinary incoming call.
   if (call.state === "ended") { cancelRingingPorchGuests(call, now); return; }
-  const end = () => finishCall(call, "The call timed out or a device went offline.", now);
-  if (call.expiresAt <= now) return end();
-  for (const guest of call.porchGuests ?? []) if (guest.state === "ringing" && guest.ringUntil <= now) { guest.state = "missed"; guest.endedAt = now; }
-  if (call.state !== "accepted") return;
+  // Ended when it ran out, or when the last lost device was last heard from, however much later that's noticed.
+  const end = (at: number) => finishCall(call, "The call timed out or a device went offline.", now, at);
   const lost = (id: string) => {
     const member = house.members.find(m => m.id === id);
     return !member || member.revoked || member.seenAt < now - 35;
   };
-  if (call.phone) { if (lost(call.to)) end(); return; }
+  const seen = (id: string) => house.members.find(m => m.id === id)?.seenAt ?? now;
+  if (call.expiresAt <= now) {
+    const on = call.state !== "accepted" ? [] : call.phone ? [call.to] : presentMembers(call);
+    return end(on.length && on.every(lost) ? Math.min(call.expiresAt, Math.max(...on.map(seen))) : call.expiresAt);
+  }
+  for (const guest of call.porchGuests ?? []) if (guest.state === "ringing" && guest.ringUntil <= now) { guest.state = "missed"; guest.endedAt = now; }
+  if (call.state !== "accepted") return;
+  if (call.phone) { if (lost(call.to)) end(seen(call.to)); return; }
   // Someone whose device stops checking in has left. The call goes on only if it still could without them.
   const present = presentMembers(call), gone = present.filter(lost);
   if (!gone.length) return;
-  if (!carriesOn(call, present.filter(id => !gone.includes(id)))) return end();
+  if (!carriesOn(call, present.filter(id => !gone.includes(id)))) return end(Math.max(...gone.map(seen)));
   for (const id of gone) leaveCall(call, id, now);
 }
 export async function mutate<T>(store: FamilyStore, id: string, change: (house: Household) => T): Promise<{ house: Household; result: T }> {

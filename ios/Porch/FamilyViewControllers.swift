@@ -380,6 +380,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         householdName.autocapitalizationType = .words
         details.addArrangedSubview(group("Who is this Porch for?", footer: "Family members see this name when calling or dropping in.", rows: [nameRow]))
         details.addArrangedSubview(familyGroup(state))
+        // The bedside iPad lists Call history in caregiver mode itself.
+        if remote != nil { details.addArrangedSubview(callsGroup()) }
         details.addArrangedSubview(dropInGroup(state))
         details.addArrangedSubview(phoneCallsGroup(state))
         details.addArrangedSubview(messagesGroup(state))
@@ -437,6 +439,16 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             ? "Tap a person to change their name, photo, drop-in and caregiver access. To put someone on a keypad number, edit that keypad contact and choose Link their Porch app."
             : "Tap a person to change their name, photo, drop-in and caregiver access."
         return group("Family", footer: footer, rows: rows)
+    }
+    private func callsGroup() -> UIView {
+        let icon = UIImageView(image: UIImage(systemName: "clock.arrow.circlepath")); icon.tintColor = PorchStyle.accent
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        let history = PorchListRow([icon, PorchStyle.label("Call history", size: 18, color: PorchStyle.ink)], label: "Call history") { [weak self] in
+            guard let self else { return }
+            self.navigationController?.pushViewController(CallHistoryViewController(remote: self.remote), animated: true)
+        }
+        history.accessibilityIdentifier = "family.callHistory"
+        return group("Calls", footer: "Calls to and from the bedside for the last 90 days, including missed ones.", rows: [history])
     }
     /// The master switch above everything it governs: family members' drop-in and approved phone numbers.
     private func dropInGroup(_ state: FamilyAdminState?) -> UIView {
@@ -937,6 +949,109 @@ final class BlockedCallersViewController: CaregiverFormViewController {
         let text = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink), PorchStyle.label(detail, size: 15)])
         text.axis = .vertical; text.spacing = 2
         return text
+    }
+}
+
+/// Calls to and from the bedside for the last 90 days, newest first and grouped by day. Opened from caregiver mode on
+/// the bedside iPad, or from Caregiver mode on an approved family phone.
+final class CallHistoryViewController: CaregiverFormViewController {
+    /// Set when caregiver mode was opened from a family phone; nil on the bedside iPad.
+    private let remote: FamilyCredential?
+    private let content = UIStackView()
+    private var task: Task<Void, Never>?
+    private var credential: FamilyCredential? { remote ?? PorchDevice.credential(for: .bedside) }
+    init(remote: FamilyCredential? = nil) { self.remote = remote; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError("Use init(remote:)") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Call history"
+        hideKeyboardControl()
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reload))
+        content.axis = .vertical; content.spacing = 28
+        form.addArrangedSubview(content)
+        reload()
+    }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent { task?.cancel(); task = nil }
+    }
+    @objc private func reload() {
+        guard task == nil else { return }
+        guard let credential else { showMessage("Return to the clock and open caregiver mode to finish setting up this bedside device."); return }
+        // A phone's caregiver session ends after ten idle minutes; the bedside keeps its own PIN.
+        let pin: String
+        if remote != nil {
+            guard let active = RemoteCaregiverSession.shared.activePIN else { navigationController?.popToRootViewController(animated: true); return }
+            pin = active
+        } else { pin = NativeCallSettings.caregiverCode }
+        if content.arrangedSubviews.isEmpty { showMessage("Loading calls…") }
+        task = Task { [weak self] in
+            do {
+                let response = try await FamilyService(credential).send("callHistory", [:], pin: pin)
+                guard let self, !Task.isCancelled else { return }
+                self.task = nil; self.render(response.calls ?? [])
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.task = nil
+                // A changed PIN, withdrawn approval or lockout ends a phone's caregiver session.
+                if self.remote != nil, let failure = error as? FamilyServiceError, [401, 403, 429].contains(failure.status),
+                   let navigation = self.navigationController, let home = navigation.viewControllers.first {
+                    RemoteCaregiverSession.shared.end()
+                    CATransaction.begin()
+                    CATransaction.setCompletionBlock { showPorchError(error, on: home) }
+                    navigation.popToRootViewController(animated: true)
+                    CATransaction.commit()
+                    return
+                }
+                self.showMessage("Couldn't load call history. \(error.localizedDescription)", retry: true)
+            }
+        }
+    }
+    private func clear() { content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() } }
+    private func showMessage(_ message: String, retry: Bool = false) {
+        clear()
+        content.addArrangedSubview(PorchStyle.label(message))
+        guard retry else { return }
+        let again = PorchStyle.button("Try again", symbol: "arrow.clockwise")
+        again.addAction(UIAction { [weak self] _ in self?.reload() }, for: .touchUpInside)
+        content.addArrangedSubview(again)
+    }
+    private func render(_ calls: [CallHistoryEntry]) {
+        guard !calls.isEmpty else { showMessage("No calls yet. Calls to and from the bedside show here for 90 days."); return }
+        clear()
+        // The bedside names phone numbers saved on its keypad, as it does elsewhere.
+        let slots = remote == nil ? (try? CallSlots.load()) : nil
+        let calendar = Calendar.current
+        let days = Dictionary(grouping: calls) { calendar.startOfDay(for: Date(timeIntervalSince1970: $0.startedAt)) }
+        let day = DateFormatter(); day.dateStyle = .full; day.timeStyle = .none; day.doesRelativeDateFormatting = true
+        let time = DateFormatter(); time.dateStyle = .none; time.timeStyle = .short
+        for start in days.keys.sorted(by: >) {
+            let rows = (days[start] ?? []).sorted { $0.startedAt > $1.startedAt }.map { row($0, slots: slots, time: time) }
+            content.addArrangedSubview(group(day.string(from: start), rows: rows))
+        }
+        content.addArrangedSubview(PorchStyle.label("Calls to and from the bedside for the last 90 days. Phone callers are named by caller ID, which can be faked. When Porch calls someone's regular phone, it can't tell whether they answered.", size: 15))
+    }
+    private func row(_ call: CallHistoryEntry, slots: CallSlots?, time: DateFormatter) -> UIView {
+        let number = call.number.map { PhoneNumberNormalization.display($0) }
+        let keypadName = call.via == "phone" ? slots?.contact(forPhoneNumber: call.number)?.name : nil
+        let saved = keypadName?.isEmpty == false ? keypadName : nil
+        // A caller known only by their number shows it once, formatted.
+        let name = saved ?? (call.name == call.number ? number ?? call.name : call.name)
+        let details = [call.kindText, call.outcomeText, name == number ? nil : number].compactMap { $0 }.joined(separator: " · ")
+        let video = call.via == "porch" && call.mode == .video
+        let symbol = call.isIncoming ? (video ? "arrow.down.left.video" : "phone.arrow.down.left") : (video ? "arrow.up.right.video" : "phone.arrow.up.right")
+        let icon = UIImageView(image: UIImage(systemName: symbol))
+        icon.tintColor = call.isMissed ? .systemRed : PorchStyle.accent
+        icon.contentMode = .scaleAspectFit
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        let text = UIStackView(arrangedSubviews: [PorchStyle.label(name, size: 18, color: call.isMissed ? .systemRed : PorchStyle.ink, weight: .medium), PorchStyle.label(details, size: 15)])
+        text.axis = .vertical; text.spacing = 2
+        let leading = UIStackView(arrangedSubviews: [icon, text]); leading.alignment = .center; leading.spacing = 12
+        let when = FamilyAdminViewController.singleLine(PorchStyle.label(time.string(from: Date(timeIntervalSince1970: call.startedAt)), size: 15))
+        let row = listRow(leading, trailing: when)
+        row.isAccessibilityElement = true
+        row.accessibilityLabel = [name, details, when.text ?? ""].joined(separator: ", ")
+        return row
     }
 }
 

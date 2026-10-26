@@ -259,6 +259,65 @@ public struct FamilyAdminState: Codable, Equatable {
         self.callScreening = callScreening
     }
 }
+/// One call to or from the bedside, as caregivers see it in Call history (`callHistory`).
+/// `direction` is the bedside's: "incoming" rang the bedside and "outgoing" was placed from it. `via` is "porch", or
+/// "phone": someone calling the household's Porch number, or the bedside calling a regular phone, including phone
+/// fallback. `name` and `number` are as Porch showed them then; a phone caller is named by caller ID, which can be faked.
+/// `outcome` is "answered", "missed", "declined", "unavailable" (Porch couldn't reach their app), "dialed" (the bedside
+/// called a regular phone; the server can't tell whether it was answered), "ringing" or "ongoing".
+public struct CallHistoryEntry: Codable, Equatable, Identifiable {
+    public let id: String
+    public let direction: String
+    public let via: String
+    public let name: String
+    public let memberID: String?
+    public let number: String?
+    public let mode: NativeCall.Mode
+    public let dropIn: Bool?
+    public let startedAt: TimeInterval
+    public let answeredAt: TimeInterval?
+    /// When the bedside's part ended. Calls from before the server recorded it have none.
+    public let endedAt: TimeInterval?
+    public let outcome: String
+    /// The bedside's unanswered Porch calls: whether the family phone showed the call. False means it never got
+    /// there, rather than that it rang and nobody heard. Older servers don't send it.
+    public let reached: Bool?
+
+    public var isIncoming: Bool { direction == "incoming" }
+    /// A missed call to the bedside, which caregivers may want to follow up.
+    public var isMissed: Bool { isIncoming && outcome == "missed" }
+    /// What kind of call it was: "Incoming video call", "Audio drop-in", "Called their phone".
+    public var kindText: String {
+        if via == "phone" { return isIncoming ? "Phone call" : "Called their phone" }
+        let media = mode == .video ? "video" : "audio"
+        if dropIn == true { return "\(media.prefix(1).uppercased())\(media.dropFirst()) drop-in" }
+        return "\(isIncoming ? "Incoming" : "Outgoing") \(media) call"
+    }
+    /// How it went, or nil for a phone the bedside dialed: "Talked 12 min", "Missed", "No answer".
+    public var outcomeText: String? {
+        switch outcome {
+        case "answered":
+            guard let answeredAt, let endedAt, endedAt >= answeredAt else { return "Answered" }
+            return "Talked \(Self.duration(endedAt - answeredAt))"
+        case "missed":
+            guard !isIncoming else { return "Missed" }
+            return reached.map { $0 ? "No answer · Their phone showed the call" : "No answer · Didn't reach their phone" } ?? "No answer"
+        case "declined": return "Declined"
+        case "unavailable": return "Couldn't reach their Porch"
+        case "ringing": return "Ringing now"
+        case "ongoing": return "On the call now"
+        default: return nil
+        }
+    }
+    /// "45 sec", "12 min", "1 hr 5 min".
+    public static func duration(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        if total < 60 { return "\(total) sec" }
+        let minutes = (total + 30) / 60
+        return minutes < 60 ? "\(minutes) min" : minutes % 60 == 0 ? "\(minutes / 60) hr" : "\(minutes / 60) hr \(minutes % 60) min"
+    }
+}
+
 public struct FamilyCredential: Codable {
     public let origin: URL
     public let credential: String

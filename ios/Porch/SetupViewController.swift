@@ -27,7 +27,7 @@ final class SlotsViewController: UITableViewController {
         tableView.reloadData()
     }
     override func numberOfSections(in tableView: UITableView) -> Int { 4 }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 4 : 1 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? CallSlots.count : section == 1 ? 5 : 1 }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.backgroundColor = PorchStyle.surface
@@ -78,11 +78,16 @@ final class SlotsViewController: UITableViewController {
             content.secondaryText = "Pair devices, invite people, and approve access"
             content.image = UIImage(systemName: "person.2.fill")
         } else if indexPath.section == 1, indexPath.row == 1 {
+            content.text = "Call history"
+            content.secondaryText = "Calls to and from this iPad, including missed ones"
+            content.image = UIImage(systemName: "clock.arrow.circlepath")
+            cell.accessibilityIdentifier = "caregiver.callHistory"
+        } else if indexPath.section == 1, indexPath.row == 2 {
             content.text = "Call preferences"
             let voicemail = FamilyCoordinator.shared.state.map { "Voicemail after \($0.ringSeconds ?? CallPreferences.defaultVoicemailSeconds) seconds · " } ?? ""
             content.secondaryText = voicemail + "Phone fallback after \(CallPreferences.fallbackSeconds()) seconds · Dialing sound"
             content.image = UIImage(systemName: "phone.badge.waveform")
-        } else if indexPath.section == 1, indexPath.row == 2 {
+        } else if indexPath.section == 1, indexPath.row == 3 {
             content.text = "Bedside display"
             content.secondaryText = BedsidePreferences.load().appearance == .dynamic ? "Dynamic · Day, night & seasons" : "Default · Dark date & time"
             content.image = UIImage(systemName: "sun.and.horizon")
@@ -119,7 +124,14 @@ final class SlotsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 1 {
-            let controller: UIViewController = indexPath.row == 0 ? FamilyAdminViewController() : indexPath.row == 1 ? CallPreferencesViewController() : indexPath.row == 2 ? BedsideDisplaySettingsViewController() : AdvancedSettingsViewController()
+            let controller: UIViewController
+            switch indexPath.row {
+            case 0: controller = FamilyAdminViewController()
+            case 1: controller = CallHistoryViewController()
+            case 2: controller = CallPreferencesViewController()
+            case 3: controller = BedsideDisplaySettingsViewController()
+            default: controller = AdvancedSettingsViewController()
+            }
             navigationController?.pushViewController(controller, animated: true); return
         }
         if indexPath.section == 2 { offerExperienceChange(on: self); return }

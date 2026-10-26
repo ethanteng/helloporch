@@ -4,7 +4,8 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -17,9 +18,7 @@ import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screen
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize;
-  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
-  /** Keeps work going once the device has its answer (Next's `after`). Without it, that work runs before answering. */
-  afterResponse?: (task: () => Promise<unknown>) => void };
+  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -58,10 +57,11 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", ...screeningActions, ...numberActions];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
-  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, ...result } = call;
+  // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
+  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, peerName: _peerName, ...result } = call;
   const phoneGuest = publicPhoneGuest(call, me), porchGuest = publicPorchGuest(house, call);
   const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
   return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(porchGuest ? { porchGuest } : {}),
@@ -272,6 +272,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       requireValue(member && isCaregiver(member), "Only an approved caregiver can change access.", 403);
       await checkCaregiverCode(request, store, now, auth.householdID, member.role === "bedside" ? undefined : member.id);
     }
+    if (action === "callHistory") {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      // A call that has run out shows as it ended, though no device has checked in since to save that.
+      const house: Household = JSON.parse(raw);
+      expire(house, now);
+      return callJSON({ calls: await callHistory(store, house, now) });
+    }
     if (messageActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
       requireValue(raw, "This household was not found.", 404);
@@ -388,10 +396,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     let removedMedia: string[] = [];
     let issuedCode: string | undefined;
     if (action === "createInvite") issuedCode = randomBytes(32).toString("hex");
+    // The finished call a new one takes the place of, saved to call history once this change is.
+    let replaced: Call | undefined;
     const { house, result } = await mutate(store, auth.householdID, house => {
       // A failed save retries this update from scratch. Room teardown from the attempt that lost must not survive
       // into one that keeps the call going, or Mom and a guest are disconnected after all.
-      removedMedia = []; removeFromRoom = undefined; cleanupRoom = undefined;
+      removedMedia = []; removeFromRoom = undefined; cleanupRoom = undefined; replaced = undefined;
       const me = memberFor(house, auth);
       expire(house, now);
       // A family guest who loses access or leaves the family: a ringing invitation is cancelled, and someone who
@@ -540,7 +550,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const wait = me.role === "family" ? ringSeconds(house, kind) : input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
         me.seenAt = now;
-        house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind, state: "pending", createdAt: now, expiresAt: now + wait + 30 };
+        replaced = house.call;
+        house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind, state: "pending", createdAt: now, expiresAt: now + wait + 30,
+          peerName: displayName(me.role === "bedside" ? target : me) };
         return undefined;
       }
       if (action === "acceptCall" || action === "endCall" || action === "joinCall" || action === "fallback") {
@@ -575,7 +587,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         } else if (action === "endCall") {
           if (call.left?.[me.id] !== undefined) return undefined; // Already off a call that went on.
           if (mayLeave && call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== me.id))) leaveCall(call, me.id, now);
-          else { finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call); }
+          else {
+            // Someone tapping Decline while it is still ringing. The bedside sends this same
+            // request when the ring runs out, iOS stops it, or it fails first, and marks that
+            // `unanswered`, so call history can show a missed call instead of a decline.
+            if (call.state === "pending" && input.unanswered !== true) call.endedBy = me.id;
+            finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call);
+          }
         } else {
           requireValue(call.left?.[me.id] === undefined, "You left this call.", 410);
           requireValue(call.state !== "ended" && call.expiresAt > now, "This call ended or expired.", 410);
@@ -611,6 +629,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       return callJSON({ left: true });
     }
     const me = memberFor(house, auth);
+    const entry = replaced && callLogEntry(house, replaced);
+    if (entry) await recordCallAfter(store, house.id, entry, now, dependencies.afterResponse);
     if (action === "startCall" && house.call?.kind === "call") {
       const call = house.call;
       const target = house.members.find(m => m.id === call.to)!;
@@ -630,7 +650,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             // A call-specific recipient receipt or answer outweighs a missing
             // APNs acknowledgment, even while the recipient is backgrounded.
             if (recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
-              finishCall(active, "Incoming call delivery unavailable.", now);
+              finishCall(active, deliveryUnavailable, now);
               return true;
             }
             return false;

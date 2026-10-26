@@ -1,7 +1,8 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
-import { callRoom, config, expire, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
+import { callLogEntry, recordCallAfter } from "./call-log.ts";
+import { callRoom, config, deliveryUnavailable, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
@@ -33,6 +34,8 @@ export type InboundDependencies = {
   now?: () => number;
   endRoom?: (room: string, configuration: CallServer) => Promise<void>;
   getPhoneParticipant?: (room: string, identity: string, configuration: CallServer) => Promise<ParticipantInfo>;
+  /** Keeps work going once the request has its answer (Next's `after`). Without it, that work runs before answering. */
+  afterResponse?: (task: () => Promise<unknown>) => void;
 };
 
 function notFound(error: unknown) {
@@ -75,12 +78,10 @@ export async function cleanupInboundCall(store: FamilyStore, householdID: string
   });
 }
 
-async function endSession(store: FamilyStore, session: Session, reason: string, dependencies: InboundDependencies) {
+async function endSession(store: FamilyStore, session: Session, reason: string, now: number, dependencies: InboundDependencies) {
   await store.create(endedKey(session.phone.roomSID), "1", 86400);
   const { house } = await mutate(store, session.householdID, house => {
-    if (house.call?.id === session.callID && house.call.state !== "ended") {
-      house.call.state = "ended"; house.call.reason = reason;
-    }
+    if (house.call?.id === session.callID && house.call.state !== "ended") finishCall(house.call, reason, now);
   });
   if (house.call?.id === session.callID) await cleanupInboundCall(store, session.householdID, house.call, dependencies);
   else await deleteRoom(session.phone.room, dependencies);
@@ -101,7 +102,7 @@ export async function reconcileInboundCall(store: FamilyStore, householdID: stri
   }
   if (!force && now - (call.phone.checkedAt ?? 0) < 5) return;
   if (!matches(call.phone, await participant(call.phone, dependencies))) {
-    await endSession(store, { householdID, callID: call.id, phone: call.phone }, "The phone caller hung up.", dependencies);
+    await endSession(store, { householdID, callID: call.id, phone: call.phone }, "The phone caller hung up.", now, dependencies);
   } else {
     await mutate(store, householdID, current => {
       if (current.call?.id === call.id && current.call.phone) current.call.phone.checkedAt = now;
@@ -147,7 +148,10 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   // Clear an expired prior phone call before trying to reserve the household.
   await reconcileInboundCall(store, route.householdID, now, dependencies);
   const pushEnabled = !!dependencies.sendPush || voipConfigured();
+  // The finished call this one takes the place of, saved to call history once this change is.
+  let replaced: Call | undefined;
   const { house, result } = await mutate(store, route.householdID, house => {
+    replaced = undefined;
     expire(house, now);
     if (house.call?.id === session.callID) return house.call.state !== "ended";
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
@@ -158,12 +162,16 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
     const expiresAt = createdAt + ringSeconds(house, dropIn ? "dropIn" : "call");
     if (expiresAt <= now) return false;
+    replaced = house.call;
+    const approved = phoneDropIn(house, phone.callerNumber)?.name;
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
-      state: "pending", createdAt, expiresAt, phone: session.phone };
+      state: "pending", createdAt, expiresAt, phone: session.phone, ...(approved ? { peerName: approved } : {}) };
     return true;
   });
+  const entry = replaced && callLogEntry(house, replaced);
+  if (entry) await recordCallAfter(store, house.id, entry, now, dependencies.afterResponse);
   if (!result || await store.get(endedKey(room.sid))) {
-    await endSession(store, session, "Porch is busy or unavailable.", dependencies);
+    await endSession(store, session, "Porch is busy or unavailable.", now, dependencies);
     return;
   }
   const call = house.call!, bedside = house.members.find(m => m.id === call.to)!;
@@ -184,7 +192,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
       if (delivery.invalidToken && recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
       const active = current.call;
       if (recipient && !(recipient.available && recipient.seenAt > now - 30) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
-        active.state = "ended"; active.reason = "Incoming call delivery unavailable.";
+        finishCall(active, deliveryUnavailable, now);
         return true;
       }
       return false;
@@ -216,7 +224,7 @@ export async function handleInboundWebhook(request: Request, dependencies: Inbou
         (session && event.participant?.identity === (JSON.parse((await store.get(`house:${session.householdID}`)) ?? "null") as Household | null)?.call?.to);
       if (relevant) {
         await store.create(endedKey(room.sid), "1", 86400);
-        if (session) await endSession(store, session, "Call ended.", dependencies);
+        if (session) await endSession(store, session, "Call ended.", now, dependencies);
       }
     }
     return callJSON({ received: true });

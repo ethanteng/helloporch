@@ -77,12 +77,23 @@ final class CaregiverInputTests: XCTestCase {
         let slots = SlotsViewController(slots: CallSlots())
         let navigation = UINavigationController(rootViewController: slots)
         navigation.loadViewIfNeeded(); slots.loadViewIfNeeded()
-        XCTAssertEqual(slots.tableView(slots.tableView, numberOfRowsInSection: 1), 4)
-        let path = IndexPath(row: 3, section: 1)
+        XCTAssertEqual(slots.tableView(slots.tableView, numberOfRowsInSection: 1), 5)
+        let path = IndexPath(row: 4, section: 1)
         let cell = slots.tableView(slots.tableView, cellForRowAt: path)
         XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Advanced")
         slots.tableView(slots.tableView, didSelectRowAt: path)
         XCTAssertTrue(navigation.topViewController is AdvancedSettingsViewController)
+    }
+
+    @MainActor func testCaregiverMenuOpensCallHistory() throws {
+        let slots = SlotsViewController(slots: CallSlots())
+        let navigation = UINavigationController(rootViewController: slots)
+        navigation.loadViewIfNeeded(); slots.loadViewIfNeeded()
+        let path = IndexPath(row: 1, section: 1)
+        let cell = slots.tableView(slots.tableView, cellForRowAt: path)
+        XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Call history")
+        slots.tableView(slots.tableView, didSelectRowAt: path)
+        XCTAssertTrue(navigation.topViewController is CallHistoryViewController)
     }
 
     @MainActor func testAdvancedSilenceSettingValidatesSavesAndCanBeTurnedOff() throws {

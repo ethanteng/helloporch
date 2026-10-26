@@ -2,7 +2,8 @@
 export interface FamilyStore {
   get(key: string): Promise<string | null>;
   create(key: string, value: string, seconds?: number): Promise<boolean>;
-  compareAndSet(key: string, previous: string, value: string): Promise<boolean>;
+  /** `seconds`, when given, is how long the new value lives, as for `create`. */
+  compareAndSet(key: string, previous: string, value: string, seconds?: number): Promise<boolean>;
 }
 
 export class RedisFamilyStore implements FamilyStore {
@@ -19,7 +20,8 @@ export class RedisFamilyStore implements FamilyStore {
   async create(key: string, value: string, seconds?: number) {
     return await this.command(["SET", this.prefix + key, value, "NX", ...(seconds ? ["EX", seconds] : [])]) === "OK";
   }
-  async compareAndSet(key: string, previous: string, value: string) {
+  async compareAndSet(key: string, previous: string, value: string, seconds?: number) {
+    if (seconds) return await this.command(["EVAL", "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); return 1", 1, this.prefix + key, previous, value, seconds]) === 1;
     return await this.command(["EVAL", "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end redis.call('SET',KEYS[1],ARGV[2]); return 1", 1, this.prefix + key, previous, value]) === 1;
   }
 }

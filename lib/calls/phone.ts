@@ -3,6 +3,8 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { AccessToken, RoomConfiguration, RoomServiceClient, SipClient, TrackSource } from "livekit-server-sdk";
 import { authorizeCalls, callInput, callJSON, type CallServer } from "./server.ts";
 import { verifyContactApproval } from "./contacts.ts";
+import { recordCallAfter } from "../family/call-log.ts";
+import { familyStore, type FamilyStore } from "../family/store.ts";
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -18,7 +20,9 @@ type PhoneServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "updateParticipant" | "deleteRoom">;
   sip: Pick<SipClient, "createSipParticipant">;
 };
-type Dependencies = { services?: (config: CallServer) => PhoneServices; now?: () => number; authorize?: (request: Request) => Promise<CallServer | Response> };
+type Dependencies = { services?: (config: CallServer) => PhoneServices; now?: () => number; authorize?: (request: Request) => Promise<CallServer | Response>; store?: FamilyStore;
+  /** Keeps work going once the iPad has its answer (Next's `after`). Without it, that work runs before answering. */
+  afterResponse?: (task: () => Promise<unknown>) => void };
 type Action = "prepare" | "start" | "end";
 
 function services(config: CallServer): PhoneServices {
@@ -142,6 +146,13 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
       if (!notFound(error)) throw error;
       await hangUp(client.rooms, room);
       return callJSON({ error: "The phone call was cancelled." }, 409);
+    }
+    // A paired bedside's calls to phones, including phone fallback, go in its household's call history.
+    if (config.householdID) {
+      try {
+        await recordCallAfter(dependencies.store ?? familyStore(), config.householdID, { id: ticket.id, direction: "outgoing", via: "phone",
+          name: ticket.name, number: ticket.phoneNumber, mode: "voice", startedAt: now, outcome: "dialed" }, now, dependencies.afterResponse);
+      } catch { /* storage isn't configured: history never fails a call */ }
     }
     return callJSON({ started: true });
   } catch (error) {
