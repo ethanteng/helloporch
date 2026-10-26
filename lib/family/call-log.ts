@@ -66,10 +66,17 @@ export async function recordCallAfter(store: FamilyStore, householdID: string, e
 }
 
 /** The household's calls, newest first. The current or most recent call is still in the household itself, and is
- * recorded once the next call replaces it. */
+ * recorded once the next call replaces it. Reading deletes calls past 90 days rather than only hiding them, and the
+ * rest is kept only until its newest call is 90 days old. */
 export async function callHistory(store: FamilyStore, house: Household, now: number): Promise<CallLogEntry[]> {
-  const raw = await store.get(logKey(house.id));
-  const entries: CallLogEntry[] = raw ? (JSON.parse(raw) as CallLog).entries : [];
+  const key = logKey(house.id), raw = await store.get(key);
+  const saved: CallLogEntry[] = raw ? (JSON.parse(raw) as CallLog).entries : [];
+  const entries = saved.filter(e => e.startedAt + callLogLimits.keepSeconds > now);
+  if (raw !== null && entries.length < saved.length) {
+    const newest = Math.max(now - callLogLimits.keepSeconds, ...entries.map(e => e.startedAt));
+    // A save that loses to a call being recorded is fine: recording prunes too. Cleanup never fails the read.
+    await store.compareAndSet(key, raw, JSON.stringify({ entries }), Math.max(1, newest + callLogLimits.keepSeconds - now)).catch(() => false);
+  }
   const current = house.call ? callLogEntry(house, house.call) : undefined;
   // Newest first, so calls that started in the same second keep the order they were made in.
   return [...(current ? [current] : []), ...entries.filter(e => e.id !== current?.id).reverse()]

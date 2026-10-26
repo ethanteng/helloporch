@@ -248,3 +248,27 @@ test('history keeps the newest calls for 90 days', async () => {
   f.advance(callLogLimits.keepSeconds);
   assert.deepEqual(await f.history(bedside.credential), []);
 });
+
+test('reading history deletes calls past 90 days instead of only hiding them', async () => {
+  const f = fixture(), { bedside, family } = await f.setup();
+  const key = `call-log:${bedside.state.householdID}`;
+  const call = async () => {
+    await f.talk(0, bedside, family);
+    const started = (await f.json('startCall', { targetID: family.state.me.id, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;
+    await f.json('endCall', { callID: started.id }, bedside.credential);
+    return started;
+  };
+  const old = await call();
+  f.advance(10 * 86400); const recent = await call();
+  f.advance(60); const latest = await call();
+  assert.deepEqual(JSON.parse(f.store.values.get(key)).entries.map(e => e.id), [old.id, recent.id]);
+  // The old call passes 90 days with no call since to prune it.
+  f.advance(callLogLimits.keepSeconds - 10 * 86400);
+  assert.deepEqual((await f.history(bedside.credential)).map(c => c.id), [latest.id, recent.id]);
+  assert.deepEqual(JSON.parse(f.store.values.get(key)).entries.map(e => e.id), [recent.id]);
+  assert.equal(f.store.lifetimes.get(key), recent.createdAt + callLogLimits.keepSeconds - f.now(), 'kept only until the newest saved call is 90 days old');
+  f.advance(10 * 86400);
+  assert.deepEqual((await f.history(bedside.credential)).map(c => c.id), []);
+  assert.deepEqual(JSON.parse(f.store.values.get(key)).entries, []);
+  assert.equal(f.store.lifetimes.get(key), 1, 'an emptied history is deleted at once');
+});

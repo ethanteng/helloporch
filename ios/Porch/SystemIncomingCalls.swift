@@ -379,9 +379,10 @@ extension Notification.Name {
     func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {
         action.fail(); finish(reason: .failed)
     }
-    func providerDidReset(_ provider: CXProvider) { finish(reason: nil) }
+    func providerDidReset(_ provider: CXProvider) { finish(reason: nil, systemEnded: true) }
 
-    private func finish(reason: CXCallEndedReason?) {
+    /// `systemEnded`: iOS ended it without a reason to report back, as when CallKit resets. Nobody declined it.
+    private func finish(reason: CXCallEndedReason?, systemEnded: Bool = false) {
         guard let id = uuid, !ending else { return }
         ending = true; status = "Call ended"; changed()
         if reason != .unanswered && backgroundTask == .invalid {
@@ -399,10 +400,10 @@ extension Notification.Name {
             if let profile, reason != .unanswered || profile.role == .bedside {
                 // Disconnect locally first, then retry server cleanup of the SIP leg.
                 for attempt in 0..<3 {
-                    // Ringing ran out, iOS stopped it, or the call failed before anyone answered.
+                    // Ringing ran out, iOS stopped or reset it, or the call failed before anyone answered.
                     // That is a missed call, not someone tapping Decline.
                     var end: [String: Any] = ["callID": id.uuidString.lowercased()]
-                    if reason == .unanswered || reason == .failed { end["unanswered"] = true }
+                    if systemEnded || reason == .unanswered || reason == .failed { end["unanswered"] = true }
                     do { _ = try await FamilyService(profile).send("endCall", end); break }
                     catch {
                         if (error as? FamilyServiceError)?.status == 404 { break }
