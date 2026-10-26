@@ -6,7 +6,7 @@
 	<array>
 		<dict>
 			<key>FooterText</key>
-			<string>Cell2Jack is optional and off by default. Enable its USB driver here, then turn on Use Cell2Jack phone keypad in Porch caregiver mode → Advanced. Standard USB keypads and touch controls work independently.</string>
+			<string>To use a desk phone as the keypad, turn on the USB driver here. Then turn on Cell2Jack in Porch caregiver mode → Advanced.</string>
 			<key>Title</key>
 			<string>Porch</string>
 			<key>Type</key>

@@ -199,7 +199,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             languageButtons[choice] = button
             languages.addArrangedSubview(button)
         }
-        form.addArrangedSubview(section("Clock view", detail: "Both views always show the current date and time in large, clear text. Default keeps the screen dark. Dynamic brightens with daylight, warms at sunset, and darkens at night, with a sun or moon and seasonal landscape.", views: [appearance]))
+        form.addArrangedSubview(section("Clock view", detail: "Both show the date and time in large text. Default is dark. Dynamic changes with the time of day and the seasons.", views: [appearance]))
         example.heightAnchor.constraint(equalToConstant: 210).isActive = true
         example.layer.cornerRadius = 20; example.clipsToBounds = true
         previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
@@ -207,14 +207,14 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         example.addSubview(previewClock)
         NSLayoutConstraint.activate([previewClock.centerYAnchor.constraint(equalTo: example.centerYAnchor), previewClock.leadingAnchor.constraint(equalTo: example.leadingAnchor, constant: 20), previewClock.trailingAnchor.constraint(equalTo: example.trailingAnchor, constant: -20)])
         form.addArrangedSubview(example)
-        form.addArrangedSubview(section("Bedside language", detail: "Choose the language for the clock, call screens, spoken drop-in announcements and the voicemail greeting phone callers hear. The phone greeting changes when you tap Save on this iPad. Caregiver settings and family mode stay in English. 繁體中文 and 简体中文 use Mandarin; 廣東話 uses Cantonese.", views: [languages]))
+        form.addArrangedSubview(section("Bedside language", detail: "The language your loved one sees and hears. 繁體中文 and 简体中文 speak Mandarin; 廣東話 speaks Cantonese. Caregiver settings stay in English.", views: [languages]))
         announcementVoice.accessibilityIdentifier = "bedside.announcementVoice"
         announcementVoice.accessibilityLabel = "Announcement voice"
         announcementVoice.showsMenuAsPrimaryAction = true
         let previewVoice = PorchStyle.button("Preview announcement", symbol: "speaker.wave.2", filled: false)
         previewVoice.accessibilityIdentifier = "bedside.previewAnnouncement"
         previewVoice.addTarget(self, action: #selector(previewAnnouncement), for: .touchUpInside)
-        form.addArrangedSubview(section("Announcement voice", detail: "Choose a voice for the bedside language. Natural voices sound like a person; the choice is saved for this family and each announcement is prepared over the internet. Built-in voices stay on this iPad, and speak whenever a natural announcement isn't ready. Each language remembers its own choice. English and Spanish include regional accents; Taiwan Mandarin, mainland Mandarin and Cantonese have separate choices. Download more built-in voices in the iPad's Accessibility speech settings, then return here. Preview before saving; no call is placed.", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
+        form.addArrangedSubview(section("Announcement voice", detail: "The voice that announces calls. Natural voices sound like a real person. Play a preview before you save.", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
         NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: .porchFamilyChanged, object: nil)
         day.minimumValue = 0; day.maximumValue = 11; day.value = Double(preferences.dayStart)
@@ -224,8 +224,8 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             stepper.addTarget(self, action: #selector(update), for: .valueChanged)
             let row = UIStackView(arrangedSubviews: [label, UIView(), stepper]); row.alignment = .center; row.spacing = 16; return row
         }
-        form.addArrangedSubview(section("Day & night schedule", detail: "The sun and moon follow these times and the iPad's local clock. They represent your daily routine, rather than local sunrise, sunset, or moon phase. The scene updates gently each minute and respects Reduce Motion.", views: [row(dayLabel, day), row(nightLabel, night)]))
-        form.addArrangedSubview(section("Seasons", detail: "Choose your hemisphere. Seasons follow the local calendar: March–May is spring in the north and fall in the south.", views: [hemisphere]))
+        form.addArrangedSubview(section("Day & night schedule", detail: "Set these to match your loved one's day. The sun and moon follow them.", views: [row(dayLabel, day), row(nightLabel, night)]))
+        form.addArrangedSubview(section("Seasons", detail: "Choose Northern or Southern so the seasons match where you live.", views: [hemisphere]))
         hideKeyboardControl(); update()
     }
     override func viewWillAppear(_ animated: Bool) {
@@ -289,23 +289,23 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         }
         if let naturalChoice {
             let saved = choices?.selected == naturalChoice.id
-            voiceStatus.text = "A natural voice for \(language.displayName)\(saved ? ", saved for this family" : ""). Each announcement is prepared over the internet the first time; until it's ready, this iPad's built-in voice speaks.\(saved ? "" : " Tap Save to use it for this family.")"
+            voiceStatus.text = "A natural voice for \(language.displayName)\(saved ? ", saved for this family" : "").\(saved ? "" : " Tap Save to use it.")"
         } else if PorchAnnouncementVoice.resolve(for: language, identifier: identifier) == nil {
-            voiceStatus.text = "No voice is available for \(language.displayName). Download a matching voice in the iPad's Accessibility speech settings. Drop-ins will require manual acceptance until speech is available."
+            voiceStatus.text = "No voice is available for \(language.displayName). Add one in iPad Settings → Accessibility → Spoken Content → Voices. Until then, drop-ins must be answered."
         } else if identifier != nil && selected == nil {
-            voiceStatus.text = "The saved voice is unavailable. Announcements will use the system default for \(language.displayName) until it is available again or you save another choice."
+            voiceStatus.text = "The saved voice isn't available, so the iPad's own voice is used for now."
         } else {
-            voiceStatus.text = "Showing voices available for \(language.displayName) on this iPad. Tap Save to keep your choice."
+            voiceStatus.text = "Tap Save to keep your choice."
         }
     }
     @objc private func previewAnnouncement() {
         stopVoicePreview()
         let language = preferences.language
-        voicePreviewStatus.text = "Playing the selected voice. No call is placed."
+        voicePreviewStatus.text = "Playing the voice…"
         voicePreview.announce(name: language.text("A family member"), video: true, language: language,
                               voiceIdentifier: preferences.announcementVoiceIdentifier(for: language),
                               naturalVoice: naturalVoice(for: language), naturalWait: 8) { [weak self] success in
-            self?.voicePreviewStatus.text = success ? "Preview completed. Tap Save to keep your choice." : "Couldn't play the preview. Check the iPad's audio output, media volume and installed voices."
+            self?.voicePreviewStatus.text = success ? "Preview completed. Tap Save to keep your choice." : "Couldn't play the preview. Check the iPad's volume."
         }
     }
     @objc private func update() {

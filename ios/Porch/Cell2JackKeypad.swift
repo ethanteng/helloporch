@@ -261,7 +261,7 @@ private final class Cell2JackUnavailableConnection: Cell2JackKeypadConnection {
     let supportsRecovery = false
     private let update: (Cell2JackKeypadUpdate) -> Void
     init(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) { self.update = update }
-    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack requires an M-series iPad with iPadOS 16 or later. USB keypads and touch controls remain available.")) } }
+    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack needs an iPad with an M chip. A regular USB keypad and the touchscreen still work.")) } }
     func stop() {}
 }
 

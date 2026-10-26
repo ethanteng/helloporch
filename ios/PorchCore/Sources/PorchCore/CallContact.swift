@@ -206,7 +206,7 @@ public struct CallContact: Codable, Equatable {
             case .invalidFamilyMember: return "Choose a paired family member."
             case .missingName: return "Enter the person's name."
             case .nameTooLong: return "Use a name with 80 characters or fewer."
-            case .invalidPhoneNumber: return "Enter each phone number with + and the country code, such as +1 415 555 0123. Extensions aren't supported."
+            case .invalidPhoneNumber: return "That phone number doesn't look right. For an international number, start with + and the country code."
             case .missingPrimaryNumber: return "Choose which of their numbers Porch calls if it isn't answered."
             case .tooManyPhoneNumbers: return "Save up to \(CallContact.maximumPhoneNumbers) phone numbers for one person."
             case .missingShortcutName: return "Enter the exact name of a shortcut saved in the Shortcuts app on this iPad."

@@ -34,9 +34,9 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         secondsField.keyboardType = .numberPad
         secondsField.accessibilityIdentifier = "advanced.silenceSeconds"
         secondsField.addTarget(self, action: #selector(updateControls), for: .editingChanged)
-        timeoutGroup = field(secondsField, title: "Seconds without talking", placeholder: "120", helper: "Choose 15–1800 seconds (up to 30 minutes). The default is 120 seconds.")
-        form.addArrangedSubview(section("Automatic hang-up", detail: "Optionally end a call when neither person has spoken for this long. Speech from either side restarts the timer, including a voicemail greeting or message. Applies to Porch calls and phone fallback on this device. The timer starts after connection and resets while reconnecting.", views: [row, timeoutGroup, validation]))
-        form.addArrangedSubview(section("USB keypad & touch controls", detail: "Your standard USB keypad and the on-screen controls stay available at all times, including when Cell2Jack is off or disconnected. Connect a standard keypad to use it as a backup; no driver or mode switch is needed.", views: []))
+        timeoutGroup = field(secondsField, title: "Seconds without talking", placeholder: "120", helper: "From 15 to 1800 seconds. Usually 120.")
+        form.addArrangedSubview(section("Automatic hang-up", detail: "Ends a call when no one has talked for a while. Useful if your loved one forgets to hang up.", views: [row, timeoutGroup, validation]))
+        form.addArrangedSubview(section("USB keypad & touch controls", detail: "A regular USB keypad and the touchscreen always work, even without Cell2Jack.", views: []))
         #if !PORCH_NO_CELL2JACK
         if Cell2JackKeypad.supportsDriverPlatform {
         phoneSwitch.isOn = phoneKeypad.enabled
@@ -59,9 +59,9 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         driver.addAction(UIAction { _ in
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         }, for: .touchUpInside)
-        form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Optional, off by default. Requires an M-series iPad with iPadOS 16 or later and the USB driver enabled in this app’s settings. These switches take effect immediately. Use your saved person keys to call and your call-control key (normally 0) to hang up. Putting the receiver back on the phone also hangs up; turn that off if they set the receiver down right after pressing a key, since the sound comes from the iPad. Picking it up does nothing by itself. Keep Porch open. USB provides keypad input; sound follows the iPad’s selected audio output.", views: [phoneRow, receiverRow, retry, driver]))
+        form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Lets your loved one use a desk phone as the keypad. Needs an iPad with an M chip, and the USB driver turned on in Settings → Porch.", views: [phoneRow, receiverRow, retry, driver]))
         } else {
-            form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Cell2Jack requires an M-series iPad with iPadOS 16 or later. You can continue using a standard USB keypad and touch controls on this device.", views: []))
+            form.addArrangedSubview(section("Cell2Jack phone keypad", detail: "Cell2Jack needs an iPad with an M chip. A regular USB keypad and the touchscreen still work.", views: []))
         }
         #endif
         updateControls()
