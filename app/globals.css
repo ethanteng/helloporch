@@ -256,11 +256,11 @@ input::placeholder {
 .hero__secondary {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-top: -10px;
+  gap: 14px;
+  margin-top: -8px;
   padding: 8px 4px;
   color: var(--tomato-deep);
-  font: 600 17px var(--sans);
+  font: 600 21px var(--sans);
   text-decoration: none;
 }
 .hero__secondary:hover {
@@ -270,9 +270,9 @@ input::placeholder {
 .hero__secondary-icon {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  padding-left: 2px;
+  width: 44px;
+  height: 44px;
+  padding-left: 3px;
   border-radius: 50%;
   background: var(--tomato-deep);
   color: #fff;

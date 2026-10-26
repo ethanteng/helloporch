@@ -29,7 +29,7 @@ export default function Home() {
           <HeroWaitlist />
           <Link href="/features" className="hero__secondary">
             <span className="hero__secondary-icon" aria-hidden="true">
-              <svg viewBox="0 0 12 12" width="12" height="12">
+              <svg viewBox="0 0 12 12" width="16" height="16">
                 <path d="M3 1.5v9l7.5-4.5z" fill="currentColor" />
               </svg>
             </span>
