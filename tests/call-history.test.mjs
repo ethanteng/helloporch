@@ -89,6 +89,19 @@ test('caregivers see who called whom and how it went, newest first', async () =>
   assert.ok(!JSON.stringify(calls).includes(family.credential.split('.')[1]));
 });
 
+test('a ring that runs out on the bedside is missed, and tapping decline is not', async () => {
+  const f = fixture(), { bedside, family } = await f.setup();
+  const declined = (await f.json('startCall', { targetID: bedside.state.me.id, mode: 'voice', kind: 'call' }, family.credential)).state.call;
+  f.advance(3);
+  await f.json('endCall', { callID: declined.id }, bedside.credential);
+  f.advance(5); await f.talk(0, bedside, family);
+  const rungOut = (await f.json('startCall', { targetID: bedside.state.me.id, mode: 'voice', kind: 'call' }, family.credential)).state.call;
+  // The bedside sends the same endCall when ringing runs out, or iOS stops it, and says so.
+  f.advance(10);
+  await f.json('endCall', { callID: rungOut.id, unanswered: true }, bedside.credential);
+  assert.deepEqual((await f.history(bedside.credential)).map(c => [c.id, c.outcome]), [[rungOut.id, 'missed'], [declined.id, 'declined']]);
+});
+
 test("a missed call from the bedside says whether it reached the family phone", async () => {
   const f = fixture(), { bedside, family } = await f.setup();
   const call = (await f.json('startCall', { targetID: family.state.me.id, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;

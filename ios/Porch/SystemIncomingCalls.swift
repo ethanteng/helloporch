@@ -399,7 +399,11 @@ extension Notification.Name {
             if let profile, reason != .unanswered || profile.role == .bedside {
                 // Disconnect locally first, then retry server cleanup of the SIP leg.
                 for attempt in 0..<3 {
-                    do { _ = try await FamilyService(profile).send("endCall", ["callID": id.uuidString.lowercased()]); break }
+                    // Ringing ran out, iOS stopped it, or the call failed before anyone answered.
+                    // That is a missed call, not someone tapping Decline.
+                    var end: [String: Any] = ["callID": id.uuidString.lowercased()]
+                    if reason == .unanswered || reason == .failed { end["unanswered"] = true }
+                    do { _ = try await FamilyService(profile).send("endCall", end); break }
                     catch {
                         if (error as? FamilyServiceError)?.status == 404 { break }
                         if attempt < 2 { try? await Task.sleep(nanoseconds: 1_000_000_000) }

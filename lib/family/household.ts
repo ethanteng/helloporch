@@ -21,8 +21,8 @@ export type Invite = { id: string; secretHash: string; name: string; permissions
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
  * `porchGuests`: other family members rung into it on Porch (see porch-guests.ts).
  * `left`: when each of the call's two ends or a family guest hung up while the call went on without them.
- * `endedAt`: when it ended. `endedBy`: who hung up before it was answered, the caller giving up or the person called
- * declining; call history tells the two apart (see call-log.ts).
+ * `endedAt`: when it ended. `endedBy`: who hung up before it was answered. The person called declining sets it;
+ * a ring that runs out does not, so call history can tell declined from missed (see call-log.ts).
  * `peerName`: what Porch called the person on the other end from the bedside when the call started, their name or an
  * approved phone number's, so a later rename or removal doesn't change the call in history. */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;

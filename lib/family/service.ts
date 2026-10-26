@@ -588,7 +588,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           if (call.left?.[me.id] !== undefined) return undefined; // Already off a call that went on.
           if (mayLeave && call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== me.id))) leaveCall(call, me.id, now);
           else {
-            if (call.state === "pending") call.endedBy = me.id;
+            // Someone tapping Decline while it is still ringing. The bedside sends this same
+            // request when the ring runs out, iOS stops it, or it fails first, and marks that
+            // `unanswered`, so call history can show a missed call instead of a decline.
+            if (call.state === "pending" && input.unanswered !== true) call.endedBy = me.id;
             finishCall(call, "Call ended.", now); cleanupRoom = callRoom(call);
           }
         } else {
