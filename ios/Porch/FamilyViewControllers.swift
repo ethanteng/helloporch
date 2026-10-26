@@ -190,8 +190,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         // A caregiver set this phone's ordinary calls to drop in, so it says so before anyone taps Audio call.
         else if state.me.autoDropIn == true {
             let permissions = state.me.permissions
-            people.addArrangedSubview(PorchStyle.label(permissions.audio && permissions.video ? "Your calls connect without them having to answer."
-                : permissions.audio ? "Your audio calls connect without them having to answer. Video calls ring." : "Your video calls connect without them having to answer. Audio calls ring."))
+            people.addArrangedSubview(PorchStyle.label(permissions.audio && permissions.video ? "Your calls connect without them having to answer, while their Porch is open."
+                : permissions.audio ? "Your audio calls connect without them having to answer, while their Porch is open. Video calls ring." : "Your video calls connect without them having to answer, while their Porch is open. Audio calls ring."))
         }
     }
     private func offerVoicemail(to name: String, title: String) {
@@ -238,7 +238,7 @@ final class FamilyCallSettingsViewController: CaregiverFormViewController {
             guard let self else { return }
             CallPreferences.saveStartVideoWithCamera(self.camera.isOn)
         }, for: .valueChanged)
-        form.addArrangedSubview(group("Video calls", footer: "Your camera turns on when a video call starts. You can turn it off anytime during the call.", rows: [toggleRow("Start with my camera on", camera)]))
+        form.addArrangedSubview(group("Video calls", footer: "When this is on, your camera turns on when Porch is open on a video call. It stays off on the lock screen. You can turn it off during the call.", rows: [toggleRow("Start with my camera on", camera)]))
         hideKeyboardControl()
     }
 }
@@ -495,7 +495,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             rows.append(listRow([PorchStyle.label("No one yet. Turn on drop-in for a family member, or approve a phone number.", size: 16)]))
         }
         rows.append(actionRow("Approve a phone number", symbol: "phone.badge.plus") { [weak self] in self?.showPhoneDropIn() })
-        let footer = "People listed here can drop in. Their calls connect on their own after a short announcement. Other calls ring."
+        let footer = "People listed here can drop in while Porch is open. A drop-in connects on its own after a short announcement. Other calls ring."
         return group("Drop-in", footer: remote == nil ? footer : footer + " The bedside iPad must allow the microphone and camera.", rows: rows)
     }
     /// Who can ring this Porch from a regular phone, beside the numbers that were turned away.
@@ -561,7 +561,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
                 NotificationCenter.default.post(name: .porchMessageAutoplayChanged, object: nil)
             }
         }, for: .valueChanged)
-        return toggleRow("Play when someone is in front of the iPad", detail: "During the hours below, waiting messages play when someone sits in front of the iPad. The camera only checks that someone is there. Nothing is recorded.", on)
+        return toggleRow("Play when someone is in front of the iPad", detail: "During the hours below, waiting messages play when someone sits in front of the iPad. The camera only checks that someone is there. Nothing is recorded or sent.", on)
     }
     private func autoplayHourRow(_ title: String, _ hour: WritableKeyPath<MessageAutoplay, Int>) -> UIView {
         let stepper = UIStepper()
@@ -830,7 +830,7 @@ final class FamilyPersonViewController: CaregiverFormViewController {
             : person.autoDropIn == true ? "Saved. It applies once audio or video drop-in is on."
             : "Turn on audio or video drop-in first."
         let dropInFooter = state.dropInEnabled
-            ? "Their call connects on its own after a short announcement, without anyone answering."
+            ? "A drop-in connects on its own after a short announcement, while Porch is open. Other calls ring."
             : "Drop-ins are paused for everyone. Turn on Allow approved drop-ins to use them."
         content.addArrangedSubview(group("Drop-in", footer: dropInFooter, rows: [toggleRow("Audio drop-in", audio), toggleRow("Video drop-in", video), toggleRow("Drop in when they call", detail: callsDetail, calls)]))
         let caregiver = UISwitch(); caregiver.isOn = person.caregiver == true
@@ -1057,7 +1057,7 @@ final class CallHistoryViewController: CaregiverFormViewController {
 
 /// Approves one telephone number for audio drop-in when it calls the household's Porch number.
 final class PhoneDropInViewController: CaregiverFormViewController, CNContactPickerDelegate {
-    static let explanation = "When one of these numbers calls the bedside, it connects on its own after a short announcement. This works with most US mobile phones."
+    static let explanation = "When drop-in is on and Porch is open, a call from one of these numbers connects on its own after a short announcement if the phone company can tell who is calling. Most US mobile phones work. Other calls ring."
     /// Set when approving from caregiver mode on a family phone.
     var remote: FamilyCredential?
     var onSaved: ((FamilyAdminState?) -> Void)?
@@ -1187,7 +1187,7 @@ final class FamilyInviteViewController: CaregiverFormViewController {
             let row = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink), toggle]); row.alignment = .center; row.spacing = 16; return row
         }
         form.addArrangedSubview(section("Who is this invitation for?", views: [field(personName, title: "Their name", placeholder: "For example, Ethan")]))
-        form.addArrangedSubview(section("Approve drop-in", detail: "Drop-in lets their calls connect without anyone answering. You can change this later.", views: [row("Audio drop-in", audio), row("Video drop-in", video)]))
+        form.addArrangedSubview(section("Approve drop-in", detail: "Drop-in lets them connect without anyone answering. Ordinary calls still ring. You can change this later.", views: [row("Audio drop-in", audio), row("Video drop-in", video)]))
         form.addArrangedSubview(section("Caregiver mode", detail: "Lets them change family settings from their phone, using the caregiver PIN.", views: [row("Caregiver mode", caregiver)]))
         form.addArrangedSubview(inviteHint)
         form.addArrangedSubview(create); create.addTarget(self, action: #selector(createInvite), for: .touchUpInside)
