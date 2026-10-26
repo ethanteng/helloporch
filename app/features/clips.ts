@@ -14,7 +14,7 @@ export const calling: Clip[] = [
     id: "first-real-call",
     title: "Our first real call.",
     description:
-      "Our first milestone: my mom, Porch’s first user, making the first real call from her own desk. She picks up the handset, presses a button, and a few seconds later the call goes through. It’s the moment we’ve been building toward.",
+      "Our first milestone: my mom, Porch’s first user, making the first real call from her own desk. She picks up the handset, presses my brother’s photo, and a few seconds later they’re face to face. It’s the moment we’ve been building toward.",
     duration: "22 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Celebrate%20first%20real%20HelloPorch%20call%20compressed.mp4",
     poster: "/features/first-real-call.jpg",
