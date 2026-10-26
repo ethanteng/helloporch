@@ -53,6 +53,16 @@ class DistributionProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must not embed"):
                 verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")
 
+    def test_family_requires_acknowledgements(self):
+        with tempfile.TemporaryDirectory() as folder:
+            bundle = Path(folder)
+            (bundle / "Settings.bundle").mkdir()
+            (bundle / "Settings.bundle" / "Root.plist").write_bytes(plistlib.dumps(
+                {"PreferenceSpecifiers": [{"Type": "PSGroupSpecifier", "Title": "Porch"}]}))
+            with patch("distribution_profiles.decode_profile", return_value=profile()):
+                with self.assertRaisesRegex(ValueError, "acknowledgements"):
+                    verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")
+
     def test_family_rejects_driver_settings(self):
         with tempfile.TemporaryDirectory() as folder:
             bundle = Path(folder)

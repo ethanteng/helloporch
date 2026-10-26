@@ -73,6 +73,8 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
         settings = [path for path in (bundle / "Settings.bundle").rglob("*") if path.is_file()]
         require(not any(b"cell2jack" in path.read_bytes().lower() for path in settings),
                 "Family build must not include Cell2Jack driver settings")
+        require((bundle / "Settings.bundle" / "Acknowledgements.plist").is_file(),
+                "Family build must include open-source acknowledgements")
         summaries = [validate_profile(profiles[0], team, app_id, communicates=False)]
     else:
         profiles.append(decode_profile(drivers[0] / "embedded.provisionprofile"))
