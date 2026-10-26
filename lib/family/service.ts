@@ -5,7 +5,7 @@ import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
 import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
-import { callHistory, callLogEntry, recordCall } from "./call-log.ts";
+import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
@@ -18,9 +18,7 @@ import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screen
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize;
-  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
-  /** Keeps work going once the device has its answer (Next's `after`). Without it, that work runs before answering. */
-  afterResponse?: (task: () => Promise<unknown>) => void };
+  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -626,12 +624,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       return callJSON({ left: true });
     }
     const me = memberFor(house, auth);
-    if (replaced) {
-      const entry = callLogEntry(house, replaced);
-      // History never holds up or fails the call that's starting.
-      const save = () => entry ? recordCall(store, house.id, entry, now).catch(() => undefined) : Promise.resolve();
-      if (dependencies.afterResponse) dependencies.afterResponse(save); else await save();
-    }
+    const entry = replaced && callLogEntry(house, replaced);
+    if (entry) await recordCallAfter(store, house.id, entry, now, dependencies.afterResponse);
     if (action === "startCall" && house.call?.kind === "call") {
       const call = house.call;
       const target = house.members.find(m => m.id === call.to)!;

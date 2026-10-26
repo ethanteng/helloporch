@@ -8,10 +8,10 @@ import { handlePhoneCall } from '../lib/calls/phone.ts';
 import { callLogLimits } from '../lib/family/call-log.ts';
 
 class MemoryStore {
-  values = new Map();
+  values = new Map(); lifetimes = new Map();
   async get(key) { return this.values.get(key) ?? null; }
-  async create(key, value) { if (this.values.has(key)) return false; this.values.set(key, value); return true; }
-  async compareAndSet(key, before, after) { if (this.values.get(key) !== before) return false; this.values.set(key, after); return true; }
+  async create(key, value, seconds) { if (this.values.has(key)) return false; this.values.set(key, value); this.lifetimes.set(key, seconds); return true; }
+  async compareAndSet(key, before, after, seconds) { if (this.values.get(key) !== before) return false; this.values.set(key, after); this.lifetimes.set(key, seconds); return true; }
 }
 const env = { LIVEKIT_URL: 'wss://test.livekit.cloud', LIVEKIT_API_KEY: 'test-key', LIVEKIT_API_SECRET: 'test-secret-not-real', PORCH_CONTACT_SETUP_CODE: 'private-test-caregiver-secret',
   LIVEKIT_SIP_OUTBOUND_TRUNK_ID: 'ST_test', PORCH_PHONE_NUMBERS: '+14155550123' };
@@ -97,6 +97,26 @@ test("a missed call from the bedside says whether it reached the family phone", 
   f.advance(45); await f.json('endCall', { callID: call.id }, bedside.credential);
   const [entry] = await f.history(bedside.credential);
   assert.equal(entry.outcome, 'missed'); assert.equal(entry.reached, true);
+});
+
+test('a call whose devices both vanished ends when they were last heard from, not when someone looks', async () => {
+  const f = fixture(), { bedside, family } = await f.setup();
+  const call = (await f.json('startCall', { targetID: bedside.state.me.id, mode: 'video', kind: 'call' }, family.credential)).state.call;
+  await f.json('acceptCall', { callID: call.id, available: true }, bedside.credential);
+  await f.talk(60, bedside, family);
+  f.advance(86400);
+  const [entry] = await f.history(bedside.credential);
+  assert.equal(entry.outcome, 'answered'); assert.equal(entry.endedAt - entry.answeredAt, 60);
+});
+
+test("saving history waits until the call's request is answered", async () => {
+  const later = [], f = fixture({ afterResponse: task => later.push(task) }), { bedside, family } = await f.setup();
+  const first = (await f.json('startCall', { targetID: family.state.me.id, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;
+  await f.json('endCall', { callID: first.id }, bedside.credential);
+  const second = (await f.json('startCall', { targetID: family.state.me.id, mode: 'voice', kind: 'call' }, bedside.credential)).state.call;
+  assert.deepEqual((await f.history(bedside.credential)).map(c => c.id), [second.id]);
+  await Promise.all(later.map(task => task()));
+  assert.deepEqual((await f.history(bedside.credential)).map(c => c.id), [second.id, first.id]);
 });
 
 test('call history needs caregiver access and the PIN', async () => {
@@ -193,6 +213,7 @@ test('history keeps the newest calls for 90 days', async () => {
     await f.json('endCall', { callID: call.id }, bedside.credential);
     ids.push(call.id);
   }
+  assert.equal(f.store.lifetimes.get(`call-log:${bedside.state.householdID}`), callLogLimits.keepSeconds, 'storage deletes it 90 days after the newest call');
   const calls = await f.history(bedside.credential);
   assert.equal(calls.length, callLogLimits.entries);
   assert.deepEqual(calls.map(c => c.id), ids.slice(-callLogLimits.entries).reverse());

@@ -42,7 +42,8 @@ export function callLogEntry(house: Household, call: Call): CallLogEntry | undef
     ...(outgoing && outcome === "missed" ? { reached: call.receivedAt !== undefined } : {}) };
 }
 
-/** Adds a finished call to the household's history. Each call is recorded once; the oldest drop off. */
+/** Adds a finished call to the household's history. Each call is recorded once; the oldest drop off. The whole
+ * history expires 90 days after the newest call is added, so a household that stops calling keeps nothing longer. */
 export async function recordCall(store: FamilyStore, householdID: string, entry: CallLogEntry, now: number) {
   const key = logKey(householdID);
   for (let attempt = 0; attempt < 12; attempt++) {
@@ -51,9 +52,16 @@ export async function recordCall(store: FamilyStore, householdID: string, entry:
     if (log.entries.some(e => e.id === entry.id)) return;
     const entries = [...log.entries.filter(e => e.startedAt + callLogLimits.keepSeconds > now), entry].slice(-callLogLimits.entries);
     const next = JSON.stringify({ entries });
-    if (raw === null ? await store.create(key, next) : await store.compareAndSet(key, raw, next)) return;
+    if (raw === null ? await store.create(key, next, callLogLimits.keepSeconds) : await store.compareAndSet(key, raw, next, callLogLimits.keepSeconds)) return;
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
+}
+/** Saves `entry` without holding up the call it rides on: once the device has its answer when `afterResponse`
+ * (Next's `after`) is given, otherwise right away. A failed save is dropped; history never fails a call. */
+export async function recordCallAfter(store: FamilyStore, householdID: string, entry: CallLogEntry, now: number,
+  afterResponse?: (task: () => Promise<unknown>) => void) {
+  const save = () => recordCall(store, householdID, entry, now).catch(() => undefined);
+  if (afterResponse) afterResponse(save); else await save();
 }
 
 /** The household's calls, newest first. The current or most recent call is still in the household itself, and is
@@ -62,7 +70,8 @@ export async function callHistory(store: FamilyStore, house: Household, now: num
   const raw = await store.get(logKey(house.id));
   const entries: CallLogEntry[] = raw ? (JSON.parse(raw) as CallLog).entries : [];
   const current = house.call ? callLogEntry(house, house.call) : undefined;
-  return [...entries.filter(e => e.id !== current?.id), ...(current ? [current] : [])]
+  // Newest first, so calls that started in the same second keep the order they were made in.
+  return [...(current ? [current] : []), ...entries.filter(e => e.id !== current?.id).reverse()]
     .filter(e => e.startedAt + callLogLimits.keepSeconds > now)
     .sort((a, b) => b.startedAt - a.startedAt).slice(0, callLogLimits.entries);
 }

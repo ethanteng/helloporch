@@ -3,7 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { AccessToken, RoomConfiguration, RoomServiceClient, SipClient, TrackSource } from "livekit-server-sdk";
 import { authorizeCalls, callInput, callJSON, type CallServer } from "./server.ts";
 import { verifyContactApproval } from "./contacts.ts";
-import { recordCall } from "../family/call-log.ts";
+import { recordCallAfter } from "../family/call-log.ts";
 import { familyStore, type FamilyStore } from "../family/store.ts";
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
@@ -20,7 +20,9 @@ type PhoneServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "updateParticipant" | "deleteRoom">;
   sip: Pick<SipClient, "createSipParticipant">;
 };
-type Dependencies = { services?: (config: CallServer) => PhoneServices; now?: () => number; authorize?: (request: Request) => Promise<CallServer | Response>; store?: FamilyStore };
+type Dependencies = { services?: (config: CallServer) => PhoneServices; now?: () => number; authorize?: (request: Request) => Promise<CallServer | Response>; store?: FamilyStore;
+  /** Keeps work going once the iPad has its answer (Next's `after`). Without it, that work runs before answering. */
+  afterResponse?: (task: () => Promise<unknown>) => void };
 type Action = "prepare" | "start" | "end";
 
 function services(config: CallServer): PhoneServices {
@@ -148,9 +150,9 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
     // A paired bedside's calls to phones, including phone fallback, go in its household's call history.
     if (config.householdID) {
       try {
-        await recordCall(dependencies.store ?? familyStore(), config.householdID, { id: ticket.id, direction: "outgoing", via: "phone",
-          name: ticket.name, number: ticket.phoneNumber, mode: "voice", startedAt: now, outcome: "dialed" }, now);
-      } catch { /* history never fails a call */ }
+        await recordCallAfter(dependencies.store ?? familyStore(), config.householdID, { id: ticket.id, direction: "outgoing", via: "phone",
+          name: ticket.name, number: ticket.phoneNumber, mode: "voice", startedAt: now, outcome: "dialed" }, now, dependencies.afterResponse);
+      } catch { /* storage isn't configured: history never fails a call */ }
     }
     return callJSON({ started: true });
   } catch (error) {

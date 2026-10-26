@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
-import { callLogEntry, recordCall } from "./call-log.ts";
+import { callLogEntry, recordCallAfter } from "./call-log.ts";
 import { callRoom, config, deliveryUnavailable, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
@@ -34,6 +34,8 @@ export type InboundDependencies = {
   now?: () => number;
   endRoom?: (room: string, configuration: CallServer) => Promise<void>;
   getPhoneParticipant?: (room: string, identity: string, configuration: CallServer) => Promise<ParticipantInfo>;
+  /** Keeps work going once the request has its answer (Next's `after`). Without it, that work runs before answering. */
+  afterResponse?: (task: () => Promise<unknown>) => void;
 };
 
 function notFound(error: unknown) {
@@ -166,7 +168,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     return true;
   });
   const entry = replaced && callLogEntry(house, replaced);
-  if (entry) { try { await recordCall(store, house.id, entry, now); } catch { /* history never fails a call */ } }
+  if (entry) await recordCallAfter(store, house.id, entry, now, dependencies.afterResponse);
   if (!result || await store.get(endedKey(room.sid))) {
     await endSession(store, session, "Porch is busy or unavailable.", now, dependencies);
     return;
