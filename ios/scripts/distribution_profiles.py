@@ -70,7 +70,9 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
     profiles = [decode_profile(bundle / "embedded.mobileprovision")]
     products, identifiers = [bundle], [app_id]
     if family:
-        require(not (bundle / "Settings.bundle").exists(), "Family build must not include Cell2Jack driver settings")
+        settings = [path for path in (bundle / "Settings.bundle").rglob("*") if path.is_file()]
+        require(not any(b"cell2jack" in path.read_bytes().lower() for path in settings),
+                "Family build must not include Cell2Jack driver settings")
         summaries = [validate_profile(profiles[0], team, app_id, communicates=False)]
     else:
         profiles.append(decode_profile(drivers[0] / "embedded.provisionprofile"))

@@ -84,6 +84,7 @@ C7962E57F4CAAA127932BFC1,
 				C00000000000000000000003 /* Products */,
                 C00000000000000000000004 /* PorchTests */,
                 C9BC29EFE88E72541AA27283,
+                2A11037ED612A1B537D136E2,
             );
 			sourceTree = "<group>";
 		};
@@ -462,7 +463,7 @@ A887DE88DBDF1737C86A0A3B = { "isa" = "XCConfigurationList"; "defaultConfiguratio
 
 8AA86E8575A7D52C0D3EA7B3 = { "path" = "PorchFamily.app"; "isa" = "PBXFileReference"; "includeInIndex" = "0"; "explicitFileType" = "wrapper.application"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
 
-B593041B63DB50D4C7298CCC = { "productType" = "com.apple.product-type.application"; "productReference" = "8AA86E8575A7D52C0D3EA7B3"; "buildConfigurationList" = "A887DE88DBDF1737C86A0A3B"; "packageProductDependencies" = ( "E00000000000000000000002", "E00000000000000000000004", ); "productName" = "Porch"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "D00000000000000000000001", "D00000000000000000000003", "D00000000000000000000002", ); "dependencies" = ( ); "name" = "PorchFamily"; "buildRules" = ( ); };
+B593041B63DB50D4C7298CCC = { "productType" = "com.apple.product-type.application"; "productReference" = "8AA86E8575A7D52C0D3EA7B3"; "buildConfigurationList" = "A887DE88DBDF1737C86A0A3B"; "packageProductDependencies" = ( "E00000000000000000000002", "E00000000000000000000004", ); "productName" = "Porch"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "D00000000000000000000001", "D00000000000000000000003", "D00000000000000000000002", "696F2C2DE6373A7C9892D7CA", ); "dependencies" = ( ); "name" = "PorchFamily"; "buildRules" = ( ); };
 
 A69B9737580D69535B091E0B = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "GENERATE_INFOPLIST_FILE" = "YES"; "ONLY_ACTIVE_ARCH" = "YES"; "TARGETED_DEVICE_FAMILY" = "1,2"; "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/PorchFamily.app/PorchFamily"; "PRODUCT_BUNDLE_IDENTIFIER" = "com.ethanteng.helloporch.familytests"; "CODE_SIGN_STYLE" = "Automatic"; "SWIFT_VERSION" = "5.0"; "BUNDLE_LOADER" = "$(TEST_HOST)"; "DEVELOPMENT_TEAM" = "7U9T57JPF7"; "PRODUCT_NAME" = "PorchFamilyTests"; }; };
 
@@ -474,6 +475,11 @@ A69B9737580D69535B091E0B = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "
 04655FE6A3EA8CC4C45BFF1A = { "buildConfigurationList" = "8800BD80F7CF957EFD34335D"; "productReference" = "6664906F7F9748903C363D28"; "productType" = "com.apple.product-type.bundle.unit-test"; "productName" = "PorchFamilyTests"; "isa" = "PBXNativeTarget"; "buildPhases" = ( "D00000000000000000000004", "D00000000000000000000005", ); "dependencies" = ( "75DC8F2B788E4CC3A4897E38", ); "name" = "PorchFamilyTests"; "buildRules" = ( ); };
 
 EBB3169BDD00A49B465125BA = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "356FD1D86F08F309C2B0A7BF", ); "runOnlyForDeploymentPostprocessing" = "0"; };
+
+/* Family Settings bundle: acknowledgements only, no Cell2Jack driver settings. */
+2A11037ED612A1B537D136E2 = { "isa" = "PBXFileReference"; "path" = "Porch/FamilySettings/Settings.bundle"; "lastKnownFileType" = "wrapper.plug-in"; "sourceTree" = "<group>"; };
+AD99BEE3D0C49D941AA81FC5 = { "isa" = "PBXBuildFile"; "fileRef" = "2A11037ED612A1B537D136E2"; };
+696F2C2DE6373A7C9892D7CA = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "AD99BEE3D0C49D941AA81FC5", ); "runOnlyForDeploymentPostprocessing" = "0"; };
 
 	};
 	rootObject = F00000000000000000000002 /* Project object */;

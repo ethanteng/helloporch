@@ -19,8 +19,10 @@ is needed for installation, not for everyday operation.
 
 - Bring current `main` into feature branches, preserving Cell2Jack integration.
 - App sources, frameworks, and feature resources are shared build phases. Add new
-  feature files to those shared phases so both variants receive them. The separate
-  driver-settings resource phase belongs only to `Porch`.
+  feature files to those shared phases so both variants receive them. Each variant
+  has one resource phase of its own, holding only its Settings bundle:
+  `Porch/Settings.bundle` has the driver settings and acknowledgements, and
+  `Porch/FamilySettings/Settings.bundle` has only the acknowledgements.
 - Keep standard USB/Bluetooth keypad and touchscreen paths independent of
   Cell2Jack. Family builds compile out the USB transport/bridge, omit DriverKit
   entitlements and driver settings, and hide the Cell2Jack caregiver section.
