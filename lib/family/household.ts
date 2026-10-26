@@ -20,9 +20,11 @@ export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
 /** `guests`: regular phones a family caregiver added to an answered call with the bedside (see phone-guests.ts).
  * `porchGuests`: other family members rung into it on Porch (see porch-guests.ts).
- * `left`: when each of the call's two ends or a family guest hung up while the call went on without them. */
+ * `left`: when each of the call's two ends or a family guest hung up while the call went on without them.
+ * `endedAt`: when it ended. `endedBy`: who hung up before it was answered, the caller giving up or the person called
+ * declining; call history tells the two apart (see call-log.ts). */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
-  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number> };
+  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string };
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
  * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
 export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;
@@ -92,8 +94,10 @@ export function cancelRingingPorchGuests(call: Call | undefined, now: number) {
   for (const guest of call?.porchGuests ?? []) if (guest.state === "ringing") { guest.state = "cancelled"; guest.endedAt = now; }
 }
 export function finishCall(call: Call, reason: string, now: number) {
-  call.state = "ended"; call.reason = reason; cancelRingingPorchGuests(call, now);
+  call.state = "ended"; call.reason = reason; call.endedAt ??= now; cancelRingingPorchGuests(call, now);
 }
+/** Why a call ended when its push couldn't reach the person called. */
+export const deliveryUnavailable = "Incoming call delivery unavailable.";
 export function expire(house: Household, now: number) {
   const call = house.call;
   if (!call) return;

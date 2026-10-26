@@ -93,6 +93,8 @@ struct FamilyResponse: Decodable {
     let phoneGuest: FamilyPhoneGuest?
     /// The family member just rung into the call (`addPorchGuest`).
     let porchGuest: FamilyPorchGuest?
+    /// Calls to and from the bedside, newest first (`callHistory`).
+    let calls: [CallHistoryEntry]?
 }
 /// A short-lived link to an announcement clip, and the voice that read it.
 struct SpeechClip: Decodable { let voiceID: String; let url: String; let expiresAt: TimeInterval }

@@ -61,15 +61,19 @@ extension Notification.Name {
     var isVideo: Bool { mode == .video }
 
     private override init() {
+        provider = CXProvider(configuration: Self.configuration())
+        super.init()
+        provider.setDelegate(self, queue: .main)
+    }
+    /// No `ringtoneSound`, so calls ring with the phone's own ringtone and vibration, like a regular call.
+    private static func configuration() -> CXProviderConfiguration {
         let configuration = CXProviderConfiguration()
         configuration.supportsVideo = true
         configuration.maximumCallGroups = 1
         configuration.maximumCallsPerCallGroup = 1
         configuration.supportedHandleTypes = [.generic]
         configuration.includesCallsInRecents = false
-        provider = CXProvider(configuration: configuration)
-        super.init()
-        provider.setDelegate(self, queue: .main)
+        return configuration
     }
 
     func start() {
@@ -174,6 +178,10 @@ extension Notification.Name {
         update.remoteHandle = CXHandle(type: .generic, value: "Porch family")
         update.hasVideo = mode == .video
         update.supportsHolding = false; update.supportsGrouping = false; update.supportsUngrouping = false; update.supportsDTMF = false
+        // Apple's advice for every CallKit app: send the configuration again just before reporting a call. It hands
+        // the system this app's current audio session, without which a call can ring and connect with no sound
+        // until Porch is relaunched.
+        provider.configuration = Self.configuration()
         provider.reportNewIncomingCall(with: id, update: update) { [weak self] error in
             completion()
             Task { @MainActor in
@@ -432,6 +440,7 @@ extension Notification.Name {
 final class SystemCallViewController: UIViewController, RoomDelegate {
     private let status = UILabel()
     private let stage = CallVideoStage()
+    private let localVideo = VideoView()
     private let placeholder = UILabel()
     private lazy var personPhoto = RecipientAppearance.photoView(SystemIncomingCalls.shared.callerContact?.photoData)
     private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
@@ -493,6 +502,8 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }, for: .touchUpInside)
         placeholder.text = "Voice call"; placeholder.textColor = .white; placeholder.textAlignment = .center
         placeholder.font = PorchStyle.font(28)
+        localVideo.isHidden = true
+        localVideo.accessibilityLabel = BedsideText.string("Your camera preview")
         // On the bedside's call, family can ring in another family member and caregivers can add a phone. Someone
         // who was rung in themselves can't add anyone.
         let calls = SystemIncomingCalls.shared
@@ -501,7 +512,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                 .init(call: SystemIncomingCalls.shared.call, canAddPhone: SystemIncomingCalls.shared.canAddPhoneGuests, family: FamilyCoordinator.shared.state?.family ?? [])
             }
         }
-        CallScreenLayout.install(in: view, video: stage, placeholder: placeholder, title: title, status: status,
+        CallScreenLayout.install(in: view, video: stage, preview: localVideo, placeholder: placeholder, title: title, status: status,
                                  photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
                                  buttons: [microphone, camera] + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
@@ -510,7 +521,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
-        guard calls.hasCall else { stage.show([]); dismiss(animated: true); return }
+        guard calls.hasCall else { stage.show([]); localVideo.track = nil; dismiss(animated: true); return }
         if let room = calls.room, room !== observedRoom {
             room.add(delegate: self); observedRoom = room
         }
@@ -537,8 +548,20 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         personPhoto.isHidden = showing
         placeholder.isHidden = showing
         placeholder.text = calls.isVideo ? "Waiting for video" : "Voice call"
+        // Your own camera, as on calls you place. It shows only while the camera is on.
+        localVideo.track = calls.isVideo ? (calls.room?.localParticipant.videoTracks.first(where: { !$0.isMuted })?.track as? VideoTrack) : nil
+        localVideo.isHidden = localVideo.track == nil
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
+    nonisolated func room(_ room: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
+    nonisolated func room(_ room: Room, participant: LocalParticipant, didUnpublishTrack publication: LocalTrackPublication) {
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
+    nonisolated func room(_ room: Room, participant: Participant, trackPublication: TrackPublication, didUpdateIsMuted isMuted: Bool) {
         Task { @MainActor [weak self] in self?.refresh() }
     }
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {

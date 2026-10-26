@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "What the Porch app and the HelloPorch website collect, why, who helps us run Porch, how long we keep information, and how to have it deleted.",
 };
 
-const updated = "October 25, 2026";
+const updated = "October 26, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -48,6 +48,7 @@ const retention: [what: string, howLong: string][] = [
   ["Someone who leaves or is removed", "Their profile, photos, notification tokens and messages are deleted. We keep a small record that their device was removed, so it can’t reconnect."],
   ["Photos that are never saved", "Deleted shortly after the upload expires."],
   ["Blocked callers", "Up to the 30 most recent numbers, until a caregiver clears the list."],
+  ["Call history", "The 100 most recent calls, for up to 90 days, including calls with someone who was later removed."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
   ["Waitlist email", "Until you unsubscribe or ask us to remove it."],
@@ -155,8 +156,10 @@ export default function PrivacyPage() {
                 they give it.
               </li>
               <li>
-                <strong>Call details.</strong> Who is calling whom, voice or video, and when, while a call is being set
-                up or is under way. We keep only the current or most recent call, not a call history.
+                <strong>Call history.</strong> For each call to or from your loved one’s iPad: who it was with (their
+                name, or the phone number for a regular phone), voice or video, when it started, whether it was
+                answered, missed or declined, and how long it lasted. Caregivers can see it with the caregiver PIN. We
+                don’t record what was said.
               </li>
               <li>
                 <strong>Messages.</strong> Audio and video messages that family members record for each other,
