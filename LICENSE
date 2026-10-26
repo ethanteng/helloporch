@@ -1,0 +1,85 @@
+Porch Proprietary License
+
+Copyright (c) 2026 Ethan Teng Consulting LLC. All rights reserved.
+
+This repository and everything in it, including its source code, apps, server,
+website, designs, documentation, images, audio and video (together, the
+"Software"), is owned by Ethan Teng Consulting LLC (the "Company") and is
+protected by copyright and other intellectual property laws. This file covers
+the Software except for the third-party components described in section 5.
+
+1. No license is granted
+
+   Being able to see this repository does not give you any right to use the
+   Software. No license or other right is granted, by implication, estoppel or
+   otherwise, except as expressly stated in this file or in a separate written
+   agreement signed by the Company. To ask for permission, write to
+   hello@helloporch.store.
+
+2. Viewing on GitHub
+
+   While this repository is public, GitHub's Terms of Service let you view it
+   and fork it on GitHub. That is the only permission you have. It does not
+   allow you to run, deploy or otherwise use the Software, or to copy it
+   outside GitHub.
+
+3. Restrictions
+
+   Unless the Company gives you written permission, you may not:
+
+   (a) copy or reproduce the Software, except as section 2 allows;
+   (b) modify, translate, adapt or create derivative works of it;
+   (c) distribute, publish, sublicense, sell, rent, lease or transfer it;
+   (d) run, host or deploy it, or offer it, or anything built from it, as a
+       product or service;
+   (e) use it to build, train or improve a competing product or service, or
+       any machine-learning model; or
+   (f) remove or change any copyright, trademark or license notice in it.
+
+4. Names and logos
+
+   This file grants no rights to the names "Porch" or "HelloPorch", the Porch
+   logo, or any other name, logo or mark of the Company.
+
+5. Third-party components
+
+   Some parts of the Software are owned by others and are licensed under their
+   own terms. Those terms govern those parts, and nothing in this file limits
+   the rights they give you.
+
+   - Parts of ios/Cell2JackDriver are adapted from Apple sample code and are
+     licensed under the terms in ios/Cell2JackDriver/APPLE-SAMPLE-LICENSE.txt.
+   - Packages installed by npm (listed in package.json) and by Swift Package
+     Manager (listed in ios/Porch.xcodeproj and ios/PorchCore/Package.swift)
+     are licensed by their authors under their own licenses.
+
+6. Contributions
+
+   Contributions are by invitation only. If you submit code, documentation or
+   other material to this repository, you grant the Company a perpetual,
+   worldwide, irrevocable, royalty-free, transferable and sublicensable license
+   to use, copy, modify, distribute and otherwise exploit it for any purpose,
+   and you confirm that you have the right to grant that license.
+
+7. Termination
+
+   Any use of the Software that this file does not allow automatically ends
+   any permission you have under it. You must then stop using the Software and
+   delete any copies you have outside GitHub.
+
+8. The Porch service
+
+   This file covers the Software as source code. It does not set the terms for
+   using the Porch apps or service.
+
+9. No warranty
+
+   TO THE EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS", WITHOUT
+   WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+10. Limitation of liability
+
+   TO THE EXTENT PERMITTED BY LAW, IN NO EVENT WILL THE COMPANY BE LIABLE FOR
+   ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR
+   OTHERWISE, ARISING FROM OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
