@@ -1,3 +1,4 @@
+import Link from "next/link";
 import DemoVideo from "@/components/DemoVideo";
 import PorchFace from "@/components/PorchFace";
 import PorchKeypad, { ScreenKey } from "@/components/PorchKeypad";
@@ -26,6 +27,14 @@ export default function Home() {
             someone they love. <strong>One press starts a video call.</strong>
           </p>
           <HeroWaitlist />
+          <Link href="/features" className="hero__secondary">
+            <span className="hero__secondary-icon" aria-hidden="true">
+              <svg viewBox="0 0 12 12" width="16" height="16">
+                <path d="M3 1.5v9l7.5-4.5z" fill="currentColor" />
+              </svg>
+            </span>
+            See Porch in action
+          </Link>
         </header>
 
         <section className="device" aria-label="The Porch tablet and keypad">

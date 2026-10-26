@@ -13,7 +13,7 @@ export default function SiteNav({ current, joinHref = "#join" }: { current?: "pi
           <Link href="/pilot" className="nav__link" aria-current={current === "pilot" ? "page" : undefined}>
             Pilot program
           </Link>
-          <Link href="/features" className="nav__link" aria-current={current === "features" ? "page" : undefined}>
+          <Link href="/features" className="nav__link nav__link--featured" aria-current={current === "features" ? "page" : undefined}>
             See Porch in action
           </Link>
           <Link href="/story" className="nav__link" aria-current={current === "story" ? "page" : undefined}>
