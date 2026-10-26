@@ -118,6 +118,11 @@ input::placeholder {
   text-decoration: underline;
   text-underline-offset: 5px;
 }
+/* The clips are the quickest way to understand Porch, so their link stands out. */
+.nav__link--featured {
+  color: var(--tomato-deep);
+  font-weight: 700;
+}
 .social {
   display: flex;
   gap: 4px;
@@ -246,6 +251,35 @@ input::placeholder {
 }
 .pill-form--join button:hover {
   background: oklch(0.8 0.11 80);
+}
+/* Sits just under the hero's waitlist form (or its thanks), closer than the hero's usual gap. */
+.hero__secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -10px;
+  padding: 8px 4px;
+  color: var(--tomato-deep);
+  font: 600 17px var(--sans);
+  text-decoration: none;
+}
+.hero__secondary:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.hero__secondary-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding-left: 2px;
+  border-radius: 50%;
+  background: var(--tomato-deep);
+  color: #fff;
+  transition: background 0.15s;
+}
+.hero__secondary:hover .hero__secondary-icon {
+  background: var(--ink);
 }
 .form-error {
   font: 400 15px var(--sans);
