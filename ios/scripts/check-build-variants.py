@@ -43,7 +43,8 @@ assert normal_settings != family_settings, "Family must not share the Cell2Jack 
 assert not any(b"cell2jack" in path.read_bytes().lower() for path in family_settings.rglob("*") if path.is_file()), \
     "Family Settings must not mention the Cell2Jack driver"
 normal_notices, family_notices = acknowledgements(normal_settings), acknowledgements(family_settings)
-assert all(item in normal_notices for item in family_notices), "Both variants must acknowledge the shared packages"
+assert normal_notices[:-1] == family_notices and normal_notices[-1]["Title"] == "Apple DriverKit sample code", \
+    "Both variants must list the same notices, plus the driver's Apple sample code in Porch"
 pins = json.loads((ios / "Porch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved").read_text())["pins"]
 assert {f'{pin["identity"]}@{pin["state"]["version"]}' for pin in pins} == \
     {item["Package"] for item in family_notices if "Package" in item}, \

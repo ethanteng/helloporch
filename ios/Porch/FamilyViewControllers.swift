@@ -518,7 +518,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let list = PorchListRow([listText, Self.singleLine(count)], label: blocked.isEmpty ? "Blocked numbers, none" : "Blocked numbers, \(blocked.count)") { [weak self] in self?.showBlockedCallers() }
         list.accessibilityIdentifier = "calls.blockedNumbers"
         list.isEnabled = screening != nil
-        let footer = "When this is on, only people on the keypad and numbers you allow can ring. Other callers can't get through. Their numbers show under Blocked numbers."
+        let footer = "When this is on, only people on the keypad and numbers you allow can ring. Other callers can't get through. Their numbers show under Blocked numbers. Calls from the Porch app aren't affected."
         return group("Phone calls", footer: footer, rows: [toggleRow("Block unknown callers", detail: detail, block), list])
     }
     private func messagesGroup(_ state: FamilyAdminState?) -> UIView {
@@ -1057,7 +1057,7 @@ final class CallHistoryViewController: CaregiverFormViewController {
 
 /// Approves one telephone number for audio drop-in when it calls the household's Porch number.
 final class PhoneDropInViewController: CaregiverFormViewController, CNContactPickerDelegate {
-    static let explanation = "When drop-in is on and Porch is open, a call from one of these numbers connects on its own after a short announcement if the phone company can tell who is calling. Most US mobile phones work. Other calls ring."
+    static let explanation = "While drop-ins are on and Porch is open, a call from one of these numbers connects on its own after a short announcement. Most US mobile phones work. Other calls ring."
     /// Set when approving from caregiver mode on a family phone.
     var remote: FamilyCredential?
     var onSaved: ((FamilyAdminState?) -> Void)?

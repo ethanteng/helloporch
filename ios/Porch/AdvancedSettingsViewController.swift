@@ -35,7 +35,7 @@ final class AdvancedSettingsViewController: CaregiverFormViewController {
         secondsField.accessibilityIdentifier = "advanced.silenceSeconds"
         secondsField.addTarget(self, action: #selector(updateControls), for: .editingChanged)
         timeoutGroup = field(secondsField, title: "Seconds without talking", placeholder: "120", helper: "From 15 to 1800 seconds. Usually 120.")
-        form.addArrangedSubview(section("Automatic hang-up", detail: "Ends a call when no one has talked for a while. Useful if your loved one forgets to hang up.", views: [row, timeoutGroup, validation]))
+        form.addArrangedSubview(section("Automatic hang-up", detail: "Turn this on to end calls when no one has talked for a while. Useful if your loved one forgets to hang up.", views: [row, timeoutGroup, validation]))
         form.addArrangedSubview(section("USB keypad & touch controls", detail: "A regular USB keypad and the touchscreen always work, even without Cell2Jack.", views: []))
         #if !PORCH_NO_CELL2JACK
         if Cell2JackKeypad.supportsDriverPlatform {

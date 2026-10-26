@@ -284,7 +284,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneDropInSwitch.accessibilityLabel = "Audio drop-in when they call this Porch"
         let dropInToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Audio drop-in when they call", size: 18, color: PorchStyle.ink, weight: .medium), phoneDropInSwitch])
         dropInToggle.alignment = .center; dropInToggle.spacing = 16
-        phoneDropInGroup = section("Drop-in by phone", detail: "When drop-in is on and Porch is open, a call from their primary phone connects on its own after a short announcement if the phone company can tell who is calling. Other calls ring.", views: [dropInToggle])
+        phoneDropInGroup = section("Drop-in by phone", detail: "While drop-ins are on and Porch is open, a call from their primary phone connects on its own after a short announcement. Most US mobile phones work.", views: [dropInToggle])
         form.addArrangedSubview(phoneDropInGroup)
         if initialContact != nil {
             let remove = PorchStyle.button("Remove person", symbol: "person.crop.circle.badge.minus", filled: false)

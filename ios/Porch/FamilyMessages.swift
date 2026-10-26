@@ -602,7 +602,7 @@ final class ReceivedMessagesViewController: CaregiverFormViewController {
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func name() {
         title = "Messages from \(from)"
-        footer.text = "When you miss a call from \(from), their message shows up here."
+        footer.text = "When you miss a Porch call from \(from), they can leave a message here."
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
