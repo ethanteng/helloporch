@@ -152,12 +152,12 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
             video.isEnabled = UIImagePickerController.isSourceTypeAvailable(.camera)
             let audio = PorchStyle.button("Record audio", symbol: "mic.fill", filled: kind == "voicemail")
             audio.addAction(UIAction { [weak self] _ in self?.startAudio() }, for: .touchUpInside)
-            content.addArrangedSubview(section("Message for \(recipient)", detail: "Up to two minutes. It waits on their Porch until they play it, and you'll see when it's played.", views: kind == "voicemail" ? [audio, video] : [video, audio]))
+            content.addArrangedSubview(section("Message for \(recipient)", detail: "Up to two minutes. It waits on their Porch until they play it.", views: kind == "voicemail" ? [audio, video] : [video, audio]))
         case .recordingAudio:
             let stop = PorchStyle.button("Stop recording", symbol: "stop.fill")
             stop.addAction(UIAction { [weak self] _ in self?.recorder?.stop() }, for: .touchUpInside)
             updateTimer()
-            content.addArrangedSubview(section("Recording for \(recipient)…", detail: "Speak after the beep. Recording stops on its own at two minutes.", views: [timerLabel, stop]))
+            content.addArrangedSubview(section("Recording for \(recipient)…", detail: "Speak after the beep. You have two minutes.", views: [timerLabel, stop]))
         case .recorded, .sending:
             let sending = phase == .sending
             let play = PorchStyle.button("Play it back", symbol: "play.fill", filled: false)
@@ -457,9 +457,9 @@ final class MessageQueueViewController: CaregiverFormViewController {
             views.append(remove)
             let type = message.fromPhone ? "Phone voicemail" : message.kind == "voicemail" ? "Voicemail" : message.mode == "video" ? "Video message" : "Audio message"
             let state = message.held != true ? (message.delivered ? "Downloaded to the iPad" : "Not downloaded yet")
-                : message.callerNumber == nil ? "Waiting for your OK: caller ID was withheld"
-                : message.callerVerified == true ? "Waiting for your OK: this number isn't saved on the Porch keypad"
-                : "Waiting for your OK: the phone company didn't verify this caller ID"
+                : message.callerNumber == nil ? "Waiting for your OK: hidden number"
+                : message.callerVerified == true ? "Waiting for your OK: number isn't on the keypad"
+                : "Waiting for your OK: number couldn't be checked"
             list.addArrangedSubview(section("\(type) from \(Self.senderName(message))", detail: "\(MessageText.length(message.durationSeconds)) · Sent \(MessageText.when(message.sentAt)) · \(state)", views: views))
         }
         loadPosters(missing)
@@ -602,7 +602,7 @@ final class ReceivedMessagesViewController: CaregiverFormViewController {
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func name() {
         title = "Messages from \(from)"
-        footer.text = "\(from)'s Porch records a message when a Porch call to you isn't answered. Calls that ring your regular phone go to its voicemail instead. Recordings are kept for 90 days."
+        footer.text = "When you miss a Porch call from \(from), they can leave a message here."
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }

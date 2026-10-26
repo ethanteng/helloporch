@@ -23,11 +23,32 @@ assert objects[normal["productReference"]]["path"] != objects[family["productRef
 assert phases(normal, "PBXCopyFilesBuildPhase") and normal["dependencies"], "Preserve the Cell2Jack development build"
 normal_phases = phases(normal, "PBXResourcesBuildPhase")
 family_phases = phases(family, "PBXResourcesBuildPhase")
-assert len(family_phases) == 1 and family_phases[0] in normal_phases, "Feature resources must stay shared"
-driver_resources = [key for key in normal_phases if key not in family_phases]
-assert len(driver_resources) == 1
-settings = objects[driver_resources[0]]["files"]
-assert len(settings) == 1 and objects[objects[settings[0]]["fileRef"]]["path"].endswith("Settings.bundle")
+shared_resources = [key for key in family_phases if key in normal_phases]
+assert len(shared_resources) == 1 and len(normal_phases) == len(family_phases) == 2, "Feature resources must stay shared"
+
+def settings_bundle(variant_phases):
+    files = objects[next(key for key in variant_phases if key not in shared_resources)]["files"]
+    assert len(files) == 1, "Each variant's own resources are only its Settings bundle"
+    path = objects[objects[files[0]]["fileRef"]]["path"]
+    assert path.endswith("Settings.bundle"), path
+    return ios / path
+
+def acknowledgements(bundle):
+    root = plistlib.loads((bundle / "Root.plist").read_bytes())["PreferenceSpecifiers"]
+    assert {"Type": "PSChildPaneSpecifier", "File": "Acknowledgements", "Title": "Acknowledgements"} in root, bundle
+    return plistlib.loads((bundle / "Acknowledgements.plist").read_bytes())["PreferenceSpecifiers"]
+
+normal_settings, family_settings = settings_bundle(normal_phases), settings_bundle(family_phases)
+assert normal_settings != family_settings, "Family must not share the Cell2Jack Settings bundle"
+assert not any(b"cell2jack" in path.read_bytes().lower() for path in family_settings.rglob("*") if path.is_file()), \
+    "Family Settings must not mention the Cell2Jack driver"
+normal_notices, family_notices = acknowledgements(normal_settings), acknowledgements(family_settings)
+assert normal_notices[:-1] == family_notices and normal_notices[-1]["Title"] == "Apple DriverKit sample code", \
+    "Both variants must list the same notices, plus the driver's Apple sample code in Porch"
+pins = json.loads((ios / "Porch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved").read_text())["pins"]
+assert {f'{pin["identity"]}@{pin["state"]["version"]}' for pin in pins} == \
+    {item["Package"] for item in family_notices if "Package" in item}, \
+    "Swift packages changed: run ios/scripts/generate-acknowledgements.py"
 for config in objects[family["buildConfigurationList"]]["buildConfigurations"]:
     settings = objects[config]["buildSettings"]
     assert settings["PRODUCT_BUNDLE_IDENTIFIER"] == "com.ethanteng.helloporch"
@@ -53,4 +74,4 @@ build_numbers = [objects[config]["buildSettings"].get("PORCH_BUILD_NUMBER")
                  for config in objects[project["buildConfigurationList"]]["buildConfigurations"]]
 assert len({str(number) for number in build_numbers}) == 1, build_numbers
 assert str(build_numbers[0]).isdigit() and int(build_numbers[0]) > 6, build_numbers
-print("Shared feature sources, family driver exclusion, and Cell2Jack development build checks passed")
+print("Shared feature sources, family driver exclusion, acknowledgements, and Cell2Jack development build checks passed")

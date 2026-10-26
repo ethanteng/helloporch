@@ -180,11 +180,11 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         removePhotoButton.configuration?.baseForegroundColor = .systemRed
         removePhotoButton.addAction(UIAction { [weak self] _ in self?.photo = nil; self?.photoChanged = true; self?.updatePhoto() }, for: .touchUpInside)
         let helper = "Leave blank to use “\(invited)”, the name on your invitation."
-        form.addArrangedSubview(section("How \(lovedOne) sees you", detail: "Your name and photo appear on \(lovedOne)'s Porch when you call, drop in or send a message.",
+        form.addArrangedSubview(section("How \(lovedOne) sees you", detail: "\(lovedOne) sees your name and photo when you call or send a message.",
             views: [photoRow, photoButton, removePhotoButton, field(nameField, title: "Your name", placeholder: invited, helper: helper)]))
         note.textAlignment = .center
         form.addArrangedSubview(note)
-        form.addArrangedSubview(PorchStyle.label("A caregiver can choose a different name or photo for you, which Porch shows instead.", size: 15))
+        form.addArrangedSubview(PorchStyle.label("A caregiver can change these for you.", size: 15))
         updateNote()
         photo = FamilyPhotos.shared.data(for: me.profile?.photoID)
         updatePhoto()
@@ -207,9 +207,9 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     private func updateNote() {
         let chosen = me?.override
         switch (chosen?.name, chosen?.photoID != nil) {
-        case let (name?, true): note.text = "A caregiver chose the name “\(name)” and a photo for you, so \(lovedOne)'s Porch shows those instead."
-        case let (name?, false): note.text = "A caregiver chose the name “\(name)” for you, so \(lovedOne)'s Porch shows it instead."
-        case (nil, true): note.text = "A caregiver chose a photo for you, so \(lovedOne)'s Porch shows it instead."
+        case let (name?, true): note.text = "A caregiver set your name to “\(name)” and chose your photo. \(lovedOne) sees those."
+        case let (name?, false): note.text = "A caregiver set your name to “\(name)”. \(lovedOne) sees that name."
+        case (nil, true): note.text = "A caregiver chose your photo. \(lovedOne) sees that photo."
         default: note.text = nil
         }
         note.isHidden = note.text == nil

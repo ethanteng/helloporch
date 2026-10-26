@@ -73,7 +73,7 @@ enum NativeCallSettings {
         let (data, response) = try await session.data(for: request)
         try Task.checkCancellation()
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw (try? JSONDecoder().decode(ServerError.self, from: data)) ?? ServerError(error: "Couldn't approve this contact. Check the internet connection and caregiver PIN, then save again.")
+            throw (try? JSONDecoder().decode(ServerError.self, from: data)) ?? ServerError(error: "Couldn't save this number. Check your internet and try again.")
         }
         let approval = try JSONDecoder().decode(PhoneApproval.self, from: data)
         guard !approval.authorization.isEmpty, approval.authorization.count <= 1000,
@@ -88,9 +88,9 @@ enum NativeCallSettings {
         case missingConfiguration, keychainFailure, missingCaregiverCode
         var errorDescription: String? {
             switch self {
-            case .missingConfiguration: return "Open caregiver mode to finish setting up this bedside device."
+            case .missingConfiguration: return "Open caregiver mode to finish setup."
             case .keychainFailure: return "Couldn't securely save caregiver settings. Unlock the iPad and try again."
-            case .missingCaregiverCode: return "Open caregiver mode and set your six-digit PIN before adding phone contacts."
+            case .missingCaregiverCode: return "Set your caregiver PIN before adding phone numbers."
             }
         }
     }

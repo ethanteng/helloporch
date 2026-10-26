@@ -223,7 +223,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     private let keyboardButton = PorchStyle.button("Porch keyboard", symbol: "square.grid.3x3", filled: false)
     private let nativeKeyboardButton = PorchStyle.button(UIDevice.current.userInterfaceIdiom == .phone ? "iPhone keyboard" : "iPad keyboard", symbol: "keyboard", filled: false)
     private let keyboardFooter = UIStackView()
-    private let hardwareHint = PorchStyle.label("Your keypad can hide the iPad keyboard. Disconnect it during setup to use the iPad keyboard, or choose Porch keyboard to keep the keypad connected.", size: 15)
+    private let hardwareHint = PorchStyle.label("A connected keypad can hide the iPad keyboard. Unplug it while typing, or use Porch keyboard.", size: 15)
     private var keyboardControlsEnabled = true
     private var hardwareKeyboardConnected = GCKeyboard.coalesced != nil
     private var fields: [UITextField] = []
@@ -485,7 +485,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         let target = activeField ?? fields.first(where: isVisible)
         let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
         let operatingSystem = UIDevice.current.userInterfaceIdiom == .phone ? "iOS" : "iPadOS"
-        let help = UIAlertController(title: "\(device) keyboard with a keypad", message: "\(operatingSystem) can hide the native keyboard while a physical keypad is connected. If there is no system keyboard control, disconnect the keypad during setup. Porch cannot force the native keyboard open.\n\nTo type while keeping the keypad connected, use Porch keyboard.\n\nIf Guided Access is on, pause it and enable Software Keyboards in Session Settings (or Options).", preferredStyle: .alert)
+        let help = UIAlertController(title: "\(device) keyboard with a keypad", message: "A connected keypad can hide the \(operatingSystem) keyboard. Unplug it while you type, or use Porch keyboard.\n\nIf Guided Access is on, pause it and turn on Software Keyboards in its options.", preferredStyle: .alert)
         help.view.accessibilityIdentifier = "caregiver.keyboardHelp"
         for (title, mode) in [("Use Porch keyboard", true), ("Try \(device) keyboard", false)] {
             help.addAction(UIAlertAction(title: title, style: .default) { [weak self, weak target, weak help] _ in

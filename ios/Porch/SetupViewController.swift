@@ -113,7 +113,7 @@ final class SlotsViewController: UITableViewController {
         ["Keypad · people & controls", "Settings", "Device mode", "About"][section]
     }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0 ? "Twelve keys, each with its own action. By default 9 toggles video, 0 answers or hangs up, and the other keys have no action until you assign them. Any key can be reassigned or set back to No action. Saving never places a call." : nil
+        section == 0 ? "Tap a key to choose what it does. At first, 0 answers or hangs up and 9 turns video on or off." : nil
     }
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = PorchStyle.secondary
@@ -252,7 +252,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         photoButton.addTarget(self, action: #selector(pickPhoto), for: .touchUpInside)
         removePhotoButton.addAction(UIAction { [weak self] _ in self?.photoData = nil; self?.updateAppearance() }, for: .touchUpInside)
         resetColorButton.addAction(UIAction { [weak self] _ in self?.buttonColorHex = nil; self?.updateAppearance() }, for: .touchUpInside)
-        appearanceGroup = section("Photo & button color", detail: "Help them recognize this person. Their photo appears on the call button and call screens. Saved on this device only. For someone with the Porch app, Porch uses the photo they chose unless you add one here.", views: [photoPreview, photoSource, photoButton, removePhotoButton, colorButton, resetColorButton])
+        appearanceGroup = section("Photo & button color", detail: "A photo helps your loved one recognize this person. It shows on their button and during calls.", views: [photoPreview, photoSource, photoButton, removePhotoButton, colorButton, resetColorButton])
         form.addArrangedSubview(appearanceGroup)
         updateAppearance()
         nameField.autocapitalizationType = .words
@@ -262,7 +262,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneFallbackSwitch.addTarget(self, action: #selector(updateMethod), for: .valueChanged)
         let phoneToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Call their phone", size: 18, color: PorchStyle.ink, weight: .medium), phoneFallbackSwitch])
         phoneToggle.alignment = .center; phoneToggle.spacing = 16
-        phoneGroup = field(phoneField, title: "Primary number", placeholder: "+14158676937", helper: "The number Porch calls. Include + and the country code for international numbers. Other numbers use this device's region (\(PhoneNumberNormalization.deviceRegion)). Internet is needed to save a phone number.")
+        phoneGroup = field(phoneField, title: "Primary number", placeholder: "+14158676937", helper: "The number Porch calls. For an international number, start with + and the country code.")
         otherNumbers = initialContact?.otherPhoneNumbers ?? []
         otherField.keyboardType = .phonePad
         otherField.textContentType = .telephoneNumber
@@ -272,11 +272,11 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         addOther.addAction(UIAction { [weak self] _ in self?.addOtherNumber() }, for: .touchUpInside)
         let otherHeading = PorchStyle.label("Other numbers", size: 16, color: PorchStyle.ink, weight: .semibold)
         let otherStack = UIStackView(arrangedSubviews: [otherHeading, otherNumbersList,
-            field(otherField, title: "Add another number", placeholder: "+14155550123", helper: "Such as their home or mobile. These can call this Porch too, but Porch only ever calls the primary number."), addOther])
+            field(otherField, title: "Add another number", placeholder: "+14155550123", helper: "Such as a home or work number. These can call Porch, but Porch only calls the primary number."), addOther])
         otherStack.axis = .vertical; otherStack.spacing = 8
         otherGroup = otherStack
         renderOtherNumbers()
-        fallbackGroup = section("If Porch isn't answered", detail: "Ring Porch for up to \(CallPreferences.fallbackSeconds()) seconds, then call their primary number. If their app is unavailable, try it right away. Change the wait in Call preferences. Phone calls are voice only and carrier charges apply. All of their numbers can ring Porch while unknown callers are blocked.", views: [phoneToggle, phoneGroup, otherGroup])
+        fallbackGroup = section("If Porch isn't answered", detail: "If they don't answer in Porch within \(CallPreferences.fallbackSeconds()) seconds, Porch calls their phone instead. Phone calls are voice only.", views: [phoneToggle, phoneGroup, otherGroup])
         form.addArrangedSubview(fallbackGroup)
         refreshPhoneDropIn()
         phoneDropInSwitch.addAction(UIAction { [weak self] _ in self?.phoneDropInTouched = true }, for: .valueChanged)
@@ -284,7 +284,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneDropInSwitch.accessibilityLabel = "Audio drop-in when they call this Porch"
         let dropInToggle = UIStackView(arrangedSubviews: [PorchStyle.label("Audio drop-in when they call", size: 18, color: PorchStyle.ink, weight: .medium), phoneDropInSwitch])
         dropInToggle.alignment = .center; dropInToggle.spacing = 16
-        phoneDropInGroup = section("Drop-in by phone", detail: "Calls from their primary number to this Porch's phone number connect with audio after the announcement, once Allow approved drop-ins is on in Family & drop-in. Only calls their phone company verifies drop in; others ring for a normal answer.", views: [dropInToggle])
+        phoneDropInGroup = section("Drop-in by phone", detail: "While drop-ins are on and Porch is open, a call from their primary phone connects on its own after a short announcement. Most US mobile phones work.", views: [dropInToggle])
         form.addArrangedSubview(phoneDropInGroup)
         if initialContact != nil {
             let remove = PorchStyle.button("Remove person", symbol: "person.crop.circle.badge.minus", filled: false)
@@ -475,11 +475,11 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         updatePhoneDropIn()
         setKeyboardControlVisible(person)
         switch chosenAction {
-        case .unassigned: actionDetail.text = "Pressing this key does nothing except remind them to choose another number. This replaces any person assigned to this key."
-        case .person: actionDetail.text = "Call the person below using their default calling mode."
-        case .callControl: actionDetail.text = "Tap to answer an incoming call or hang up. Hold for one second to decline a ringing call. Tap during a drop-in countdown to stop it. This replaces any person assigned to this key."
-        case .toggleVideo: actionDetail.text = "Turn your camera off or on during a video call. Voice-only and regular phone calls keep the camera off. This replaces any person assigned to this key."
-        case .messages: actionDetail.text = "Play waiting family messages, or stop them while they play. This replaces any person assigned to this key."
+        case .unassigned: actionDetail.text = "This key does nothing. Pressing it shows a reminder to try another key."
+        case .person: actionDetail.text = "Calls the person below."
+        case .callControl: actionDetail.text = "Tap to answer or hang up. Hold to decline a call."
+        case .toggleVideo: actionDetail.text = "Turns the camera on or off during a video call."
+        case .messages: actionDetail.text = "Plays waiting messages, or stops them."
         }
     }
     /// A Porch family member can go by their own name, so Name is optional for them.
@@ -622,7 +622,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     }
 
     @objc private func removePerson() {
-        let alert = UIAlertController(title: "Remove \(initialContact?.name ?? "this person")?", message: "Key \(key) will be unassigned. Your other people will keep their numbers.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Remove \(initialContact?.name ?? "this person")?", message: "Key \(key) will be empty. Other keys won't change.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
             guard let self else { return }

@@ -1,40 +1,111 @@
-# helloporch
+# HelloPorch
 
-Landing page for **Porch**, a tablet plus large-button keypad that lets individuals with dementia or limited dexterity start a video call with one press. Implements design 3a from the Claude Design handoff.
+**Porch** is one-button video calling for people with dementia, Parkinson's or limited dexterity. An iPad by the bed shows a quiet clock and works with a large-button keypad. Each button is someone they love, and one press starts a call. Family answer on their phones in the Porch app, and anyone can reach the bedside from a regular phone by calling the household's own Porch number.
+
+This repository holds the whole product: the website at [helloporch.store](https://helloporch.store), the calling server, and the iPhone and iPad app.
+
+Porch is in a small private pilot. Families install it through TestFlight, and everyone else can join the waitlist on the website. See [Status](#status).
+
+## What's here
+
+| Path | What it is |
+|---|---|
+| `app/`, `components/`, `public/` | The Next.js 16 website, plus the calling server's API routes under `app/api/` |
+| `lib/calls/`, `lib/family/` | Server logic: households, pairing, calls, messages, phone numbers, push and speech |
+| `ios/` | The universal iOS and iPadOS app, the `PorchCore` Swift package and the Cell2Jack USB driver ([ios/README.md](ios/README.md)) |
+| `scripts/` | Operator scripts for setup, number provisioning and checks |
+| `tests/` | Node tests for the server |
+| `.github/workflows/` | CI, the calling-server deploy and the TestFlight upload |
+
+## What Porch does
+
+**At the bedside.** The iPad starts as a clock, either the default one or a dynamic one that follows the day, night and seasons.
+
+- **Keypad.** Twelve keys (0–9, * and #). Each one can call a person, answer or hang up, turn video on or off, play messages, or do nothing.
+- **What drives it.** The keys work from a USB or Bluetooth number pad, a keyboard, the touchscreen, or a big-button photo phone connected through a Cell2Jack adapter. On that phone, putting the receiver back hangs up.
+- **Calling out.** Pressing a key says who it's calling ("Calling David.") and rings that person's Porch app. If nobody answers and the person has a phone number saved, Porch rings that number instead, by default after 20 seconds.
+- **Answering.** Ordinary calls ring and wait for someone to answer. Family the caregiver approves can drop in with audio or video. The bedside announces them and counts down for five seconds, with a **Don't connect** button.
+- **Messages.** Family send audio and video messages, which wait until they're played. They can play on their own when someone sits down, using on-device face detection. When a call from the bedside isn't answered, the bedside records a message for that person.
+- **Languages.** English, Traditional Chinese, Simplified Chinese, Cantonese and Spanish, spoken with the iPad's own voices or natural ElevenLabs voices.
+
+**For family**, on an iPhone or iPad in family mode:
+
+- Private invitations and pairing, with no server addresses or codes to type.
+- Calls ring through CallKit, even when the phone is locked.
+- Send messages, and get a notification when the bedside leaves one.
+- On a call with the bedside, ring in another family member with video. A caregiver can also add a regular phone number, such as a bank that needs the loved one on the line.
+
+**For caregivers.** A six-digit PIN protects caregiver mode, which can also be opened remotely from an approved family phone. Caregivers set up the keypad, names and photos, and drop-in permissions. They also review call history and blocked callers.
+
+**On the phone network.**
+
+- **A number per household.** Households set up in the app get their own US number, bought from Twilio during setup.
+- **Incoming calls.** Calls to that number ring the bedside, audio-only, for a manual answer. Numbers the caregiver approves can drop in with audio when the phone company verifies their caller ID.
+- **Blocking and voicemail.** Unknown callers can be blocked; new households start with blocking on. Voicemail from regular phones is held for a caregiver, unless the caller is a verified keypad contact.
+- **Outgoing caller ID.** Phone fallback and added phone numbers show the household's number, so calling back rings the bedside.
+
+The [family setup guide](ios/FAMILY-SETUP.md) describes all of this in detail.
+
+## How it fits together
+
+- **The apps talk to the calling server.** Almost everything goes through `POST /api/family`, which handles setup, pairing, the PIN, calls, presence, messages, profiles, phone numbers and history.
+- **Calls.** Live audio and video run on LiveKit Cloud. Phone calls in both directions go through LiveKit SIP and a Twilio Elastic SIP trunk, and Twilio voice webhooks handle voicemail.
+- **Storage.** Household state lives in Upstash Redis. Photos, messages, recordings and cached speech go to a private Vercel Blob store.
+- **Push and speech.** The server sends Apple push notifications (VoIP and alerts) directly over APNs. Speech comes from ElevenLabs and is cached.
+- **Hosting.** This repo deploys to two Vercel projects: `helloporch`, the website at helloporch.store, and `porch-calling-prototype`, the calling server the apps use.
+
+| Route | Purpose | Code |
+|---|---|---|
+| `POST /api/family` | Everything the apps do | `lib/family/service.ts` |
+| `/api/calls/phone/{prepare,start,end}` | Phone fallback and dialing out | `lib/calls/phone.ts` |
+| `/api/calls/contacts/authorize` | Signed approvals for phone contacts | `lib/calls/contacts.ts` |
+| `/api/calls/inbound/webhook` | LiveKit SIP webhook for incoming calls | `lib/family/inbound.ts` |
+| `/api/calls/inbound/voice/…` | Twilio voice and voicemail webhooks | `lib/family/voicemail.ts` |
+| `GET /api/calls/health` | Release health check | `lib/calls/health.ts` |
+| `/api/waitlist` | Website waitlist (MailerLite) | `app/api/waitlist/route.ts` |
+| `/api/calls/token` | Legacy browser-call token (see [Legacy](#legacy)) | `lib/calls/server.ts` |
 
 ## Develop
 
-The native iPhone/iPad calling prototype lives in [`ios/`](ios/README.md). Open `ios/Porch.xcodeproj` in Xcode. It supports in-app LiveKit voice/video calls as well as the existing FaceTime/Shortcut methods.
+### Website and server
 
-See [server and TestFlight releases](RELEASING.md) for automatic calling-server deployment after relevant merges and the manual TestFlight release workflow.
+Requires Node.js 24 or newer, the same version CI uses.
 
 ```sh
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-## Bedside and family calling
+The site runs at http://localhost:3000. Fill in only the services you need. Never put credentials in `NEXT_PUBLIC_` variables or in the app.
 
-The universal app now includes family pairing, ordinary incoming calls, approved audio/video drop-in while Mom’s iPad is open, and recorded family messages and voicemail that wait on the bedside iPad until played, including voicemail from regular phone callers, held for a caregiver unless it is a carrier-verified call from a keypad contact. If a caregiver turns it on, the bedside can start waiting messages when someone sits down in front of it, using on-device face detection. When Mom's Porch call isn't answered, the bedside records an audio or video message for that family member, who gets a notification; calls that ring through to a regular phone use its own voicemail. Start with the [family setup guide](ios/FAMILY-SETUP.md) for invitations, the six-digit caregiver PIN, managed storage, permissions and beta limits. Ordinary calls to family iPhones support APNs VoIP delivery and CallKit ringing while locked or backgrounded once the server and Apple signing are configured; see [incoming-call setup](ios/INCOMING-CALLS.md). The existing regular-phone fallback remains in place. Family on a call with the bedside can [ring in another family member](ios/FAMILY-SETUP.md#adding-family-to-a-call), who joins with video, and a caregiver can [add a phone number](ios/FAMILY-SETUP.md#adding-a-phone-number-to-a-call), such as a bank that needs Mom on the line. Existing manual rooms remain available for browser testing.
+| Service | Variables |
+|---|---|
+| LiveKit | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`, `LIVEKIT_SIP_URI` |
+| Upstash Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (or `KV_REST_API_URL`, `KV_REST_API_TOKEN`), optional `PORCH_FAMILY_STORE_PREFIX` |
+| Vercel Blob | `BLOB_READ_WRITE_TOKEN` |
+| Apple push | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY`, `APNS_BUNDLE_ID` |
+| Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` |
+| Phone numbers | `PORCH_SERVER_ORIGIN`, `PORCH_MAX_PHONE_NUMBERS` (nothing is bought without it), optional `PORCH_INBOUND_NUMBER` |
+| ElevenLabs | `ELEVENLABS_API_KEY` |
+| Server secrets | `PORCH_CONTACT_SETUP_CODE` (signing and recovery secret), legacy `PORCH_CALL_ACCESS_CODE` and `PORCH_PHONE_NUMBERS` |
+| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL` |
 
-Regular phones can also call a household's assigned Twilio number and ring its bedside iPad with a manual-answer, audio-only call. Numbers the caregiver approves can instead drop in with audio when their phone company verifies the caller ID. Each household uses its own number; routing never depends on recognizing the caller. Households set up from the app get their number automatically, bought from Twilio during setup. See [inbound telephone setup](ios/INBOUND-PHONE-CALLS.md) for automatic numbers, the LiveKit trunk, signed webhook, number assignment, and Twilio Origination configuration.
+To try the apps against a local server without real families, `scripts/seed-family-preview.mjs` creates sample devices in an isolated store prefix ([details](ios/FAMILY-SETUP.md#verify)).
 
-## Native voice and video calling prototype
+### iPhone and iPad app
 
-The instructions in this section describe browser calling and older native builds. Current apps use the family setup guide above; manual-room and connection fields have been removed. The iPad and browser join a private LiveKit room manually. There is no incoming app-call notification, background calling, account system, or recording in this version. An optional phone fallback rings a regular phone if Porch isn't answered. Each new room is configured for at most two participants. Use a distinct room name for each contact, and use the same voice/video mode on both devices.
+Open `ios/Porch.xcodeproj` in Xcode 26 or newer. The app runs on iOS and iPadOS 15 and later.
 
-1. Create a LiveKit Cloud project and get its WebSocket URL, API key, and API secret from its dashboard.
-2. Copy `.env.example` to `.env.local`. Fill in `LIVEKIT_URL` (`wss://…`), `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. Generate a separate `PORCH_CALL_ACCESS_CODE` with `openssl rand -hex 24` and save it in that file too. Never put API credentials in `NEXT_PUBLIC_` variables or in the iPad app.
-3. Run `npm install` and `npm run dev`. Open [the browser call page](http://localhost:3000/call). For testing with a physical iPad or another computer, host this server over HTTPS and set the same four environment variables there. Plain HTTP localhost works only on the same computer (including the iPad simulator).
-4. In an older iPad build’s setup → **Calling connection**, enter this server's HTTPS origin and the prototype access code. Use `http://localhost:3000` for simulator testing. The access code is saved in the iPad Keychain.
-5. Configure a person with **Porch**, a room such as `family-david`, and **Voice** or **Video**. Tap Done and press their number.
-6. On the browser page, enter your name, the same room, access code, and mode, then **Join call**. You can also configure the same room/mode on a second iPad. Both people should join within 90 seconds, or 20 seconds if phone fallback is enabled; either person can join first.
+| Scheme | Use |
+|---|---|
+| `Porch` | The full app with the optional Cell2Jack USB driver. Bedside iPads that use Cell2Jack get this as a development build. |
+| `PorchFamily` | The same app without the driver. This is the TestFlight build for family devices and touchscreen or number-pad bedsides. |
+| `PorchCell2Jack`, `PorchCell2JackCalls`, `PorchKeypadPreview` | Earlier experiments and test fixtures. CI still runs some of their tests. |
 
-Calls support mute, camera on/off in video mode, ending, reconnect status, and return to the people screen when the other person leaves. Voice mode never requests camera access and its server token permits only microphone publication. Voice and video rooms have separate namespaces; changing modes requires ending and starting a new call. Leaving the iPad app or locking it ends the prototype call.
+See [ios/README.md](ios/README.md) for building, Debug preview flags, TestFlight and App Review. [ios/BUILD-VARIANTS.md](ios/BUILD-VARIANTS.md) explains which build goes where.
 
-The shared access code grants access to all prototype rooms. It is intended for trusted testers, not public distribution. Before production, replace it with family/device authentication, per-family contact management, rate limiting, and incoming-call delivery. Tokens are room-scoped, valid for initial join for ten minutes, and returned with `Cache-Control: no-store`; API credentials remain server-side. Tokens issued before an access-code rotation remain usable until expiry, and existing calls continue. Calls use LiveKit transport encryption; application-level end-to-end encryption is not configured. Review App Store privacy disclosures for the media and metadata handled by LiveKit before distributing this version.
-
-Checks (Node.js 24+ for the built-in TypeScript test runner):
+### Checks
 
 ```sh
 npm test
@@ -43,68 +114,60 @@ npm run build
 swift test --package-path ios/PorchCore
 ```
 
-The token tests verify authentication, input validation, signed token expiry, room isolation, two-person room configuration, and camera restrictions. Real microphone, camera, network-recovery, and Guided Access behavior still require testing on the intended devices with a configured LiveKit project. See [`ios/README.md`](ios/README.md) for iPad details.
+The Node tests use fake LiveKit and Twilio clients and never place real calls. UIKit and Cell2Jack tests run in Xcode or through the commands in [ios/README.md](ios/README.md#build-and-verify). Real microphone, camera, push, telephone and keypad behavior still needs testing on devices. See the [acceptance checks](ios/FAMILY-SETUP.md#verify).
 
-## Porch first, then phone fallback
+## Release
 
-For a Porch contact, enable **Call their phone if Porch isn't answered** and enter their number with `+` and the country code. Pressing their button **always attempts Porch first**. If nobody joins within the configured wait (20 seconds by default), or the initial Porch connection fails before anyone joins, the iPad releases the camera, leaves the Porch room, and dials their regular phone in a separate microphone-only room. If someone joins Porch, the fallback is cancelled. Once a Porch call is answered, hanging up doesn't trigger a second phone call. A late join to the original room cannot enter the telephone conversation. An existing mute setting is preserved across fallback. On the iPad, **Caregiver mode → Call preferences** changes the wait from 5 to 120 seconds in 5-second steps. A local ringback tone plays while waiting for a Porch answer and stops on connection or exit; The same local tone also plays during phone fallback dialing; updated clients suppress the SIP tone to prevent overlap, while older builds keep SIP ringback.
+| Workflow | When it runs | What it does |
+|---|---|---|
+| Calling server checks | Pushes and PRs that touch the server | `npm test`, typecheck and build |
+| iPhone and iPad build | Pushes and PRs that touch `ios/` | Simulator builds, UIKit and Cell2Jack tests, and Release builds of both variants |
+| Deploy calling server | Server changes merged to `main`, or before each TestFlight upload | Stages a production deployment, checks `/api/calls/health` for the expected commit, then promotes it |
+| Upload Porch to TestFlight | Manually | Deploys the matching server, then builds and uploads the `family` (default) or `cell2jack` variant |
 
-To enable real telephone dialing:
+See [RELEASING.md](RELEASING.md) for setup and recovery.
 
-1. Configure an outbound SIP trunk in your LiveKit project with your telephone provider's credentials and an authorized outgoing caller-ID number. Follow [LiveKit's outbound trunk setup](https://docs.livekit.io/telephony/making-calls/outbound-trunk/). Provider credentials stay in LiveKit; nothing is provisioned automatically by this prototype.
-2. Set `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` on the Porch server to that trunk's ID.
-3. Generate a separate `PORCH_CONTACT_SETUP_CODE` with `openssl rand -hex 24` and set it on the server once. It must differ from `PORCH_CALL_ACCESS_CODE`. Restart or redeploy once after adding it.
-4. Install the updated iPad build. In **Calling connection**, enter the caregiver setup code once; keep it private and share only the calling access code with other call participants.
-5. Add or edit a Porch contact, enable phone fallback, and enter the number with `+` and its country code. **Save** automatically approves the number using the caregiver code. Saving requires internet and never places a call. Failed approval leaves the original saved contact unchanged. New contacts no longer require a Vercel environment change.
+## Operating
 
-Older iPad builds still use `PORCH_PHONE_NUMBERS`, an optional comma-separated list of destinations. Keep it during migration; once all iPads are updated and configured with the caregiver code, it can be removed. Removing it does not disable dialing for approved contacts. To disable new phone calls, remove `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` and redeploy; hangup remains available for active sessions.
+| Script | Purpose |
+|---|---|
+| `scripts/create-bedside-invite.mjs` | Make a one-use activation link for a new bedside iPad |
+| `scripts/provision-number.mjs` | Give a household set up by hand a phone number, either an existing one or a newly bought one |
+| `scripts/configure-inbound.mjs` | Plan or apply the LiveKit inbound trunk, dispatch rule and number route |
+| `scripts/prepare-app-review.mjs` | Build the private access pack for Apple's App Review |
+| `scripts/verify-calling-deployment.mjs` | The health and commit check CI runs on each deploy |
+| `scripts/voice-samples.mjs` | Make a page for comparing ElevenLabs voices |
+| `npm run calls:check` | Check LiveKit credentials and the outbound trunk, without calling anyone |
 
-Contact approvals are server-signed, bound to one exact phone number and server origin, valid for 30 days, and stored in the iPad Keychain. The iPad renews them as needed using its saved caregiver PIN or legacy setup code, so there is no monthly manual step. The shared calling access code alone cannot authorize new phone contacts. Changing the six-digit PIN preserves approvals. Rotating/removing the long server signing/recovery secret invalidates existing approvals; configure the new code on the iPads and save contacts again. These stateless approvals survive server restarts without a database. Removing a contact stops calls from that app slot but does not centrally revoke a copied approval before expiry. Paired family devices can now be revoked; these legacy stateless phone approvals retain their expiry limitation.
+Setup guides:
 
-The recipient answers a normal mobile or landline voice call and needs no Porch app. The call shows the household's own Porch number when it has one, so calling back rings the bedside ([a number for each household](ios/INBOUND-PHONE-CALLS.md#a-number-for-each-household)); otherwise it shows the trunk's number. Telephone and LiveKit SIP charges apply. The iPad still needs an internet connection. Native Porch contacts support this fallback; FaceTime/Shortcut handoffs cannot report call outcomes, so they don't offer automatic fallback. Browser guests join Porch calls but do not initiate phone fallback themselves.
+- [Family setup](ios/FAMILY-SETUP.md): pairing, the caregiver PIN, messages, call behavior and verification.
+- [Incoming calls](ios/INCOMING-CALLS.md): APNs and CallKit ringing on locked devices.
+- [Incoming telephone calls](ios/INBOUND-PHONE-CALLS.md): per-household numbers, the inbound trunk, blocking and voicemail.
+- [Cell2Jack and backup keypads](ios/CELL2JACK-CALLS.md): the USB driver, the photo phone and diagnostics.
 
-Dialing begins only after the iPad joins the voice room. A signed, short-lived control ticket fixes the destination and limits hang-up access to that call. Client tokens have no SIP calling privileges. End Call, backgrounding, no-answer, and a disconnected recipient all trigger room deletion to release the telephone leg. The client retries a failed hangup and shows **Retry ending phone call** if it cannot confirm cleanup. An offline or terminated iPad cannot guarantee immediate remote hangup; server-side calls have a 45-second ring limit and a 15-minute maximum duration. Voicemail can answer a regular call; answering-machine detection isn't configured.
+Phone fallback needs a LiveKit outbound SIP trunk connected to Twilio, with its ID in `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`. Follow LiveKit's [outbound trunk](https://docs.livekit.io/telephony/making-calls/outbound-trunk/) and [Twilio](https://docs.livekit.io/telephony/start/providers/twilio/) guides. Buying numbers automatically needs an upgraded Twilio account. Telephone, SIP and number charges apply.
 
-Dial requests are never automatically retried. A participant marker blocks sequential replays, and a process-local guard blocks simultaneous submissions to the same process. Distributed atomic SIP dialing locks, durable telephone-call status, abuse rate limits and provider-side spending limits are still needed before public use. Paired devices now have family/role authorization. This remains a trusted-tester prototype. The server forwards the approved phone number to LiveKit and the telephone provider; regular telephone calls do not provide application-level end-to-end encryption.
+## Website
 
-Phone tests use fake LiveKit service clients and **never place real calls**. Device verification still needed with a configured trunk: saving a new phone number without a Vercel edit, failed/ offline save preserving the old contact, caregiver-code errors, approval renewal, answer Porch before 20 seconds (no telephone call), leave Porch unanswered (one telephone call), camera release and mute preservation, cancel during dialing, busy/no-answer/voicemail, hang up from either end, backgrounding, unavailable server, and recovery after a failed hangup.
+The site at helloporch.store has the home page, [features](https://helloporch.store/features), the [pilot](https://helloporch.store/pilot) guide, the [story](https://helloporch.store/story) and the [privacy policy](https://helloporch.store/privacy).
 
-## First-time US test setup
+- **Waitlist.** Both waitlist forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer goes in the subscriber's `porch_who` field. Each request is also logged as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those logs only briefly, so MailerLite is the record.
+- **Demo video.** It defaults to the v2 file on Vercel Blob. To change it, set `NEXT_PUBLIC_DEMO_VIDEO_URL` to the new `.mp4` URL and redeploy. The value is built into the page.
+- **Analytics.** Google Analytics runs only on production deployments.
 
-Start with LiveKit's free **Build** plan and a **Twilio trial**, checking the limits shown in each account. Twilio supports trial SIP calls to verified destinations; verify the US phone you will answer during testing. Keep account upgrades, phone-number purchases, and test traffic within your chosen budget ($10 for this setup). No paid service is enabled by the repository scripts. Account registration, terms acceptance, and phone/email verification must be completed by the account owner.
+## Status
 
-1. Register at [LiveKit Cloud](https://cloud.livekit.io/login), create a project named **Porch Prototype**, and choose Build. Get the project WebSocket URL and an API key/secret. Porch needs rooms and media; it does not need an AI agent.
-2. Enter the URL, API key, and secret directly in the private `.env.local` file. A Porch access code has already been generated there for this checkout; keep it private. Do not send credentials in chat. Run `npm run calls:check` to check LiveKit authentication without starting a call.
-3. Register for a [Twilio trial](https://www.twilio.com/try-twilio). Complete account verification, verify the test recipient's US phone number, and obtain the trial voice number if offered. Stay on the trial while testing; check the account's actual allowances before enabling paid features.
-4. In Twilio, create an **Elastic SIP Trunk** named **Porch Prototype**. In **Termination**, choose a unique URI ending in `.pstn.twilio.com`. Create and attach a **Credential List** with a SIP username/password. Associate the outgoing Twilio voice number with the trunk. These SIP credentials are distinct from Twilio's account Auth Token. Outbound fallback only needs termination. To also receive calls on this number, follow the separate [inbound telephone setup](ios/INBOUND-PHONE-CALLS.md). See [LiveKit's Twilio guide](https://docs.livekit.io/telephony/start/providers/twilio/).
-5. In LiveKit → **Telephony → SIP trunks → Create new trunk → JSON editor → Outbound**, enter this configuration with your actual values, then create the trunk:
+- **Pilot.** Families join by invitation. Bedsides that use Cell2Jack run development builds installed from a Mac, while family devices and other bedsides use TestFlight.
+- **Waiting on Apple.** A TestFlight build with the Cell2Jack driver needs Apple's DriverKit USB entitlement, which was requested on 2026-10-18. App Review access is described in [ios/README.md](ios/README.md#app-review-access-and-resubmission).
+- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). So far, only per-household phone numbers are built. Porch won't open to families beyond the pilot until Apple approves the driver.
 
-```json
-{
-  "name": "Porch Prototype outbound",
-  "address": "YOUR-UNIQUE-TRUNK.pstn.twilio.com",
-  "numbers": ["+1YOUR_TWILIO_NUMBER"],
-  "authUsername": "YOUR_SIP_USERNAME",
-  "authPassword": "YOUR_SIP_PASSWORD"
-}
-```
+## Legacy
 
-6. Put the **LiveKit** outbound trunk ID (`ST_…`, not Twilio's trunk SID) in `.env.local` as `LIVEKIT_SIP_OUTBOUND_TRUNK_ID`. Generate and set a separate `PORCH_CONTACT_SETUP_CODE` for automatic approval of saved phone contacts. The number in the trunk's `numbers` list is the **outgoing caller ID**; the contact in Porch contains the **recipient**. Run `npm run calls:check -- --phone` to verify the trunk exists. This lookup doesn't test provider authentication or place a call.
-7. Run the Porch server at an HTTPS origin accessible from the iPad, using these same calling environment variables, including the separate caregiver setup code. The Mac's `localhost` is not reachable as `localhost` from a physical iPad. Verify a deployed server with `npm run calls:check -- --phone --endpoint=https://YOUR-PORCH-SERVER` before configuring the device. Preview deployment protection must allow the native app to reach the API; a protected login page cannot act as the token endpoint.
-8. Install this branch's iPad build using Xcode (select your connected iPad, Porch scheme, and development signing team), or upload this branch through the existing TestFlight workflow. In **Caregiver mode → Calling connection**, save the Porch server's HTTPS origin and the **Porch access code** from `.env.local`. Also enter the separate caregiver setup code to enable phone contacts. Never enter a LiveKit API secret on the iPad.
-9. Add a Porch contact with room `family-test`. First disable phone fallback: test Voice, then Video, with another device joining `/call` on the server using that room, mode, and Porch access code. Allow microphone/camera permissions as requested. Once those work, enable phone fallback with your verified recipient number, leave the Porch room unanswered for 20 seconds, and answer the normal phone call. End Call should disconnect both ends. Twilio trial calls may play a trial announcement.
+The browser call page at `/call` and its token route, `/api/calls/token`, come from the original prototype. It joined manual LiveKit rooms with a shared `PORCH_CALL_ACCESS_CODE`. The current apps don't use either; they pair through invitations and call through `/api/family`. `npm run calls:check` still asks for that access code. Older builds may still need the `PORCH_PHONE_NUMBERS` allowlist for phone fallback.
 
-Configuration check commands print status only, never API secrets, access codes, tokens, trunk passwords, or destination phone numbers. They perform read-only LiveKit lookups and optionally request an unused join token from Porch; they never dial, publish media, or create SIP trunks. The SIP credentials stay in LiveKit and Twilio, while the Porch server needs its LiveKit API credentials, outbound trunk ID, and separate calling/caregiver codes. Endpoint checking also verifies caregiver authentication with an invalid destination; it never approves a phone number.
+## License
 
-## Waitlist
+Copyright © 2026 Ethan Teng Consulting LLC. All rights reserved.
 
-Both forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer is saved to the subscriber's `porch_who` custom field. Each request is also logged to the function logs as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those only briefly, so MailerLite is the record.
-
-Set these env vars in Vercel:
-
-- `MAILERLITE_API_KEY`: required to enable MailerLite
-- `MAILERLITE_GROUP_ID`: optional group to add subscribers to
-
-## Demo video
-
-The demo video defaults to the v2 file on Vercel Blob. To use a different one, set `NEXT_PUBLIC_DEMO_VIDEO_URL` in Vercel to the new `.mp4` URL and redeploy. The value is built into the page, so changing it has no effect until the next deployment.
+This is proprietary software. The repository is public so it can be viewed, but you get no license to use, copy, modify or distribute it. See [LICENSE](LICENSE). Third-party components keep their own licenses. The app lists the ones it includes in **Settings → Porch → Acknowledgements**.

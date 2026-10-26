@@ -26,6 +26,8 @@ Keep the bedside iPad open and unlocked. Ordinary incoming family calls use Call
 
 Open `ios/Porch.xcodeproj` with Xcode 26 or newer, choose the Porch scheme and an iPhone/iPad running iOS/iPadOS 15+. The LiveKit Swift SDK is pinned to 2.17.0 and PhoneNumberKit to 5.0.9.
 
+The open-source licenses of everything the app bundles are listed in **Settings → Porch → Acknowledgements**. After changing a package version, let Xcode resolve packages, then run `python3 ios/scripts/generate-acknowledgements.py` (it needs internet access) and commit both `Acknowledgements.plist` files. CI fails until the list matches `Package.resolved`.
+
 ```sh
 swift test --package-path ios/PorchCore
 xcodebuild -project ios/Porch.xcodeproj -scheme Porch \

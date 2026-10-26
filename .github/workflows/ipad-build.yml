@@ -166,7 +166,8 @@ jobs:
             -configuration Release -destination 'generic/platform=iOS' \
             -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
           test ! -d ios/build/device/Build/Products/Release-iphoneos/PorchFamily.app/SystemExtensions
-          test ! -d ios/build/device/Build/Products/Release-iphoneos/PorchFamily.app/Settings.bundle
+          test -f ios/build/device/Build/Products/Release-iphoneos/PorchFamily.app/Settings.bundle/Acknowledgements.plist
+          if grep -rqi cell2jack ios/build/device/Build/Products/Release-iphoneos/PorchFamily.app/Settings.bundle; then exit 1; fi
   family:
     name: Family app tests
     runs-on: macos-26

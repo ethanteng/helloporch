@@ -275,7 +275,7 @@ final class AddPhoneGuestViewController: CaregiverFormViewController, CNContactP
         let contacts = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
         contacts.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
         call.addTarget(self, action: #selector(dial), for: .touchUpInside)
-        form.addArrangedSubview(section("Who should join the call?", detail: "Porch calls this number and adds it to your call. Everyone on the call hears it ring. The phone hangs up if you leave the call, so it is never left alone with the bedside. Only you see the number.", views: [
+        form.addArrangedSubview(section("Who should join the call?", detail: "Porch calls this number and adds them to your call. If you hang up, their call ends too.", views: [
             field(name, title: "Who are you calling?", placeholder: "For example, Bank", helper: "The bedside shows this name."),
             field(phone, title: "Their phone number", placeholder: "(800) 555-0123", helper: "US and Canadian numbers, including toll-free numbers."),
             contacts, call,
