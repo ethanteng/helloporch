@@ -10,7 +10,7 @@ import styles from "./pilot.module.css";
 export const metadata: Metadata = {
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "What a pilot family needs for Porch: an iPad, a stand, a USB hub and a keypad, the two ways to get set up, and how to install the app with TestFlight.",
+    "What a pilot family needs for Porch: an iPad, a stand, a USB hub and a keypad, the two keypads to choose from, and how to set it all up with TestFlight.",
 };
 
 type Option = {
@@ -22,12 +22,33 @@ type Option = {
   cons: string[];
 };
 
-// The two setups. The big-button phone needs a USB driver Apple hasn't approved for TestFlight yet,
-// so I install that version on each iPad myself until it does.
+// The two keypads. Families install Porch from TestFlight either way; the big-button phone also needs
+// Porch's USB driver turned on, and the driver only runs on M-series iPads.
 const options: Option[] = [
   {
+    id: "big-button-phone",
+    kicker: "For newer iPads",
+    title: "Big-button phone",
+    facts: [
+      ["iPad", "One with an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later."],
+      ["Setup", "You install Porch with TestFlight, using an invitation from me, then turn on its USB driver. The steps are below."],
+      ["Updates", "Arrive on their own through TestFlight."],
+      ["Cost", "About $114 for the stand, hub, Cell2Jack and phone."],
+    ],
+    pros: [
+      "Feels like the phone they’ve used for years.",
+      "Each button has a photo, so they can see who they’re calling.",
+      "Big buttons are easier to press with shaky hands.",
+    ],
+    cons: [
+      "Needs a newer iPad, and a few more steps to set up.",
+      "They lift the receiver to press a photo, but the handset carries no sound: they talk and listen through the iPad.",
+      "More parts and cables, for about $35 more.",
+    ],
+  },
+  {
     id: "number-pad",
-    kicker: "Set it up yourself",
+    kicker: "For almost any iPad",
     title: "Touchscreen and number pad",
     facts: [
       ["iPad", "Any iPad with iPadOS 15 or later. If it has a Lightning port instead of USB-C, let me know and I’ll suggest an adapter."],
@@ -37,34 +58,13 @@ const options: Option[] = [
     ],
     pros: [
       "Works with almost any spare iPad, including older ones.",
-      "You can start right away, with nothing to ship.",
+      "No driver to turn on, so there are fewer steps to set up.",
       "Costs less, with fewer cables.",
     ],
     cons: [
       "The keys show numbers, not faces, so they need to know who each number calls.",
       "It looks like a computer accessory, not a phone, and has extra keys that don’t call anyone.",
       "The keys are small for shaky hands.",
-    ],
-  },
-  {
-    id: "big-button-phone",
-    kicker: "I set it up for you",
-    title: "Big-button phone",
-    facts: [
-      ["iPad", "One with an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later."],
-      ["Setup", "I install a special version of Porch that works with the phone. In the Bay Area, I’ll come to you. Elsewhere, mail me the iPad and I’ll send it back ready to go."],
-      ["Updates", "Come from me until Apple approves our app. After that, they arrive on their own."],
-      ["Cost", "About $114 for the stand, hub, Cell2Jack and phone."],
-    ],
-    pros: [
-      "Feels like the phone they’ve used for years.",
-      "Each button has a photo, so they can see who they’re calling.",
-      "Big buttons are easier to press with shaky hands.",
-    ],
-    cons: [
-      "Needs a newer iPad, and my help to set it up.",
-      "The handset carries no sound. If they pick it up out of habit, they still talk and listen through the iPad.",
-      "More parts and cables, for about $35 more.",
     ],
   },
 ];
@@ -82,8 +82,8 @@ export default function PilotPage() {
               Getting ready for <em>the Porch pilot.</em>
             </h1>
             <p className={styles.lede}>
-              Thank you for helping me test Porch. Here’s how it fits together, the two ways to set it up, and
-              what you’ll need.
+              Thank you for helping me test Porch. Here’s how it fits together, the two keypads to choose from,
+              and what you’ll need to set it all up yourself.
             </p>
           </header>
 
@@ -137,10 +137,10 @@ export default function PilotPage() {
 
           <section className={styles.section} aria-labelledby="options-title">
             <div className={styles.sectionIntro}>
-              <h2 id="options-title">Two ways to set it up</h2>
+              <h2 id="options-title">Two keypads to choose from</h2>
               <p>
-                Calls, drop-ins and messages work the same either way. The difference is what your family
-                member presses, and who installs Porch on the iPad.
+                Calls, drop-ins and messages work the same either way, and you install Porch yourself with
+                either one. The difference is what your family member presses, and which iPads it works with.
               </p>
             </div>
             <div className={styles.options}>
@@ -198,24 +198,24 @@ export default function PilotPage() {
               ))}
             </div>
             <div className={styles.keypads}>
-              <section className={styles.keypadGroup} aria-labelledby="number-pad-kit">
-                <h3 id="number-pad-kit">
-                  Number pad <span>· $30</span>
-                </h3>
-                <p>Plugs straight into the hub.</p>
-                <div className={styles.groupParts}>
-                  {numberPad.map((part) => (
-                    <PartCard key={part.id} part={part} nested />
-                  ))}
-                </div>
-              </section>
               <section className={styles.keypadGroup} aria-labelledby="phone-kit">
                 <h3 id="phone-kit">
-                  Or the big-button phone <span>· $65 for both</span>
+                  Big-button phone <span>· $65 for both</span>
                 </h3>
                 <p>You need both: the phone plugs into the Cell2Jack, and the Cell2Jack plugs into the hub.</p>
                 <div className={`${styles.groupParts} ${styles.groupPartsTwo}`}>
                   {phoneKit.map((part) => (
+                    <PartCard key={part.id} part={part} nested />
+                  ))}
+                </div>
+              </section>
+              <section className={styles.keypadGroup} aria-labelledby="number-pad-kit">
+                <h3 id="number-pad-kit">
+                  Or a number pad <span>· $30</span>
+                </h3>
+                <p>Plugs straight into the hub.</p>
+                <div className={styles.groupParts}>
+                  {numberPad.map((part) => (
                     <PartCard key={part.id} part={part} nested />
                   ))}
                 </div>
@@ -230,16 +230,16 @@ export default function PilotPage() {
               <p>
                 Porch isn’t on the App Store yet, so it installs with{" "}
                 <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a>, Apple’s free app for
-                trying apps before they’re released. Family members who want the Porch app on their iPhone use
-                it, and so does the iPad if you’re setting it up yourself.
+                trying apps before they’re released. You use it to install Porch on the iPad, and so does each
+                family member who wants the Porch app on their iPhone.
               </p>
             </div>
             <ol className={styles.install}>
               <li>
                 <h3>Get TestFlight.</h3>
                 <p>
-                  Install it from the App Store on the iPhone of each family member who wants the Porch app, and
-                  on the iPad if you’re setting it up yourself.
+                  Install it from the App Store on the iPad, and on the iPhone of each family member who wants
+                  the Porch app.
                 </p>
               </li>
               <li>
@@ -260,13 +260,52 @@ export default function PilotPage() {
                 <h3>Set up the iPad.</h3>
                 <p>
                   I’ll send a private link that makes the iPad your family’s Porch. Then you choose a caregiver
-                  PIN and invite each person from inside the app. If I’m setting up your iPad, we’ll do this
-                  part together.
+                  PIN and invite each person from inside the app.
                 </p>
               </li>
             </ol>
             <p className={styles.note}>
               Turn on automatic updates in TestFlight, because each test version stops working after 90 days.
+            </p>
+          </section>
+
+          <section className={styles.section} aria-labelledby="phone-setup-title">
+            <div className={styles.sectionIntro}>
+              <h2 id="phone-setup-title">Connecting the big-button phone</h2>
+              <p>
+                Skip this if you chose the number pad. Once Porch is set up on the iPad, connecting the phone
+                takes a few minutes.
+              </p>
+            </div>
+            <ol className={styles.install}>
+              <li>
+                <h3>Plug it in.</h3>
+                <p>Plug the phone into the Cell2Jack, and the Cell2Jack into the hub.</p>
+              </li>
+              <li>
+                <h3>Turn on the driver.</h3>
+                <p>
+                  Open the iPad’s Settings app, find <strong>Porch</strong>, and turn on its USB driver. This lets
+                  Porch read the phone’s buttons.
+                </p>
+              </li>
+              <li>
+                <h3>Replug the Cell2Jack.</h3>
+                <p>Unplug the Cell2Jack for ten seconds, then plug it back in.</p>
+              </li>
+              <li>
+                <h3>Turn on the keypad in Porch.</h3>
+                <p>
+                  In Porch’s caregiver mode, open <strong>Advanced</strong> and turn on{" "}
+                  <strong>Use Cell2Jack phone keypad</strong>. When <strong>Phone keypad ready</strong> appears
+                  under Call someone, lift the receiver and press a photo to try it.
+                </p>
+              </li>
+            </ol>
+            <p className={styles.note}>
+              The keys only work with the receiver lifted. The Cell2Jack may say the phone isn’t connected when
+              you pick up; pressing a photo stops it. Putting the receiver back ends the call, like a regular
+              phone, unless you turn off <strong>Hang up when the receiver is put back</strong> in Advanced.
             </p>
           </section>
 
