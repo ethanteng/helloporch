@@ -476,8 +476,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now;
-        if (takesAvailability(me, input.launch, input.sequence)) me.available = input.available;
-        noteAttendance(house, me, input.attendedSeconds, now);
+        // Same ordering as availability. A poll that left earlier can arrive after a newer one, and its
+        // attendedSeconds were counted when it was sent.
+        if (takesAvailability(me, input.launch, input.sequence)) {
+          me.available = input.available;
+          noteAttendance(house, me, input.attendedSeconds, now);
+        }
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.

@@ -207,9 +207,10 @@ export function takesAvailability(member: Member, launch: unknown, sequence: unk
 export function attendanceShared(house: Household) { return house.shareAttendance !== false; }
 /** The bedside reports, with each poll, how many seconds ago it last noticed someone at the iPad: a key pressed, the
  * screen touched or, if a caregiver turned it on, a face its camera saw. Seconds ago, not a time, so the iPad's clock
- * doesn't matter. Polls can arrive out of order, so the newest time is kept. Anything else, or a report while sharing
- * is off, is ignored rather than failing the poll. So is a time from before sharing was turned back on: an iPad that
- * was offline meanwhile never heard it was off. */
+ * doesn't matter. Only the newest poll may call this: `secondsAgo` was counted at send time, so a poll that arrives
+ * late would otherwise move the time forward. Among polls that do count, the newest time is kept. Anything else, or a
+ * report while sharing is off, is ignored rather than failing the poll. So is a time from before sharing was turned
+ * back on: an iPad that was offline meanwhile never heard it was off. */
 export function noteAttendance(house: Household, member: Member, secondsAgo: unknown, now: number) {
   if (!attendanceShared(house) || member.role !== "bedside" || !Number.isSafeInteger(secondsAgo) || (secondsAgo as number) < 0 || (secondsAgo as number) > 30 * 86400) return;
   const at = now - (secondsAgo as number);

@@ -473,6 +473,22 @@ test('family see when someone was last noticed at the bedside iPad, and only the
  assert.equal(own.bedsideAttendedAt,undefined); assert.equal(own.people[0].attendedAt,undefined);
 });
 
+test('a bedside poll that arrives late cannot make someone look newly at the iPad',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ const launch=randomUUID();
+ const seen=async()=>(await f.json('poll',{available:true},family.credential)).state.bedsideAttendedAt;
+ const first=await f.json('poll',{available:true,attendedSeconds:50,launch,sequence:1},bedside.credential);
+ const at=first.state.serverTime-50;
+ assert.equal(await seen(),at);
+ f.advance(40);
+ await f.json('poll',{available:true,attendedSeconds:90,launch,sequence:3},bedside.credential);
+ const kept=await seen();
+ assert.equal(kept,at);
+ f.advance(80);
+ await f.json('poll',{available:true,attendedSeconds:0,launch,sequence:2},bedside.credential);
+ assert.equal(await seen(),kept,'a poll the server already passed never moves the time forward');
+});
+
 test('a caregiver can stop family seeing when someone is at the iPad, which forgets the last time',async()=>{
  const f=fixture(),{bedside,family}=await f.setup();
  const seen=async()=>(await f.json('poll',{available:true},family.credential)).state.bedsideAttendedAt;
