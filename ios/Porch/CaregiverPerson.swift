@@ -26,7 +26,6 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         super.viewDidLoad()
         content.axis = .vertical; content.spacing = 28
         form.addArrangedSubview(content)
-        nameField.autocapitalizationType = .words
         nameField.accessibilityIdentifier = "person.name"
         nameField.addAction(UIAction { [weak self] _ in self?.editedName = self?.nameField.text }, for: .editingChanged)
         NotificationCenter.default.addObserver(self, selector: #selector(changed), name: .porchCaregiverChanged, object: admin)
@@ -162,7 +161,10 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         let save = PorchStyle.button("Save", symbol: "checkmark")
         save.accessibilityLabel = "Save name"
         save.addAction(UIAction { [weak self] _ in self?.saveName() }, for: .touchUpInside)
-        return group(rows: [listRow(field(nameField, title: "Name", placeholder: placeholder), trailing: FamilyAdminViewController.singleLine(save), alignedToBottom: true)])
+        let name = field(nameField, title: "Name", placeholder: placeholder)
+        // `field` resets capitalization, including on every redraw of this page.
+        nameField.autocapitalizationType = .words
+        return group(rows: [listRow(name, trailing: FamilyAdminViewController.singleLine(save), alignedToBottom: true)])
     }
     private func saveName() {
         view.endEditing(true)

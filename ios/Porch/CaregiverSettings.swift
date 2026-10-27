@@ -473,9 +473,10 @@ final class HouseholdNameViewController: CaregiverFormViewController {
         super.viewDidLoad(); title = "Name"
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
         name.text = admin?.current?.householdName
-        name.autocapitalizationType = .words
         name.accessibilityIdentifier = "caregiver.householdName"
         form.addArrangedSubview(field(name, title: "Who is this Porch for?", placeholder: "Your loved one"))
+        // `field` resets capitalization. The name family see is capitalized word by word.
+        name.autocapitalizationType = .words
     }
     @objc private func save() {
         view.endEditing(true)

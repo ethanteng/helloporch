@@ -154,7 +154,6 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         super.viewDidLoad(); title = "Settings"
         content.axis = .vertical; content.spacing = 24
         form.addArrangedSubview(content)
-        nameField.autocapitalizationType = .words
         nameField.textContentType = .name
         nameField.accessibilityIdentifier = "profile.name"
         nameField.addAction(UIAction { [weak self] _ in self?.editedName = self?.nameField.text }, for: .editingChanged)
@@ -227,7 +226,10 @@ final class FamilyProfileViewController: CaregiverFormViewController {
             self.saveProfile(["name": self.nameField.text ?? ""])
         }, for: .touchUpInside)
         let invited = me.invitedName ?? me.name
-        let name = listRow(field(nameField, title: "Name", placeholder: invited), trailing: FamilyAdminViewController.singleLine(save), alignedToBottom: true)
+        let name = field(nameField, title: "Name", placeholder: invited)
+        // `field` resets capitalization, including on every redraw of this page.
+        nameField.autocapitalizationType = .words
+        let nameRow = listRow(name, trailing: FamilyAdminViewController.singleLine(save), alignedToBottom: true)
         // A caregiver's choice is what the bedside shows, which would otherwise be a surprise.
         let chosen = me.override
         let note: String?
@@ -237,7 +239,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         case (nil, true): note = "A caregiver chose your photo. \(lovedOne) sees that photo."
         default: note = nil
         }
-        content.addArrangedSubview(group(detail: note, rows: [name]))
+        content.addArrangedSubview(group(detail: note, rows: [nameRow]))
     }
     /// Saves a new name or photo: a photo is uploaded first, and NSNull removes it.
     private func saveProfile(_ change: [String: Any]) {

@@ -79,13 +79,14 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         selectedFamilyID = initialContact?.familyMemberID
         invitationID = initialContact?.invitationID
         memberName = initialContact?.memberName
-        nameField.autocapitalizationType = .words
         phoneField.text = initialContact?.phoneNumber ?? (initialContact?.nativeCall == nil ? initialContact.flatMap { try? PhoneNumberNormalization.e164($0.address) } : nil)
         phoneField.keyboardType = .phonePad
         phoneField.textContentType = .telephoneNumber
         modeControl.selectedSegmentIndex = initialContact?.nativeCall?.mode == .video ? 1 : 0
         modeControl.accessibilityLabel = "Calls start as"
         nameGroup = field(nameField, title: "Name", placeholder: "For example, David")
+        // `field` resets capitalization; a person's name is capitalized word by word.
+        nameField.autocapitalizationType = .words
         chooseContactButton.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
         configureFamilyLinks()
         familyLink.addTarget(self, action: #selector(invitePerson), for: .touchUpInside)
