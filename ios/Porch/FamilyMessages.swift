@@ -270,7 +270,7 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
                 if let poster = self.recording?.poster ?? recording.poster { MessagePosters.save(poster, for: sent.id) }
                 try? FileManager.default.removeItem(at: recording.file)
                 self.recording = nil; self.phase = .idle
-                let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch. See when it's played in Your messages.", preferredStyle: .alert)
+                let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch. See when it's played in Messages to \(self.recipient).", preferredStyle: .alert)
                 done.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in self?.navigationController?.popViewController(animated: true) })
                 self.present(done, animated: true)
             } catch {
@@ -298,7 +298,9 @@ final class SentMessagesViewController: CaregiverFormViewController {
     private var opening = false
     private var posterTask: Task<Void, Never>?
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Your messages"
+        super.viewDidLoad()
+        let state = FamilyCoordinator.shared.state
+        title = "Messages to \(state?.people.first { $0.role == .bedside }?.name ?? state?.householdName ?? "your loved one")"
         list.axis = .vertical; list.spacing = 20
         form.addArrangedSubview(list)
         hideKeyboardControl()

@@ -144,7 +144,6 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         let paired: Bool
         /// This phone's own details the page shows. Being online or able to ring isn't one of them.
         let name: String?, invitedName: String?, profile: FamilyProfile?, override: FamilyProfile?, caregiver: Bool?
-        let household: String?
         let lovedOne: String
         let photo: Bool
     }
@@ -188,7 +187,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
             FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: credential)
         }
         let next = Shown(paired: paired, name: me?.name, invitedName: me?.invitedName, profile: me?.profile, override: me?.override, caregiver: me?.caregiver,
-                         household: FamilyCoordinator.shared.state?.householdName, lovedOne: lovedOne, photo: photo)
+                         lovedOne: lovedOne, photo: photo)
         guard next != shown else { return }
         shown = next
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
@@ -222,19 +221,15 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         let change = PorchStyle.button(photo == nil ? "Add a photo" : "Change photo", filled: false)
         change.accessibilityIdentifier = "profile.choosePhoto"
         chooser.attach(to: change)
-        var header: [UIView] = [FamilyAdminViewController.avatar(me.profile?.name ?? me.name, photo: photo, size: 96), change]
+        var actions = [change]
         if photo != nil {
             let remove = PorchStyle.button("Remove photo", filled: false)
             remove.configuration?.baseForegroundColor = .systemRed
             remove.addAction(UIAction { [weak self] _ in self?.saveProfile(["photo": NSNull()]) }, for: .touchUpInside)
-            header.append(remove)
+            actions.append(remove)
         }
-        let household = PorchStyle.label(FamilyCoordinator.shared.state?.householdName ?? "", size: 15)
-        household.textAlignment = .center
-        header.append(household)
-        let top = UIStackView(arrangedSubviews: header)
-        top.axis = .vertical; top.alignment = .center; top.spacing = 2
-        top.setCustomSpacing(10, after: header[0])
+        let top = UIStackView(arrangedSubviews: [FamilyAdminViewController.avatar(me.profile?.name ?? me.name, photo: photo, size: 96), PorchStyle.photoActions(actions)])
+        top.axis = .vertical; top.alignment = .center; top.spacing = 10
         content.addArrangedSubview(top)
         nameField.text = editedName ?? me.profile?.name
         let save = PorchStyle.button("Save", symbol: "checkmark")

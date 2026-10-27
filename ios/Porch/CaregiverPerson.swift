@@ -93,8 +93,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         let change = PorchStyle.button(photo == nil ? "Add photo" : "Change photo", filled: false)
         change.accessibilityIdentifier = "person.choosePhoto"
         chooser.attach(to: change)
-        var views: [UIView] = [FamilyAdminViewController.avatar(subject.name, photo: photo, size: 96), change]
-        if let restore = restorePhoto(subject, admin) { views.append(restore) }
+        var views: [UIView] = [FamilyAdminViewController.avatar(subject.name, photo: photo, size: 96), PorchStyle.photoActions([change] + [restorePhoto(subject, admin)].compactMap { $0 })]
         let status: String
         if let member = subject.member { status = member.id == admin.myID ? "\(member.shortStatus) · This phone" : member.shortStatus }
         else { status = invitePending(subject, admin) ? "Invite sent" : "Not on Porch" }
