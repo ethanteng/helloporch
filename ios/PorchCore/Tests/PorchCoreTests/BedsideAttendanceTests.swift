@@ -41,9 +41,11 @@ final class BedsideAttendanceTests: XCTestCase {
         XCTAssertEqual(tracker.secondsSince, 41)
         tracker.noticed()
         XCTAssertEqual(tracker.secondsSince, 0)
-        // A clock set back can't make it sound like the future.
+        // A clock set back must not be reported as someone just arriving.
         now -= 600
-        XCTAssertEqual(tracker.secondsSince, 0)
+        XCTAssertNil(tracker.secondsSince)
+        tracker.noticed()
+        XCTAssertEqual(tracker.secondsSince, 0, "a touch after the clock changes still counts")
         tracker.forget()
         XCTAssertNil(tracker.secondsSince, "nothing from while sharing was off")
     }

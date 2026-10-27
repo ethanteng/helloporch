@@ -53,7 +53,13 @@ public final class AttendanceTracker {
     public func noticed() { noticedAt = clock() }
     /// While a caregiver has sharing off, so turning it back on can't report someone who was there meanwhile.
     public func forget() { noticedAt = nil }
-    /// Whole seconds since then, for the bedside's poll. Nil until someone has been noticed. Seconds ago rather than a
-    /// time, so a wrong clock on the iPad doesn't matter.
-    public var secondsSince: Int? { noticedAt.map { max(0, Int(clock().timeIntervalSince($0))) } }
+    /// Whole seconds since then, for the bedside's poll. Nil until someone has been noticed, and nil when the clock has
+    /// jumped back: reporting 0 would tell family someone just arrived. Seconds ago rather than a time, so a clock that
+    /// is merely wrong, but still running forward, doesn't matter.
+    public var secondsSince: Int? {
+        guard let noticedAt else { return nil }
+        let elapsed = clock().timeIntervalSince(noticedAt)
+        guard elapsed >= 0 else { return nil }
+        return Int(elapsed)
+    }
 }
