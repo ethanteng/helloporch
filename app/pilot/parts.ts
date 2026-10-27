@@ -47,7 +47,7 @@ export const shared: Part[] = [
   },
 ];
 
-// The keypad for the set-it-up-yourself option.
+// The keypad for the touchscreen-and-number-pad option.
 export const numberPad: Part[] = [
   {
     id: "keypad",
@@ -63,7 +63,7 @@ export const numberPad: Part[] = [
   },
 ];
 
-// The keypad for the option I set up: the phone, and the adapter that connects it.
+// The keypad for the big-button phone option: the phone, and the adapter that connects it.
 export const phoneKit: Part[] = [
   {
     id: "phone",

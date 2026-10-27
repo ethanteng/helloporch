@@ -262,7 +262,7 @@
   background: var(--honey);
 }
 
-.keypadGroup:last-child {
+.keypadGroup:first-child {
   grid-column: span 2;
 }
 
@@ -293,7 +293,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* ---------- Two ways to set it up ---------- */
+/* ---------- Two keypads to choose from ---------- */
 /* The two panels, with an "Or" badge between them. */
 .options {
   display: grid;
@@ -597,7 +597,7 @@
   }
 
   .keypadGroup,
-  .keypadGroup:last-child {
+  .keypadGroup:first-child {
     display: flex;
     flex-direction: column;
     grid-column: auto;
