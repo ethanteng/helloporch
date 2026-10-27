@@ -151,11 +151,13 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             }
             people.addArrangedSubview(section(person.name, views: views))
         }
-        let received = PorchStyle.button("Messages from \(from)", symbol: "envelope.open", filled: false)
+        // One coming in, one going out, so they read as a pair.
+        let received = PorchStyle.button("Messages from \(from)", symbol: "tray.and.arrow.down", filled: false)
         received.accessibilityIdentifier = "family.receivedMessages"
         received.addAction(UIAction { [weak self] _ in self?.openReceivedMessages() }, for: .touchUpInside)
         people.addArrangedSubview(received)
-        let sent = PorchStyle.button("Your messages", symbol: "tray.full", filled: false)
+        let sent = PorchStyle.button("Messages to \(from)", symbol: "tray.and.arrow.up", filled: false)
+        sent.accessibilityIdentifier = "family.sentMessages"
         sent.addAction(UIAction { [weak self] _ in self?.navigationController?.pushViewController(SentMessagesViewController(), animated: true) }, for: .touchUpInside)
         people.addArrangedSubview(sent)
     }
