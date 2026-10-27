@@ -16,6 +16,14 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return "Español"
         }
     }
+    /// The name in caregiver settings, which also says which language the Chinese choices speak.
+    public var choiceLabel: String {
+        switch self {
+        case .traditionalChinese, .simplifiedChinese: return "\(displayName) · Mandarin"
+        case .cantonese: return "\(displayName) · Cantonese"
+        case .english, .spanish: return displayName
+        }
+    }
     public var locale: Locale {
         switch self {
         case .english: return Locale(identifier: "en_US")
@@ -85,7 +93,7 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         "Finish Porch setup": "请完成 Porch 设置",
         "Open caregiver mode and invite this person to Porch or add their phone number.": "请照护者邀请这位联系人加入 Porch，或添加电话号码。",
         "Porch isn't ready": "Porch 尚未准备好",
-        "Check Family & drop-in in caregiver mode, then try again.": "请照护者检查家人与自动接听设置，再试一次。",
+        "Check People and Drop-in in caregiver mode, then try again.": "请照护者检查家人与自动接听设置，再试一次。",
         "Couldn't call %@": "无法打给%@", "Please ask your caregiver for help, then try again.": "请照护者协助检查后，再试一次。",
         "OK": "好", "Connecting…": "正在连接…", "Your camera preview": "您的摄像头画面",
         "Voice call\nCamera is off": "语音通话\n摄像头已关闭", "Waiting for video": "正在等待视频画面",
@@ -155,7 +163,7 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         "Finish Porch setup": "請完成 Porch 設定",
         "Open caregiver mode and invite this person to Porch or add their phone number.": "請照顧者邀請呢位聯絡人加入 Porch，或者加入電話號碼。",
         "Porch isn't ready": "Porch 仲未準備好",
-        "Check Family & drop-in in caregiver mode, then try again.": "請照顧者檢查家人同自動接聽設定，再試一次。",
+        "Check People and Drop-in in caregiver mode, then try again.": "請照顧者檢查家人同自動接聽設定，再試一次。",
         "Couldn't call %@": "打唔到畀%@", "Please ask your caregiver for help, then try again.": "請照顧者幫手檢查，再試一次。",
         "OK": "好", "Connecting…": "連線中…", "Your camera preview": "您嘅鏡頭畫面",
         "Voice call\nCamera is off": "語音通話\n鏡頭已關閉", "Waiting for video": "等緊視像畫面",
@@ -225,7 +233,7 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         "Finish Porch setup": "Complete la configuración de Porch",
         "Open caregiver mode and invite this person to Porch or add their phone number.": "Pida a su cuidador que invite a esta persona a Porch o añada su número de teléfono.",
         "Porch isn't ready": "Porch aún no está listo",
-        "Check Family & drop-in in caregiver mode, then try again.": "Pida a su cuidador que revise los ajustes de familia y conexión automática e inténtelo de nuevo.",
+        "Check People and Drop-in in caregiver mode, then try again.": "Pida a su cuidador que revise los ajustes de familia y conexión automática e inténtelo de nuevo.",
         "Couldn't call %@": "No se pudo llamar a %@", "Please ask your caregiver for help, then try again.": "Pida ayuda a su cuidador e inténtelo de nuevo.",
         "OK": "Aceptar", "Connecting…": "Conectando…", "Your camera preview": "Vista de su cámara",
         "Voice call\nCamera is off": "Llamada de voz\nCámara apagada", "Waiting for video": "Esperando el vídeo",
@@ -296,7 +304,7 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         "Finish Porch setup": "請完成 Porch 設定",
         "Open caregiver mode and invite this person to Porch or add their phone number.": "請照顧者邀請這位聯絡人加入 Porch，或新增電話號碼。",
         "Porch isn't ready": "Porch 尚未準備好",
-        "Check Family & drop-in in caregiver mode, then try again.": "請照顧者檢查家人與自動接聽設定，再試一次。",
+        "Check People and Drop-in in caregiver mode, then try again.": "請照顧者檢查家人與自動接聽設定，再試一次。",
         "Couldn't call %@": "無法打給%@", "Please ask your caregiver for help, then try again.": "請照顧者協助檢查後，再試一次。",
         "OK": "好", "Connecting…": "正在連線…", "Your camera preview": "您的鏡頭畫面",
         "Voice call\nCamera is off": "語音通話\n鏡頭已關閉", "Waiting for video": "正在等待視訊畫面",

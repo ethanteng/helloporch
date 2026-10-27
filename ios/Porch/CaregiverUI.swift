@@ -58,6 +58,16 @@ enum PorchStyle {
         return button
     }
 
+    static func segmented(_ items: [String]) -> UISegmentedControl {
+        let control = UISegmentedControl(items: items)
+        control.selectedSegmentTintColor = accent
+        control.backgroundColor = page
+        control.setTitleTextAttributes([.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 16, weight: .medium)], for: .normal)
+        control.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 16, weight: .semibold)], for: .selected)
+        control.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        return control
+    }
+
     static func navigation(_ root: UIViewController) -> UINavigationController {
         let nav = UINavigationController(rootViewController: root)
         nav.overrideUserInterfaceStyle = .light
@@ -210,9 +220,16 @@ final class PorchListRow: UIControl {
         addAction(UIAction { _ in action() }, for: .touchUpInside)
     }
     required init?(coder: NSCoder) { fatalError("Use init(_:label:chevron:action:)") }
-    override var isHighlighted: Bool { didSet { backgroundColor = isHighlighted ? PorchStyle.page : nil } }
-    override var isEnabled: Bool {
-        didSet { alpha = isEnabled ? 1 : 0.5; accessibilityTraits = isEnabled ? .button : [.button, .notEnabled] }
+    /// The page showing beside a list, such as the caregiver sidebar on an iPad.
+    var isCurrent = false { didSet { update() } }
+    override var isHighlighted: Bool { didSet { update() } }
+    override var isEnabled: Bool { didSet { alpha = isEnabled ? 1 : 0.5; update() } }
+    private func update() {
+        backgroundColor = isHighlighted ? PorchStyle.page : isCurrent ? PorchStyle.accent.withAlphaComponent(0.12) : nil
+        var traits: UIAccessibilityTraits = .button
+        if !isEnabled { traits.insert(.notEnabled) }
+        if isCurrent { traits.insert(.selected) }
+        accessibilityTraits = traits
     }
 }
 
@@ -309,7 +326,8 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     func setKeyboardControlVisible(_ visible: Bool) { keyboardControlsEnabled = visible; updateKeyboardUI() }
 
     func field(_ field: UITextField, title: String, placeholder: String, helper: String? = nil) -> UIView {
-        if !fields.contains(where: { $0 === field }) { fields.append(field) }
+        // Pages that redraw pass the same field again, which keeps the one height constraint it got the first time.
+        if !fields.contains(where: { $0 === field }) { fields.append(field); field.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true }
         field.delegate = self
         field.accessibilityLabel = title
         field.accessibilityIdentifier = field.accessibilityIdentifier ?? title
@@ -328,7 +346,6 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         field.rightViewMode = .always
         field.font = .preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
-        field.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
         field.returnKeyType = .next
         field.inputView = useTouchKeyboard ? emptyInput : nil
         // Preserve the native assistant bar rather than stripping its controls.
@@ -365,10 +382,20 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         return card
     }
 
-    /// A heading over one card of compact rows, for screens where several settings belong together.
-    func group(_ title: String, footer: String? = nil, rows: [UIView]) -> UIView {
-        let heading = PorchStyle.label(title, size: 20, color: PorchStyle.ink, weight: .semibold)
-        heading.accessibilityTraits = .header
+    /// A heading, and what it's about when that isn't plain, over the rows or views it introduces.
+    func heading(_ title: String?, detail: String? = nil) -> [UIView] {
+        var views: [UIView] = []
+        if let title {
+            let heading = PorchStyle.label(title, size: 20, color: PorchStyle.ink, weight: .semibold)
+            heading.accessibilityTraits = .header
+            views.append(heading)
+        }
+        if let detail { views.append(PorchStyle.label(detail, size: 15)) }
+        return views
+    }
+
+    /// One card of compact rows, under an optional heading, for settings that belong together.
+    func group(_ title: String? = nil, detail: String? = nil, rows: [UIView]) -> UIView {
         let card = UIStackView()
         card.axis = .vertical
         card.backgroundColor = PorchStyle.surface
@@ -382,11 +409,85 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
             }
             card.addArrangedSubview(row)
         }
-        let stack = UIStackView(arrangedSubviews: [heading, card] + (footer.map { [PorchStyle.label($0, size: 15)] } ?? []))
+        let introduction = heading(title, detail: detail)
+        let stack = UIStackView(arrangedSubviews: introduction + [card])
         stack.axis = .vertical
         stack.spacing = 10
-        stack.setCustomSpacing(8, after: card)
+        if title != nil, detail != nil, let first = introduction.first { stack.setCustomSpacing(4, after: first) }
         return stack
+    }
+
+    /// A row that opens more: its title, what it's set to now, and a chevron.
+    func linkRow(_ title: String, value: String? = nil, symbol: String? = nil, action: @escaping () -> Void) -> PorchListRow {
+        var views: [UIView] = []
+        if let symbol {
+            let icon = UIImageView(image: UIImage(systemName: symbol)); icon.tintColor = PorchStyle.accent
+            icon.contentMode = .scaleAspectFit
+            icon.setContentHuggingPriority(.required, for: .horizontal)
+            icon.widthAnchor.constraint(equalToConstant: 26).isActive = true
+            views.append(icon)
+        }
+        views.append(PorchStyle.label(title, size: 18, color: PorchStyle.ink))
+        if let value {
+            let label = PorchStyle.label(value, size: 17)
+            label.numberOfLines = 1
+            label.setContentHuggingPriority(.required, for: .horizontal)
+            label.setContentCompressionResistancePriority(.required, for: .horizontal)
+            views.append(label)
+        }
+        return PorchListRow(views, label: value.map { "\(title), \($0)" } ?? title, action: action)
+    }
+
+    /// A number set with − and +, `value` showing it beside them.
+    func stepperRow(_ title: String, value: UILabel, _ stepper: UIStepper) -> UIView {
+        stepper.accessibilityLabel = title
+        stepper.accessibilityValue = value.text
+        stepper.setContentCompressionResistancePriority(.required, for: .horizontal)
+        value.font = PorchStyle.font(18, weight: .medium)
+        value.textColor = PorchStyle.ink
+        value.numberOfLines = 1
+        value.setContentHuggingPriority(.required, for: .horizontal)
+        value.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return listRow([PorchStyle.label(title, size: 18, color: PorchStyle.ink), value, stepper])
+    }
+
+    /// A full-width button row in a `group` card, such as Invite someone.
+    func actionRow(_ title: String, symbol: String? = nil, destructive: Bool = false, action: (() -> Void)? = nil) -> UIButton {
+        let button = PorchStyle.button(title, symbol: symbol, filled: false)
+        button.contentHorizontalAlignment = .leading
+        button.configuration?.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+        if destructive { button.configuration?.baseForegroundColor = .systemRed }
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+        if let action { button.addAction(UIAction { _ in action() }, for: .touchUpInside) }
+        return button
+    }
+
+    /// A plain text link, for things that matter less than the settings above them.
+    func textLink(_ title: String, size: CGFloat = 16, action: @escaping () -> Void) -> UIButton {
+        let button = UIButton(type: .system)
+        var config = UIButton.Configuration.plain()
+        config.title = title
+        config.baseForegroundColor = PorchStyle.accent
+        config.contentInsets = .init(top: 10, leading: 4, bottom: 10, trailing: 4)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes; attributes.font = PorchStyle.font(size); return attributes
+        }
+        button.configuration = config
+        button.contentHorizontalAlignment = .leading
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        return button
+    }
+
+    /// After Save: back to where this was opened from or, where it's the first page beside the caregiver
+    /// sidebar, a moment of "Saved".
+    func finishSave() {
+        if let navigation = navigationController, navigation.viewControllers.first !== self {
+            navigation.popViewController(animated: true); return
+        }
+        guard let item = navigationItem.rightBarButtonItem else { return }
+        item.title = "Saved"; item.isEnabled = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak item] in item?.title = "Save"; item?.isEnabled = true }
     }
 
     /// One padded row for a `group` card.

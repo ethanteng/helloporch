@@ -118,6 +118,23 @@ public struct CallContact: Codable, Equatable {
         self.otherPhoneNumbers = others
     }
 
+    /// The same contact with some details changed. Its photos stay unless `photoData` replaces the caregiver's
+    /// (nil inside removes it), and an empty `name` makes a Porch contact go by its family member's name.
+    public func updating(name: String? = nil, mode: NativeCall.Mode? = nil, buttonColorHex: String?? = nil, photoData: Data?? = nil) throws -> Self {
+        let color = buttonColorHex ?? self.buttonColorHex
+        var result: CallContact
+        if let nativeCall {
+            result = try CallContact(name: name ?? customName, nativeCall: NativeCall(room: nativeCall.room, mode: mode ?? nativeCall.mode),
+                phoneNumber: phoneNumber, otherPhoneNumbers: otherPhoneNumbers, familyMemberID: familyMemberID, invitationID: invitationID,
+                memberName: memberName, buttonColorHex: color)
+        } else {
+            result = try CallContact(name: name ?? customName, address: address, shortcutName: shortcutName, buttonColorHex: color)
+        }
+        result = result.preservingPhoto(from: self)
+        if let photoData { result.photo = try photoData.map { try ContactPhoto(data: $0) } }
+        return result
+    }
+
     private static func validatedColor(_ value: String?) throws -> String? {
         guard let value else { return nil }
         guard value.range(of: "^[0-9A-Fa-f]{6}$", options: .regularExpression) != nil else { throw ValidationError.invalidAppearance }

@@ -128,113 +128,168 @@ final class PhotoChooser: NSObject, PHPickerViewControllerDelegate, UIImagePicke
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true) }
 }
 
-/// The family member's own name and photo. The bedside shows them when they call, drop in or send a
-/// message, unless a caregiver chose a name or photo for them.
+/// A family phone's settings, opened from its photo: the name and photo the bedside shows for this phone, its calls,
+/// and, less often, caregiver mode and changing family or device. The bedside shows the name and photo when this
+/// phone calls, drops in or sends a message, unless a caregiver chose others.
 final class FamilyProfileViewController: CaregiverFormViewController {
+    private let content = UIStackView()
+    /// Kept across redraws, which happen whenever anything in the family changes.
     private let nameField = UITextField()
-    private let photoView = RecipientAppearance.photoView(nil)
-    private let photoButton = PorchStyle.button("Add a photo", symbol: "camera", filled: false)
-    private let removePhotoButton = PorchStyle.button("Remove photo", filled: false)
-    private let note = PorchStyle.label("", size: 16, color: PorchStyle.accent, weight: .medium)
-    private let connecting = PorchStyle.label("Connecting to your family…")
-    private var built = false
-    private var photo: Data?
-    private var photoChanged = false
-    private var saveTask: Task<Void, Never>?
+    private var editedName: String?
+    private var renderAfterEditing = false
+    private var saving = false
+    /// What the page shows from the family. Porch checks in every few seconds, and redrawing for a check-in that
+    /// changed none of it would close an open photo menu and send VoiceOver back to the top.
+    private struct Shown: Equatable {
+        let paired: Bool
+        /// This phone's own details the page shows. Being online or able to ring isn't one of them.
+        let name: String?, invitedName: String?, profile: FamilyProfile?, override: FamilyProfile?, caregiver: Bool?
+        let household: String?
+        let lovedOne: String
+        let photo: Bool
+    }
+    private var shown: Shown?
     private lazy var chooser = PhotoChooser(presenter: self) { [weak self] data in
         guard let self else { return }
         guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
-        self.photo = data; self.photoChanged = true; self.updatePhoto()
+        self.saveProfile(["photo": data])
     }
     private var me: FamilyPerson? { FamilyCoordinator.shared.state?.me }
     private var lovedOne: String {
         let state = FamilyCoordinator.shared.state
         return state?.people.first { $0.role == .bedside }?.name ?? state?.householdName ?? "your loved one"
     }
+    private var device: String { UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
 
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Your profile"
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
-        form.addArrangedSubview(connecting)
-        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
-        build()
-    }
-    deinit { NotificationCenter.default.removeObserver(self) }
-    /// Waits for this phone's details, which a just-opened Porch may still be loading.
-    private func build() {
-        guard !built else { return }
-        guard let me else { navigationItem.rightBarButtonItem?.isEnabled = false; return }
-        built = true; navigationItem.rightBarButtonItem?.isEnabled = true
-        form.removeArrangedSubview(connecting); connecting.removeFromSuperview()
-        let invited = me.invitedName ?? me.name
-        nameField.text = me.profile?.name
-        nameField.autocapitalizationType = .words
+        super.viewDidLoad(); title = "Settings"
+        content.axis = .vertical; content.spacing = 24
+        form.addArrangedSubview(content)
         nameField.textContentType = .name
         nameField.accessibilityIdentifier = "profile.name"
-        photoView.contentMode = .scaleAspectFill
-        photoView.layer.cornerRadius = 90
-        NSLayoutConstraint.activate([photoView.widthAnchor.constraint(equalToConstant: 180), photoView.heightAnchor.constraint(equalToConstant: 180)])
-        let photoRow = UIStackView(arrangedSubviews: [photoView]); photoRow.alignment = .center; photoRow.axis = .vertical
-        photoButton.accessibilityIdentifier = "profile.choosePhoto"
-        chooser.attach(to: photoButton)
-        removePhotoButton.configuration?.baseForegroundColor = .systemRed
-        removePhotoButton.addAction(UIAction { [weak self] _ in self?.photo = nil; self?.photoChanged = true; self?.updatePhoto() }, for: .touchUpInside)
-        let helper = "Leave blank to use “\(invited)”, the name on your invitation."
-        form.addArrangedSubview(section("How \(lovedOne) sees you", detail: "\(lovedOne) sees your name and photo when you call or send a message.",
-            views: [photoRow, photoButton, removePhotoButton, field(nameField, title: "Your name", placeholder: invited, helper: helper)]))
-        note.textAlignment = .center
-        form.addArrangedSubview(note)
-        form.addArrangedSubview(PorchStyle.label("A caregiver can change these for you.", size: 15))
-        updateNote()
-        photo = FamilyPhotos.shared.data(for: me.profile?.photoID)
-        updatePhoto()
-        // A new phone, or a photo saved elsewhere: download it once.
-        if photo == nil, let id = me.profile?.photoID, let credential = PorchDevice.credential(for: .family) {
-            FamilyPhotos.shared.load(id, values: ["source": "self"], credential: credential)
+        nameField.addAction(UIAction { [weak self] _ in self?.editedName = self?.nameField.text }, for: .editingChanged)
+        NotificationCenter.default.addObserver(self, selector: #selector(render), name: .porchFamilyChanged, object: nil)
+        render()
+    }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    override func textFieldDidEndEditing(_ textField: UITextField) {
+        super.textFieldDidEndEditing(textField)
+        if renderAfterEditing { renderAfterEditing = false; render() }
+    }
+    @objc private func render() {
+        guard isViewLoaded else { return }
+        // Waits while the name is typed, so the keyboard doesn't close.
+        guard !nameField.isFirstResponder else { renderAfterEditing = true; return }
+        let paired = PorchDevice.credential(for: .family) != nil
+        let photoID = me?.profile?.photoID
+        let photo = photoID.map { FamilyPhotos.shared.store.contains($0) } == true
+        // A new phone, or a photo saved elsewhere: download it, and try again on later check-ins if that fails.
+        if !photo, let photoID, let credential = PorchDevice.credential(for: .family) {
+            FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: credential)
         }
-    }
-    @objc private func familyChanged() {
-        guard built else { build(); return }
-        updateNote()
-        if !photoChanged, photo == nil, let data = FamilyPhotos.shared.data(for: me?.profile?.photoID) { photo = data; updatePhoto() }
-    }
-    private func updatePhoto() {
-        photoView.image = RecipientAppearance.photo(photo)
-        photoView.isHidden = photo == nil
-        removePhotoButton.isHidden = photo == nil
-        photoButton.configuration?.title = photo == nil ? "Add a photo" : "Change photo"
-    }
-    private func updateNote() {
-        let chosen = me?.override
-        switch (chosen?.name, chosen?.photoID != nil) {
-        case let (name?, true): note.text = "A caregiver set your name to “\(name)” and chose your photo. \(lovedOne) sees those."
-        case let (name?, false): note.text = "A caregiver set your name to “\(name)”. \(lovedOne) sees that name."
-        case (nil, true): note.text = "A caregiver chose your photo. \(lovedOne) sees that photo."
-        default: note.text = nil
+        let next = Shown(paired: paired, name: me?.name, invitedName: me?.invitedName, profile: me?.profile, override: me?.override, caregiver: me?.caregiver,
+                         household: FamilyCoordinator.shared.state?.householdName, lovedOne: lovedOne, photo: photo)
+        guard next != shown else { return }
+        shown = next
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        // The name is the only thing to type, so the keyboard choice shows only with it.
+        setKeyboardControlVisible(paired && me != nil)
+        if paired, let me { profile(me) } else if paired { content.addArrangedSubview(PorchStyle.label("Connecting to your family…")) }
+        if paired {
+            let camera = UISwitch(); camera.isOn = CallPreferences.startVideoWithCamera()
+            camera.accessibilityIdentifier = "family.startVideoWithCamera"
+            camera.addAction(UIAction { [weak camera] _ in if let camera { CallPreferences.saveStartVideoWithCamera(camera.isOn) } }, for: .valueChanged)
+            content.addArrangedSubview(group(rows: [toggleRow("Start video calls with my camera on", camera)]))
         }
-        note.isHidden = note.text == nil
+        if me?.caregiver == true {
+            let caregiver = linkRow("Caregiver mode", symbol: "lock.fill") { [weak self] in
+                self?.navigationController?.pushViewController(RemoteCaregiverPINViewController(), animated: true)
+            }
+            caregiver.accessibilityIdentifier = "family.caregiverMode"
+            content.addArrangedSubview(group(rows: [caregiver]))
+        }
+        // Rarely needed, so they're links rather than settings.
+        let links = UIStackView(arrangedSubviews: (paired ? [textLink("Join a different family") { [weak self] in self?.confirmNewFamily() }] : [])
+            + [textLink("Use this \(device) as the bedside Porch") { [weak self] in self?.confirmBedside() }])
+        links.axis = .vertical; links.alignment = .leading
+        content.addArrangedSubview(links)
+        let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
+        privacy.accessibilityIdentifier = "family.privacy"
+        content.addArrangedSubview(privacy)
     }
-    @objc private func save() {
-        guard built, saveTask == nil, let credential = PorchDevice.credential(for: .family) else { return }
-        view.endEditing(true)
-        navigationItem.rightBarButtonItem?.isEnabled = false; navigationItem.rightBarButtonItem?.title = "Saving…"
-        saveTask = Task { [weak self] in
+    private func profile(_ me: FamilyPerson) {
+        let photo = FamilyPhotos.shared.data(for: me.profile?.photoID)
+        let change = PorchStyle.button(photo == nil ? "Add a photo" : "Change photo", filled: false)
+        change.accessibilityIdentifier = "profile.choosePhoto"
+        chooser.attach(to: change)
+        var header: [UIView] = [FamilyAdminViewController.avatar(me.profile?.name ?? me.name, photo: photo, size: 96), change]
+        if photo != nil {
+            let remove = PorchStyle.button("Remove photo", filled: false)
+            remove.configuration?.baseForegroundColor = .systemRed
+            remove.addAction(UIAction { [weak self] _ in self?.saveProfile(["photo": NSNull()]) }, for: .touchUpInside)
+            header.append(remove)
+        }
+        let household = PorchStyle.label(FamilyCoordinator.shared.state?.householdName ?? "", size: 15)
+        household.textAlignment = .center
+        header.append(household)
+        let top = UIStackView(arrangedSubviews: header)
+        top.axis = .vertical; top.alignment = .center; top.spacing = 2
+        top.setCustomSpacing(10, after: header[0])
+        content.addArrangedSubview(top)
+        nameField.text = editedName ?? me.profile?.name
+        let save = PorchStyle.button("Save", symbol: "checkmark")
+        save.accessibilityLabel = "Save name"
+        save.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            defer { self.saveTask = nil; self.navigationItem.rightBarButtonItem?.isEnabled = true; self.navigationItem.rightBarButtonItem?.title = "Save" }
+            self.view.endEditing(true)
+            self.saveProfile(["name": self.nameField.text ?? ""])
+        }, for: .touchUpInside)
+        let invited = me.invitedName ?? me.name
+        let name = field(nameField, title: "Name", placeholder: invited)
+        // `field` resets capitalization, including on every redraw of this page.
+        nameField.autocapitalizationType = .words
+        let nameRow = listRow(name, trailing: FamilyAdminViewController.singleLine(save), alignedToBottom: true)
+        // A caregiver's choice is what the bedside shows, which would otherwise be a surprise.
+        let chosen = me.override
+        let note: String?
+        switch (chosen?.name, chosen?.photoID != nil) {
+        case let (name?, true): note = "A caregiver set your name to “\(name)” and chose your photo. \(lovedOne) sees those."
+        case let (name?, false): note = "A caregiver set your name to “\(name)”. \(lovedOne) sees that name."
+        case (nil, true): note = "A caregiver chose your photo. \(lovedOne) sees that photo."
+        default: note = nil
+        }
+        content.addArrangedSubview(group(detail: note, rows: [nameRow]))
+    }
+    /// Saves a new name or photo: a photo is uploaded first, and NSNull removes it.
+    private func saveProfile(_ change: [String: Any]) {
+        guard !saving, let credential = PorchDevice.credential(for: .family) else { return }
+        saving = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.saving = false }
             do {
-                var values: [String: Any] = ["name": self.nameField.text ?? ""]
-                if self.photoChanged {
-                    if let photo = self.photo { values["photo"] = try await FamilyPhotos.shared.upload(photo, action: "profilePhotoUpload", credential: credential) }
-                    else { values["photo"] = NSNull() }
-                }
+                var values = change
+                if let photo = change["photo"] as? Data { values["photo"] = try await FamilyPhotos.shared.upload(photo, action: "profilePhotoUpload", credential: credential) }
                 let response = try await FamilyService(credential).send("setProfile", values)
+                if change["name"] != nil { self.editedName = nil }
                 FamilyCoordinator.shared.update(response)
-                self.navigationController?.popViewController(animated: true)
-            } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
+                self.render()
+            } catch { showPorchError(error, on: self) }
         }
     }
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        if isMovingFromParent { saveTask?.cancel() }
+    private func confirmNewFamily() {
+        let current = FamilyCoordinator.shared.state?.householdName ?? "your current family"
+        let alert = UIAlertController(title: "Join a different family?", message: "You'll need an invitation from that family's caregiver. Until you join, this \(device) stays in \(current).", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .default) { [weak self] _ in
+            self?.navigationController?.pushViewController(FamilyPairingViewController(), animated: true)
+        })
+        present(alert, animated: true)
+    }
+    private func confirmBedside() {
+        let alert = UIAlertController(title: "Use this \(device) as the bedside Porch?", message: "Only do this on the device next to your loved one. You can switch back later.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Use as bedside", style: .default) { _ in PorchDevice.experience = .bedside })
+        present(alert, animated: true)
     }
 }

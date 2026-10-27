@@ -56,92 +56,84 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertNil(RecipientAppearance.preparedPhoto(at: url))
     }
 
-    @MainActor func testCaregiverCanChangeColorRemovePhotoAndSave() async throws {
-        let person = try CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), familyMemberID: UUID().uuidString, buttonColorHex: "FFCC00", photoData: portraitData())
-        let editor = SetupViewController(slot: 1, contact: person); editor.loadViewIfNeeded()
+    @MainActor func testCaregiverCanChangeColorRemovePhotoAndSave() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), phoneNumber: "+14155550123", buttonColorHex: "FFCC00", photoData: portraitData()), for: 1)
+        let home = FamilyAdminViewController(slots: slots)
+        var saved: CallSlots?
+        home.onSaveSlots = { saved = $0 }
+        let person = PersonViewController(admin: home, slot: 1); person.loadViewIfNeeded()
+        XCTAssertEqual(person.title, "David")
         let colorPicker = UIColorPickerViewController(); colorPicker.selectedColor = .white
-        editor.colorPickerViewControllerDidSelectColor(colorPicker)
-        let remove = try XCTUnwrap(buttons(in: editor.view).first { $0.accessibilityIdentifier == "recipient.removePhoto" })
+        person.colorPickerViewControllerDidSelectColor(colorPicker)
+        XCTAssertNil(saved, "The color is saved once the picker closes")
+        person.colorPickerViewControllerDidFinish(colorPicker)
+        XCTAssertEqual(saved?.contact(for: 1)?.buttonColorHex, "FFFFFF")
+        let remove = try XCTUnwrap(buttons(in: person.view).first { $0.accessibilityIdentifier == "person.removePhoto" })
         remove.sendActions(for: .touchUpInside)
-        let saved = expectation(description: "Appearance saved with contact")
-        editor.onSaveSlot = { action, contact in
-            XCTAssertEqual(action, .person); XCTAssertEqual(contact?.buttonColorHex, "FFFFFF"); XCTAssertNil(contact?.photoData)
-            saved.fulfill()
+        let contact = try XCTUnwrap(saved?.contact(for: 1))
+        XCTAssertNil(contact.photoData); XCTAssertEqual(contact.buttonColorHex, "FFFFFF")
+        XCTAssertEqual(contact.phoneNumber, "+14155550123", "Changing one detail keeps the rest of the key")
+        XCTAssertFalse(buttons(in: person.view).contains { $0.accessibilityIdentifier == "person.removePhoto" })
+    }
+
+    @MainActor func testCaregiverHomeOpensEachBedsidePage() throws {
+        let home = FamilyAdminViewController(slots: CallSlots())
+        let navigation = UINavigationController(rootViewController: home); home.loadViewIfNeeded()
+        XCTAssertEqual(rows(in: home.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("caregiver.page.") }, CaregiverPage.allCases.map { "caregiver.page.\($0.rawValue)" })
+        XCTAssertEqual(Array(CaregiverPage.pages(onBedside: true).map { $0.title(onBedside: true) }.prefix(7)), ["People", "Calls", "Drop-in", "Messages", "Display & voice", "Privacy", "Caregivers & PIN"])
+        let expected: [(CaregiverPage, AnyClass)] = [(.people, PeopleSettingsViewController.self), (.calls, CallSettingsViewController.self), (.dropIn, DropInSettingsViewController.self),
+            (.messages, MessageSettingsViewController.self), (.display, BedsideDisplaySettingsViewController.self), (.privacy, PrivacySettingsViewController.self),
+            (.caregivers, CaregiverAccessViewController.self), (.device, DeviceSettingsViewController.self)]
+        for (page, screen) in expected {
+            navigation.popToRootViewController(animated: false)
+            try XCTUnwrap(rows(in: home.view).first { $0.accessibilityIdentifier == "caregiver.page.\(page.rawValue)" }).sendActions(for: .touchUpInside)
+            XCTAssertTrue(navigation.topViewController?.isKind(of: screen) == true, "\(page)")
         }
-        let save = try XCTUnwrap(editor.navigationItem.rightBarButtonItem)
-        _ = editor.perform(try XCTUnwrap(save.action))
-        await fulfillment(of: [saved], timeout: 2)
     }
 
-    @MainActor func testCaregiverAdvancedMenuOpensSilenceSettings() throws {
-        let slots = SlotsViewController(slots: CallSlots())
-        let navigation = UINavigationController(rootViewController: slots)
-        navigation.loadViewIfNeeded(); slots.loadViewIfNeeded()
-        XCTAssertEqual(slots.tableView(slots.tableView, numberOfRowsInSection: 1), 5)
-        let path = IndexPath(row: 4, section: 1)
-        let cell = slots.tableView(slots.tableView, cellForRowAt: path)
-        XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Advanced")
-        slots.tableView(slots.tableView, didSelectRowAt: path)
-        XCTAssertTrue(navigation.topViewController is AdvancedSettingsViewController)
-    }
-
-    @MainActor func testCaregiverMenuOpensCallHistory() throws {
-        let slots = SlotsViewController(slots: CallSlots())
-        let navigation = UINavigationController(rootViewController: slots)
-        navigation.loadViewIfNeeded(); slots.loadViewIfNeeded()
-        let path = IndexPath(row: 1, section: 1)
-        let cell = slots.tableView(slots.tableView, cellForRowAt: path)
-        XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Call history")
-        slots.tableView(slots.tableView, didSelectRowAt: path)
+    @MainActor func testCallsPageOpensCallHistory() throws {
+        let home = FamilyAdminViewController(slots: CallSlots())
+        let calls = CallSettingsViewController(admin: home)
+        let navigation = UINavigationController(rootViewController: calls); calls.loadViewIfNeeded()
+        try XCTUnwrap(rows(in: calls.view).first { $0.accessibilityIdentifier == "calls.history" }).sendActions(for: .touchUpInside)
         XCTAssertTrue(navigation.topViewController is CallHistoryViewController)
     }
 
-    @MainActor func testAdvancedSilenceSettingValidatesSavesAndCanBeTurnedOff() throws {
-        let suite = "porch.advanced-test.\(UUID().uuidString)"
+    @MainActor func testSilenceHangUpIsSetInMinutesAndCanBeTurnedOff() throws {
+        let suite = "porch.calls-test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let screen = AdvancedSettingsViewController(defaults: defaults)
-        screen.loadViewIfNeeded()
-        func find<T: UIView>(_ view: UIView, _ type: T.Type) -> T? {
-            if let found = view as? T { return found }
-            return view.subviews.lazy.compactMap { find($0, type) }.first
-        }
-        let toggle = try XCTUnwrap(find(screen.view, UISwitch.self))
-        let field = try XCTUnwrap(find(screen.view, UITextField.self))
-        XCTAssertFalse(toggle.isOn); XCTAssertEqual(field.text, "120")
-        toggle.isOn = true; toggle.sendActions(for: .valueChanged)
-        for invalid in ["", "hello", "14", "1801", "3.5", "-30"] {
-            field.text = invalid; field.sendActions(for: .editingChanged)
-            XCTAssertFalse(screen.navigationItem.rightBarButtonItem!.isEnabled, invalid)
-        }
-        field.text = "45"; field.sendActions(for: .editingChanged)
-        let navigation = UINavigationController(rootViewController: screen)
-        navigation.loadViewIfNeeded()
-        let original = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow })
-        let window = UIWindow(windowScene: try XCTUnwrap(original.windowScene))
-        window.rootViewController = navigation; window.makeKeyAndVisible()
-        defer { window.isHidden = true; original.makeKeyAndVisible() }
-        for size in [CGSize(width: 393, height: 852), CGSize(width: 1024, height: 768)] {
-            window.frame = CGRect(origin: .zero, size: size)
-            window.setNeedsLayout(); window.layoutIfNeeded()
-            navigation.view.setNeedsLayout(); navigation.view.layoutIfNeeded(); screen.view.layoutIfNeeded()
-            XCTAssertGreaterThan(try XCTUnwrap(find(screen.view, UIScrollView.self)).bounds.height, 100)
-            XCTAssertGreaterThan(field.bounds.width, 100)
-            XCTAssertFalse(field.superview!.isHidden)
-        }
-        let save = try XCTUnwrap(screen.navigationItem.rightBarButtonItem)
-        XCTAssertTrue(save.isEnabled)
-        UIApplication.shared.sendAction(try XCTUnwrap(save.action), to: save.target, from: save, for: nil)
+        let home = FamilyAdminViewController(slots: CallSlots())
+        let calls = CallSettingsViewController(admin: home, defaults: defaults); calls.loadViewIfNeeded()
+        func switches(_ view: UIView) -> [UISwitch] { descendants(view).compactMap { $0 as? UISwitch } }
+        func minutes(_ view: UIView) -> UIStepper? { descendants(view).compactMap { $0 as? UIStepper }.first { $0.accessibilityIdentifier == "calls.silenceMinutes" } }
+        let silence = try XCTUnwrap(switches(calls.view).first { $0.accessibilityIdentifier == "calls.silence" })
+        XCTAssertFalse(silence.isOn)
+        XCTAssertNil(minutes(calls.view), "The time shows only while it's on")
+        silence.isOn = true; silence.sendActions(for: .valueChanged)
         XCTAssertTrue(CallPreferences.disconnectAfterSilence(in: defaults))
-        XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 45)
-        let reloaded = AdvancedSettingsViewController(defaults: defaults); reloaded.loadViewIfNeeded()
-        let reloadedToggle = try XCTUnwrap(find(reloaded.view, UISwitch.self))
-        XCTAssertTrue(reloadedToggle.isOn)
-        reloadedToggle.isOn = false; reloadedToggle.sendActions(for: .valueChanged)
-        let off = try XCTUnwrap(reloaded.navigationItem.rightBarButtonItem)
-        UIApplication.shared.sendAction(try XCTUnwrap(off.action), to: off.target, from: off, for: nil)
+        let stepper = try XCTUnwrap(minutes(calls.view))
+        XCTAssertEqual(stepper.value, 2); XCTAssertEqual(stepper.accessibilityValue, "2 min")
+        stepper.value = 5; stepper.sendActions(for: .valueChanged)
+        XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 300)
+        XCTAssertEqual(stepper.accessibilityValue, "5 min")
+        // A time saved in seconds by an older version shows as it is.
+        CallPreferences.saveSilence(enabled: true, seconds: 45, in: defaults)
+        let reopened = CallSettingsViewController(admin: home, defaults: defaults); reopened.loadViewIfNeeded()
+        XCTAssertEqual(minutes(reopened.view)?.accessibilityValue, "45 sec")
+        let off = try XCTUnwrap(switches(reopened.view).first { $0.accessibilityIdentifier == "calls.silence" })
+        off.isOn = false; off.sendActions(for: .valueChanged)
         XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 45)
+        XCTAssertNil(minutes(reopened.view))
+        // Phone fallback and leaving a message save as they change too.
+        let fallback = try XCTUnwrap(descendants(reopened.view).compactMap { $0 as? UIStepper }.first { $0.accessibilityIdentifier == "calls.fallbackWait" })
+        fallback.value = 30; fallback.sendActions(for: .valueChanged)
+        XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), 30)
+        let leave = try XCTUnwrap(switches(reopened.view).first { $0.accessibilityIdentifier == "calls.leaveMessage" })
+        leave.isOn = false; leave.sendActions(for: .valueChanged)
+        XCTAssertFalse(CallPreferences.leaveMessageWhenUnanswered(in: defaults))
     }
 
     @MainActor func testCallCredentialsCanMigrateToLockScreenAccessWithoutChangingOtherSecrets() throws {
@@ -281,7 +273,7 @@ final class CaregiverInputTests: XCTestCase {
             let options = buttons(in: settings.view).filter { $0.accessibilityIdentifier?.hasPrefix("bedside.language.") == true }
             XCTAssertEqual(options.count, 5)
             let language = options.first { $0.accessibilityIdentifier == "bedside.language.\(choice.rawValue)" }!
-            XCTAssertEqual(language.configuration?.title, choice.displayName)
+            XCTAssertEqual(language.configuration?.title, choice.choiceLabel)
             language.sendActions(for: .touchUpInside)
             XCTAssertTrue(language.accessibilityTraits.contains(.selected))
             XCTAssertEqual(options.filter { $0.accessibilityTraits.contains(.selected) }.count, 1)
@@ -890,12 +882,11 @@ final class CaregiverInputTests: XCTestCase {
             window.rootViewController = PorchStyle.navigation(editor)
             window.makeKeyAndVisible()
             defer { window.isHidden = true }
-            // Drop-in by phone shows only on a paired bedside.
-            for view in all(editor.view) where view.isHidden && all(view).contains(where: { $0.accessibilityLabel == "Audio drop-in when they call this Porch" }) { view.isHidden = false }
             window.layoutIfNeeded()
+            XCTAssertEqual(editor.title, "Phone", "A person already on the key has only their numbers edited here")
             XCTAssertEqual(editor.form.bounds.width, min(760, size.width - 48), "The other numbers must not squeeze the form at \(size)")
             let controls = all(editor.form).filter { $0 is UISwitch || ["Make primary", "Remove"].contains(($0 as? UIButton)?.configuration?.title) }
-            XCTAssertEqual(controls.count, 4)
+            XCTAssertEqual(controls.count, 3)
             // Converting between views leaves rounding noise (143.66666666666663 against 143.66666666666666);
             // a squeezed control is short by whole points.
             let tolerance: CGFloat = 0.5
@@ -916,27 +907,25 @@ final class CaregiverInputTests: XCTestCase {
         }
         let text = labels(editor.view)
         XCTAssertTrue(text.contains("Their details"))
-        XCTAssertTrue(text.contains("Default calling mode"))
+        XCTAssertTrue(text.contains("Calls start as"))
         XCTAssertTrue(text.contains("Primary number"))
         XCTAssertTrue(text.contains("Other numbers"))
         for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
-        let settings = SlotsViewController(slots: CallSlots())
-        settings.loadViewIfNeeded()
-        let headings = (0..<settings.numberOfSections(in: settings.tableView)).compactMap { settings.tableView(settings.tableView, titleForHeaderInSection: $0) }
-        XCTAssertEqual(headings, ["Keypad · people & controls", "Settings", "Device mode", "About"])
+        XCTAssertEqual(editor.title, "Key 1")
+        XCTAssertEqual(CaregiverPage.pages(onBedside: false).map { $0.title(onBedside: false) }, ["Family", "Calls", "Drop-in", "Messages", "Privacy", "Caregivers"])
     }
 
-    @MainActor func testCaregiverMenuOpensPrivacyPolicy() throws {
-        let slots = SlotsViewController(slots: CallSlots())
+    @MainActor func testThisIPadAndPrivacyPagesLinkThePrivacyPolicy() throws {
+        let device = DeviceSettingsViewController()
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 820, height: 1180))
-        window.rootViewController = slots; window.makeKeyAndVisible()
+        window.rootViewController = device; window.makeKeyAndVisible()
         defer { window.isHidden = true }
-        let path = IndexPath(row: 0, section: 3)
-        let cell = slots.tableView(slots.tableView, cellForRowAt: path)
-        XCTAssertEqual((cell.contentConfiguration as? UIListContentConfiguration)?.text, "Privacy policy")
-        slots.tableView(slots.tableView, didSelectRowAt: path)
-        XCTAssertTrue(slots.presentedViewController is SFSafariViewController)
+        try XCTUnwrap(buttons(in: device.view).first { $0.configuration?.title == "Privacy policy" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue(device.presentedViewController is SFSafariViewController)
         XCTAssertEqual(privacyPolicyURL.absoluteString, "https://helloporch.store/privacy")
+        let home = FamilyAdminViewController(slots: CallSlots())
+        let privacy = PrivacySettingsViewController(admin: home); privacy.loadViewIfNeeded()
+        XCTAssertTrue(buttons(in: privacy.view).contains { $0.configuration?.title == "Privacy policy" })
     }
 
     @MainActor func testCaregiverPINScreenLinksPrivacyPolicy() {
@@ -984,21 +973,34 @@ final class CaregiverInputTests: XCTestCase {
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
-        XCTAssertFalse(rows(in: admin.view).contains { $0.accessibilityLabel == "Change caregiver PIN" }, "The bedside iPad keeps the PIN it uses for renewals")
-        XCTAssertEqual(rows(in: admin.view).filter { $0.accessibilityIdentifier?.hasPrefix("family.person.") == true }.count, 2)
-        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Ethan (this phone). Porch is open. Audio drop-in · Caregiver." })
-        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Sam. Offline. Calls only." })
-        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        XCTAssertFalse(switches(admin.view).contains { $0.accessibilityIdentifier == "messages.autoplay" }, "Starting messages by camera is set on the bedside iPad itself")
-        XCTAssertFalse(switches(admin.view).contains { $0.accessibilityIdentifier == "attendance.camera" }, "So is looking for someone at the iPad by camera")
-        let share = try XCTUnwrap(switches(admin.view).first { $0.accessibilityIdentifier == "attendance.share" }, "Sharing that someone is at the iPad is a server setting a phone can change")
+        XCTAssertEqual(rows(in: admin.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("caregiver.page.") },
+                       ["caregiver.page.people", "caregiver.page.calls", "caregiver.page.dropIn", "caregiver.page.messages", "caregiver.page.privacy", "caregiver.page.caregivers"])
+        for bedsideOnly in ["Keypad", "Display & voice", "Caregiver PIN"] {
+            XCTAssertTrue(descendants(admin.view).contains { $0.accessibilityLabel == "\(bedsideOnly), set on the bedside iPad" }, bedsideOnly)
+        }
+        let family = PeopleSettingsViewController(admin: admin); family.loadViewIfNeeded()
+        XCTAssertEqual(family.title, "Family")
+        XCTAssertFalse(descendants(family.view).contains { $0.accessibilityIdentifier?.hasPrefix("keypad.key.") == true }, "The keypad is set on the bedside iPad")
+        XCTAssertEqual(rows(in: family.view).filter { $0.accessibilityIdentifier?.hasPrefix("family.person.") == true }.count, 2)
+        XCTAssertTrue(rows(in: family.view).contains { $0.accessibilityLabel == "Ethan (this phone). Porch is open. Audio drop-in · Caregiver." })
+        XCTAssertTrue(rows(in: family.view).contains { $0.accessibilityLabel == "Sam. Offline. Calls only." })
+        let caregivers = CaregiverAccessViewController(admin: admin); caregivers.loadViewIfNeeded()
+        XCTAssertFalse(rows(in: caregivers.view).contains { $0.accessibilityLabel == "Change caregiver PIN" }, "The bedside iPad keeps the PIN it uses for renewals")
+        func switches(_ view: UIView) -> [UISwitch] { descendants(view).compactMap { $0 as? UISwitch } }
+        XCTAssertEqual(switches(caregivers.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Ethan is a caregiver"], "Another caregiver must change this phone's caregiver access")
+        let messages = MessageSettingsViewController(admin: admin); messages.loadViewIfNeeded()
+        XCTAssertFalse(switches(messages.view).contains { $0.accessibilityIdentifier == "messages.autoplay" }, "Starting messages by camera is set on the bedside iPad itself")
+        let privacy = PrivacySettingsViewController(admin: admin); privacy.loadViewIfNeeded()
+        XCTAssertFalse(switches(privacy.view).contains { $0.accessibilityIdentifier == "attendance.camera" }, "So is looking for someone at the iPad by camera")
+        let share = try XCTUnwrap(switches(privacy.view).first { $0.accessibilityIdentifier == "attendance.share" }, "Sharing that someone is at the iPad is a server setting a phone can change")
         XCTAssertFalse(share.isEnabled, "An older server without the setting can't change it")
-        let me = FamilyPersonViewController(personID: "me", admin: admin); me.loadViewIfNeeded()
-        XCTAssertFalse(buttons(in: me.view).contains { $0.configuration?.title == "Remove access" }, "A caregiver can't remove their own phone here")
+        let me = PersonViewController(admin: admin, memberID: "me"); me.loadViewIfNeeded()
+        XCTAssertFalse(buttons(in: me.view).contains { $0.accessibilityIdentifier == "person.remove" }, "A caregiver can't remove their own phone here")
+        XCTAssertFalse(buttons(in: me.view).contains { $0.accessibilityIdentifier == "person.key" }, "Keys are set on the bedside iPad")
         XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")
-        let sam = FamilyPersonViewController(personID: "sam", admin: admin); sam.loadViewIfNeeded()
-        XCTAssertEqual(buttons(in: sam.view).filter { $0.configuration?.title == "Remove access" }.count, 1)
-        XCTAssertEqual(switches(sam.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Drop in when they call"], "Calls drop in only as a drop-in they're approved for")
+        let sam = PersonViewController(admin: admin, memberID: "sam"); sam.loadViewIfNeeded()
+        XCTAssertEqual(buttons(in: sam.view).filter { $0.configuration?.title == "Remove Sam" }.count, 1)
+        XCTAssertEqual(switches(sam.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Sam's calls drop in too"], "Calls drop in only as a drop-in they're approved for")
     }
 
     @MainActor func testCaregiverModeSetsWhoseOrdinaryCallsDropIn() throws {
@@ -1008,26 +1010,30 @@ final class CaregiverInputTests: XCTestCase {
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
-        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video · Calls drop in" })
-        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Mia. Porch is open. Audio and video drop-in · Calls drop in." })
-        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Ana, Porch app, Audio" })
-        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
-        let mia = FamilyPersonViewController(personID: "mia", admin: admin); mia.loadViewIfNeeded()
+        let dropIn = DropInSettingsViewController(admin: admin); dropIn.loadViewIfNeeded()
+        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video · Calls drop in" })
+        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Ana, Porch app, Audio" })
+        let family = PeopleSettingsViewController(admin: admin); family.loadViewIfNeeded()
+        XCTAssertTrue(rows(in: family.view).contains { $0.accessibilityLabel == "Mia. Porch is open. Audio and video drop-in · Calls drop in." })
+        func switches(_ view: UIView) -> [UISwitch] { descendants(view).compactMap { $0 as? UISwitch } }
+        func texts(_ view: UIView) -> [String] { labels(in: view).compactMap(\.text) }
+        let mia = PersonViewController(admin: admin, memberID: "mia"); mia.loadViewIfNeeded()
         let calls = try XCTUnwrap(switches(mia.view).first { $0.accessibilityIdentifier == "person.autoDropIn" })
         XCTAssertTrue(calls.isOn); XCTAssertTrue(calls.isEnabled)
-        XCTAssertTrue(labels(mia.view).contains("Their audio and video calls drop in too."))
-        let ana = FamilyPersonViewController(personID: "ana", admin: admin); ana.loadViewIfNeeded()
+        XCTAssertEqual(calls.accessibilityLabel, "Mia's calls drop in too")
+        XCTAssertFalse(texts(mia.view).contains("Turn on audio or video drop-in first."))
+        let ana = PersonViewController(admin: admin, memberID: "ana"); ana.loadViewIfNeeded()
         XCTAssertEqual(switches(ana.view).first { $0.accessibilityIdentifier == "person.autoDropIn" }?.isOn, false)
-        XCTAssertTrue(labels(ana.view).contains("Their audio calls drop in too. Video calls ring."))
         let kept = try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
             ["id": "noa", "name": "Noa", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": false, "autoDropIn": true]]]))
         let keptAdmin = FamilyAdminViewController(remote: remote, state: kept); keptAdmin.loadViewIfNeeded()
-        let noa = FamilyPersonViewController(personID: "noa", admin: keptAdmin); noa.loadViewIfNeeded()
+        let noa = PersonViewController(admin: keptAdmin, memberID: "noa"); noa.loadViewIfNeeded()
         let saved = try XCTUnwrap(switches(noa.view).first { $0.accessibilityIdentifier == "person.autoDropIn" })
         XCTAssertTrue(saved.isOn)
         XCTAssertTrue(saved.isEnabled, "A saved choice can be turned off after drop-in approval is removed")
-        XCTAssertTrue(labels(noa.view).contains("Saved. It applies once audio or video drop-in is on."))
+        XCTAssertTrue(texts(noa.view).contains("Turn on audio or video drop-in first."))
+        let noaDropIn = DropInSettingsViewController(admin: keptAdmin); noaDropIn.loadViewIfNeeded()
+        XCTAssertTrue(rows(in: noaDropIn.view).contains { $0.accessibilityLabel == "Noa, can't drop in" })
     }
 
     @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {
@@ -1037,12 +1043,11 @@ final class CaregiverInputTests: XCTestCase {
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
-        func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
-        XCTAssertTrue(labels(admin.view).contains("+14155550200 · Phone call, audio"))
-        XCTAssertTrue(rows(in: admin.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video" }, "Approved family members are listed beside approved numbers")
-        let titles = buttons(in: admin.view).compactMap { $0.configuration?.title }
-        XCTAssertTrue(titles.contains("Approve a phone number"))
-        XCTAssertEqual(buttons(in: admin.view).filter { $0.accessibilityLabel == "Remove phone drop-in for David" }.count, 1)
+        let dropIn = DropInSettingsViewController(admin: admin); dropIn.loadViewIfNeeded()
+        XCTAssertTrue(labels(in: dropIn.view).compactMap(\.text).contains("\(PhoneNumberNormalization.display("+14155550200")) · By phone"))
+        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video" }, "Approved family members are listed beside approved numbers")
+        XCTAssertTrue(buttons(in: dropIn.view).compactMap { $0.configuration?.title }.contains("Add a phone number"))
+        XCTAssertEqual(buttons(in: dropIn.view).filter { $0.accessibilityLabel == "Remove phone drop-in for David" }.count, 1)
     }
 
     @MainActor func testCaregiverModeBlocksUnknownCallersAndListsBlockedNumbersSeparately() throws {
@@ -1052,12 +1057,15 @@ final class CaregiverInputTests: XCTestCase {
                 "blocked": [["number": "+14155550999", "firstCallAt": 1_800_000_000, "lastCallAt": 1_800_000_060, "calls": 2]]]])
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
-        let admin = FamilyAdminViewController(remote: remote, state: state)
-        let navigation = UINavigationController(rootViewController: admin); admin.loadViewIfNeeded()
-        func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        let block = try XCTUnwrap(switches(admin.view).first { $0.accessibilityIdentifier == "calls.blockUnknown" })
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        let calls = CallSettingsViewController(admin: admin)
+        let navigation = UINavigationController(rootViewController: calls); calls.loadViewIfNeeded()
+        XCTAssertEqual(calls.title, "Calls")
+        func switches(_ view: UIView) -> [UISwitch] { descendants(view).compactMap { $0 as? UISwitch } }
+        let block = try XCTUnwrap(switches(calls.view).first { $0.accessibilityIdentifier == "calls.blockUnknown" })
         XCTAssertTrue(block.isOn); XCTAssertTrue(block.isEnabled)
-        let list = try XCTUnwrap(rows(in: admin.view).first { $0.accessibilityIdentifier == "calls.blockedNumbers" })
+        XCTAssertFalse(descendants(calls.view).contains { $0.accessibilityIdentifier == "calls.silence" }, "Hanging up after silence is set on the bedside iPad")
+        let list = try XCTUnwrap(rows(in: calls.view).first { $0.accessibilityIdentifier == "calls.blockedNumbers" })
         XCTAssertEqual(list.accessibilityLabel, "Blocked numbers, 1")
         list.sendActions(for: .touchUpInside)
         let blocked = try XCTUnwrap(navigation.topViewController as? BlockedCallersViewController)
@@ -1069,7 +1077,8 @@ final class CaregiverInputTests: XCTestCase {
         // A server without call screening can't turn it on.
         let older = FamilyAdminViewController(remote: remote, state: try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": false, "people": []])))
         older.loadViewIfNeeded()
-        XCTAssertEqual(switches(older.view).first { $0.accessibilityIdentifier == "calls.blockUnknown" }?.isEnabled, false)
+        let olderCalls = CallSettingsViewController(admin: older); olderCalls.loadViewIfNeeded()
+        XCTAssertEqual(switches(olderCalls.view).first { $0.accessibilityIdentifier == "calls.blockUnknown" }?.isEnabled, false)
     }
 
     @MainActor func testPendingInvitationsAreListedByNameAndCancelledOneAtATime() throws {
@@ -1078,20 +1087,23 @@ final class CaregiverInputTests: XCTestCase {
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
-        let cancels = buttons(in: admin.view).compactMap(\.accessibilityLabel).filter { $0.hasPrefix("Cancel invitation") }
+        let family = PeopleSettingsViewController(admin: admin); family.loadViewIfNeeded()
+        let cancels = buttons(in: family.view).compactMap(\.accessibilityLabel).filter { $0.hasPrefix("Cancel invitation") }
         XCTAssertEqual(cancels, ["Cancel invitation for Ana", "Cancel invitation for Invitation"])
-        XCTAssertFalse(buttons(in: admin.view).contains { $0.configuration?.title == "Cancel unused invitations" })
+        XCTAssertFalse(buttons(in: family.view).contains { $0.configuration?.title == "Cancel unused invitations" })
     }
 
     @MainActor func testInvitationCreatedFromAPhoneAppearsInTheList() throws {
         let decode = { (json: [String: Any]) in try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: json)) }
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: try decode(["householdName": "Pat", "dropInEnabled": false, "people": []]))
-        let navigation = UINavigationController(rootViewController: admin); admin.loadViewIfNeeded()
-        buttons(in: admin.view).first { $0.configuration?.title == "Invite a family member" }!.sendActions(for: .touchUpInside)
+        admin.loadViewIfNeeded()
+        let family = PeopleSettingsViewController(admin: admin)
+        let navigation = UINavigationController(rootViewController: family); family.loadViewIfNeeded()
+        buttons(in: family.view).first { $0.configuration?.title == "Invite someone" }!.sendActions(for: .touchUpInside)
         let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
         invite.onAdminChanged?(try decode(["householdName": "Pat", "dropInEnabled": false, "people": [], "invitations": [["id": "a", "name": "Ana", "expiresAt": 1_800_000_900]]]))
-        XCTAssertTrue(buttons(in: admin.view).contains { $0.accessibilityLabel == "Cancel invitation for Ana" }, "Caregiver mode on a phone keeps its own state, so it must take the one createInvite returns")
+        XCTAssertTrue(buttons(in: family.view).contains { $0.accessibilityLabel == "Cancel invitation for Ana" }, "Caregiver mode on a phone keeps its own state, so it must take the one createInvite returns")
     }
 
     @MainActor func testFirstTapOnGearOpensCaregiverGate() async {
@@ -1105,13 +1117,20 @@ final class CaregiverInputTests: XCTestCase {
         await withCheckedContinuation { continuation in clock.dismiss(animated: false) { continuation.resume() } }
     }
 
-    @MainActor func testAllTenKeypadRowsIncludeDefaultControlsAndCanBeRemapped() throws {
-        let settings = SlotsViewController(slots: CallSlots()); settings.loadViewIfNeeded()
-        XCTAssertEqual(settings.tableView(settings.tableView, numberOfRowsInSection: 0), 12)
-        let nine = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 8, section: 0))
-        let zero = settings.tableView(settings.tableView, cellForRowAt: IndexPath(row: 9, section: 0))
-        XCTAssertEqual(nine.accessibilityLabel, "Key 9, Turn video off / on")
-        XCTAssertEqual(zero.accessibilityLabel, "Key 0, Answer / decline / hang up")
+    @MainActor func testEveryKeyIsOnTheKeypadGridWithDefaultControlsAndCanBeRemapped() throws {
+        let home = FamilyAdminViewController(slots: CallSlots())
+        let people = PeopleSettingsViewController(admin: home)
+        let navigation = UINavigationController(rootViewController: people); people.loadViewIfNeeded()
+        let keys = descendants(people.view).filter { $0.accessibilityIdentifier?.hasPrefix("keypad.key.") == true }
+        XCTAssertEqual(keys.compactMap(\.accessibilityIdentifier), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map { "keypad.key.\($0)" }, "Laid out as the keypad is")
+        XCTAssertEqual(keys.first { $0.accessibilityIdentifier == "keypad.key.9" }?.accessibilityLabel, "Key 9, Turn video off / on")
+        XCTAssertEqual(keys.first { $0.accessibilityIdentifier == "keypad.key.0" }?.accessibilityLabel, "Key 0, Answer / decline / hang up")
+        XCTAssertEqual(keys.first { $0.accessibilityIdentifier == "keypad.key.0" }?.accessibilityValue, "Hold to decline")
+        XCTAssertEqual(keys.first { $0.accessibilityIdentifier == "keypad.key.5" }?.accessibilityLabel, "Key 5, No action")
+        try XCTUnwrap(keys.first { $0.accessibilityIdentifier == "keypad.key.5" } as? UIControl).sendActions(for: .touchUpInside)
+        let empty = try XCTUnwrap(navigation.topViewController as? SetupViewController)
+        empty.loadViewIfNeeded()
+        XCTAssertEqual(empty.title, "Key 5")
         let editor = SetupViewController(slot: 4, contact: nil, action: .callControl)
         editor.loadViewIfNeeded()
         var saved: KeypadAction?
@@ -1153,9 +1172,163 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(labels(pairing.view).contains("Your Porch invite"))
         let editor = SetupViewController(slot: 1, contact: nil); editor.loadViewIfNeeded()
         func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
-        let mode = segments(editor.view).first { $0.accessibilityLabel == "Default calling mode" }
-        XCTAssertEqual(mode?.titleForSegment(at: 0), "Voice-only")
+        let mode = segments(editor.view).first { $0.accessibilityLabel == "Calls start as" }
+        XCTAssertEqual(mode?.titleForSegment(at: 0), "Voice")
         XCTAssertFalse(buttons(in: editor.view).contains { $0.configuration?.title == "Link their Porch app" })
+    }
+
+    @MainActor func testSomeoneOnlyOnTheKeypadKeepsTheNameSavedWithTheirKey() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), phoneNumber: "+14155550123"), for: 2)
+        let home = FamilyAdminViewController(slots: slots)
+        var saved: CallSlots?
+        home.onSaveSlots = { saved = $0 }
+        let person = PersonViewController(admin: home, slot: 2); person.loadViewIfNeeded()
+        func find(_ id: String) -> UITextField? { descendants(person.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == id } }
+        let name = try XCTUnwrap(find("person.name"))
+        XCTAssertEqual(name.text, "David")
+        name.text = "David Chen"; name.sendActions(for: .editingChanged)
+        try XCTUnwrap(buttons(in: person.view).first { $0.accessibilityLabel == "Save name" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(saved?.contact(for: 2)?.name, "David Chen")
+        XCTAssertEqual(person.title, "David Chen")
+        XCTAssertEqual(name.constraints.filter { $0.firstAttribute == .height }.count, 1, "redrawing the page doesn't add to the name field's constraints")
+        XCTAssertEqual(name.autocapitalizationType, .words, "and keeps names capitalized")
+        XCTAssertTrue(rows(in: person.view).contains { $0.accessibilityIdentifier == "person.phone" })
+        XCTAssertTrue(descendants(person.view).contains { $0.accessibilityLabel == "Porch app, Not on Porch" })
+        XCTAssertTrue(buttons(in: person.view).contains { $0.configuration?.title == "Invite David" })
+        XCTAssertFalse(descendants(person.view).contains { $0.accessibilityIdentifier == "person.caregiver" }, "Caregiver mode is for family members on Porch")
+        XCTAssertEqual(buttons(in: person.view).filter { $0.configuration?.title == "Remove David" }.count, 1)
+        // Their phone numbers open in the key editor, without the rest of it.
+        let navigation = UINavigationController(rootViewController: person)
+        try XCTUnwrap(rows(in: person.view).first { $0.accessibilityIdentifier == "person.phone" }).sendActions(for: .touchUpInside)
+        let numbers = try XCTUnwrap(navigation.topViewController as? SetupViewController)
+        numbers.loadViewIfNeeded()
+        XCTAssertEqual(numbers.title, "Phone")
+        func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
+        XCTAssertTrue(visible(try XCTUnwrap(buttons(in: numbers.view).first { $0.configuration?.title == "Choose from Contacts" })))
+    }
+
+    /// Moving someone to another key keeps their page open, now showing that key.
+    @MainActor func testMovingSomeoneToAnotherKeyKeepsTheirPageOpen() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), phoneNumber: "+14155550123"), for: 2)
+        let home = FamilyAdminViewController(slots: slots)
+        var saved: CallSlots?
+        home.onSaveSlots = { saved = $0 }
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        let person = PersonViewController(admin: home, slot: 2)
+        navigation.pushViewController(person, animated: false); person.loadViewIfNeeded()
+        person.move(to: 3)
+        XCTAssertNil(saved?.contact(for: 2))
+        XCTAssertEqual(saved?.contact(for: 3)?.name, "David")
+        XCTAssertTrue(navigation.topViewController === person, "their page stays open")
+        XCTAssertEqual(buttons(in: person.view).first { $0.accessibilityIdentifier == "person.key" }?.configuration?.title, "Key 3")
+    }
+
+    /// Someone on the keypad by phone who joined Porch another way can be linked to it, keeping their key's numbers and color.
+    @MainActor func testLinkingAPhoneKeyToSomeoneOnPorchKeepsItsNumbers() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .video), phoneNumber: "+14155550123",
+                                         otherPhoneNumbers: ["+14155550199"], buttonColorHex: "FFCC00"), for: 2)
+        let home = FamilyAdminViewController(slots: slots)
+        var saved: CallSlots?
+        home.onSaveSlots = { saved = $0 }
+        let person = PersonViewController(admin: home, slot: 2); person.loadViewIfNeeded()
+        let id = UUID().uuidString
+        person.link(to: try JSONDecoder().decode(FamilyPerson.self, from: JSONSerialization.data(withJSONObject: [
+            "id": id, "name": "David Chen", "role": "family", "permissions": ["audio": false, "video": false], "online": true])))
+        let key = try XCTUnwrap(saved?.contact(for: 2))
+        XCTAssertEqual(key.familyMemberID, id)
+        XCTAssertEqual(key.name, "David Chen", "they go by their Porch name")
+        XCTAssertEqual(key.phoneNumbers, ["+14155550123", "+14155550199"])
+        XCTAssertEqual(key.nativeCall?.room, "test")
+        XCTAssertEqual(key.nativeCall?.mode, .video)
+        XCTAssertEqual(key.buttonColorHex, "FFCC00")
+    }
+
+    /// Someone invited from an empty key without a name gets one there, so the key can still be saved.
+    @MainActor func testKeyInvitedWithoutANameAsksForOne() async throws {
+        let editor = SetupViewController(slot: 3, contact: nil)
+        let navigation = UINavigationController(rootViewController: editor); editor.loadViewIfNeeded()
+        let name = try XCTUnwrap(descendants(editor.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "Name" })
+        try XCTUnwrap(buttons(in: editor.view).first { $0.configuration?.title == "Invite them" }).sendActions(for: .touchUpInside)
+        let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
+        invite.onCreated?(UUID().uuidString, "")
+        func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
+        XCTAssertTrue(visible(name), "an invitation without a name leaves the name to fill in")
+        name.text = "David"
+        let saved = expectation(description: "saved")
+        editor.onSaveSlot = { action, contact in
+            XCTAssertEqual(action, .person); XCTAssertEqual(contact?.name, "David"); XCTAssertNotNil(contact?.invitationID)
+            XCTAssertEqual(contact?.customName, "", "the name gives way once they join and choose their own")
+            XCTAssertEqual(contact?.memberName, "David")
+            saved.fulfill()
+        }
+        _ = editor.perform(try XCTUnwrap(editor.navigationItem.rightBarButtonItem?.action))
+        await fulfillment(of: [saved], timeout: 5)
+    }
+
+    /// On a caregiver's phone, a family member's photo shows on their page once it has downloaded.
+    @MainActor func testRemoteCaregiverModeShowsAPhotoOnceItDownloads() throws {
+        let photo = portraitData(), id = ContactPhotoStore.id(for: photo)
+        let file = FamilyPhotos.shared.store.directoryURL.appendingPathComponent(id).appendingPathExtension("jpg")
+        try? FileManager.default.removeItem(at: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": false, "people": [
+            ["id": "sam", "name": "Sam", "role": "family", "photoID": id, "permissions": ["audio": false, "video": false], "online": true]]]))
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        RemoteCaregiverSession.shared.begin(pin: "123456")
+        defer { RemoteCaregiverSession.shared.end() }
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        let sam = PersonViewController(admin: admin, memberID: "sam"); sam.loadViewIfNeeded()
+        func photoButton() -> String? { buttons(in: sam.view).first { $0.accessibilityIdentifier == "person.choosePhoto" }?.configuration?.title }
+        XCTAssertEqual(photoButton(), "Add photo")
+        try FamilyPhotos.shared.store.add(photo)
+        NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+        XCTAssertEqual(photoButton(), "Change photo")
+    }
+
+    @MainActor func testWideIPadShowsThePageBesideTheList() throws {
+        let home = FamilyAdminViewController(slots: CallSlots())
+        let split = CaregiverSplitViewController(home: home)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 1180, height: 820)
+        window.rootViewController = split; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        // A phone always shows one page at a time.
+        guard !split.isCollapsed else { return }
+        func detail() -> UIViewController? { (split.viewController(for: .secondary) as? UINavigationController)?.topViewController ?? split.viewController(for: .secondary) }
+        XCTAssertTrue(detail() is PeopleSettingsViewController)
+        XCTAssertTrue(rows(in: home.view).first { $0.accessibilityIdentifier == "caregiver.page.people" }?.isCurrent == true)
+        try XCTUnwrap(rows(in: home.view).first { $0.accessibilityIdentifier == "caregiver.page.calls" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue(detail() is CallSettingsViewController)
+        XCTAssertEqual(rows(in: home.view).filter(\.isCurrent).map(\.accessibilityIdentifier), ["caregiver.page.calls"])
+        XCTAssertTrue(home.navigationController?.viewControllers == [home], "The list stays beside the page")
+    }
+
+    @MainActor func testFamilySettingsKeepRarelyUsedChoicesAsLinks() {
+        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
+        XCTAssertEqual(settings.title, "Settings")
+        let titles = buttons(in: settings.view).compactMap { $0.configuration?.title }
+        XCTAssertTrue(titles.contains("Privacy policy"))
+        XCTAssertTrue(titles.contains { $0.hasPrefix("Use this ") && $0.hasSuffix(" as the bedside Porch") })
+        if FamilyCoordinator.shared.state?.me.caregiver != true {
+            XCTAssertFalse(rows(in: settings.view).contains { $0.accessibilityIdentifier == "family.caregiverMode" }, "Caregiver mode shows only for caregivers")
+        }
+    }
+
+    /// Porch checks in every few seconds. One that changes nothing on the page leaves its controls in place, so an open
+    /// photo menu stays open and VoiceOver stays where it was.
+    @MainActor func testFamilySettingsStayPutWhenACheckInChangesNothing() {
+        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
+        let before = buttons(in: settings.view)
+        NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+        let after = buttons(in: settings.view)
+        XCTAssertFalse(before.isEmpty)
+        XCTAssertEqual(after.count, before.count)
+        XCTAssertTrue(zip(before, after).allSatisfy { $0 === $1 }, "the same buttons are still showing")
     }
 
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {

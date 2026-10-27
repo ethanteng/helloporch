@@ -31,6 +31,15 @@ public enum CallPreferences {
         defaults.set(min(silenceRange.upperBound, max(silenceRange.lowerBound, seconds)), forKey: silenceSecondsKey)
     }
 
+    /// Where a minute stepper lands, given the timeout it was showing. A whole number of minutes
+    /// follows the stepper. A leftover number of seconds moves one minute from that leftover:
+    /// up to the next minute, or down to the minute below it (and at least one minute).
+    public static func silenceSeconds(choosing minutes: Int, from current: Int) -> Int {
+        guard current % 60 != 0 else { return minutes * 60 }
+        let floorMinutes = current / 60
+        return minutes > floorMinutes ? (floorMinutes + 1) * 60 : max(60, floorMinutes * 60)
+    }
+
     public static func fallbackSeconds(in defaults: UserDefaults = .standard) -> Int {
         let seconds = defaults.integer(forKey: fallbackKey)
         return fallbackRange.contains(seconds) ? seconds : defaultFallbackSeconds

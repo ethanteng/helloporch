@@ -190,20 +190,16 @@ final class CaregiverPINViewController: CaregiverFormViewController {
         submit.configuration?.title = creating ? "Save PIN and continue" : "Open caregiver mode"
         fields.append(submit)
         bedsideName.autocapitalizationType = .words
-        content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", detail: creating ? "Choose a PIN you'll remember. You'll need it to change settings." : "Enter your PIN to change settings.", views: fields))
+        content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", detail: creating ? "Caregivers also use it on their phones." : nil, views: fields))
         // Until this device is enrolled, caregiver mode (and its device-mode switch) can't open,
         // so offer the way back here.
         if creating && profile == nil {
-            let family = PorchStyle.button("Use this device as a family member", symbol: "iphone", filled: false)
-            family.addAction(UIAction { [weak self] _ in self?.useAsFamily() }, for: .touchUpInside)
-            let detail = PorchDevice.credential(for: .family) != nil ? "Switch back to family mode. Your family pairing is still saved." : "For calling the bedside from this device instead."
-            content.addArrangedSubview(section("Not the bedside device?", detail: detail, views: [family]))
+            content.addArrangedSubview(textLink("Use this device as a family member") { [weak self] in self?.useAsFamily() })
         }
         // Reachable without the PIN, so anyone at the bedside can read it.
-        let privacy = PorchStyle.button("Privacy policy", symbol: "hand.raised", filled: false)
+        let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
         privacy.accessibilityIdentifier = "caregiver.privacy"
-        privacy.addAction(UIAction { [weak self] _ in if let self { showPrivacyPolicy(on: self) } }, for: .touchUpInside)
-        content.addArrangedSubview(section("Privacy", detail: "What Porch keeps and for how long.", views: [privacy]))
+        content.addArrangedSubview(privacy)
     }
     private func useAsFamily() {
         task?.cancel(); try? PorchDevice.saveActivation(nil)

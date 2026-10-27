@@ -68,6 +68,20 @@ final class MemberProfileTests: XCTestCase {
         }
     }
 
+    /// An invitation created without a name keeps the name typed on the key, and that name gives way once they join.
+    func testBlankInvitationKeepsTheNameTypedForTheKeyUntilTheyJoin() throws {
+        try fixture { _, store in
+            var slots = CallSlots()
+            try slots.setContact(CallContact(name: "", nativeCall: NativeCall(room: "paired", mode: .voice), invitationID: invitation, memberName: "David"), for: 1)
+            try slots.reconcile(with: snapshot(people: [], invitations: [["id": invitation, "name": "", "expiresAt": 9]]), memberPhotos: store.familyMembers)
+            XCTAssertEqual(slots.contact(for: 1)?.name, "David")
+            XCTAssertEqual(slots.contact(for: 1)?.customName, "")
+            try slots.reconcile(with: snapshot(people: [person(name: "David Chen")]), memberPhotos: store.familyMembers)
+            XCTAssertEqual(slots.contact(for: 1)?.name, "David Chen")
+            XCTAssertEqual(slots.contact(for: 1)?.customName, "")
+        }
+    }
+
     func testCaregiversKeypadNameAndPhotoComeFirst() throws {
         try fixture { _, store in
             let theirs = Data("their photo".utf8), keypad = Data("keypad photo".utf8)
@@ -105,6 +119,44 @@ final class MemberProfileTests: XCTestCase {
             try slots.save(to: defaults, photoStore: store)
             let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: defaults.data(forKey: "porch.slots.v2")!) as? [[String: Any]])
             XCTAssertEqual((saved[1]["contact"] as? [String: Any])?["name"] as? String, "Ethan")
+        }
+    }
+
+    /// Caregiver settings change one detail of a key at a time, such as its color, and nothing else on it.
+    func testUpdatingOneDetailKeepsTheRestOfTheKeyIncludingTheMembersPhoto() throws {
+        try fixture { _, store in
+            let photo = Data("ethan's photo".utf8)
+            try store.familyMembers.add(photo)
+            var slots = CallSlots()
+            try slots.setContact(CallContact(name: "Grandpa Joe", nativeCall: NativeCall(room: "paired", mode: .voice), phoneNumber: "+14155550123",
+                                             otherPhoneNumbers: ["+14155550199"], invitationID: invitation, memberName: "Ethan", buttonColorHex: "FFCC00"), for: 1)
+            try slots.reconcile(with: snapshot(people: [person(name: "Ethan", photoID: ContactPhotoStore.id(for: photo))]), memberPhotos: store.familyMembers)
+            let original = try XCTUnwrap(slots.contact(for: 1))
+            XCTAssertEqual(original.photoData, photo)
+
+            let video = try original.updating(mode: .video)
+            XCTAssertEqual(video.nativeCall?.mode, .video)
+            XCTAssertEqual(video.nativeCall?.room, "paired")
+            XCTAssertEqual(video.customName, "Grandpa Joe")
+            XCTAssertEqual(video.phoneNumbers, ["+14155550123", "+14155550199"])
+            XCTAssertEqual(video.familyMemberID, member)
+            XCTAssertEqual(video.buttonColorHex, "FFCC00")
+            XCTAssertEqual(video.photoData, photo, "the member's photo stays on the key")
+
+            // One name per family member: an empty name makes the key go by theirs.
+            XCTAssertEqual(try original.updating(name: "").name, "Ethan")
+            XCTAssertNil(try original.updating(buttonColorHex: .some(nil)).buttonColorHex)
+            XCTAssertEqual(try original.updating(buttonColorHex: .some("00aa00")).buttonColorHex, "00AA00")
+
+            let own = Data("a key photo".utf8)
+            let withPhoto = try original.updating(photoData: .some(own))
+            XCTAssertEqual(withPhoto.customPhotoData, own)
+            XCTAssertEqual(withPhoto.photoData, own, "a key's own photo comes first")
+            let cleared = try withPhoto.updating(photoData: .some(nil))
+            XCTAssertNil(cleared.customPhotoData)
+            XCTAssertEqual(cleared.photoData, photo, "back to the member's photo")
+            XCTAssertThrowsError(try CallContact(name: "David", nativeCall: NativeCall(room: "phone", mode: .voice), phoneNumber: "+14155550123").updating(name: ""),
+                                 "someone who isn't on Porch needs a name")
         }
     }
 }

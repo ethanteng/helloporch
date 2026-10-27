@@ -502,16 +502,16 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: Cell2JackKeypad.enabledKey))
         XCTAssertEqual(keypad.status, "Phone keypad off")
     }
-    @MainActor func testCaregiverCell2JackSwitchIsIndependentOfSilenceSaveAndStartsOff() throws {
+    @MainActor func testCaregiverCell2JackSwitchStartsOffAndLeavesSilenceAlone() throws {
         guard Cell2JackKeypad.supportsDriverPlatform else { return }
         let name = "cell2jack-switch-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { false }) { Connection($0) }
-        let screen = AdvancedSettingsViewController(defaults: defaults, phoneKeypad: keypad)
+        let screen = DeviceSettingsViewController(phoneKeypad: keypad)
         screen.loadViewIfNeeded()
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "advanced.cell2jack" })
+        let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "device.cell2jack" })
         XCTAssertFalse(toggle.isOn)
         toggle.isOn = true; toggle.sendActions(for: .valueChanged)
         XCTAssertTrue(keypad.enabled)
@@ -528,10 +528,10 @@ final class Cell2JackRoutingTests: XCTestCase {
         let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
             let result = Connection(update); connection = result; return result
         }
-        let screen = AdvancedSettingsViewController(defaults: defaults, phoneKeypad: keypad)
+        let screen = DeviceSettingsViewController(phoneKeypad: keypad)
         screen.loadViewIfNeeded()
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "advanced.cell2jackReceiverHangUp" })
+        let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "device.cell2jackReceiverHangUp" })
         XCTAssertTrue(toggle.isOn); XCTAssertTrue(keypad.receiverHangUp)
         toggle.isOn = false; toggle.sendActions(for: .valueChanged)
         XCTAssertFalse(keypad.receiverHangUp)
