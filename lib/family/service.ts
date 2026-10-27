@@ -441,8 +441,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       if (action === "setShareAttendance") {
         requireValue(typeof input.enabled === "boolean", "Choose whether family see when someone is at the iPad.");
+        // Turning it back on starts afresh, and turning it off forgets the last time, too.
+        if (input.enabled && !attendanceShared(house)) house.attendanceSince = now;
         house.shareAttendance = input.enabled;
-        // Turning it off forgets the last time, too.
         if (!input.enabled) for (const member of house.members) delete member.attendedAt;
         return undefined;
       }

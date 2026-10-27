@@ -74,7 +74,7 @@ On the bedside iPad, turn this off in **Call preferences → When no one answers
 
 ## Someone at the iPad
 
-Under the bedside's name, family phones show **Someone is at the iPad** when someone was there in the last 90 seconds, and otherwise how long ago someone was: "Someone was at the iPad 25 minutes ago". It helps them decide whether to call now. It never says no one is there, because Porch can miss someone lying in bed or across the room who can still hear a call ring. After a week it shows nothing.
+Under the bedside's name, family phones show **Someone is at the iPad** when someone was there in the last 90 seconds, and otherwise how long ago someone was: "Someone was at the iPad 25 minutes ago". It helps them decide whether to call now. It never says no one is there, because Porch can miss someone lying in bed or across the room who can still hear a call ring. After a week it shows nothing, and it's hidden while the phone can't reach Porch.
 
 - **Turning it off.** **Family & drop-in → Privacy → Show family when someone is at the iPad** is on to start. A caregiver can turn it off on the bedside iPad or in caregiver mode on a phone. Off, family see nothing about it, the server deletes the last time, and the iPad stops reporting and forgets anything it noticed meanwhile.
 - **Keys and touches.** While it's on, any touch on the bedside screen, any key on a keyboard or number pad, and any key or hang-up on a Cell2Jack phone count, in every Porch screen, including caregiver mode.

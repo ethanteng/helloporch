@@ -133,7 +133,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let state = coordinator.state
         let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, autoDropIn: state?.me.autoDropIn, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0,
                               photo: state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
-        let attended = state.flatMap { BedsideAttendance.text(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) }
+        // Without a fresh check-in the last one's time stands still, so it would look current forever.
+        let attended = coordinator.error != nil ? nil : state.flatMap { BedsideAttendance.text(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) }
         attendance.text = attended; attendance.isHidden = attended == nil
         attendance.textColor = state.map { BedsideAttendance.isPresent(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) } == true ? PorchStyle.accent : PorchStyle.secondary
         guard next != displayed else { return }

@@ -67,10 +67,11 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
  * `keypadNumbers`: the phone numbers saved on the bedside keypad, as the iPad last reported them; unset until it first does.
  * `porchNumber`: the household's own phone number, and `phoneSetup` while one is still being set up.
  * `shareAttendance`: family see when someone was last at the bedside iPad (see `noteAttendance`); unset is on.
+ *   `attendanceSince`: when a caregiver last turned it back on. Nothing from before then is kept.
  * `numberFromSetup`: made by the app's setup, which gets the household its number. A household set up by hand, like the
  * first one, already has a number outside these records; the app never buys it another (see numbers.ts). */
 export type Household = { id: string; name: string; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
-  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean };
+  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
@@ -207,10 +208,13 @@ export function attendanceShared(house: Household) { return house.shareAttendanc
 /** The bedside reports, with each poll, how many seconds ago it last noticed someone at the iPad: a key pressed, the
  * screen touched or, if a caregiver turned it on, a face its camera saw. Seconds ago, not a time, so the iPad's clock
  * doesn't matter. Polls can arrive out of order, so the newest time is kept. Anything else, or a report while sharing
- * is off, is ignored rather than failing the poll. */
+ * is off, is ignored rather than failing the poll. So is a time from before sharing was turned back on: an iPad that
+ * was offline meanwhile never heard it was off. */
 export function noteAttendance(house: Household, member: Member, secondsAgo: unknown, now: number) {
   if (!attendanceShared(house) || member.role !== "bedside" || !Number.isSafeInteger(secondsAgo) || (secondsAgo as number) < 0 || (secondsAgo as number) > 30 * 86400) return;
-  member.attendedAt = Math.max(member.attendedAt ?? 0, now - (secondsAgo as number));
+  const at = now - (secondsAgo as number);
+  if (at < (house.attendanceSince ?? 0)) return;
+  member.attendedAt = Math.max(member.attendedAt ?? 0, at);
 }
 /** What a new Porch call becomes. A family member whose calls a caregiver set to drop in drops in with an ordinary
  * call too, whenever they could have chosen that drop-in themselves and the bedside is ready for it. Otherwise it

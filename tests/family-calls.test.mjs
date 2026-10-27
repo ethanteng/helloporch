@@ -489,8 +489,14 @@ test('a caregiver can stop family seeing when someone is at the iPad, which forg
  await f.json('setCaregiver',{memberID:family.state.me.id,enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  const on=await f.json('setShareAttendance',{enabled:true},family.credential,env.PORCH_CONTACT_SETUP_CODE);
  assert.equal(on.admin.shareAttendance,true); assert.equal(on.state.shareAttendance,undefined,'only the bedside needs it in its state');
+ f.advance(10);
+ // An iPad that was offline while it was off still remembers someone from then.
+ await f.json('poll',{available:true,attendedSeconds:30},bedside.credential);
+ assert.equal(await seen(),undefined,'nothing from before it was turned back on');
  const now=(await f.json('poll',{available:true,attendedSeconds:3},bedside.credential)).state.serverTime;
  assert.equal(await seen(),now-3);
+ await f.json('setShareAttendance',{enabled:true},family.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal(await seen(),now-3,'turning it on while it is already on keeps the last time');
 });
 
 test('CallKit answer retains the atomic phone fallback race and heartbeats keep locked calls alive',async()=>{
