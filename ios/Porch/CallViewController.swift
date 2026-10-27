@@ -517,13 +517,15 @@ final class CallViewController: UIViewController {
     @objc private func refreshPresence() {
         let messages = presenceAllowed
         // Watching for messages sees anyone there anyway, so a separate look waits until it stops.
-        let looking = !messages && attendanceLookEnds.map { Date() < $0 } == true && cameraAvailable && BedsideAttendance.cameraEnabled()
+        let looking = !messages && attendanceLookEnds.map { Date() < $0 } == true && cameraAvailable && attendanceCameraOn
         if messages || looking { presence.start(orientation: view.window?.windowScene?.interfaceOrientation ?? .landscapeLeft, messages: messages) }
         else { presence.stop() }
     }
+    /// A caregiver lets family see someone is at the iPad, and lets the camera check.
+    private var attendanceCameraOn: Bool { BedsideAttendance.cameraEnabled() && FamilyCoordinator.shared.state?.shareAttendance == true }
     /// A few seconds of looking for someone at the iPad, if a caregiver lets family see that.
     private func lookForSomeone() {
-        guard BedsideAttendance.cameraEnabled() else { return }
+        guard attendanceCameraOn else { return }
         let ends = Date().addingTimeInterval(BedsideAttendance.lookSeconds)
         attendanceLookEnds = ends
         refreshPresence()
@@ -534,7 +536,7 @@ final class CallViewController: UIViewController {
     }
     /// A face close by. Family hear of it only if a caregiver turned that on: starting messages alone tells no one.
     private func someoneSeen() {
-        guard BedsideAttendance.cameraEnabled() else { return }
+        guard attendanceCameraOn else { return }
         AttendanceTracker.shared.noticed()
         // Seen, so this look can stop early.
         if attendanceLookEnds != nil { attendanceLookEnds = nil; refreshPresence() }

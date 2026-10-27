@@ -44,5 +44,7 @@ final class BedsideAttendanceTests: XCTestCase {
         // A clock set back can't make it sound like the future.
         now -= 600
         XCTAssertEqual(tracker.secondsSince, 0)
+        tracker.forget()
+        XCTAssertNil(tracker.secondsSince, "nothing from while sharing was off")
     }
 }

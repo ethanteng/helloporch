@@ -383,7 +383,8 @@ Exit criteria: an Android phone joins an existing household from an invitation a
     - Thermal status is below severe.
   - It announces, then plays. "Not now" snoozes for 30 minutes per set of messages.
 - **Someone at the bedside.**
-  - Any touch, key or phone-keypad press counts. Send the whole seconds since then as `attendedSeconds` with each poll.
+  - Any touch, key or phone-keypad press counts. Send the whole seconds since then as `attendedSeconds` with each poll, only while the bedside snapshot's `shareAttendance` is true. While it's false, forget the last time.
+  - Caregiver mode shows **Privacy → Show family when someone is at the iPad** (`setShareAttendance`), on the tablet and on phones.
   - If the caregiver turns on **Check with the camera** (a setting on the tablet), the same face detection looks for up to 5 s every 30 s on the idle clock. A face held for 1 s counts.
   - A face seen while presence autoplay is watching counts too, but only with that setting on.
   - Nothing is recorded or sent. Stop the camera before any call screen opens.

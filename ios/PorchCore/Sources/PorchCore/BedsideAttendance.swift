@@ -51,6 +51,8 @@ public final class AttendanceTracker {
     private var noticedAt: Date?
     public init(clock: @escaping () -> Date = { Date() }) { self.clock = clock }
     public func noticed() { noticedAt = clock() }
+    /// While a caregiver has sharing off, so turning it back on can't report someone who was there meanwhile.
+    public func forget() { noticedAt = nil }
     /// Whole seconds since then, for the bedside's poll. Nil until someone has been noticed. Seconds ago rather than a
     /// time, so a wrong clock on the iPad doesn't matter.
     public var secondsSince: Int? { noticedAt.map { max(0, Int(clock().timeIntervalSince($0))) } }

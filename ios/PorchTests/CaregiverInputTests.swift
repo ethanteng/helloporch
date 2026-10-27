@@ -991,6 +991,8 @@ final class CaregiverInputTests: XCTestCase {
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
         XCTAssertFalse(switches(admin.view).contains { $0.accessibilityIdentifier == "messages.autoplay" }, "Starting messages by camera is set on the bedside iPad itself")
         XCTAssertFalse(switches(admin.view).contains { $0.accessibilityIdentifier == "attendance.camera" }, "So is looking for someone at the iPad by camera")
+        let share = try XCTUnwrap(switches(admin.view).first { $0.accessibilityIdentifier == "attendance.share" }, "Sharing that someone is at the iPad is a server setting a phone can change")
+        XCTAssertFalse(share.isEnabled, "An older server without the setting can't change it")
         let me = FamilyPersonViewController(personID: "me", admin: admin); me.loadViewIfNeeded()
         XCTAssertFalse(buttons(in: me.view).contains { $0.configuration?.title == "Remove access" }, "A caregiver can't remove their own phone here")
         XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")

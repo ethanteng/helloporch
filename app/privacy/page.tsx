@@ -148,9 +148,9 @@ export default function PrivacyPage() {
                 Porch can show who is reachable.
               </li>
               <li>
-                <strong>When someone was last at the iPad.</strong> The last time someone pressed a key or touched your
-                loved one’s iPad and, if a caregiver turns it on, the last time its camera saw a face close by. We keep
-                only the latest time. Family members see “Someone is at the iPad” or how long ago someone was, so they
+                <strong>When someone was last at the iPad.</strong> Unless a caregiver turns this off, the last time
+                someone pressed a key or touched your loved one’s iPad and, if a caregiver turns it on, the last time its
+                camera saw a face close by. We keep only the latest time. Family members see “Someone is at the iPad” or how long ago someone was, so they
                 know whether to call. It doesn’t say who it was or how Porch noticed.
               </li>
               <li>
@@ -317,6 +317,10 @@ export default function PrivacyPage() {
               <li>
                 <strong>Noticing someone in front of the iPad</strong> is off unless a caregiver turns it on, separately
                 for starting messages and for telling family.
+              </li>
+              <li>
+                <strong>Showing family when someone is at the iPad</strong> can be turned off by a caregiver. That
+                deletes the last time we kept, and the iPad stops sending it.
               </li>
               <li>
                 <strong>Drop-in</strong> works only for people a caregiver approves, and can be turned off at any time.

@@ -473,6 +473,26 @@ test('family see when someone was last noticed at the bedside iPad, and only the
  assert.equal(own.bedsideAttendedAt,undefined); assert.equal(own.people[0].attendedAt,undefined);
 });
 
+test('a caregiver can stop family seeing when someone is at the iPad, which forgets the last time',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ const seen=async()=>(await f.json('poll',{available:true},family.credential)).state.bedsideAttendedAt;
+ assert.equal((await f.json('poll',{available:true,attendedSeconds:10},bedside.credential)).state.shareAttendance,true,'on unless a caregiver turns it off');
+ assert.notEqual(await seen(),undefined);
+ assert.equal((await f.send('setShareAttendance',{enabled:false},bedside.credential)).status,403,'it needs the PIN');
+ assert.equal((await f.send('setShareAttendance',{enabled:'no'},bedside.credential,env.PORCH_CONTACT_SETUP_CODE)).status,400);
+ const off=await f.json('setShareAttendance',{enabled:false},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal(off.admin.shareAttendance,false); assert.equal(off.state.shareAttendance,false);
+ assert.ok(!f.store.values.get(`house:${bedside.state.householdID}`).includes('attendedAt'),'the last time is deleted');
+ await f.json('poll',{available:true,attendedSeconds:0},bedside.credential);
+ assert.equal(await seen(),undefined,'reports are ignored while it is off');
+ // A family caregiver can turn it back on from their phone.
+ await f.json('setCaregiver',{memberID:family.state.me.id,enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ const on=await f.json('setShareAttendance',{enabled:true},family.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal(on.admin.shareAttendance,true); assert.equal(on.state.shareAttendance,undefined,'only the bedside needs it in its state');
+ const now=(await f.json('poll',{available:true,attendedSeconds:3},bedside.credential)).state.serverTime;
+ assert.equal(await seen(),now-3);
+});
+
 test('CallKit answer retains the atomic phone fallback race and heartbeats keep locked calls alive',async()=>{
  const f=fixture({sendPush:async()=>({delivered:true})}),{bedside,family}=await f.setup();
  await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);
