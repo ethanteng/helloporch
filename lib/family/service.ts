@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -57,7 +57,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
   // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
@@ -83,12 +83,14 @@ function pendingInvites(house: Household, now: number) {
 // family device here. It is returned only after a PIN check.
 function adminState(house: Household, now: number, pushEnabled: boolean) {
   return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], callScreening: publicCallScreening(house),
+    shareAttendance: attendanceShared(house),
     people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled, true)), invitations: pendingInvites(house, now) };
 }
 function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
   // The bedside is a caregiver device; a family member edits their own profile.
   const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled, me.role === "bedside" || m.id === me.id), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
+  const bedside = house.members.find(m => m.role === "bedside");
   const invited = call && ![call.from, call.to].includes(me.id) ? call.porchGuests?.filter(g => g.memberID === me.id).at(-1) : undefined;
   // A telephone drop-in is announced with the caregiver's name for that approved number.
   const callerName = (call: Call) => {
@@ -108,12 +110,16 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], bedsideLanguage: bedsideLanguage(house) } : {}),
     // Who can ring by phone, and the keypad numbers as the server knows them, so the iPad can tell when to report a change.
     ...(me.role === "bedside" ? { callScreening: publicCallScreening(house) } : {}),
+    // Whether the iPad tells family when someone is there. While it's off, the iPad doesn't report it at all.
+    ...(me.role === "bedside" ? { shareAttendance: attendanceShared(house) } : {}),
     // The bedside's natural announcement voices, when this server can make them.
     ...(me.role === "bedside" && speechConfigured() ? { speech: publicSpeech(house) } : {}),
     // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
     ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}),
     // Messages the bedside left for this family member when they missed its call.
     ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
+    // When someone was last noticed at the bedside iPad, so family can tell whether a call now is likely to be answered.
+    ...(me.role === "family" && attendanceShared(house) && bedside?.attendedAt !== undefined ? { bedsideAttendedAt: bedside.attendedAt } : {}),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
     // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only.
@@ -433,6 +439,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         house.ringSeconds = seconds;
         return undefined;
       }
+      if (action === "setShareAttendance") {
+        requireValue(typeof input.enabled === "boolean", "Choose whether family see when someone is at the iPad.");
+        // Turning it back on starts afresh, and turning it off forgets the last time, too.
+        if (input.enabled && !attendanceShared(house)) house.attendanceSince = now;
+        house.shareAttendance = input.enabled;
+        if (!input.enabled) for (const member of house.members) delete member.attendedAt;
+        return undefined;
+      }
       if (action === "setBedsideLanguage") {
         // Chosen on the iPad itself; the server keeps a copy so phone voicemail greets callers in it.
         requireValue(me.role === "bedside", "Only the bedside can change its language.", 403);
@@ -462,7 +476,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now;
-        if (takesAvailability(me, input.launch, input.sequence)) me.available = input.available;
+        // Same ordering as availability. A poll that left earlier can arrive after a newer one, and its
+        // attendedSeconds were counted when it was sent.
+        if (takesAvailability(me, input.launch, input.sequence)) {
+          me.available = input.available;
+          noteAttendance(house, me, input.attendedSeconds, now);
+        }
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.

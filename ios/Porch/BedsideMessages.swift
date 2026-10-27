@@ -7,6 +7,7 @@ import Vision
 extension Notification.Name {
     static let porchMessagesReady = Notification.Name("porch.messages.ready")
     static let porchMessageAutoplayChanged = Notification.Name("porch.messages.autoplay")
+    static let porchAttendanceCameraChanged = Notification.Name("porch.attendance.camera")
 }
 
 /// Keeps waiting family messages downloaded on the bedside iPad, so they play instantly and
@@ -962,13 +963,20 @@ extension BedsideVoicemailViewController: Cell2JackDigitReceiving {
 }
 
 /// Notices someone sitting in front of the bedside iPad: the front camera runs at a low rate and
-/// Apple's on-device face detection looks at a few frames a second. Nothing is recorded, kept or sent.
-/// Callers run it only while messages are waiting and stop it before anything else uses the camera.
+/// Apple's on-device face detection looks at a few frames a second. No image is recorded, kept or sent.
+/// Callers run it while messages are waiting, or for a few seconds at a time when a caregiver lets family
+/// see that someone is at the iPad, and stop it before anything else uses the camera.
 final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    /// Called on the main thread once someone has been in front of the iPad for a couple of seconds.
+    /// Called on the main thread once someone has been in front of the iPad for a couple of seconds,
+    /// while it's watching for messages.
     var onPresent: (() -> Void)?
+    /// Called on the main thread whenever a face close by has stayed for a moment: about once a second
+    /// while someone is there.
+    var onSighting: (() -> Void)?
     /// Main-thread state.
     private(set) var running = false
+    /// Main-thread state: someone settling in front of the iPad calls `onPresent`.
+    private var watchingMessages = false
     // Starting, stopping and setup happen on the session queue; frames are analyzed on the video
     // queue, so waiting for a stop never holds up frame delivery.
     private let sessionQueue = DispatchQueue(label: "porch.presence.session")
@@ -977,6 +985,10 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private var connection: AVCaptureConnection?
     private var configured = false
     private var trigger = PresenceTrigger()
+    /// A moment's steady face, so one odd frame doesn't count as someone there.
+    private var sighting = PresenceTrigger(requiredSeconds: 1)
+    /// The video queue's copy of `watchingMessages`.
+    private var armed = false
     private var lastAnalysis: TimeInterval = 0
     private let faces = VNDetectFaceRectanglesRequest()
     /// Main-thread count of session-queue jobs. Start and stop bounce to the main thread, so a
@@ -990,13 +1002,20 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         sessionQueue.async { if capture.isRunning { capture.stopRunning() } }
     }
 
-    /// Starts watching, or keeps watching with the iPad's current orientation.
-    func start(orientation: UIInterfaceOrientation) {
+    /// Starts watching, or keeps watching with the iPad's current orientation. `messages`: someone settling in
+    /// front of the iPad calls `onPresent`; otherwise only `onSighting` is called.
+    func start(orientation: UIInterfaceOrientation, messages: Bool = true) {
         dispatchPrecondition(condition: .onQueue(.main))
         // Permission revoked while watching: stop, instead of leaving the camera running.
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { stop(); return }
-        if !running { videoQueue.async { [self] in trigger.reset(); lastAnalysis = 0 } }
-        running = true
+        // Someone already sitting there when messages start waiting counts from then.
+        let restart = !running, rearm = messages && !(running && watchingMessages)
+        videoQueue.async { [self] in
+            if restart { sighting.reset(); lastAnalysis = 0 }
+            if rearm { trigger.reset() }
+            armed = messages
+        }
+        running = true; watchingMessages = messages
         startToken += 1
         let token = startToken
         enqueueSession { [self] in
@@ -1070,7 +1089,14 @@ final class BedsidePresence: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         lastAnalysis = time
         guard (try? VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up).perform([faces])) != nil else { return }
         let largest = (faces.results ?? []).map { Double($0.boundingBox.height) }.max()
-        if trigger.observe(faceHeight: largest, at: time) {
+        if sighting.observe(faceHeight: largest, at: time) {
+            sighting.reset()
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.running else { return }
+                self.onSighting?()
+            }
+        }
+        if armed, trigger.observe(faceHeight: largest, at: time) {
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.running else { return }
                 self.onPresent?()

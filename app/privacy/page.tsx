@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "What the Porch app and the HelloPorch website collect, why, who helps us run Porch, how long we keep information, and how to have it deleted.",
 };
 
-const updated = "October 26, 2026";
+const updated = "October 27, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -48,6 +48,7 @@ const retention: [what: string, howLong: string][] = [
   ["Someone who leaves or is removed", "Their profile, photos, notification tokens and messages are deleted. We keep a small record that their device was removed, so it can’t reconnect."],
   ["Photos that are never saved", "Deleted shortly after the upload expires."],
   ["Blocked callers", "Up to the 30 most recent numbers, until a caregiver clears the list."],
+  ["When someone was last at the iPad", "Only the most recent time, which replaces the one before."],
   ["Call history", "The 100 most recent calls, for up to 90 days, including calls with someone who was later removed."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
@@ -82,7 +83,7 @@ export default function PrivacyPage() {
             <li>We don’t sell your information, show ads, or track you across other apps and websites.</li>
             <li>Calls go live between devices and aren’t recorded. Only messages and voicemail that someone chooses to leave are saved.</li>
             <li>Unplayed messages are deleted after 7 days, and played ones after 90 days.</li>
-            <li>When Porch notices someone in front of the iPad, detection happens on the device. No image leaves it.</li>
+            <li>When Porch notices someone in front of the iPad, detection happens on the device. No image leaves it. Family see only when someone was last there.</li>
             <li>A few service providers help us run calls, phone service, storage, notifications and website analytics. They get only what they need.</li>
             <li>
               Email <a href={`mailto:${contact}`}>{contact}</a> any time to see or delete your family’s information.
@@ -147,6 +148,12 @@ export default function PrivacyPage() {
                 Porch can show who is reachable.
               </li>
               <li>
+                <strong>When someone was last at the iPad.</strong> Unless a caregiver turns this off, the last time
+                someone pressed a key or touched your loved one’s iPad and, if a caregiver turns it on, the last time its
+                camera saw a face close by. We keep only the latest time. Family members see “Someone is at the iPad” or how long ago someone was, so they
+                know whether to call. It doesn’t say who it was or how Porch noticed.
+              </li>
+              <li>
                 <strong>Notification tokens.</strong> Addresses from Apple that let us ring a family phone or tell it a
                 message has arrived.
               </li>
@@ -192,9 +199,9 @@ export default function PrivacyPage() {
             <ul>
               <li>
                 <strong>Noticing someone in front of the iPad.</strong> If a caregiver turns this on, your loved one’s
-                iPad uses its camera to notice that a face is in view, so it can start waiting messages. This happens on the
-                iPad. It doesn’t recognize who the person is, no image is saved or sent anywhere, and nothing is
-                reported to anyone.
+                iPad uses its camera to notice that a face is in view, so it can start waiting messages or let family
+                know someone is there. This happens on the iPad. It doesn’t recognize who the person is, and no image is
+                saved or sent anywhere. For family, only the time it last saw someone is sent.
               </li>
               <li>
                 <strong>Contacts.</strong> When you pick someone from your contacts, Porch receives only that
@@ -308,7 +315,12 @@ export default function PrivacyPage() {
                 calls never turn on the camera.
               </li>
               <li>
-                <strong>Noticing someone in front of the iPad</strong> is off unless a caregiver turns it on.
+                <strong>Noticing someone in front of the iPad</strong> is off unless a caregiver turns it on, separately
+                for starting messages and for telling family.
+              </li>
+              <li>
+                <strong>Showing family when someone is at the iPad</strong> can be turned off by a caregiver. That
+                deletes the last time we kept, and the iPad stops sending it.
               </li>
               <li>
                 <strong>Drop-in</strong> works only for people a caregiver approves, and can be turned off at any time.

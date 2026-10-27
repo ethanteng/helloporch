@@ -32,6 +32,7 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 
 - Private invitations and pairing, with no server addresses or codes to type.
 - Calls ring through CallKit, even when the phone is locked.
+- Before calling, see whether someone is at the bedside iPad, or how long ago someone was. Touches and key presses count, and so can the iPad's camera if a caregiver turns that on. A caregiver can turn it off.
 - Send messages, and get a notification when the bedside leaves one.
 - On a call with the bedside, ring in another family member with video. A caregiver can also add a regular phone number, such as a bank that needs the loved one on the line.
 

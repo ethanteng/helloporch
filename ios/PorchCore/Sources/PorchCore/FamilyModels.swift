@@ -210,10 +210,16 @@ public struct FamilySnapshot: Codable, Equatable {
     public let bedsideLanguage: String?
     /// Bedside only: who can ring by phone. Older servers don't send it.
     public let callScreening: CallScreening?
+    /// Bedside only: family see when someone is at the iPad, unless a caregiver turned it off. The iPad reports it only
+    /// when this is true; older servers don't send it, and don't take reports.
+    public let shareAttendance: Bool?
     /// Family caregivers: this phone can add a regular phone number to its calls with the bedside.
     public let canAddPhoneGuests: Bool?
     /// Family devices: the rest of the family on this Porch, who can be rung into a call. Older servers don't send it.
     public let family: [FamilyRelative]?
+    /// Family devices: when someone was last noticed at the bedside iPad, in server time (see `BedsideAttendance`).
+    /// Older servers don't send it, nor does one that hasn't heard of anyone there yet.
+    public let bedsideAttendedAt: TimeInterval?
 
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {
@@ -253,10 +259,12 @@ public struct FamilyAdminState: Codable, Equatable {
     public let invitations: [PendingFamilyInvitation]?
     /// Who can ring by phone. Older servers don't send it.
     public let callScreening: CallScreening?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil) {
+    /// Family see when someone is at the bedside iPad. Older servers don't send it.
+    public let shareAttendance: Bool?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
         self.messagesEnabled = messagesEnabled; self.messages = messages; self.phoneDropIns = phoneDropIns; self.invitations = invitations
-        self.callScreening = callScreening
+        self.callScreening = callScreening; self.shareAttendance = shareAttendance
     }
 }
 /// One call to or from the bedside, as caregivers see it in Call history (`callHistory`).
