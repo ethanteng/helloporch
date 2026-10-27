@@ -42,7 +42,7 @@ const options: Option[] = [
     ],
     cons: [
       "Needs a newer iPad, and a few more steps to set up.",
-      "The handset carries no sound. If they pick it up out of habit, they still talk and listen through the iPad.",
+      "They lift the receiver to press a photo, but the handset carries no sound: they talk and listen through the iPad.",
       "More parts and cables, for about $35 more.",
     ],
   },
@@ -298,13 +298,14 @@ export default function PilotPage() {
                 <p>
                   In Porch’s caregiver mode, open <strong>Advanced</strong> and turn on{" "}
                   <strong>Use Cell2Jack phone keypad</strong>. When <strong>Phone keypad ready</strong> appears
-                  under Call someone, press a photo to try it.
+                  under Call someone, lift the receiver and press a photo to try it.
                 </p>
               </li>
             </ol>
             <p className={styles.note}>
-              The phone keypad only works on iPads with an M-series chip. Other iPads can still use the
-              touchscreen or a number pad.
+              The keys only work with the receiver lifted. The Cell2Jack may say the phone isn’t connected when
+              you pick up; pressing a photo stops it. Putting the receiver back ends the call, like a regular
+              phone, unless you turn off <strong>Hang up when the receiver is put back</strong> in Advanced.
             </p>
           </section>
 
