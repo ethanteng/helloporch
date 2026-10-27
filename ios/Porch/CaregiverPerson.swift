@@ -230,7 +230,15 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         let subject = resolve(admin)
         if let key = subject.slot, let contact = subject.contact {
             guard key != digit else { return }
-            if save({ try $0.setContact(nil, for: key); try $0.setContact(contact, for: digit) }) { slot = digit; render() }
+            // Saving notifies this page before it returns. A phone-only person is found by their key,
+            // so the new key has to be tracked first or the redraw treats them as removed and closes.
+            let previous = slot
+            slot = digit
+            guard save({ try $0.setContact(nil, for: key); try $0.setContact(contact, for: digit) }) else {
+                slot = previous
+                return
+            }
+            render()
         } else if let member = subject.member {
             if save({ slots in
                 let contact = try CallContact(name: "", nativeCall: NativeCall(room: "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: .voice),
