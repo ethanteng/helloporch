@@ -54,10 +54,23 @@ final class CallSettingsViewController: CaregiverPageViewController {
         let row = stepperRow("Ring before voicemail", value: value, stepper)
         stepper.addAction(UIAction { [weak admin, weak stepper, weak value] _ in
             guard let admin, let stepper else { return }
-            value?.text = Self.duration(Int(stepper.value)); stepper.accessibilityValue = value?.text
+            let chosen = Int(stepper.value)
+            // What the page showed before this tap. The control has already moved.
+            let previous = FamilyCoordinator.shared.state.map { $0.ringSeconds ?? CallPreferences.defaultVoicemailSeconds }
+            value?.text = Self.duration(chosen); stepper.accessibilityValue = value?.text
             // Waits for this change to save before taking the next, which the page then shows as saved.
             stepper.isEnabled = false
-            Task { await admin.perform("setRingSeconds", ["seconds": Int(stepper.value)]) }
+            Task { [weak stepper, weak value] in
+                let saved = await admin.perform("setRingSeconds", ["seconds": chosen])
+                // A save that never started doesn't redraw the page, so the stepper would stay stuck on the unsaved time.
+                guard !saved, let stepper, stepper.superview != nil else { return }
+                if let previous {
+                    stepper.value = Double(previous)
+                    value?.text = CallSettingsViewController.duration(previous)
+                    stepper.accessibilityValue = value?.text
+                }
+                stepper.isEnabled = FamilyCoordinator.shared.state != nil
+            }
         }, for: .valueChanged)
         return row
     }
