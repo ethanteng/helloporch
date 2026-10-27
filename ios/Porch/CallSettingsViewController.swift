@@ -120,21 +120,46 @@ final class CallSettingsViewController: CaregiverPageViewController {
         }, for: .valueChanged)
         return toggleRow("End calls after silence", silence)
     }
-    /// Whole minutes. A time saved in seconds by an older version shows as it is until it's changed.
+    /// Whole minutes. A time saved in seconds by an older version shows as it is until it's changed,
+    /// and the first + or − then moves one minute from that time.
     private func silenceRow() -> UIView {
         let seconds = CallPreferences.silenceSeconds(in: defaults)
+        let minimumMinutes = 1
+        let maximumMinutes = CallPreferences.silenceRange.upperBound / 60
         let stepper = UIStepper()
-        stepper.minimumValue = 1
-        stepper.maximumValue = Double(CallPreferences.silenceRange.upperBound / 60)
-        stepper.value = Double(max(1, (seconds + 30) / 60))
+        stepper.stepValue = 1
+        stepper.maximumValue = Double(maximumMinutes)
         stepper.accessibilityIdentifier = "calls.silenceMinutes"
+        // Park a leftover on the minute below it, with room to step down. Under a minute,
+        // park below the minimum so the first + lands on one minute.
+        let partial = seconds % 60 != 0
+        let floorMinutes = seconds / 60
+        if partial && floorMinutes >= minimumMinutes {
+            stepper.minimumValue = Double(floorMinutes - 1)
+            stepper.value = Double(floorMinutes)
+        } else if partial {
+            stepper.minimumValue = 0
+            stepper.value = 0
+        } else {
+            stepper.minimumValue = Double(minimumMinutes)
+            stepper.value = Double(min(maximumMinutes, max(minimumMinutes, seconds / 60)))
+        }
         let value = PorchStyle.label(Self.duration(seconds))
         let row = stepperRow("After no one talks for", value: value, stepper)
+        var pending = seconds
+        var applying = false
         stepper.addAction(UIAction { [weak self, weak stepper, weak value] _ in
-            guard let self, let stepper else { return }
-            let seconds = Int(stepper.value) * 60
-            CallPreferences.saveSilence(enabled: true, seconds: seconds, in: self.defaults)
-            value?.text = Self.duration(seconds); stepper.accessibilityValue = value?.text
+            guard let self, let stepper, !applying else { return }
+            applying = true
+            defer { applying = false }
+            let next = CallPreferences.silenceSeconds(choosing: Int(stepper.value.rounded()), from: pending)
+            CallPreferences.saveSilence(enabled: true, seconds: next, in: self.defaults)
+            pending = CallPreferences.silenceSeconds(in: self.defaults)
+            // Snapping the control back onto whole minutes can itself change its value.
+            stepper.minimumValue = Double(minimumMinutes)
+            stepper.maximumValue = Double(maximumMinutes)
+            stepper.value = Double(pending / 60)
+            value?.text = Self.duration(pending); stepper.accessibilityValue = value?.text
         }, for: .valueChanged)
         return row
     }

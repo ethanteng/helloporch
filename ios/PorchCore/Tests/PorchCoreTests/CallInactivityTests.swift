@@ -69,4 +69,16 @@ final class CallInactivityTests: XCTestCase {
         defaults.set(-10, forKey: "porch.silenceSeconds")
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 120)
     }
+
+    func testSilenceMinuteStepFollowsWholeMinutesAndMovesOneMinuteFromALeftover() {
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 5, from: 120), 300)
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 1, from: 120), 60)
+        // 45 seconds shows as 45 sec. The first + is one minute, not two.
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 1, from: 45), 60)
+        // 1 min 30 sec: + is 2 min and − is 1 min, rather than jumping to 3 min.
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 2, from: 90), 120)
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 0, from: 90), 60)
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 3, from: 150), 180)
+        XCTAssertEqual(CallPreferences.silenceSeconds(choosing: 1, from: 150), 120)
+    }
 }
