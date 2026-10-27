@@ -147,6 +147,7 @@ Port the tests alongside the code. Sources are in [PorchCoreTests](../ios/PorchC
   - `NativeCallServer`: https only, or http for localhost.
 - **Messages and photos.**
   - `MessageAutoplay` and `PresenceTrigger`.
+  - `BedsideAttendance` and `AttendanceTracker`: what family see about someone at the bedside, and the seconds the bedside reports.
   - `ContactPhotoStore`: SHA-256 IDs, path-traversal checks, prune unreferenced photos after 24 h.
 - **Phone numbers.** `PhoneNumberNormalization` on libphonenumber: reject extensions, and use the device region.
 - **Invitation parsing.** `porch://pair?server=<origin>&code=<64 hex>` and `porch://activate?…`, with the same strict rules as [FamilyModels.swift:267-303](../ios/PorchCore/Sources/PorchCore/FamilyModels.swift): exactly two query items; no path, user, port or fragment.
@@ -192,6 +193,7 @@ Exit criteria: an Android phone joins an existing household from an invitation a
 ### Home screen
 
 - For each person, show availability and four buttons: Audio call, Video call, Drop in with audio, Drop in with video.
+- Under the bedside, show `BedsideAttendance.text` from `bedsideAttendedAt` and `serverTime`: "Someone is at the iPad", or how long ago someone was.
 - Drop-in buttons are enabled only when the bedside is online and not busy, drop-in is on, and the person has permission.
 - Also show message entry points and the held-voicemail, new-message and drop-in-paused banners.
 
@@ -380,6 +382,10 @@ Exit criteria: an Android phone joins an existing household from an invitation a
     - Porch is visible and the bedside isn't busy.
     - Thermal status is below severe.
   - It announces, then plays. "Not now" snoozes for 30 minutes per set of messages.
+- **Someone at the bedside.**
+  - Any touch, key or phone-keypad press counts. Send the whole seconds since then as `attendedSeconds` with each poll.
+  - If the caregiver turns on **Check with the camera** (a setting on the tablet), the same face detection looks for up to 5 s every 30 s on the idle clock. A face held for 1 s counts.
+  - A face seen while presence autoplay is watching counts too, but only with that setting on.
   - Nothing is recorded or sent. Stop the camera before any call screen opens.
 - **Held phone voicemail.** Auto-release it (`releaseKnownCaller`) for carrier-verified callers who are saved on the keypad.
 

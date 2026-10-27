@@ -214,6 +214,9 @@ public struct FamilySnapshot: Codable, Equatable {
     public let canAddPhoneGuests: Bool?
     /// Family devices: the rest of the family on this Porch, who can be rung into a call. Older servers don't send it.
     public let family: [FamilyRelative]?
+    /// Family devices: when someone was last noticed at the bedside iPad, in server time (see `BedsideAttendance`).
+    /// Older servers don't send it, nor does one that hasn't heard of anyone there yet.
+    public let bedsideAttendedAt: TimeInterval?
 
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {

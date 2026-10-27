@@ -207,7 +207,10 @@ struct FamilyCallSession {
             while !Task.isCancelled {
                 guard let self, self.isActive, self.generation == generation else { return }
                 do {
-                    let result = try await FamilyService(credential).send("poll", PollOrder.next(["available": self.canReceive()]))
+                    var values: [String: Any] = ["available": self.canReceive()]
+                    // How long ago someone was at the bedside iPad, so family can tell whether to call now.
+                    if credential.role == .bedside, let seconds = AttendanceTracker.shared.secondsSince { values["attendedSeconds"] = seconds }
+                    let result = try await FamilyService(credential).send("poll", PollOrder.next(values))
                     guard !Task.isCancelled, self.generation == generation else { return }
                     self.state = result.state; self.error = nil; self.accessRemoved = false; self.changed()
                 } catch {

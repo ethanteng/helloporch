@@ -13,8 +13,9 @@ export type Profile = { name?: string; photo?: ProfilePhoto };
 export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
  * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`).
- * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`). */
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+ * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`).
+ * `attendedAt`: the bedside only, when it last noticed someone at the iPad (see `noteAttendance`). */
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
@@ -199,6 +200,14 @@ export function takesAvailability(member: Member, launch: unknown, sequence: unk
   if (member.lastPoll?.launch === launch && (sequence as number) < member.lastPoll.sequence) return false;
   member.lastPoll = { launch, sequence: sequence as number };
   return true;
+}
+/** The bedside reports, with each poll, how many seconds ago it last noticed someone at the iPad: a key pressed, the
+ * screen touched or, if a caregiver turned it on, a face its camera saw. Seconds ago, not a time, so the iPad's clock
+ * doesn't matter. Polls can arrive out of order, so the newest time is kept. Anything else is ignored rather than
+ * failing the poll. */
+export function noteAttendance(member: Member, secondsAgo: unknown, now: number) {
+  if (member.role !== "bedside" || !Number.isSafeInteger(secondsAgo) || (secondsAgo as number) < 0 || (secondsAgo as number) > 30 * 86400) return;
+  member.attendedAt = Math.max(member.attendedAt ?? 0, now - (secondsAgo as number));
 }
 /** What a new Porch call becomes. A family member whose calls a caregiver set to drop in drops in with an ordinary
  * call too, whenever they could have chosen that drop-in themselves and the bedside is ready for it. Otherwise it

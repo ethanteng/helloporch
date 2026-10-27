@@ -1,4 +1,5 @@
 import UIKit
+import PorchCore
 
 @main
 final class PorchApp: UIResponder, UIApplicationDelegate {
@@ -23,6 +24,14 @@ final class PorchApp: UIResponder, UIApplicationDelegate {
     }
 }
 
+/// A touch or a key press anywhere in Porch means someone is at the iPad (see `BedsideAttendance`).
+final class PorchWindow: UIWindow {
+    override func sendEvent(_ event: UIEvent) {
+        if event.type == .touches || event.type == .presses { AttendanceTracker.shared.noticed() }
+        super.sendEvent(event)
+    }
+}
+
 final class PorchScene: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
@@ -32,7 +41,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         #if DEBUG
         PorchDevice.installPreviewFixture()
         #endif
-        let window = UIWindow(windowScene: scene)
+        let window = PorchWindow(windowScene: scene)
         window.rootViewController = PorchContainerViewController()
         window.makeKeyAndVisible()
         self.window = window

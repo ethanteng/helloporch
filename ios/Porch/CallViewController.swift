@@ -17,7 +17,11 @@ final class CallViewController: UIViewController {
     /// Who a call that's opening is for, said aloud. The call screen takes it over once it appears.
     private var announcement: OutgoingCallAnnouncement?
     /// Plays waiting messages when someone sits down in front of the iPad, if a caregiver turned it on.
+    /// If a caregiver lets family see that someone is at the iPad, it also looks for them now and then.
     private let presence = BedsidePresence()
+    /// While a look for someone at the iPad is under way, when it ends. One starts every `BedsideAttendance.lookInterval`.
+    private var attendanceLookEnds: Date?
+    private var attendanceTimer: Timer?
     private var notice: MessageNoticeView?
     /// True while the camera is being released before something covers the clock. Presence must not
     /// start again until that present has either appeared or been abandoned.
@@ -228,13 +232,15 @@ final class CallViewController: UIViewController {
         BedsideMessages.shared.start()
         BedsideOutbox.shared.start()
         presence.onPresent = { [weak self] in self?.presenceDetected() }
+        presence.onSighting = { [weak self] in self?.someoneSeen() }
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchMessageAutoplayChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshPresence), name: .porchAttendanceCameraChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(thermalStateChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
         updateDisplay(); resetClock()
     }
 
-    deinit { statusTimer?.invalidate(); phoneKeypadStatusTimer?.invalidate(); clockTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
+    deinit { statusTimer?.invalidate(); phoneKeypadStatusTimer?.invalidate(); clockTimer?.invalidate(); attendanceTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -279,6 +285,7 @@ final class CallViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         clockTimer?.invalidate(); clockTimer = nil
+        attendanceTimer?.invalidate(); attendanceTimer = nil; attendanceLookEnds = nil
         displayStatus(nil)
         // The present that covered us already waited for the camera. A removal just stops it.
         presence.stop()
@@ -350,7 +357,14 @@ final class CallViewController: UIViewController {
             RunLoop.main.add(timer, forMode: .common)
             clockTimer = timer
         }
+        if attendanceTimer == nil {
+            let timer = Timer(timeInterval: BedsideAttendance.lookInterval, repeats: true) { [weak self] _ in self?.lookForSomeone() }
+            timer.tolerance = 2
+            RunLoop.main.add(timer, forMode: .common)
+            attendanceTimer = timer
+        }
         becomeFirstResponder()
+        lookForSomeone()
         refreshPresence()
     }
 
@@ -360,6 +374,7 @@ final class CallViewController: UIViewController {
         presence.stop()
         notice?.end(); notice = nil
         trigger.resetKeys(); clockTimer?.invalidate(); clockTimer = nil
+        attendanceTimer?.invalidate(); attendanceTimer = nil; attendanceLookEnds = nil
         if opening { cancelOpening = true; announcement?.stop() }
     }
 
@@ -483,21 +498,46 @@ final class CallViewController: UIViewController {
         present(player, animated: true)
     }
 
-    /// The camera runs only while it could start messages right away: the clock is showing and idle,
-    /// downloaded messages are waiting, it's within the caregiver's hours, and Mom hasn't just said not now.
+    /// The camera runs only while the clock is showing and idle, nothing else needs the camera and the iPad isn't hot.
+    private var cameraAvailable: Bool {
+        guard !presenceSuppressed, !SystemIncomingCalls.shared.reservesFrontCamera, isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
+              notice == nil, !opening, UIApplication.shared.applicationState == .active,
+              PorchDevice.experience == .bedside, FamilyCoordinator.shared.state?.busy != true,
+              ProcessInfo.processInfo.thermalState != .serious, ProcessInfo.processInfo.thermalState != .critical else { return false }
+        return true
+    }
+    /// It watches for messages only while it could start them right away: downloaded messages are waiting,
+    /// it's within the caregiver's hours, and Mom hasn't just said not now.
     private var presenceAllowed: Bool {
         let ready = BedsideMessages.shared.ready
-        guard !presenceSuppressed, !SystemIncomingCalls.shared.reservesFrontCamera, isViewLoaded, view.window != nil, presentedViewController == nil, parent?.presentedViewController == nil,
-              notice == nil, !opening, !ready.isEmpty, UIApplication.shared.applicationState == .active,
-              PorchDevice.experience == .bedside, FamilyCoordinator.shared.state?.busy != true,
-              ProcessInfo.processInfo.thermalState != .serious, ProcessInfo.processInfo.thermalState != .critical,
-              MessageAutoplay.load().allows(Date()) else { return false }
+        guard cameraAvailable, !ready.isEmpty, MessageAutoplay.load().allows(Date()) else { return false }
         if let snooze, Date() < snooze.until, ready.allSatisfy({ snooze.ids.contains($0.id) }) { return false }
         return true
     }
     @objc private func refreshPresence() {
-        if presenceAllowed { presence.start(orientation: view.window?.windowScene?.interfaceOrientation ?? .landscapeLeft) }
+        let messages = presenceAllowed
+        // Watching for messages sees anyone there anyway, so a separate look waits until it stops.
+        let looking = !messages && attendanceLookEnds.map { Date() < $0 } == true && cameraAvailable && BedsideAttendance.cameraEnabled()
+        if messages || looking { presence.start(orientation: view.window?.windowScene?.interfaceOrientation ?? .landscapeLeft, messages: messages) }
         else { presence.stop() }
+    }
+    /// A few seconds of looking for someone at the iPad, if a caregiver lets family see that.
+    private func lookForSomeone() {
+        guard BedsideAttendance.cameraEnabled() else { return }
+        let ends = Date().addingTimeInterval(BedsideAttendance.lookSeconds)
+        attendanceLookEnds = ends
+        refreshPresence()
+        DispatchQueue.main.asyncAfter(deadline: .now() + BedsideAttendance.lookSeconds) { [weak self] in
+            guard let self, self.attendanceLookEnds == ends else { return }
+            self.attendanceLookEnds = nil; self.refreshPresence()
+        }
+    }
+    /// A face close by. Family hear of it only if a caregiver turned that on: starting messages alone tells no one.
+    private func someoneSeen() {
+        guard BedsideAttendance.cameraEnabled() else { return }
+        AttendanceTracker.shared.noticed()
+        // Seen, so this look can stop early.
+        if attendanceLookEnds != nil { attendanceLookEnds = nil; refreshPresence() }
     }
     /// Posted off the main thread on some iOS versions. Presence state is main-thread only.
     @objc private func thermalStateChanged() {

@@ -14,11 +14,14 @@ extension Cell2JackDigitReceiving {
 enum Cell2JackDigitRouter {
     static let transitioning = "screen transitioning"
     static func route(_ symbol: String, root: UIViewController) -> String {
+        // Someone pressed a key on the phone by the bed.
+        AttendanceTracker.shared.noticed()
         guard let digit = CallSlots.digit(forSymbol: symbol) else { return "unassigned symbol" }
         return deliver(root: root) { $0.receiveCell2JackDigit(digit) }
     }
     static func routeHangUp(root: UIViewController) -> String {
-        deliver(root: root) { $0.receiveCell2JackHangUp() }
+        AttendanceTracker.shared.noticed()
+        return deliver(root: root) { $0.receiveCell2JackHangUp() }
     }
     private static func deliver(root: UIViewController, _ action: (Cell2JackDigitReceiving) -> String) -> String {
         var screen = root

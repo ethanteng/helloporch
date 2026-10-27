@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -89,6 +89,7 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
   // The bedside is a caregiver device; a family member edits their own profile.
   const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled, me.role === "bedside" || m.id === me.id), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
+  const bedside = house.members.find(m => m.role === "bedside");
   const invited = call && ![call.from, call.to].includes(me.id) ? call.porchGuests?.filter(g => g.memberID === me.id).at(-1) : undefined;
   // A telephone drop-in is announced with the caregiver's name for that approved number.
   const callerName = (call: Call) => {
@@ -114,6 +115,8 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}),
     // Messages the bedside left for this family member when they missed its call.
     ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
+    // When someone was last noticed at the bedside iPad, so family can tell whether a call now is likely to be answered.
+    ...(me.role === "family" && bedside?.attendedAt !== undefined ? { bedsideAttendedAt: bedside.attendedAt } : {}),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
     // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only.
@@ -463,6 +466,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now;
         if (takesAvailability(me, input.launch, input.sequence)) me.available = input.available;
+        noteAttendance(me, input.attendedSeconds, now);
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.

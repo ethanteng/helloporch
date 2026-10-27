@@ -456,6 +456,23 @@ test('offline family devices receive ordinary-call pushes once after the winning
  assert.equal((await f.send('acceptCall',{callID:call.id,available:true},family.credential)).status,410);
 });
 
+test('family see when someone was last noticed at the bedside iPad, and only the bedside can report it',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ const seen=async()=>(await f.json('poll',{available:true},family.credential)).state.bedsideAttendedAt;
+ assert.equal(await seen(),undefined,'nothing until the bedside notices someone');
+ const now=(await f.json('poll',{available:true,attendedSeconds:40},bedside.credential)).state.serverTime;
+ assert.equal(await seen(),now-40);
+ await f.json('poll',{available:true,attendedSeconds:600},bedside.credential);
+ assert.equal(await seen(),now-40,'a poll that arrives late never moves it back');
+ f.advance(100); await f.json('poll',{available:true,attendedSeconds:5},bedside.credential);
+ assert.equal(await seen(),now+95);
+ for (const attendedSeconds of [-1,1.5,'3',null,31*86400]) await f.json('poll',{available:true,attendedSeconds},bedside.credential);
+ await f.json('poll',{available:true,attendedSeconds:0},family.credential);
+ assert.equal(await seen(),now+95,'bad values and family devices are ignored, without failing the poll');
+ const own=(await f.json('poll',{available:true},bedside.credential)).state;
+ assert.equal(own.bedsideAttendedAt,undefined); assert.equal(own.people[0].attendedAt,undefined);
+});
+
 test('CallKit answer retains the atomic phone fallback race and heartbeats keep locked calls alive',async()=>{
  const f=fixture({sendPush:async()=>({delivered:true})}),{bedside,family}=await f.setup();
  await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},family.credential);

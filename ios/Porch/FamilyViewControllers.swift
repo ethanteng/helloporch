@@ -24,6 +24,9 @@ func offerExperienceChange(on controller: UIViewController) {
 
 final class FamilyHomeViewController: CaregiverFormViewController {
     private let status = PorchStyle.label("", size: 17)
+    /// Under the bedside's name: someone is at the iPad, or how long ago someone was. It changes by the minute,
+    /// so it's updated in place rather than rebuilding the screen.
+    private let attendance = PorchStyle.label("", size: 17, weight: .semibold)
     private let people = UIStackView()
     private var starting = false
     private struct Presentation: Equatable {
@@ -130,6 +133,9 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let state = coordinator.state
         let next = Presentation(household: state?.householdID, people: state?.people ?? [], permissions: state?.me.permissions, dropIn: state?.dropInEnabled, autoDropIn: state?.me.autoDropIn, busy: state?.busy, error: coordinator.error, paired: PorchDevice.credential(for: .family) != nil, starting: starting, messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0,
                               photo: state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
+        let attended = state.flatMap { BedsideAttendance.text(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) }
+        attendance.text = attended; attendance.isHidden = attended == nil
+        attendance.textColor = state.map { BedsideAttendance.isPresent(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) } == true ? PorchStyle.accent : PorchStyle.secondary
         guard next != displayed else { return }
         displayed = next
         // Once paired, joining another family lives in Device settings so it isn't done by accident.
@@ -169,7 +175,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
                 button.isEnabled = coordinator.error == nil && person.online && !state.busy && !starting && (!drop || (state.dropInEnabled && (mode == .voice ? state.me.permissions.audio : state.me.permissions.video)))
                 button.addAction(UIAction { [weak self] _ in self?.call(person, mode: mode, dropIn: drop) }, for: .touchUpInside)
             }
-            var views: [UIView] = [availability, audio, video, dropAudio, dropVideo]
+            var views: [UIView] = [availability] + (person.role == .bedside ? [attendance] : []) + [audio, video, dropAudio, dropVideo]
             // Messages wait on the bedside device, so they don't need it to be open right now.
             if next.messages {
                 let message = PorchStyle.button("Send a message", symbol: "envelope.fill", filled: false)
@@ -385,6 +391,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         details.addArrangedSubview(dropInGroup(state))
         details.addArrangedSubview(phoneCallsGroup(state))
         details.addArrangedSubview(messagesGroup(state))
+        // Looking for someone uses this iPad's camera, so it's set on the iPad itself.
+        if remote == nil { details.addArrangedSubview(attendanceGroup()) }
         details.addArrangedSubview(caregiverGroup(state))
         personScreen?.render()
         blockedScreen?.render()
@@ -562,6 +570,25 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             }
         }, for: .valueChanged)
         return toggleRow("Play when someone is in front of the iPad", detail: "During the hours below, waiting messages play when someone sits in front of the iPad. The camera only checks that someone is there. Nothing is recorded or sent.", on)
+    }
+    /// What family see about someone being at the iPad. Keys and touches always count; the camera only once a caregiver turns it on.
+    private func attendanceGroup() -> UIView {
+        let on = UISwitch(); on.isOn = BedsideAttendance.cameraEnabled()
+        on.accessibilityIdentifier = "attendance.camera"
+        on.addAction(UIAction { [weak self, weak on] _ in
+            guard let self, let on else { return }
+            Task { @MainActor in
+                if on.isOn, !(await AVCaptureDevice.requestAccess(for: .video)) {
+                    on.setOn(false, animated: true)
+                    showPorchError(FamilyServiceError(message: "Allow camera access in iPad Settings → Porch to tell family when someone is at the iPad.", status: 403), on: self.navigationController?.topViewController ?? self)
+                    return
+                }
+                BedsideAttendance.setCameraEnabled(on.isOn)
+                NotificationCenter.default.post(name: .porchAttendanceCameraChanged, object: nil)
+            }
+        }, for: .valueChanged)
+        let footer = "Family see “Someone is at the iPad,” or how long ago someone was, so they know whether to call. Pressing a key or touching the screen counts too. Porch can't tell who it is."
+        return group("Someone at the iPad", footer: footer, rows: [toggleRow("Check with the camera", detail: "About every 30 seconds while the clock is showing, the camera checks for a face close to the iPad. Only the time is sent. Nothing is recorded.", on)])
     }
     private func autoplayHourRow(_ title: String, _ hour: WritableKeyPath<MessageAutoplay, Int>) -> UIView {
         let stepper = UIStepper()
