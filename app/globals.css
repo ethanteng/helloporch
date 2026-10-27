@@ -184,7 +184,6 @@ input::placeholder {
   text-wrap: pretty;
 }
 .hero__lede strong {
-  display: block;
   font-weight: 700;
   color: var(--ink);
 }
