@@ -16,15 +16,14 @@ export default function Home() {
 
         <header className="hero">
           <div className="hero__badge">
-            One-button video calling for people with Parkinson&rsquo;s, dementia, and limited dexterity.
+            One-button video calling for loved ones with Parkinson&rsquo;s, dementia, or shaky hands.
           </div>
           <h1 className="hero__title">
-            <span className="hero__title-lead">Phones can get complicated.</span>{" "}
-            <em>Seeing family shouldn&rsquo;t.</em>
+            Video calling as simple as <em>speed dial</em>
           </h1>
           <p className="hero__lede">
-            Porch is a tablet and a large-button keypad for individuals with dementia or limited dexterity. Each button is
-            someone they love. <strong>One press starts a video call.</strong>
+            Porch is a tablet and a large-button keypad. Each button is someone they love.{" "}
+            <strong>One press starts a video call.</strong>
           </p>
           <HeroWaitlist />
           <Link href="/features" className="hero__secondary">

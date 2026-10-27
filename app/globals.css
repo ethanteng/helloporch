@@ -168,15 +168,11 @@ input::placeholder {
   color: var(--muted);
 }
 .hero__title {
-  font: 400 clamp(60px, 9vw, 112px) / 0.95 var(--serif);
+  font: 400 clamp(44px, 5.6vw, 72px) / 1.05 var(--serif);
   letter-spacing: -0.035em;
-}
-.hero__title-lead {
-  display: block;
-  font-size: 0.6em;
+  text-wrap: balance;
 }
 .hero__title em {
-  font-size: 0.85em;
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--tomato);
