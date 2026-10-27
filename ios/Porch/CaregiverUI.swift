@@ -58,6 +58,14 @@ enum PorchStyle {
         return button
     }
 
+    /// Change photo and Remove photo side by side under a photo, closer than full-size buttons stack.
+    static func photoActions(_ buttons: [UIButton]) -> UIStackView {
+        for button in buttons { button.configuration?.contentInsets = .init(top: 8, leading: 12, bottom: 8, trailing: 12) }
+        let row = UIStackView(arrangedSubviews: buttons)
+        row.spacing = 8; row.alignment = .center
+        return row
+    }
+
     static func segmented(_ items: [String]) -> UISegmentedControl {
         let control = UISegmentedControl(items: items)
         control.selectedSegmentTintColor = accent
