@@ -393,13 +393,19 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
                 throw FamilyServiceError(message: "Invite them to Porch or add a phone number so Porch can reach this person.", status: 400)
             }
             // A family member added here goes by their Porch name and photo. A key that had its own keeps them until
-            // the caregiver changes them on the person's page.
+            // the caregiver changes them on the person's page. An invitation with no name yet still needs one so the
+            // key can be saved. That name stays with the invitation, and gives way once they join and choose their own.
             let ownDetails = editingNumbers || !linked
+            let typedName = nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let knownMemberName = (linkedPerson?.name ?? memberName)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let supplyingName = knownMemberName?.isEmpty != false && !ownDetails && !nameGroup.isHidden
+            if supplyingName, typedName.count > 80 { throw CallContact.ValidationError.nameTooLong }
+            let pendingName = knownMemberName?.isEmpty == false ? knownMemberName : (supplyingName ? typedName : nil)
             let call = try NativeCall(room: initialContact?.nativeCall?.room ?? "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
-            let contact = try CallContact(name: ownDetails || !nameGroup.isHidden ? nameField.text ?? "" : "", nativeCall: call,
+            let contact = try CallContact(name: ownDetails ? nameField.text ?? "" : "", nativeCall: call,
                 phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil,
                 otherPhoneNumbers: phoneFallbackSwitch.isOn ? otherNumbers : [], familyMemberID: selectedFamilyID, invitationID: invitationID,
-                memberName: linkedPerson?.name ?? memberName, buttonColorHex: buttonColorHex, photoData: ownDetails ? photoData : nil)
+                memberName: pendingName, buttonColorHex: buttonColorHex, photoData: ownDetails ? photoData : nil)
             phoneField.text = contact.phoneNumber
             otherNumbers = contact.otherPhoneNumbers; renderOtherNumbers()
             view.isUserInteractionEnabled = false

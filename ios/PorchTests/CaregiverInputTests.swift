@@ -1258,6 +1258,8 @@ final class CaregiverInputTests: XCTestCase {
         let saved = expectation(description: "saved")
         editor.onSaveSlot = { action, contact in
             XCTAssertEqual(action, .person); XCTAssertEqual(contact?.name, "David"); XCTAssertNotNil(contact?.invitationID)
+            XCTAssertEqual(contact?.customName, "", "the name gives way once they join and choose their own")
+            XCTAssertEqual(contact?.memberName, "David")
             saved.fulfill()
         }
         _ = editor.perform(try XCTUnwrap(editor.navigationItem.rightBarButtonItem?.action))

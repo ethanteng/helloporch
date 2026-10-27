@@ -68,6 +68,20 @@ final class MemberProfileTests: XCTestCase {
         }
     }
 
+    /// An invitation created without a name keeps the name typed on the key, and that name gives way once they join.
+    func testBlankInvitationKeepsTheNameTypedForTheKeyUntilTheyJoin() throws {
+        try fixture { _, store in
+            var slots = CallSlots()
+            try slots.setContact(CallContact(name: "", nativeCall: NativeCall(room: "paired", mode: .voice), invitationID: invitation, memberName: "David"), for: 1)
+            try slots.reconcile(with: snapshot(people: [], invitations: [["id": invitation, "name": "", "expiresAt": 9]]), memberPhotos: store.familyMembers)
+            XCTAssertEqual(slots.contact(for: 1)?.name, "David")
+            XCTAssertEqual(slots.contact(for: 1)?.customName, "")
+            try slots.reconcile(with: snapshot(people: [person(name: "David Chen")]), memberPhotos: store.familyMembers)
+            XCTAssertEqual(slots.contact(for: 1)?.name, "David Chen")
+            XCTAssertEqual(slots.contact(for: 1)?.customName, "")
+        }
+    }
+
     func testCaregiversKeypadNameAndPhotoComeFirst() throws {
         try fixture { _, store in
             let theirs = Data("their photo".utf8), keypad = Data("keypad photo".utf8)

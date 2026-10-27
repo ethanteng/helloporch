@@ -75,7 +75,9 @@ public struct CallSlots: Equatable {
             guard let contact = contact(for: digit), let native = contact.nativeCall else { continue }
             let member = Self.member(for: contact, in: state)
             // Until the invitation is accepted, a contact goes by the name the caregiver gave it.
-            let invited = member == nil ? contact.invitationID.flatMap { id in state.invitations?.first { $0.id == id }?.name } : nil
+            // A blank invitation name isn't one, so the name typed for the key stands until they choose their own.
+            let recorded = member == nil ? contact.invitationID.flatMap { id in state.invitations?.first { $0.id == id }?.name }?.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+            let invited = recorded?.isEmpty == false ? recorded : nil
             let name = member?.name ?? invited ?? contact.memberName
             var photoID = contact.memberPhotoID
             if let member {
