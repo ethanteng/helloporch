@@ -119,6 +119,9 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             if coordinator.accessRemoved || coordinator.state?.me.caregiver == false {
                 lock(FamilyServiceError(message: "Caregiver mode is no longer available on this phone.", status: 403))
             } else if !RemoteCaregiverSession.shared.isActive { lock(nil) }
+            // A poll is not a reason to redraw. A photo that just finished downloading is: the open
+            // person page and the people list both start that download and otherwise keep the placeholder.
+            else if !busy, displayedPhotos != photosOnHand() { refresh() }
             return
         }
         guard !busy else { return }
