@@ -91,7 +91,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         configureFamilyLinks()
         familyLink.addTarget(self, action: #selector(invitePerson), for: .touchUpInside)
         invitationStatus.textAlignment = .center
-        personGroup = section("Their details", views: [existingPerson, familyLink, invitationStatus, nameGroup, chooseContactButton, modeLabel, modeControl])
+        // Editing someone's numbers, Choose from Contacts goes under them instead.
+        personGroup = section("Their details", views: [existingPerson, familyLink, invitationStatus, nameGroup] + (editingNumbers ? [] : [chooseContactButton]) + [modeLabel, modeControl])
         form.addArrangedSubview(personGroup)
         buttonColorHex = initialContact?.buttonColorHex
         photoData = initialContact?.customPhotoData
@@ -151,7 +152,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
             let offset = min(max(0, section.minY - 24), max(0, scroll.contentSize.height - scroll.bounds.height))
             scroll.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
         }
-        if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") || ProcessInfo.processInfo.arguments.contains("--preview-system-keyboard") { nameField.becomeFirstResponder() }
+        // Someone already on the key has only their numbers here.
+        if ProcessInfo.processInfo.arguments.contains("--preview-touch-keyboard") || ProcessInfo.processInfo.arguments.contains("--preview-system-keyboard") { (editingNumbers ? phoneField : nameField).becomeFirstResponder() }
         #endif
     }
     @objc private func updateMethod() {
@@ -326,7 +328,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
     /// A family member on Porch goes by their Porch name and photo, so the name is only for someone added by phone.
     @objc private func configureFamilyLinks() {
         defer {
-            nameGroup.isHidden = linked
+            // Someone invited without a name needs one here until they join and choose their own.
+            nameGroup.isHidden = linked && (linkedPerson?.name ?? memberName)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             modeLabel.isHidden = !linked; modeControl.isHidden = !linked
             updateFallbackDetail()
             if memberPhotoID.flatMap({ FamilyPhotos.shared.store.contains($0) ? $0 : nil }) != shownMemberPhoto { updateAppearance() }
@@ -393,7 +396,7 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
             // the caregiver changes them on the person's page.
             let ownDetails = editingNumbers || !linked
             let call = try NativeCall(room: initialContact?.nativeCall?.room ?? "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: modeControl.selectedSegmentIndex == 0 ? .voice : .video)
-            let contact = try CallContact(name: ownDetails ? nameField.text ?? "" : "", nativeCall: call,
+            let contact = try CallContact(name: ownDetails || !nameGroup.isHidden ? nameField.text ?? "" : "", nativeCall: call,
                 phoneNumber: phoneFallbackSwitch.isOn ? PhoneNumberNormalization.e164(phoneField.text ?? "") : nil,
                 otherPhoneNumbers: phoneFallbackSwitch.isOn ? otherNumbers : [], familyMemberID: selectedFamilyID, invitationID: invitationID,
                 memberName: linkedPerson?.name ?? memberName, buttonColorHex: buttonColorHex, photoData: ownDetails ? photoData : nil)

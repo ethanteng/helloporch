@@ -225,7 +225,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         return group(rows: rows)
     }
     /// Puts them on a free key: moves their key, or gives a family member who isn't on the keypad one.
-    private func move(to digit: Int) {
+    func move(to digit: Int) {
         guard let admin else { return }
         let subject = resolve(admin)
         if let key = subject.slot, let contact = subject.contact {
@@ -282,6 +282,15 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         let linked = subject.member != nil || contact.invitationID != nil
         if subject.member == nil, !invitePending(subject, admin) {
             rows.append(actionRow("Invite \(subject.firstName)", symbol: "person.badge.plus") { [weak self] in self?.invite() })
+            // Or they joined Porch some other way, such as an invitation from People.
+            let unlinked = (admin.current?.people ?? []).filter { admin.key(for: $0) == nil }
+            if !unlinked.isEmpty {
+                let choose = actionRow("Choose from Family on Porch", symbol: "person.2")
+                choose.accessibilityIdentifier = "person.linkFamily"
+                choose.menu = UIMenu(children: unlinked.map { person in UIAction(title: person.name) { [weak self] _ in self?.link(to: person) } })
+                choose.showsMenuAsPrimaryAction = true
+                rows.append(choose)
+            }
         }
         if linked, let call = contact.nativeCall {
             let mode = PorchStyle.segmented(["Voice", "Video"])
@@ -317,14 +326,23 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         invite.prefilledName = contact.name
         invite.onCreated = { [weak self] id, invitedName in
             // The name moves to the invitation, and the key follows the name they choose once they join.
-            self?.save { slots in
-                let linked = try CallContact(name: "", nativeCall: contact.nativeCall ?? NativeCall(room: "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: .voice),
-                    phoneNumber: contact.phoneNumber, otherPhoneNumbers: contact.otherPhoneNumbers, invitationID: id,
-                    memberName: invitedName.isEmpty ? contact.name : invitedName, buttonColorHex: contact.buttonColorHex, photoData: contact.customPhotoData)
-                try slots.setContact(linked, for: key)
-            }
+            self?.save { try $0.setContact(Self.linked(contact, invitationID: id, name: invitedName.isEmpty ? contact.name : invitedName), for: key) }
         }
         navigationController?.pushViewController(invite, animated: true)
+    }
+    /// Links the key of someone who's on the keypad by phone to them on Porch.
+    func link(to person: FamilyPerson) {
+        guard let admin else { return }
+        let subject = resolve(admin)
+        guard let key = subject.slot, let contact = subject.contact else { return }
+        save { try $0.setContact(Self.linked(contact, memberID: person.id, invitationID: person.invitationID, name: person.name), for: key) }
+    }
+    /// A key for someone on Porch, or invited to it: it keeps the key's numbers, how calls start, color and photo, and goes
+    /// by their Porch name.
+    private static func linked(_ contact: CallContact, memberID: String? = nil, invitationID: String?, name: String) throws -> CallContact {
+        try CallContact(name: "", nativeCall: contact.nativeCall ?? NativeCall(room: "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: .voice),
+            phoneNumber: contact.phoneNumber, otherPhoneNumbers: contact.otherPhoneNumbers, familyMemberID: memberID, invitationID: invitationID,
+            memberName: name, buttonColorHex: contact.buttonColorHex, photoData: contact.customPhotoData)
     }
 
     // MARK: Drop-in

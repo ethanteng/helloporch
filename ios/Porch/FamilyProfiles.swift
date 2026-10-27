@@ -138,6 +138,16 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     private var editedName: String?
     private var renderAfterEditing = false
     private var saving = false
+    /// What the page shows from the family. Porch checks in every few seconds, and redrawing for a check-in that
+    /// changed none of it would close an open photo menu and send VoiceOver back to the top.
+    private struct Shown: Equatable {
+        let paired: Bool
+        let me: FamilyPerson?
+        let household: String?
+        let lovedOne: String
+        let photo: Bool
+    }
+    private var shown: Shown?
     private lazy var chooser = PhotoChooser(presenter: self) { [weak self] data in
         guard let self else { return }
         guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
@@ -169,8 +179,19 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         guard isViewLoaded else { return }
         // Waits while the name is typed, so the keyboard doesn't close.
         guard !nameField.isFirstResponder else { renderAfterEditing = true; return }
-        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
         let paired = PorchDevice.credential(for: .family) != nil
+        let photoID = me?.profile?.photoID
+        let photo = photoID.map { FamilyPhotos.shared.store.contains($0) } == true
+        // A new phone, or a photo saved elsewhere: download it, and try again on later check-ins if that fails.
+        if !photo, let photoID, let credential = PorchDevice.credential(for: .family) {
+            FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: credential)
+        }
+        let next = Shown(paired: paired, me: me, household: FamilyCoordinator.shared.state?.householdName, lovedOne: lovedOne, photo: photo)
+        guard next != shown else { return }
+        shown = next
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        // The name is the only thing to type, so the keyboard choice shows only with it.
+        setKeyboardControlVisible(paired && me != nil)
         if paired, let me { profile(me) } else if paired { content.addArrangedSubview(PorchStyle.label("Connecting to your family…")) }
         if paired {
             let camera = UISwitch(); camera.isOn = CallPreferences.startVideoWithCamera()
@@ -196,10 +217,6 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     }
     private func profile(_ me: FamilyPerson) {
         let photo = FamilyPhotos.shared.data(for: me.profile?.photoID)
-        // A new phone, or a photo saved elsewhere: download it once.
-        if photo == nil, let id = me.profile?.photoID, let credential = PorchDevice.credential(for: .family) {
-            FamilyPhotos.shared.load(id, values: ["source": "self"], credential: credential)
-        }
         let change = PorchStyle.button(photo == nil ? "Add a photo" : "Change photo", filled: false)
         change.accessibilityIdentifier = "profile.choosePhoto"
         chooser.attach(to: change)

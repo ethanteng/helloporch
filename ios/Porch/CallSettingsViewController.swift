@@ -55,6 +55,8 @@ final class CallSettingsViewController: CaregiverPageViewController {
         stepper.addAction(UIAction { [weak admin, weak stepper, weak value] _ in
             guard let admin, let stepper else { return }
             value?.text = Self.duration(Int(stepper.value)); stepper.accessibilityValue = value?.text
+            // Waits for this change to save before taking the next, which the page then shows as saved.
+            stepper.isEnabled = false
             Task { await admin.perform("setRingSeconds", ["seconds": Int(stepper.value)]) }
         }, for: .valueChanged)
         return row

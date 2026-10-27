@@ -1202,6 +1202,86 @@ final class CaregiverInputTests: XCTestCase {
         let numbers = try XCTUnwrap(navigation.topViewController as? SetupViewController)
         numbers.loadViewIfNeeded()
         XCTAssertEqual(numbers.title, "Phone")
+        func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
+        XCTAssertTrue(visible(try XCTUnwrap(buttons(in: numbers.view).first { $0.configuration?.title == "Choose from Contacts" })))
+    }
+
+    /// Moving someone to another key keeps their page open, now showing that key.
+    @MainActor func testMovingSomeoneToAnotherKeyKeepsTheirPageOpen() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), phoneNumber: "+14155550123"), for: 2)
+        let home = FamilyAdminViewController(slots: slots)
+        var saved: CallSlots?
+        home.onSaveSlots = { saved = $0 }
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        let person = PersonViewController(admin: home, slot: 2)
+        navigation.pushViewController(person, animated: false); person.loadViewIfNeeded()
+        person.move(to: 3)
+        XCTAssertNil(saved?.contact(for: 2))
+        XCTAssertEqual(saved?.contact(for: 3)?.name, "David")
+        XCTAssertTrue(navigation.topViewController === person, "their page stays open")
+        XCTAssertEqual(buttons(in: person.view).first { $0.accessibilityIdentifier == "person.key" }?.configuration?.title, "Key 3")
+    }
+
+    /// Someone on the keypad by phone who joined Porch another way can be linked to it, keeping their key's numbers and color.
+    @MainActor func testLinkingAPhoneKeyToSomeoneOnPorchKeepsItsNumbers() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .video), phoneNumber: "+14155550123",
+                                         otherPhoneNumbers: ["+14155550199"], buttonColorHex: "FFCC00"), for: 2)
+        let home = FamilyAdminViewController(slots: slots)
+        var saved: CallSlots?
+        home.onSaveSlots = { saved = $0 }
+        let person = PersonViewController(admin: home, slot: 2); person.loadViewIfNeeded()
+        let id = UUID().uuidString
+        person.link(to: try JSONDecoder().decode(FamilyPerson.self, from: JSONSerialization.data(withJSONObject: [
+            "id": id, "name": "David Chen", "role": "family", "permissions": ["audio": false, "video": false], "online": true])))
+        let key = try XCTUnwrap(saved?.contact(for: 2))
+        XCTAssertEqual(key.familyMemberID, id)
+        XCTAssertEqual(key.name, "David Chen", "they go by their Porch name")
+        XCTAssertEqual(key.phoneNumbers, ["+14155550123", "+14155550199"])
+        XCTAssertEqual(key.nativeCall?.room, "test")
+        XCTAssertEqual(key.nativeCall?.mode, .video)
+        XCTAssertEqual(key.buttonColorHex, "FFCC00")
+    }
+
+    /// Someone invited from an empty key without a name gets one there, so the key can still be saved.
+    @MainActor func testKeyInvitedWithoutANameAsksForOne() async throws {
+        let editor = SetupViewController(slot: 3, contact: nil)
+        let navigation = UINavigationController(rootViewController: editor); editor.loadViewIfNeeded()
+        let name = try XCTUnwrap(descendants(editor.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "Name" })
+        try XCTUnwrap(buttons(in: editor.view).first { $0.configuration?.title == "Invite them" }).sendActions(for: .touchUpInside)
+        let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
+        invite.onCreated?(UUID().uuidString, "")
+        func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
+        XCTAssertTrue(visible(name), "an invitation without a name leaves the name to fill in")
+        name.text = "David"
+        let saved = expectation(description: "saved")
+        editor.onSaveSlot = { action, contact in
+            XCTAssertEqual(action, .person); XCTAssertEqual(contact?.name, "David"); XCTAssertNotNil(contact?.invitationID)
+            saved.fulfill()
+        }
+        _ = editor.perform(try XCTUnwrap(editor.navigationItem.rightBarButtonItem?.action))
+        await fulfillment(of: [saved], timeout: 5)
+    }
+
+    /// On a caregiver's phone, a family member's photo shows on their page once it has downloaded.
+    @MainActor func testRemoteCaregiverModeShowsAPhotoOnceItDownloads() throws {
+        let photo = portraitData(), id = ContactPhotoStore.id(for: photo)
+        let file = FamilyPhotos.shared.store.directoryURL.appendingPathComponent(id).appendingPathExtension("jpg")
+        try? FileManager.default.removeItem(at: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let state = try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": false, "people": [
+            ["id": "sam", "name": "Sam", "role": "family", "photoID": id, "permissions": ["audio": false, "video": false], "online": true]]]))
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        RemoteCaregiverSession.shared.begin(pin: "123456")
+        defer { RemoteCaregiverSession.shared.end() }
+        let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
+        let sam = PersonViewController(admin: admin, memberID: "sam"); sam.loadViewIfNeeded()
+        func photoButton() -> String? { buttons(in: sam.view).first { $0.accessibilityIdentifier == "person.choosePhoto" }?.configuration?.title }
+        XCTAssertEqual(photoButton(), "Add photo")
+        try FamilyPhotos.shared.store.add(photo)
+        NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+        XCTAssertEqual(photoButton(), "Change photo")
     }
 
     @MainActor func testWideIPadShowsThePageBesideTheList() throws {
@@ -1233,6 +1313,18 @@ final class CaregiverInputTests: XCTestCase {
         if FamilyCoordinator.shared.state?.me.caregiver != true {
             XCTAssertFalse(rows(in: settings.view).contains { $0.accessibilityIdentifier == "family.caregiverMode" }, "Caregiver mode shows only for caregivers")
         }
+    }
+
+    /// Porch checks in every few seconds. One that changes nothing on the page leaves its controls in place, so an open
+    /// photo menu stays open and VoiceOver stays where it was.
+    @MainActor func testFamilySettingsStayPutWhenACheckInChangesNothing() {
+        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
+        let before = buttons(in: settings.view)
+        NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+        let after = buttons(in: settings.view)
+        XCTAssertFalse(before.isEmpty)
+        XCTAssertEqual(after.count, before.count)
+        XCTAssertTrue(zip(before, after).allSatisfy { $0 === $1 }, "the same buttons are still showing")
     }
 
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {
