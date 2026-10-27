@@ -77,6 +77,8 @@ jobs:
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-sunset.png --preview-dynamic --preview-hour 17
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-night.png --preview-dynamic --preview-hour 22
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver-calls.png --preview-six --preview-caregiver --preview-caregiver-page calls
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver-person.png --preview-six --preview-caregiver --preview-caregiver-key 1
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people-chinese.png --preview-six --preview-people --preview-chinese --family-silent
@@ -130,11 +132,12 @@ jobs:
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
           mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png
-      - name: Save the iPhone screenshot
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-settings-iphone.png --preview-profile
+      - name: Save the iPhone screenshots
         uses: actions/upload-artifact@v4
         with:
           name: Porch-iPhone-screenshot
-          path: ios/build/screenshots/family-iphone.png
+          path: ios/build/screenshots/*.png
           retention-days: 7
   release:
     name: Release builds and checks

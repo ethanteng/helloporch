@@ -138,4 +138,9 @@ final class BedsideLanguageTests: XCTestCase {
         XCTAssertTrue(CallTone.incoming.loops); XCTAssertTrue(CallTone.ringback.loops)
         XCTAssertFalse(CallTone.connected.loops); XCTAssertFalse(CallTone.announcement.loops)
     }
+
+    /// Caregiver settings say which language each Chinese choice speaks.
+    func testChoiceLabelsNameTheSpokenLanguage() {
+        XCTAssertEqual(BedsideLanguage.allCases.map(\.choiceLabel), ["English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español"])
+    }
 }

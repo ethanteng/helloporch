@@ -667,7 +667,7 @@ final class CallViewController: UIViewController {
 
     private func startFamilyCall(_ contact: CallContact, memberID: String?, mode: NativeCall.Mode) {
         guard PorchDevice.credential(for: .bedside) != nil, !opening else {
-            showError("Porch isn't ready", message: "Check Family & drop-in in caregiver mode, then try again."); return
+            showError("Porch isn't ready", message: "Check People and Drop-in in caregiver mode, then try again."); return
         }
         guard trigger.allowLaunch(at: ProcessInfo.processInfo.systemUptime) else { return }
         cancelOpening = false
@@ -741,13 +741,14 @@ final class CallViewController: UIViewController {
         guard !presenceSuppressed, presentedViewController == nil else { return }
         trigger.resetKeys()
         resignFirstResponder()
-        let setup = SlotsViewController(slots: slots)
-        setup.onSave = { [weak self] updated in
+        let home = FamilyAdminViewController(slots: slots)
+        home.onSaveSlots = { [weak self] updated in
             try updated.save()
             self?.slots = updated
             FamilyCoordinator.shared.reportKeypad(updated)
         }
-        present(PorchStyle.navigation(setup), animated: true)
+        // An iPad shows the settings pages beside their list.
+        present(UIDevice.current.userInterfaceIdiom == .pad ? CaregiverSplitViewController(home: home) : PorchStyle.navigation(home), animated: true)
     }
 
     private func showError(_ title: String, message: String) {

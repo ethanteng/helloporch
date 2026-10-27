@@ -155,13 +155,15 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private let naturalVoices: @MainActor () -> NaturalVoices?
     private var natural: NaturalVoices? { naturalVoices() }
     private var naturalDrafts: [BedsideLanguage: String?] = [:]
-    private let appearance = UISegmentedControl(items: ["Default", "Dynamic"])
+    private let appearance = UISegmentedControl(items: ["Dark", "Day & night"])
     private let hemisphere = UISegmentedControl(items: ["Northern", "Southern"])
     private var languageButtons: [BedsideLanguage: UIButton] = [:]
     private let day = UIStepper(), night = UIStepper()
     private let dayLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let nightLabel = PorchStyle.label("", size: 19, color: PorchStyle.ink)
     private let example = BedsideSceneView()
+    /// Only the Day & night clock follows the schedule and the seasons.
+    private var scheduleGroup = UIView(), seasonsGroup = UIView()
     private let previewClock = PorchStyle.label("", size: 24, color: PorchStyle.ink, weight: .semibold)
     init(defaults: UserDefaults = .standard,
          naturalVoices: @escaping @MainActor () -> NaturalVoices? = { PorchDevice.experience == .bedside ? FamilyCoordinator.shared.state?.speech : nil }) {
@@ -172,10 +174,10 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     }
     required init?(coder: NSCoder) { fatalError("Use init(defaults:)") }
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Bedside display"
+        super.viewDidLoad(); title = "Display & voice"
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
         appearance.selectedSegmentIndex = preferences.appearance == .dynamic ? 1 : 0
-        appearance.accessibilityLabel = "Bedside view"
+        appearance.accessibilityLabel = "Clock"
         hemisphere.selectedSegmentIndex = preferences.hemisphere == .northern ? 0 : 1
         hemisphere.accessibilityLabel = "Season hemisphere"
         for control in [appearance, hemisphere] {
@@ -189,7 +191,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         languages.axis = .vertical; languages.spacing = 4
         languages.accessibilityIdentifier = "bedside.language"
         for choice in BedsideLanguage.allCases {
-            let button = PorchStyle.button(choice.displayName, symbol: "circle", filled: false)
+            let button = PorchStyle.button(choice.choiceLabel, symbol: "circle", filled: false)
             button.contentHorizontalAlignment = .leading
             button.accessibilityIdentifier = "bedside.language.\(choice.rawValue)"
             button.accessibilityLanguage = choice.speechLanguage
@@ -199,7 +201,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             languageButtons[choice] = button
             languages.addArrangedSubview(button)
         }
-        form.addArrangedSubview(section("Clock view", detail: "Both show the date and time in large text. Default is dark. Dynamic changes with the time of day and the seasons.", views: [appearance]))
+        form.addArrangedSubview(section("Clock", views: [appearance]))
         example.heightAnchor.constraint(equalToConstant: 210).isActive = true
         example.layer.cornerRadius = 20; example.clipsToBounds = true
         previewClock.text = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
@@ -207,14 +209,14 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         example.addSubview(previewClock)
         NSLayoutConstraint.activate([previewClock.centerYAnchor.constraint(equalTo: example.centerYAnchor), previewClock.leadingAnchor.constraint(equalTo: example.leadingAnchor, constant: 20), previewClock.trailingAnchor.constraint(equalTo: example.trailingAnchor, constant: -20)])
         form.addArrangedSubview(example)
-        form.addArrangedSubview(section("Bedside language", detail: "The language your loved one sees and hears. 繁體中文 and 简体中文 speak Mandarin; 廣東話 speaks Cantonese. Caregiver settings stay in English.", views: [languages]))
+        form.addArrangedSubview(section("Bedside language", views: [languages]))
         announcementVoice.accessibilityIdentifier = "bedside.announcementVoice"
         announcementVoice.accessibilityLabel = "Announcement voice"
         announcementVoice.showsMenuAsPrimaryAction = true
         let previewVoice = PorchStyle.button("Preview announcement", symbol: "speaker.wave.2", filled: false)
         previewVoice.accessibilityIdentifier = "bedside.previewAnnouncement"
         previewVoice.addTarget(self, action: #selector(previewAnnouncement), for: .touchUpInside)
-        form.addArrangedSubview(section("Announcement voice", detail: "The voice that announces calls. Natural voices sound like a real person. Play a preview before you save.", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
+        form.addArrangedSubview(section("Announcement voice", views: [announcementVoice, voiceStatus, previewVoice, voicePreviewStatus]))
         NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshAnnouncementVoices), name: .porchFamilyChanged, object: nil)
         day.minimumValue = 0; day.maximumValue = 11; day.value = Double(preferences.dayStart)
@@ -224,8 +226,10 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             stepper.addTarget(self, action: #selector(update), for: .valueChanged)
             let row = UIStackView(arrangedSubviews: [label, UIView(), stepper]); row.alignment = .center; row.spacing = 16; return row
         }
-        form.addArrangedSubview(section("Day & night schedule", detail: "Set these to match your loved one's day. The sun and moon follow them.", views: [row(dayLabel, day), row(nightLabel, night)]))
-        form.addArrangedSubview(section("Seasons", detail: "Choose Northern or Southern so the seasons match where you live.", views: [hemisphere]))
+        scheduleGroup = section("Day & night", views: [row(dayLabel, day), row(nightLabel, night)])
+        seasonsGroup = section("Seasons", views: [hemisphere])
+        form.addArrangedSubview(scheduleGroup)
+        form.addArrangedSubview(seasonsGroup)
         hideKeyboardControl(); update()
     }
     override func viewWillAppear(_ animated: Bool) {
@@ -288,14 +292,13 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children: actions)
         }
         if let naturalChoice {
-            let saved = choices?.selected == naturalChoice.id
-            voiceStatus.text = "A natural voice for \(language.displayName)\(saved ? ", saved for this family" : "").\(saved ? "" : " Tap Save to use it.")"
+            voiceStatus.text = choices?.selected == naturalChoice.id ? nil : "Tap Save to use \(naturalChoice.name)."
         } else if PorchAnnouncementVoice.resolve(for: language, identifier: identifier) == nil {
             voiceStatus.text = "No voice is available for \(language.displayName). Add one in iPad Settings → Accessibility → Spoken Content → Voices. Until then, drop-ins must be answered."
         } else if identifier != nil && selected == nil {
             voiceStatus.text = "The saved voice isn't available, so the iPad's own voice is used for now."
         } else {
-            voiceStatus.text = "Tap Save to keep your choice."
+            voiceStatus.text = nil
         }
     }
     @objc private func previewAnnouncement() {
@@ -324,6 +327,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         dayLabel.text = "Day begins · \(hour(preferences.dayStart))"; nightLabel.text = "Night begins · \(hour(preferences.nightStart))"
         day.accessibilityValue = hour(preferences.dayStart); night.accessibilityValue = hour(preferences.nightStart)
         example.isHidden = preferences.appearance != .dynamic
+        scheduleGroup.isHidden = example.isHidden; seasonsGroup.isHidden = example.isHidden
         example.scene = BedsideScene(date: Date(), preferences: preferences)
         let formatter = DateFormatter(); formatter.locale = preferences.language.locale
         formatter.dateStyle = .medium; formatter.timeStyle = .short
@@ -342,7 +346,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             return (language, draft)
         }
         guard reportLanguage != nil || !changes.isEmpty, let credential = PorchDevice.credential(for: .bedside) else {
-            navigationController?.popViewController(animated: true); return
+            finishSave(); return
         }
         navigationItem.rightBarButtonItem?.isEnabled = false
         Task { [weak self] in
@@ -356,7 +360,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
                     FamilyCoordinator.shared.update(response)
                 }
                 self?.naturalDrafts = [:]
-                self?.navigationController?.popViewController(animated: true)
+                self?.finishSave()
             } catch {
                 guard let self else { return }
                 self.navigationItem.rightBarButtonItem?.isEnabled = true
