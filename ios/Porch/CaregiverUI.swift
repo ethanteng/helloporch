@@ -326,7 +326,8 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     func setKeyboardControlVisible(_ visible: Bool) { keyboardControlsEnabled = visible; updateKeyboardUI() }
 
     func field(_ field: UITextField, title: String, placeholder: String, helper: String? = nil) -> UIView {
-        if !fields.contains(where: { $0 === field }) { fields.append(field) }
+        // Pages that redraw pass the same field again, which keeps the one height constraint it got the first time.
+        if !fields.contains(where: { $0 === field }) { fields.append(field); field.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true }
         field.delegate = self
         field.accessibilityLabel = title
         field.accessibilityIdentifier = field.accessibilityIdentifier ?? title
@@ -345,7 +346,6 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         field.rightViewMode = .always
         field.font = .preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
-        field.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
         field.returnKeyType = .next
         field.inputView = useTouchKeyboard ? emptyInput : nil
         // Preserve the native assistant bar rather than stripping its controls.

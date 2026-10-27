@@ -142,7 +142,8 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     /// changed none of it would close an open photo menu and send VoiceOver back to the top.
     private struct Shown: Equatable {
         let paired: Bool
-        let me: FamilyPerson?
+        /// This phone's own details the page shows. Being online or able to ring isn't one of them.
+        let name: String?, invitedName: String?, profile: FamilyProfile?, override: FamilyProfile?, caregiver: Bool?
         let household: String?
         let lovedOne: String
         let photo: Bool
@@ -186,7 +187,8 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         if !photo, let photoID, let credential = PorchDevice.credential(for: .family) {
             FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: credential)
         }
-        let next = Shown(paired: paired, me: me, household: FamilyCoordinator.shared.state?.householdName, lovedOne: lovedOne, photo: photo)
+        let next = Shown(paired: paired, name: me?.name, invitedName: me?.invitedName, profile: me?.profile, override: me?.override, caregiver: me?.caregiver,
+                         household: FamilyCoordinator.shared.state?.householdName, lovedOne: lovedOne, photo: photo)
         guard next != shown else { return }
         shown = next
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }

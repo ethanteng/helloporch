@@ -417,15 +417,16 @@ final class PhoneDropInViewController: CaregiverFormViewController, CNContactPic
     private let save = PorchStyle.button("Approve audio drop-in", symbol: "phone.badge.plus")
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Add a phone number"
-        personName.autocapitalizationType = .words
         phone.keyboardType = .phonePad; phone.textContentType = .telephoneNumber
         let contacts = PorchStyle.button("Choose from Contacts", symbol: "person.crop.circle", filled: false)
         contacts.addTarget(self, action: #selector(pickContact), for: .touchUpInside)
-        form.addArrangedSubview(section("Who can drop in by phone?", detail: "Works with most US mobile phones.", views: [
+        form.addArrangedSubview(section("Who can drop in by phone?", views: [
             field(personName, title: "Their name", placeholder: "For example, David"),
             field(phone, title: "Their phone number", placeholder: "+14158676937", helper: "Start international numbers with +."),
             contacts, save,
         ]))
+        // `field` resets capitalization; a person's name is capitalized word by word.
+        personName.autocapitalizationType = .words
         save.addTarget(self, action: #selector(approve), for: .touchUpInside)
     }
     @objc private func pickContact() {

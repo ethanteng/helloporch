@@ -1191,6 +1191,8 @@ final class CaregiverInputTests: XCTestCase {
         try XCTUnwrap(buttons(in: person.view).first { $0.accessibilityLabel == "Save name" }).sendActions(for: .touchUpInside)
         XCTAssertEqual(saved?.contact(for: 2)?.name, "David Chen")
         XCTAssertEqual(person.title, "David Chen")
+        XCTAssertEqual(name.constraints.filter { $0.firstAttribute == .height }.count, 1, "redrawing the page doesn't add to the name field's constraints")
+        XCTAssertEqual(name.autocapitalizationType, .words, "and keeps names capitalized")
         XCTAssertTrue(rows(in: person.view).contains { $0.accessibilityIdentifier == "person.phone" })
         XCTAssertTrue(descendants(person.view).contains { $0.accessibilityLabel == "Porch app, Not on Porch" })
         XCTAssertTrue(buttons(in: person.view).contains { $0.configuration?.title == "Invite David" })

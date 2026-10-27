@@ -401,7 +401,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
                     await admin.perform("setPhoneDropIn", phone.isOn ? ["number": number, "name": contact.name, "enabled": true] : ["number": number, "enabled": false])
                 }
             }, for: .valueChanged)
-            rows.append(toggleRow("Calls from \(PhoneNumberNormalization.display(number)) drop in", detail: "Works with most US mobile phones.", phone))
+            rows.append(toggleRow("Calls from \(PhoneNumberNormalization.display(number)) drop in", phone))
         }
         guard !rows.isEmpty else { return nil }
         let detail = state?.dropInEnabled == false ? "Drop-ins are paused for everyone." : "Drop-ins connect without anyone answering."
@@ -442,7 +442,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
             alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in self?.removeFromPorch(member) })
             present(alert, animated: true); return
         }
-        let sheet = UIAlertController(title: "Remove \(member.name)?", message: nil, preferredStyle: .actionSheet)
+        let sheet = UIAlertController(title: "Remove \(member.name)?", message: "Remove from Porch also empties their key. \(leaving)", preferredStyle: .actionSheet)
         sheet.addAction(UIAlertAction(title: "Take off the keypad", style: .default) { [weak self] _ in self?.removeFromKeypad() })
         sheet.addAction(UIAlertAction(title: "Remove from Porch", style: .destructive) { [weak self] _ in self?.removeFromPorch(member) })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
