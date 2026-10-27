@@ -335,7 +335,14 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         guard let admin else { return }
         let subject = resolve(admin)
         guard let key = subject.slot, let contact = subject.contact else { return }
-        save { try $0.setContact(Self.linked(contact, memberID: person.id, invitationID: person.invitationID, name: person.name), for: key) }
+        // A name typed for the phone key must not be saved over this person's Porch name.
+        let draft = editedName
+        editedName = nil
+        if nameField.isFirstResponder { nameField.resignFirstResponder() }
+        guard save({ try $0.setContact(Self.linked(contact, memberID: person.id, invitationID: person.invitationID, name: person.name), for: key) }) else {
+            editedName = draft
+            return
+        }
     }
     /// A key for someone on Porch, or invited to it: it keeps the key's numbers, how calls start, color and photo, and goes
     /// by their Porch name.
