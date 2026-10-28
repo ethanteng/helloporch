@@ -100,9 +100,9 @@ export const accessibility: Clip[] = [
 export const safety: Screenshot[] = [
   {
     id: "block-unknown-callers",
-    title: "Strangers can’t get through.",
+    title: "Scammers can’t get through.",
     description:
-      "Scammers call older adults pretending to be a grandchild in trouble, Medicare, or the bank. Porch blocks unknown callers from the day it’s set up, so only the people on their keypad and numbers you allow can ring. You can see who was turned away, and let the pharmacy through with one tap.",
+      "Porch blocks unknown callers from the day it’s set up, so only the people on their keypad and numbers you allow can ring.",
     label: "On by default",
     image: "/features/block-unknown-callers.png",
     alt: "Porch’s Calls settings in caregiver mode on an iPhone. Under “Calls to Mom,” Block unknown callers is switched on, with the note “Only keypad contacts and numbers you allow can ring.” Below it, Blocked numbers shows 4, with 1 allowed.",
