@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
@@ -6,6 +7,7 @@ import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 import FeatureTabs from "./FeatureTabs";
 import { accessibility, calling, type Clip } from "./clips";
 import styles from "./features.module.css";
+import ThreeWayCalling from "./ThreeWayCalling";
 
 export const metadata: Metadata = {
   title: "See Porch in Action | HelloPorch",
@@ -31,7 +33,15 @@ export default function FeaturesPage() {
 
           <FeatureTabs
             tabs={[
-              { id: "calling", label: "Calling", content: <Clips clips={calling} /> },
+              {
+                id: "calling",
+                label: "Calling",
+                content: (
+                  <Clips clips={calling}>
+                    <ThreeWayCalling />
+                  </Clips>
+                ),
+              },
               { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
               { id: "safety", label: "Safety", content: <ComingSoon /> },
             ]}
@@ -56,7 +66,8 @@ export default function FeaturesPage() {
   );
 }
 
-function Clips({ clips }: { clips: Clip[] }) {
+// `children` follow the clips, such as an entry shown with screens instead of a clip.
+function Clips({ clips, children }: { clips: Clip[]; children?: ReactNode }) {
   return (
     <div className={styles.clips}>
       {clips.map((clip) => (
@@ -76,6 +87,7 @@ function Clips({ clips }: { clips: Clip[] }) {
           </div>
         </article>
       ))}
+      {children}
     </div>
   );
 }
