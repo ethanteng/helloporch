@@ -1,74 +1,21 @@
 /* ---------- The features page entry ---------- */
 
-/* A full row in the clips grid: the film beside the copy, then three screens on a warm stage. */
+/* A full row in the clips grid: the film, taking a clip's third of the row like the players above it, beside the copy. */
 .entry {
   flex: 0 1 100%;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 56px);
   padding: 12px;
   border-radius: 36px;
   background: var(--paper);
   scroll-margin-top: 24px;
 }
 
-/* The film takes a clip's third of the row, like the players above it. */
-.intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  align-items: center;
-  gap: clamp(24px, 4vw, 56px);
-  padding-bottom: 12px;
-}
-
 .film {
   min-width: 0;
-}
-
-.shots {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: clamp(20px, 3vw, 40px);
-  margin: 0;
-  padding: clamp(28px, 4vw, 48px) clamp(20px, 3vw, 40px) clamp(24px, 3vw, 32px);
-  border-radius: 26px;
-  background: oklch(0.93 0.04 80);
-  list-style: none;
-}
-
-.shot {
-  flex: 0 1 250px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin: 0;
-}
-
-.shot:last-child {
-  flex-basis: 370px;
-}
-
-.shot figcaption {
-  display: flex;
-  gap: 10px;
-  font: 400 16px/1.5 var(--sans);
-  color: var(--muted-2);
-  text-wrap: pretty;
-}
-
-.step {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--ink);
-  color: #fff;
-  font: 600 14px/1 var(--sans);
 }
 
 .copy {
@@ -88,31 +35,10 @@
 }
 
 @media (max-width: 900px) {
-  .intro {
+  .entry {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
-    padding-bottom: 20px;
-  }
-
-  /* Swipe through the screens, with the next one peeking in. */
-  .shots {
-    justify-content: flex-start;
-    gap: 20px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: 24px;
-    padding-inline: 24px;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .shot {
-    flex: 0 0 68%;
-    scroll-snap-align: start;
-  }
-
-  .shot:last-child {
-    flex-basis: 86%;
+    padding-bottom: 32px;
   }
 }
 

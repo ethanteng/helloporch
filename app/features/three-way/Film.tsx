@@ -7,7 +7,7 @@ import { AddPhoneForm, AddSomeoneMenu, CallScreen, Phone, PhoneKeypad, Porch, Sh
 import type { ThreeWayPeople } from "./people";
 import styles from "./film.module.css";
 
-// A short portrait film of 3-way calling, drawn from the features page's screens. Everything on screen is a
+// A short portrait film of 3-way calling, drawn from the app's screens in Screens.tsx. Everything on screen is a
 // function of the time, so scripts/render-three-way-film.mjs can step through it frame by frame with
 // `window.__film.seek(seconds)`. Opened without ?render, it plays on a loop.
 

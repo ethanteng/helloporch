@@ -3,8 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import styles from "./three-way.module.css";
 
 // Mockups of the iOS app's 3-way calling screens (ios/Porch/CallGuests.swift and NativeCallViewController.swift),
-// drawn in iOS points so they keep their proportions at any size. The features page shows them still, and the
-// film animates the same screens.
+// drawn in iOS points so they keep their proportions at any size, for the film on the features page.
 
 export type Person = { name: string; photo?: string };
 
