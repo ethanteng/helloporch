@@ -242,186 +242,91 @@
   text-underline-offset: 4px;
 }
 
-/* ---------- Keypad groups ---------- */
-/* Each keypad option is a tinted box on the same three columns as the shared cards. The subgrid
-   lines up both boxes' headings, notes and cards. */
-.keypads {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: auto auto 1fr;
-  column-gap: 16px;
-}
-
-.keypadGroup {
-  display: grid;
-  grid-row: span 3;
-  grid-template-rows: subgrid;
-  row-gap: 4px;
-  padding: 12px;
-  border-radius: 44px;
+/* The last card in the parts grid adds everything up. */
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: clamp(24px, 3vw, 32px);
+  border-radius: 36px;
   background: var(--honey);
 }
 
-.keypadGroup:first-child {
-  grid-column: span 2;
+.total h3 {
+  font: 400 clamp(24px, 2.2vw, 28px) / 1.15 var(--serif);
+  letter-spacing: -0.015em;
 }
 
-.keypadGroup > h3 {
-  padding: 14px 16px 0;
-  font: 600 18px/1.4 var(--sans);
-}
-
-.keypadGroup > h3 span {
-  font-weight: 400;
-  color: var(--muted-2);
-}
-
-.keypadGroup > p {
-  padding: 0 16px 10px;
-  font: 400 15px/1.5 var(--sans);
-  color: var(--muted-2);
-  text-wrap: pretty;
-}
-
-.groupParts {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-.groupPartsTwo {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-/* ---------- Two keypads to choose from ---------- */
-/* The two panels, with an "Or" badge between them. */
-.options {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 16px;
-}
-
-.or {
-  display: grid;
-  place-items: center;
-  align-self: center;
-  justify-self: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--ink);
-  color: #fff;
-  font: italic 400 26px/1 var(--serif);
-}
-
-.option {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: clamp(24px, 3.5vw, 40px);
-  border-radius: 36px;
-  background: var(--paper);
-}
-
-.optionHeading {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.kicker {
-  font: 600 clamp(19px, 2vw, 22px) / 1.3 var(--sans);
-  color: var(--tomato-deep);
-}
-
-.optionHeading h3 {
-  font: 400 clamp(30px, 3.2vw, 38px) / 1.1 var(--serif);
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-}
-
-.facts {
-  display: flex;
-  flex-direction: column;
+.total ul {
   margin: 0;
-}
-
-.facts > div {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px 0;
-  border-top: 1px solid oklch(0.88 0.02 75);
-}
-
-.facts dt {
-  font: 600 15px/1.55 var(--sans);
-}
-
-.facts dd {
-  margin: 0;
-  font: 400 16px/1.55 var(--sans);
-  color: var(--muted-2);
-  text-wrap: pretty;
-}
-
-/* Stacked while the panels sit side by side; next to each other once a panel is full width. */
-.tradeoffs {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  margin-top: auto;
-}
-
-.tradeoffs > div {
-  padding: 18px 20px 20px;
-  border-radius: 22px;
-  background: var(--bg);
-}
-
-.tradeoffs h4 {
-  margin: 0 0 10px;
-  font: 600 15px/1.4 var(--sans);
-}
-
-.pros,
-.cons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   padding: 0;
   list-style: none;
 }
 
-.pros li,
-.cons li {
-  position: relative;
-  padding-left: 22px;
-  font: 400 15px/1.5 var(--sans);
+.total li,
+.total > p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid oklch(0.78 0.06 75);
+  font: 400 16px/1.5 var(--sans);
   color: var(--muted-2);
-  text-wrap: pretty;
 }
 
-.pros li::before,
-.cons li::before {
-  position: absolute;
-  left: 0;
-  font-weight: 700;
-}
-
-.pros li::before {
-  content: "+";
-  color: oklch(0.5 0.12 150);
-}
-
-.cons li::before {
-  content: "\2013";
-  color: var(--tomato-deep);
+.total > p {
+  border-top: 2px solid var(--ink);
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .note strong {
   font-weight: 600;
   color: var(--ink);
+}
+
+/* ---------- Where Porch is installed ---------- */
+.devices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: min(100%, 880px);
+  margin: 0 auto;
+}
+
+.devices > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px 28px 28px;
+  border-radius: 28px;
+  background: var(--paper);
+}
+
+.devices h3 {
+  font: 400 clamp(26px, 2.6vw, 32px) / 1.15 var(--serif);
+  letter-spacing: -0.015em;
+}
+
+.devices p {
+  font: 400 16px/1.55 var(--sans);
+  color: var(--muted-2);
+  text-wrap: pretty;
+}
+
+.devices .need {
+  width: fit-content;
+  margin-bottom: 6px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: var(--honey);
+  font: 600 14px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.devices .required {
+  background: var(--ink);
+  color: #fff;
 }
 
 /* ---------- Installing ---------- */
@@ -446,54 +351,6 @@
 .install strong {
   font-weight: 600;
   color: var(--ink);
-}
-
-/* ---------- Staying in touch ---------- */
-.reach {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(24px, 3vw, 32px);
-  margin: clamp(48px, 6vw, 72px) clamp(16px, 3vw, 40px) 0;
-  padding: clamp(36px, 5vw, 56px) clamp(16px, 4vw, 48px);
-  border-radius: clamp(32px, 4vw, 48px);
-  background: var(--honey);
-}
-
-.reach h2 {
-  font: 400 clamp(34px, 4.2vw, 48px) / 1.05 var(--serif);
-  letter-spacing: -0.025em;
-  text-align: center;
-  text-wrap: balance;
-}
-
-.reach h2 em {
-  font-weight: 700;
-  color: var(--tomato-deep);
-}
-
-.reachWays {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  width: 100%;
-}
-
-.reachWays > div {
-  padding: 24px 24px 28px;
-  border-radius: 28px;
-  background: var(--paper);
-}
-
-.reachWays h3 {
-  margin-bottom: 6px;
-  font: 600 18px/1.4 var(--sans);
-}
-
-.reachWays p {
-  font: 400 16px/1.55 var(--sans);
-  color: var(--muted-2);
-  text-wrap: pretty;
 }
 
 /* ---------- What the pilot asks ---------- */
@@ -568,9 +425,7 @@
 }
 
 @media (max-width: 900px) {
-  .fit,
-  .options,
-  .reachWays {
+  .fit {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -579,46 +434,20 @@
     margin-inline: auto;
   }
 
-  .tradeoffs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   /* Cards stack one to a row, at the width they have on a phone. */
-  .parts,
-  .keypads {
+  .parts {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
     width: min(100%, 440px);
     margin-inline: auto;
-  }
-
-  .keypads {
-    grid-template-rows: none;
-  }
-
-  .keypadGroup,
-  .keypadGroup:first-child {
-    display: flex;
-    flex-direction: column;
-    grid-column: auto;
-    grid-row: auto;
-  }
-
-  .groupPartsTwo {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 600px) {
   .install,
   .involves,
-  .tradeoffs {
+  .devices {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .facts > div {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
   }
 
   .part {

@@ -1,21 +1,20 @@
-// The equipment on the pilot page. Prices are what each part cost on Amazon in October 2026.
+// The equipment on the pilot page. Families provide all of it; costs are what each part cost on
+// Amazon in October 2026.
 export type Part = {
   id: string;
   name: string;
-  price: string;
+  cost?: number;
   description: string;
   href?: string;
   photo: { src: string; alt: string };
 };
 
-// Everyone needs these.
-export const shared: Part[] = [
+export const parts: Part[] = [
   {
     id: "ipad",
-    name: "Any iPad",
-    price: "Yours",
+    name: "iPad",
     description:
-      "A spare iPad is perfect. It stays plugged in and on your home Wi-Fi. Which models work depends on the keypad you choose.",
+      "One with an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later. A spare one is perfect. It stays plugged in and on your Wi-Fi.",
     photo: {
       src: "/pilot/ipad.jpg",
       alt: "An iPad in its stand, showing Porch’s clock and a Call someone button.",
@@ -24,7 +23,7 @@ export const shared: Part[] = [
   {
     id: "stand",
     name: "Sturdy iPad stand",
-    price: "$30",
+    cost: 30,
     description:
       "A weighted base and a folding aluminum arm hold the iPad steady at eye level, so it won’t tip when someone taps the screen. The clamp fits any iPad.",
     href: "https://www.amazon.com/dp/B0H3N2YPKJ",
@@ -36,39 +35,19 @@ export const shared: Part[] = [
   {
     id: "hub",
     name: "USB hub",
-    price: "$19",
+    cost: 19,
     description:
-      "Plugs into the iPad’s USB-C port. Your iPad’s charger plugs into the hub, so the iPad stays charged with the keypad plugged in too.",
+      "Plugs into the iPad’s USB-C port. Your iPad’s charger plugs into the hub, so the iPad stays charged with the phone plugged in too.",
     href: "https://www.amazon.com/dp/B0BQLLB61B",
     photo: {
       src: "/pilot/hub.jpg",
       alt: "A slim black Anker USB hub with a charging cable and a white USB cable plugged in.",
     },
   },
-];
-
-// The keypad for the touchscreen-and-number-pad option.
-export const numberPad: Part[] = [
-  {
-    id: "keypad",
-    name: "Number pad",
-    price: "$30",
-    description:
-      "A wired keypad that plugs into the hub’s USB-C port. You choose what each key does: call a particular person, answer, hang up, or turn the camera on and off.",
-    href: "https://www.amazon.com/dp/B0BXT6Q3BZ",
-    photo: {
-      src: "/pilot/keypad.jpg",
-      alt: "A gray Macally number pad with black keys: arrows, 0 to 9, math keys and a tall enter key.",
-    },
-  },
-];
-
-// The keypad for the big-button phone option: the phone, and the adapter that connects it.
-export const phoneKit: Part[] = [
   {
     id: "phone",
     name: "Big-button phone",
-    price: "$28",
+    cost: 28,
     description:
       "A corded phone with a photo under each big button. Pressing someone’s photo calls them on Porch. The phone is only the keypad: you see and hear each other on the iPad.",
     href: "https://www.amazon.com/dp/B0FZ99J2QG",
@@ -80,7 +59,7 @@ export const phoneKit: Part[] = [
   {
     id: "cell2jack",
     name: "Cell2Jack",
-    price: "$37",
+    cost: 37,
     description:
       "Made to connect home phones to a cell phone. Here it connects the big-button phone to the USB hub, and Porch reads the button presses through it.",
     href: "https://www.amazon.com/dp/B089984QRT",
@@ -90,3 +69,6 @@ export const phoneKit: Part[] = [
     },
   },
 ];
+
+// What everything but the iPad costs together.
+export const equipmentCost = parts.reduce((sum, part) => sum + (part.cost ?? 0), 0);

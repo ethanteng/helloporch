@@ -1,73 +1,16 @@
-import { Fragment } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
-import { numberPad, phoneKit, shared, type Part } from "./parts";
+import { equipmentCost, parts, type Part } from "./parts";
 import styles from "./pilot.module.css";
 
 export const metadata: Metadata = {
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "What a pilot family needs for Porch: an iPad, a stand, a USB hub and a keypad, the two keypads to choose from, and how to set it all up with TestFlight.",
+    "What a pilot family provides for Porch: an iPad, a stand, a USB hub, a big-button phone and a Cell2Jack. Then how to install the Porch app with TestFlight and connect the phone.",
 };
-
-type Option = {
-  id: string;
-  kicker: string;
-  title: string;
-  facts: [label: string, detail: string][];
-  pros: string[];
-  cons: string[];
-};
-
-// The two keypads. Families install Porch from TestFlight either way; the big-button phone also needs
-// Porch's USB driver turned on, and the driver only runs on M-series iPads.
-const options: Option[] = [
-  {
-    id: "big-button-phone",
-    kicker: "For newer iPads",
-    title: "Big-button phone",
-    facts: [
-      ["iPad", "One with an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later."],
-      ["Setup", "You install Porch with TestFlight, using an invitation from me, then turn on its USB driver. The steps are below."],
-      ["Updates", "Arrive on their own through TestFlight."],
-      ["Cost", "About $114 for the stand, hub, Cell2Jack and phone."],
-    ],
-    pros: [
-      "Feels like the phone they’ve used for years.",
-      "Each button has a photo, so they can see who they’re calling.",
-      "Big buttons are easier to press with shaky hands.",
-    ],
-    cons: [
-      "Needs a newer iPad, and a few more steps to set up.",
-      "They lift the receiver to press a photo, but the handset carries no sound: they talk and listen through the iPad.",
-      "More parts and cables, for about $35 more.",
-    ],
-  },
-  {
-    id: "number-pad",
-    kicker: "For almost any iPad",
-    title: "Touchscreen and number pad",
-    facts: [
-      ["iPad", "Any iPad with iPadOS 15 or later. If it has a Lightning port instead of USB-C, let me know and I’ll suggest an adapter."],
-      ["Setup", "You install Porch with TestFlight, using an invitation from me."],
-      ["Updates", "Arrive on their own through TestFlight."],
-      ["Cost", "About $79 for the stand, hub and number pad."],
-    ],
-    pros: [
-      "Works with almost any spare iPad, including older ones.",
-      "No driver to turn on, so there are fewer steps to set up.",
-      "Costs less, with fewer cables.",
-    ],
-    cons: [
-      "The keys show numbers, not faces, so they need to know who each number calls.",
-      "It looks like a computer accessory, not a phone, and has extra keys that don’t call anyone.",
-      "The keys are small for shaky hands.",
-    ],
-  },
-];
 
 export default function PilotPage() {
   return (
@@ -82,8 +25,9 @@ export default function PilotPage() {
               Getting ready for <em>the Porch pilot.</em>
             </h1>
             <p className={styles.lede}>
-              Thank you for helping me test Porch. Here’s how it fits together, the two keypads to choose from,
-              and what you’ll need to set it all up yourself.
+              Thank you for helping me test Porch. You provide the equipment: an iPad and a big-button phone,
+              plus a few parts to connect them. Porch is the app that runs on it. Here’s what to get and how to
+              set it all up yourself.
             </p>
           </header>
 
@@ -96,12 +40,12 @@ export default function PilotPage() {
                 height={1600}
                 sizes="(max-width: 900px) min(100vw, 560px), 460px"
               />
-              <figcaption>The working prototype, with a big-button phone as its keypad.</figcaption>
+              <figcaption>The working prototype: an iPad on its stand, and a big-button phone.</figcaption>
             </figure>
             <div className={styles.fitCopy}>
               <h2 id="fit-title">How it fits together</h2>
               <p className={styles.fitIntro}>
-                Porch is an app on an iPad. The rest of the equipment lets your family member use it without
+                Porch is an app on an iPad. The big-button phone lets your family member use it without
                 swiping or tapping through menus.
               </p>
               <ol className={styles.fitSteps}>
@@ -111,129 +55,99 @@ export default function PilotPage() {
                 </li>
                 <li>
                   <h3>The hub keeps it charged.</h3>
-                  <p>It plugs into the iPad’s charging port. The charger plugs into the hub, leaving a port for the keypad.</p>
+                  <p>It plugs into the iPad’s charging port. The charger plugs into the hub, leaving a port for the phone.</p>
                 </li>
                 <li>
-                  <h3>The keypad starts calls.</h3>
-                  <p>Each key calls someone you choose, whether it’s a photo button on a big-button phone or a number on a number pad.</p>
-                </li>
-                <li>
-                  <h3>You talk on the iPad.</h3>
+                  <h3>The phone starts calls.</h3>
                   <p>
-                    They see and hear you on its screen and speaker. Family with the Porch app on their iPhone get
-                    a video call. Anyone else gets a voice call on their regular phone, with no app needed.
+                    Each big button has a photo of someone you choose. They lift the receiver and press a photo
+                    to call that person. A Cell2Jack connects the phone to the hub.
+                  </p>
+                </li>
+                <li>
+                  <h3>They talk on the iPad.</h3>
+                  <p>
+                    They see and hear you on its screen and speaker, not through the receiver. Family with the
+                    Porch app on their iPhone get a video call. Anyone else gets a voice call on their regular
+                    phone, with no app needed.
                   </p>
                 </li>
                 <li>
                   <h3>It has its own phone number.</h3>
                   <p>
                     Your family member’s Porch gets a new phone number. Family and friends can call it from any
-                    phone, and it rings on the iPad as a voice call.
+                    phone, and it rings on the iPad as a voice call. You can block callers you haven’t approved.
                   </p>
                 </li>
               </ol>
             </div>
           </section>
 
-          <section className={styles.section} aria-labelledby="options-title">
-            <div className={styles.sectionIntro}>
-              <h2 id="options-title">Two keypads to choose from</h2>
-              <p>
-                Calls, drop-ins and messages work the same either way, and you install Porch yourself with
-                either one. The difference is what your family member presses, and which iPads it works with.
-              </p>
-            </div>
-            <div className={styles.options}>
-              {options.map((option, index) => (
-                <Fragment key={option.id}>
-                  {index > 0 && <p className={styles.or}>Or</p>}
-                  <article className={styles.option} aria-labelledby={`${option.id}-title`}>
-                    <div className={styles.optionHeading}>
-                      <p className={styles.kicker}>{option.kicker}</p>
-                      <h3 id={`${option.id}-title`}>{option.title}</h3>
-                    </div>
-                    <dl className={styles.facts}>
-                      {option.facts.map(([label, detail]) => (
-                        <div key={label}>
-                          <dt>{label}</dt>
-                          <dd>{detail}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <div className={styles.tradeoffs}>
-                      <div>
-                        <h4>Why choose it</h4>
-                        <ul className={styles.pros}>
-                          {option.pros.map((pro) => (
-                            <li key={pro}>{pro}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <h4>Keep in mind</h4>
-                        <ul className={styles.cons}>
-                          {option.cons.map((con) => (
-                            <li key={con}>{con}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </article>
-                </Fragment>
-              ))}
-            </div>
-            <p className={styles.note}>
-              To find your iPad’s model, open <strong>Settings → General → About</strong>.
-            </p>
-          </section>
-
           <section className={styles.section} aria-labelledby="kit-title">
             <div className={styles.sectionIntro}>
-              <h2 id="kit-title">What you’ll need</h2>
-              <p>Everyone needs an iPad, a stand and a hub. Then add the keypad you chose.</p>
+              <h2 id="kit-title">The equipment you provide</h2>
+              <p>
+                You provide all of the hardware, including the iPad. Everything but the iPad is on Amazon, for
+                about ${equipmentCost} in all.
+              </p>
             </div>
             <div className={styles.parts}>
-              {shared.map((part) => (
+              {parts.map((part) => (
                 <PartCard key={part.id} part={part} />
               ))}
-            </div>
-            <div className={styles.keypads}>
-              <section className={styles.keypadGroup} aria-labelledby="phone-kit">
-                <h3 id="phone-kit">
-                  Big-button phone <span>· $65 for both</span>
-                </h3>
-                <p>You need both: the phone plugs into the Cell2Jack, and the Cell2Jack plugs into the hub.</p>
-                <div className={`${styles.groupParts} ${styles.groupPartsTwo}`}>
-                  {phoneKit.map((part) => (
-                    <PartCard key={part.id} part={part} nested />
+              <aside className={styles.total} aria-labelledby="total-title">
+                <h3 id="total-title">Your shopping list</h3>
+                <ul>
+                  {parts.map((part) => (
+                    <li key={part.id}>
+                      <span>{part.name}</span>
+                      <span>{part.cost ? `$${part.cost}` : "Your own"}</span>
+                    </li>
                   ))}
-                </div>
-              </section>
-              <section className={styles.keypadGroup} aria-labelledby="number-pad-kit">
-                <h3 id="number-pad-kit">
-                  Or a number pad <span>· $30</span>
-                </h3>
-                <p>Plugs straight into the hub.</p>
-                <div className={styles.groupParts}>
-                  {numberPad.map((part) => (
-                    <PartCard key={part.id} part={part} nested />
-                  ))}
-                </div>
-              </section>
+                </ul>
+                <p>
+                  <span>Total</span>
+                  <span>${equipmentCost} + iPad</span>
+                </p>
+              </aside>
             </div>
-            <p className={styles.note}>Prices are from Amazon in October 2026 and may change.</p>
+            <p className={styles.note}>
+              To find your iPad’s model, open <strong>Settings → General → About</strong>. Prices are from Amazon
+              in October 2026 and may change.
+            </p>
           </section>
 
           <section className={styles.section} aria-labelledby="install-title">
             <div className={styles.sectionIntro}>
-              <h2 id="install-title">Installing the app</h2>
+              <h2 id="install-title">Installing the Porch app</h2>
               <p>
-                Porch isn’t on the App Store yet, so it installs with{" "}
-                <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a>, Apple’s free app for
-                trying apps before they’re released. You use it to install Porch on the iPad, and so does each
-                family member who wants the Porch app on their iPhone.
+                Porch is an app you install on the iPad. Family members can install it on their iPhones too,
+                if they’d like.
               </p>
             </div>
+            <div className={styles.devices}>
+              <div>
+                <p className={`${styles.need} ${styles.required}`}>Required</p>
+                <h3>On the iPad</h3>
+                <p>
+                  This is your family member’s Porch. It shows the clock, rings when someone calls, and calls
+                  whoever they press on the phone.
+                </p>
+              </div>
+              <div>
+                <p className={styles.need}>Optional</p>
+                <h3>On family iPhones</h3>
+                <p>
+                  For video calls, drop-ins and messages with your family member. There’s no Android app yet,
+                  but Porch can still call any phone number for a voice call.
+                </p>
+              </div>
+            </div>
+            <p className={styles.note}>
+              Porch isn’t on the App Store yet, so it installs with{" "}
+              <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a>, Apple’s free app for
+              trying apps before they’re released.
+            </p>
             <ol className={styles.install}>
               <li>
                 <h3>Get TestFlight.</h3>
@@ -272,10 +186,7 @@ export default function PilotPage() {
           <section className={styles.section} aria-labelledby="phone-setup-title">
             <div className={styles.sectionIntro}>
               <h2 id="phone-setup-title">Connecting the big-button phone</h2>
-              <p>
-                Skip this if you chose the number pad. Once Porch is set up on the iPad, connecting the phone
-                takes a few minutes.
-              </p>
+              <p>Once Porch is set up on the iPad, connecting the phone takes a few minutes.</p>
             </div>
             <ol className={styles.install}>
               <li>
@@ -309,44 +220,14 @@ export default function PilotPage() {
             </p>
           </section>
 
-          <section className={styles.reach} aria-labelledby="reach-title">
-            <h2 id="reach-title">
-              Staying in touch, <em>app or no app.</em>
-            </h2>
-            <div className={styles.reachWays}>
-              <div>
-                <h3>The Porch app</h3>
-                <p>
-                  For video calls, drop-ins and messages. It’s iPhone and iPad only for now, with no Android app
-                  yet.
-                </p>
-              </div>
-              <div>
-                <h3>Any phone</h3>
-                <p>
-                  Porch can call anyone’s regular phone number for a voice call, so family on Android or a
-                  landline can still pick up. No app needed.
-                </p>
-              </div>
-              <div>
-                <h3>Their own Porch number</h3>
-                <p>
-                  Your family member gets a new phone number for their Porch. Share it with family and friends
-                  so they can save it in their contacts and call any time. You can block callers you haven’t
-                  approved.
-                </p>
-              </div>
-            </div>
-          </section>
-
           <section className={styles.section} aria-labelledby="involves-title">
             <div className={styles.sectionIntro}>
               <h2 id="involves-title">What the pilot asks of you</h2>
             </div>
             <ul className={styles.involves}>
               <li>
-                <h3>A spare iPad and $79 to $114 of equipment.</h3>
-                <p>Depending on the keypad you choose.</p>
+                <h3>All the equipment, including the iPad.</h3>
+                <p>A newer iPad, plus about ${equipmentCost} for the stand, hub, phone and Cell2Jack.</p>
               </li>
               <li>
                 <h3>A spot with Wi-Fi and an outlet.</h3>
@@ -382,9 +263,7 @@ export default function PilotPage() {
   );
 }
 
-// Cards inside a keypad group sit under that group's h3, so their names drop to h4.
-function PartCard({ part, nested = false }: { part: Part; nested?: boolean }) {
-  const Heading = nested ? "h4" : "h3";
+function PartCard({ part }: { part: Part }) {
   return (
     <article className={styles.part} aria-labelledby={`${part.id}-title`}>
       <Image
@@ -397,8 +276,8 @@ function PartCard({ part, nested = false }: { part: Part; nested?: boolean }) {
       />
       <div className={styles.partCopy}>
         <div className={styles.partHeading}>
-          <Heading id={`${part.id}-title`}>{part.name}</Heading>
-          <span className={styles.price}>{part.price}</span>
+          <h3 id={`${part.id}-title`}>{part.name}</h3>
+          <span className={styles.price}>{part.cost ? `$${part.cost}` : "Your own"}</span>
         </div>
         <p>{part.description}</p>
         {part.href && (
