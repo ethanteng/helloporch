@@ -3,7 +3,7 @@ import featureStyles from "./features.module.css";
 import styles from "./three-way/three-way.module.css";
 
 // A film of the app's own 3-way calling screens, rendered by scripts/render-three-way-film.mjs.
-const FILM = "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20compressed.mp4";
+const FILM = "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20v2%20compressed.mp4";
 
 // 3-way calling: the film beside the copy, a full row at the end of the Calling tab.
 export default function ThreeWayCalling() {

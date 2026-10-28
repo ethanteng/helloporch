@@ -13,6 +13,14 @@
   --u: calc(100cqw / 540);
 }
 
+/* The caption's strip, over anything zoomed up into it. */
+.band {
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(226 * var(--u));
+  background: var(--bg);
+}
+
 .caption {
   position: absolute;
   inset: 0 0 auto;
@@ -77,10 +85,4 @@
 .endTitle em {
   font-weight: 600;
   color: var(--tomato-deep);
-}
-
-.endLine {
-  font: 400 calc(23 * var(--u)) / 1.45 var(--sans);
-  color: var(--muted);
-  text-wrap: balance;
 }

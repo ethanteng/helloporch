@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import PorchLogo from "@/components/PorchLogo";
-import { AddPhoneForm, AddSomeoneMenu, CallScreen, Phone, PhoneKeypad, Porch, Sheet, type Tap } from "./Screens";
+import { AddPhoneForm, CallScreen, Phone, Porch, Sheet } from "./Screens";
 import type { ThreeWayPeople } from "./people";
 import styles from "./film.module.css";
 
@@ -11,36 +11,27 @@ import styles from "./film.module.css";
 // function of the time, so scripts/render-three-way-film.mjs can step through it frame by frame with
 // `window.__film.seek(seconds)`. Opened without ?render, it plays on a loop.
 
-const DURATION = 24.5;
+const DURATION = 20.5;
 
 // When things happen, in seconds.
 const AT = {
-  addTap: 1.7,
-  menu: [2.0, 2.4],
-  numberTap: 3.3,
-  menuOut: [3.7, 4.0],
-  form: [3.8, 4.25],
-  typeName: [4.6, 5.2],
-  typeNumber: [5.5, 6.9],
-  callTap: 7.4,
-  formOut: [7.8, 8.2],
-  toPorch: [10.0, 10.6],
-  zoomIn: [11.0, 11.7],
-  bankAnswers: 12.2,
-  zoomOut: [13.7, 14.3],
-  toPhone: [14.6, 15.2],
-  keypadTap: 16.0,
-  keypad: [16.3, 16.7],
-  keys: [17.2, 17.8, 18.4],
-  keypadOut: [19.5, 19.9],
-  end: [20.4, 21.0],
+  form: [3.0, 3.45],
+  typeName: [3.8, 4.4],
+  typeNumber: [4.7, 6.1],
+  formOut: [6.8, 7.2],
+  toPorch: [8.4, 9.0],
+  zoomIn: [9.2, 10.0],
+  bankAnswers: 11.2,
+  zoomOut: [13.0, 13.6],
+  toPhone: [13.6, 14.2],
+  end: [17.6, 18.2],
 } as const;
 
 const CAPTIONS: { from: number; to: number; text: ReactNode }[] = [
-  { from: 0, to: 3.8, text: <>The bank needs to hear from <em>Mom.</em></> },
-  { from: 3.8, to: 10.0, text: <>Call her on Porch, then <em>add the bank.</em></> },
-  { from: 10.0, to: 14.6, text: <>Mom hears the bank and <em>answers for herself.</em></> },
-  { from: 14.6, to: 20.4, text: <>You handle <em>the menus</em> and the hold music.</> },
+  { from: 0, to: 3.0, text: <>The bank insists that <em>Mom</em> be on the call.</> },
+  { from: 3.0, to: 8.4, text: <>Call her on Porch, then <em>add the bank.</em></> },
+  { from: 8.4, to: 13.6, text: <>Mom hears the bank and <em>answers for herself.</em></> },
+  { from: 13.6, to: 17.6, text: <>You handle <em>the menus</em> and the hold music.</> },
 ];
 
 declare global {
@@ -79,51 +70,27 @@ export default function Film({ people }: { people: ThreeWayPeople }) {
 }
 
 function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
-  const { mom, caller, family } = people;
+  const { mom, caller } = people;
   const phoneShown = t < AT.toPorch[1] ? 1 - ramp(t, ...AT.toPorch) : ramp(t, ...AT.toPhone) * (1 - ramp(t, ...AT.end));
   const porchShown = ramp(t, ...AT.toPorch) * (1 - ramp(t, ...AT.toPhone));
-  // Moves in on the Porch's heading, small at the iPad's real size, while it says who's joining.
+  // Moves in close on the Porch's heading, small at the iPad's real size, while it says who's joining.
   const zoom = ramp(t, ...AT.zoomIn) * (1 - ramp(t, ...AT.zoomOut));
   const answered = t >= AT.bankAnswers;
   const guest = t >= AT.formOut[0] ? { name: "Bank", answered } : undefined;
-
-  // What's over the call on the phone: the Add someone menu, the Add a phone form, or the keypad.
-  const menu = ramp(t, ...AT.menu) * (1 - ramp(t, ...AT.menuOut));
   const form = ramp(t, ...AT.form) * (1 - ramp(t, ...AT.formOut));
-  const keypad = ramp(t, ...AT.keypad) * (1 - ramp(t, ...AT.keypadOut));
-  const pressed = AT.keys.filter((at) => t >= at).map((_, i) => "12#"[i]).join("");
-  const tap =
-    tapAt(t, AT.addTap, "add") ??
-    tapAt(t, AT.numberTap, "number") ??
-    tapAt(t, AT.callTap, "call") ??
-    tapAt(t, AT.keypadTap, "keypad") ??
-    AT.keys.map((at, i) => tapAt(t, at, "12#"[i])).find(Boolean);
 
   return (
     <>
-      {CAPTIONS.map((caption) => (
-        <p key={caption.from} className={styles.caption} style={fade(t, caption.from, caption.to)}>
-          <span>{caption.text}</span>
-        </p>
-      ))}
-
       {phoneShown > 0 && (
         <div className={styles.phoneShot} style={shot(phoneShown)}>
-          <Phone label="" light={form > 0.5 || keypad > 0.5}>
-            <CallScreen device="phone" title={mom.name} status={["Video call connected"]} remote={mom} self={caller} guest={guest} tap={tap}>
-              <Sheet shown={menu}>
-                <AddSomeoneMenu family={family} tap={tap} />
-              </Sheet>
-              <Sheet shown={form} page>
+          <Phone light={form > 0.5}>
+            <CallScreen device="phone" title={mom.name} status={["Video call connected"]} remote={mom} self={caller} guest={guest}>
+              <Sheet shown={form}>
                 <AddPhoneForm
                   name={typed("Bank", t, ...AT.typeName)}
                   number={typed("(800) 555-0199", t, ...AT.typeNumber)}
-                  typing={t < AT.typeName[1] + 0.2 ? "name" : t < AT.callTap ? "number" : undefined}
-                  tap={tap}
+                  typing={t < AT.typeName[1] + 0.2 ? "name" : t < AT.formOut[0] ? "number" : undefined}
                 />
-              </Sheet>
-              <Sheet shown={keypad} page>
-                <PhoneKeypad name="Bank" pressed={pressed} tap={tap} />
               </Sheet>
             </CallScreen>
           </Phone>
@@ -131,8 +98,8 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
       )}
 
       {porchShown > 0 && (
-        <div className={styles.porchShot} style={shot(porchShown, 1 + zoom * 0.3)}>
-          <Porch label="">
+        <div className={styles.porchShot} style={shot(porchShown, 1 + zoom * 1.2)}>
+          <Porch>
             <CallScreen
               device="porch"
               title={caller.name}
@@ -144,6 +111,14 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
         </div>
       )}
 
+      {/* Keeps the captions clear of a device that's zoomed in under them. */}
+      <div className={styles.band} />
+      {CAPTIONS.map((caption) => (
+        <p key={caption.from} className={styles.caption} style={fade(t, caption.from, caption.to)}>
+          <span>{caption.text}</span>
+        </p>
+      ))}
+
       <div className={styles.end} style={{ opacity: ramp(t, ...AT.end) }}>
         <p className={`logo ${styles.logo}`}>
           <PorchLogo />
@@ -151,7 +126,6 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
         <p className={styles.endTitle}>
           <em>3-way</em> calling
         </p>
-        <p className={styles.endLine}>When you hang up, the bank hangs up too, so Mom is never left alone with a caller.</p>
       </div>
     </>
   );
@@ -161,10 +135,6 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
 function ramp(t: number, from: number, to: number) {
   const x = Math.min(1, Math.max(0, (t - from) / (to - from)));
   return x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2;
-}
-
-function tapAt(t: number, at: number, on: string): Tap | undefined {
-  return t >= at && t < at + 0.45 ? { on, p: (t - at) / 0.45 } : undefined;
 }
 
 function typed(text: string, t: number, from: number, to: number) {

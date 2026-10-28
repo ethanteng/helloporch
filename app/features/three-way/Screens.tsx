@@ -7,17 +7,10 @@ import styles from "./three-way.module.css";
 
 export type Person = { name: string; photo?: string };
 
-/** A finger tap on the control named `on`, with `p` running from 0 to 1. Only the film taps. */
-export type Tap = { on: string; p: number };
-
-function tapStyle(tap: Tap | undefined, on: string) {
-  return tap?.on === on ? { "data-tap": true, style: { "--tap": tap.p } as CSSProperties } : {};
-}
-
 /** An iPhone 17 Pro, 402 × 874 points. */
-export function Phone({ label, light = false, children }: { label: string; light?: boolean; children: ReactNode }) {
+export function Phone({ light = false, children }: { light?: boolean; children: ReactNode }) {
   return (
-    <div className={styles.phone} role="img" aria-label={label}>
+    <div className={styles.phone}>
       <div className={styles.phoneScreen}>
         <div className={styles.ui}>
           {children}
@@ -45,9 +38,9 @@ export function Phone({ label, light = false, children }: { label: string; light
 }
 
 /** Mom's Porch: an iPad Air standing upright, 820 × 1180 points, with no status bar. */
-export function Porch({ label, children }: { label: string; children: ReactNode }) {
+export function Porch({ children }: { children: ReactNode }) {
   return (
-    <div className={styles.porch} role="img" aria-label={label}>
+    <div className={styles.porch}>
       <div className={styles.porchBezel}>
         <div className={styles.porchScreen}>
           <div className={styles.ui}>
@@ -87,7 +80,6 @@ export function CallScreen({
   remote,
   self,
   guest,
-  tap,
   children,
 }: {
   device: "phone" | "porch";
@@ -96,14 +88,13 @@ export function CallScreen({
   remote: Person;
   self: Person;
   guest?: Guest;
-  tap?: Tap;
   children?: ReactNode;
 }) {
   const phone = device === "phone";
   return (
     <>
       <div className={styles.stage}>
-        <Face person={remote} sizes={phone ? "(max-width: 900px) 70vw, 300px" : "(max-width: 900px) 85vw, 420px"} />
+        <Face person={remote} sizes={phone ? "300px" : "430px"} />
       </div>
       <div className={styles.overlays}>
         <div className={`${styles.panel} ${styles.heading}`}>
@@ -123,17 +114,17 @@ export function CallScreen({
               <>
                 <p className={styles.guestStatus}>{guest.answered ? `${guest.name} is on the call` : `Calling ${guest.name}…`}</p>
                 <div className={styles.row}>
-                  <CallButton on="keypad" title="Keypad" icon="keypad" disabled={!guest.answered} tap={tap} />
-                  <CallButton on="hangUpGuest" title={`Hang up ${guest.name}`} icon="hangUp" end tap={tap} />
+                  <CallButton title="Keypad" icon="keypad" disabled={!guest.answered} />
+                  <CallButton title={`Hang up ${guest.name}`} icon="hangUp" end />
                 </div>
               </>
             )}
             {!phone && <p className={styles.hint}>Key 0: hang up · Key 9: video off / on</p>}
             <div className={styles.row}>
-              <CallButton on="mute" title="Mute" icon="mute" tap={tap} />
-              <CallButton on="camera" title="Camera off" icon="camera" tap={tap} />
-              {phone && <CallButton on="add" title="Add someone" icon="add" tap={tap} />}
-              <CallButton on="end" title="End call" icon="hangUp" end tap={tap} />
+              <CallButton title="Mute" icon="mute" />
+              <CallButton title="Camera off" icon="camera" />
+              {phone && <CallButton title="Add someone" icon="add" />}
+              <CallButton title="End call" icon="hangUp" end />
             </div>
           </div>
         </div>
@@ -143,50 +134,34 @@ export function CallScreen({
   );
 }
 
-function CallButton({ on, title, icon, end, disabled, tap }: { on: string; title: string; icon: IconName; end?: boolean; disabled?: boolean; tap?: Tap }) {
+function CallButton({ title, icon, end, disabled }: { title: string; icon: IconName; end?: boolean; disabled?: boolean }) {
   return (
-    <span className={styles.callButton} data-end={end || undefined} data-disabled={disabled || undefined} {...tapStyle(tap, on)}>
+    <span className={styles.callButton} data-end={end || undefined} data-disabled={disabled || undefined}>
       <Icon name={icon} />
       {title}
     </span>
   );
 }
 
-/** Slides a sheet up over the call and dims it; `shown` runs from 0 (hidden) to 1. */
-export function Sheet({ shown = 1, page = false, children }: { shown?: number; page?: boolean; children: ReactNode }) {
+/** Slides a page sheet up over the call and dims it; `shown` runs from 0 (hidden) to 1. */
+export function Sheet({ shown = 1, children }: { shown?: number; children: ReactNode }) {
   if (shown <= 0) return null;
   return (
     <div className={styles.sheetLayer} style={{ "--in": shown } as CSSProperties}>
       <div className={styles.dim} />
-      <div className={page ? styles.pageSheet : styles.actionSheet}>{children}</div>
+      <div className={styles.pageSheet}>{children}</div>
     </div>
   );
 }
 
-/** What Add someone offers: family on Porch first, then a phone number. */
-export function AddSomeoneMenu({ family, tap }: { family: string; tap?: Tap }) {
-  return (
-    <>
-      <div className={styles.sheetGroup}>
-        <div className={styles.sheetHeader}>
-          <p className={styles.sheetTitle}>Add someone to this call</p>
-          <p>Family join on Porch with video.</p>
-        </div>
-        <span className={styles.sheetOption} {...tapStyle(tap, "family")}>{family}</span>
-        <span className={styles.sheetOption} {...tapStyle(tap, "number")}>A phone number…</span>
-      </div>
-      <div className={styles.sheetGroup}>
-        <span className={`${styles.sheetOption} ${styles.sheetCancel}`}>Cancel</span>
-      </div>
-    </>
-  );
-}
-
 /** The Add a phone form, with what's been typed so far and the field being typed in. */
-export function AddPhoneForm({ name, number, typing, tap }: { name: string; number: string; typing?: "name" | "number"; tap?: Tap }) {
+export function AddPhoneForm({ name, number, typing }: { name: string; number: string; typing?: "name" | "number" }) {
   return (
     <>
-      <NavBar title="Add a phone" left="Cancel" />
+      <div className={styles.navBar}>
+        <span className={styles.navButton}>Cancel</span>
+        Add a phone
+      </div>
       <div className={styles.form}>
         <div className={styles.card}>
           <p className={styles.cardTitle}>Who should join the call?</p>
@@ -203,7 +178,7 @@ export function AddPhoneForm({ name, number, typing, tap }: { name: string; numb
             <Icon name="contact" />
             Choose from Contacts
           </span>
-          <span className={styles.formButton} data-filled {...tapStyle(tap, "call")}>
+          <span className={styles.formButton} data-filled>
             <Icon name="dial" />
             Call and add to this call
           </span>
@@ -222,35 +197,6 @@ function Field({ label, value, placeholder, helper, caret }: { label: string; va
         {caret && <span className={styles.caret} />}
       </p>
       <p className={styles.helper}>{helper}</p>
-    </div>
-  );
-}
-
-/** Key presses for the added phone's menus, such as "press 1 for your account". */
-export function PhoneKeypad({ name, pressed, tap }: { name: string; pressed: string; tap?: Tap }) {
-  return (
-    <>
-      <NavBar title={`Keypad for ${name}`} right="Done" />
-      <div className={styles.keypad}>
-        <p className={styles.pressed}>{pressed}</p>
-        <div className={styles.keys}>
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map((key) => (
-            <span key={key} className={styles.key} {...tapStyle(tap, key)}>
-              {key}
-            </span>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function NavBar({ title, left, right }: { title: string; left?: string; right?: string }) {
-  return (
-    <div className={styles.navBar}>
-      {left && <span className={styles.navButton}>{left}</span>}
-      {title}
-      {right && <span className={`${styles.navButton} ${styles.navDone}`}>{right}</span>}
     </div>
   );
 }
