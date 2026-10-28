@@ -31,7 +31,7 @@ const questions = [
   },
   {
     question: "Does the price include an iPad or a keypad?",
-    answer: "No. This is a software subscription. You’ll need a compatible iPad and home Wi-Fi. A keypad is optional; you can also use the touchscreen. Our pilot guide explains the equipment options and which iPads work with them.",
+    answer: "No. This is a software subscription. You’ll need a compatible iPad and home Wi-Fi. A keypad is optional; you can also use the touchscreen. Our pilot guide lists the equipment and which iPads work with it.",
   },
   {
     question: "What happens if we replace the iPad?",
