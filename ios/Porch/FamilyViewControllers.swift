@@ -46,14 +46,14 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         hideKeyboardControl()
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPushStatus), name: .porchSystemCallChanged, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(openReceivedMessages), name: .porchOpenReceivedMessages, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(openMessages), name: .porchOpenReceivedMessages, object: nil)
         refresh()
     }
-    @objc private func openReceivedMessages() {
+    @objc private func openMessages() {
         guard PorchDevice.credential(for: .family) != nil, let navigationController else { return }
         if navigationController.presentedViewController != nil { navigationController.dismiss(animated: false) }
         navigationController.popToRootViewController(animated: false)
-        navigationController.pushViewController(ReceivedMessagesViewController(), animated: true)
+        navigationController.pushViewController(MessageThreadViewController(), animated: true)
     }
     @objc private func refreshPushStatus() { displayed = nil; refresh() }
     #if DEBUG
@@ -62,7 +62,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         super.viewDidAppear(animated)
         guard !previewShown else { return }
         previewShown = true
-        if ProcessInfo.processInfo.arguments.contains("--preview-received-messages") { openReceivedMessages() }
+        if ProcessInfo.processInfo.arguments.contains("--preview-messages") { openMessages() }
         if ProcessInfo.processInfo.arguments.contains("--preview-profile") { showSettings() }
     }
     #endif
@@ -124,7 +124,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         if next.unheard > 0 {
             let play = PorchStyle.button(next.unheard == 1 ? "New message from \(from)" : "\(next.unheard) new messages from \(from)", symbol: "envelope.badge.fill")
             play.accessibilityIdentifier = "family.newMessages"
-            play.addAction(UIAction { [weak self] _ in self?.openReceivedMessages() }, for: .touchUpInside)
+            play.addAction(UIAction { [weak self] _ in self?.openMessages() }, for: .touchUpInside)
             people.addArrangedSubview(play)
         }
         for person in state.people {
@@ -151,15 +151,11 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             }
             people.addArrangedSubview(section(person.name, views: views))
         }
-        // One coming in, one going out, so they read as a pair.
-        let received = PorchStyle.button("Messages from \(from)", symbol: "tray.and.arrow.down", filled: false)
-        received.accessibilityIdentifier = "family.receivedMessages"
-        received.addAction(UIAction { [weak self] _ in self?.openReceivedMessages() }, for: .touchUpInside)
-        people.addArrangedSubview(received)
-        let sent = PorchStyle.button("Messages to \(from)", symbol: "tray.and.arrow.up", filled: false)
-        sent.accessibilityIdentifier = "family.sentMessages"
-        sent.addAction(UIAction { [weak self] _ in self?.navigationController?.pushViewController(SentMessagesViewController(), animated: true) }, for: .touchUpInside)
-        people.addArrangedSubview(sent)
+        // Both ways in one thread, like a text conversation.
+        let thread = PorchStyle.button("Messages with \(from)", symbol: "bubble.left.and.bubble.right", filled: false)
+        thread.accessibilityIdentifier = "family.messages"
+        thread.addAction(UIAction { [weak self] _ in self?.openMessages() }, for: .touchUpInside)
+        people.addArrangedSubview(thread)
     }
     private func offerVoicemail(to name: String, title: String) {
         guard view.window != nil, presentedViewController == nil, FamilyCoordinator.shared.state?.messagesEnabled != false else {

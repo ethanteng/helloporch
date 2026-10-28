@@ -270,7 +270,7 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
                 if let poster = self.recording?.poster ?? recording.poster { MessagePosters.save(poster, for: sent.id) }
                 try? FileManager.default.removeItem(at: recording.file)
                 self.recording = nil; self.phase = .idle
-                let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch. See when it's played in Messages to \(self.recipient).", preferredStyle: .alert)
+                let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch. See when it's played in Messages with \(self.recipient).", preferredStyle: .alert)
                 done.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in self?.navigationController?.popViewController(animated: true) })
                 self.present(done, animated: true)
             } catch {
@@ -289,36 +289,198 @@ enum MessageText {
         return formatter.string(from: Date(timeIntervalSince1970: time))
     }
     static func length(_ seconds: Int) -> String { String(format: "%d:%02d", seconds / 60, seconds % 60) }
+    /// The time alone, for a message under its day's heading.
+    static func time(_ time: TimeInterval) -> String {
+        DateFormatter.localizedString(from: Date(timeIntervalSince1970: time), dateStyle: .none, timeStyle: .short)
+    }
+    /// When a message was played, short enough for its tag: "today at 4:02 PM", "Oct 25 at 6:04 PM".
+    static func played(_ time: TimeInterval?) -> String {
+        guard let time else { return "" }
+        let date = Date(timeIntervalSince1970: time), calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate(calendar.isDate(date, equalTo: Date(), toGranularity: .year) ? "MMMd" : "MMMdy")
+        let day = calendar.isDateInToday(date) ? "today" : calendar.isDateInYesterday(date) ? "yesterday" : formatter.string(from: date)
+        return "\(day) at \(self.time(time))"
+    }
+    /// Today, Yesterday, or the weekday and date, over that day's messages.
+    static func day(_ time: TimeInterval) -> String {
+        let date = Date(timeIntervalSince1970: time), calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate(calendar.isDate(date, equalTo: Date(), toGranularity: .year) ? "EEEEMMMMd" : "EEEEMMMMdy")
+        return formatter.string(from: date)
+    }
 }
 
-/// This phone's own messages and voicemails, with whether each was played. Others' messages aren't shown.
-final class SentMessagesViewController: CaregiverFormViewController {
+/// Whether a message has been played, shown as a colored tag under it rather than words in a sentence.
+struct MessageStatus {
+    enum Tone { case new, played, waiting, ended, failed }
+    let text: String
+    let symbol: String
+    let tone: Tone
+    /// More about it, when there's more to say.
+    var note: String? = nil
+
+    static func sent(_ message: SentMessage, to name: String) -> MessageStatus {
+        switch message.state {
+        case "uploading": return MessageStatus(text: "Still sending", symbol: "arrow.up.circle", tone: .waiting, note: "Keep Porch open until it finishes.")
+        case "queued": return MessageStatus(text: "Not played yet", symbol: "clock", tone: .waiting, note: message.deliveredAt != nil ? "Waiting on \(name)'s Porch." : "Waiting for \(name)'s Porch to download it.")
+        case "played": return MessageStatus(text: "Played \(MessageText.played(message.playedAt))", symbol: "checkmark.circle.fill", tone: .played, note: message.replayable == true ? nil : "The recording was deleted after 90 days.")
+        case "expired": return MessageStatus(text: "Never played", symbol: "xmark.circle", tone: .ended, note: "Not played within a week, so it was removed.")
+        case "removed": return MessageStatus(text: "Removed by a caregiver", symbol: "minus.circle", tone: .ended)
+        case "unsent": return MessageStatus(text: "You unsent it", symbol: "arrow.uturn.backward.circle", tone: .ended)
+        default: return MessageStatus(text: "Didn't send", symbol: "exclamationmark.circle", tone: .failed, note: "This message didn't finish sending.")
+        }
+    }
+    static func received(_ message: ReceivedMessage) -> MessageStatus {
+        switch message.state {
+        case "queued": return message.available ? MessageStatus(text: "New", symbol: "circle.fill", tone: .new)
+            : MessageStatus(text: "Never played", symbol: "xmark.circle", tone: .ended, note: "It was deleted after 90 days.")
+        case "played": return MessageStatus(text: "Played \(MessageText.played(message.playedAt))", symbol: "checkmark.circle.fill", tone: .played, note: message.available ? nil : "The recording was deleted after 90 days.")
+        default: return MessageStatus(text: "Never played", symbol: "xmark.circle", tone: .ended, note: "Not played within 90 days, so it was deleted.")
+        }
+    }
+
+    /// The tag itself: filled for new, green once played, amber while it waits, gray once it's gone.
+    func tag() -> UIButton {
+        let colors: (foreground: UIColor, background: UIColor)
+        switch tone {
+        case .new: colors = (.white, PorchStyle.accent)
+        case .played: colors = (PorchStyle.accent, PorchStyle.accent.withAlphaComponent(0.12))
+        case .waiting: colors = (UIColor(red: 0.52, green: 0.32, blue: 0, alpha: 1), UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26))
+        case .ended: colors = (PorchStyle.secondary, PorchStyle.border.withAlphaComponent(0.45))
+        case .failed: colors = (UIColor(red: 0.68, green: 0.13, blue: 0.1, alpha: 1), UIColor.systemRed.withAlphaComponent(0.12))
+        }
+        var config = UIButton.Configuration.filled()
+        config.title = text
+        config.image = UIImage(systemName: symbol); config.imagePadding = 6
+        // New is a small dot, like an unheard voicemail.
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: tone == .new ? 8 : 13, weight: .bold)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes; attributes.font = PorchStyle.font(15, weight: .semibold); return attributes
+        }
+        config.cornerStyle = .capsule
+        config.contentInsets = .init(top: 6, leading: 10, bottom: 6, trailing: 12)
+        config.baseForegroundColor = colors.foreground; config.baseBackgroundColor = colors.background
+        let tag = UIButton(configuration: config)
+        // The bubble above reads it out.
+        tag.isUserInteractionEnabled = false; tag.isAccessibilityElement = false
+        return tag
+    }
+}
+
+/// One message in the thread; tapping it plays the message. This phone's own are green.
+final class MessageBubble: UIControl {
+    private(set) var poster: MessagePosterView?
+    init(mine: Bool, title: String, length: String, video: Bool, poster image: UIImage?, showsPoster: Bool, playable: Bool, new: Bool) {
+        super.init(frame: .zero)
+        let ink = mine ? UIColor.white : PorchStyle.ink
+        backgroundColor = mine ? PorchStyle.accent : PorchStyle.surface
+        layer.cornerRadius = 22; layer.cornerCurve = .continuous
+        if !mine { layer.borderWidth = new ? 2 : 1; layer.borderColor = (new ? PorchStyle.accent : PorchStyle.border).cgColor }
+        let icon = UIImageView(image: UIImage(systemName: video ? "video.fill" : playable ? "play.circle.fill" : "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: video ? 22 : 34)))
+        icon.tintColor = ink
+        icon.setContentHuggingPriority(.required, for: .horizontal); icon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let words = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 17, color: ink, weight: .semibold), PorchStyle.label(length, size: 15, color: ink.withAlphaComponent(0.8))])
+        words.axis = .vertical; words.spacing = 2
+        let line = UIStackView(arrangedSubviews: [icon, words])
+        line.spacing = 12; line.alignment = .center
+        let stack = UIStackView(arrangedSubviews: [line])
+        stack.axis = .vertical; stack.spacing = 12
+        if showsPoster {
+            let poster = MessagePosterView(image: image, playable: playable)
+            poster.layer.cornerRadius = 12
+            stack.insertArrangedSubview(poster, at: 0); self.poster = poster
+        }
+        // Taps anywhere in the bubble play it.
+        stack.isUserInteractionEnabled = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12), stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 12), stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+        ])
+        isEnabled = playable
+        isAccessibilityElement = true
+        accessibilityTraits = playable ? .button : .staticText
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(mine:title:length:video:poster:showsPoster:playable:new:)") }
+    override var isHighlighted: Bool { didSet { alpha = isHighlighted ? 0.7 : 1 } }
+}
+
+/// Messages between this phone and the bedside in one thread, oldest first like a text conversation: theirs
+/// on the left, this phone's own on the right, each tagged with whether it's been played. Others' messages
+/// to the bedside aren't shown. Playing one of theirs marks it played; each can be played again while the
+/// recording is kept (90 days).
+final class MessageThreadViewController: CaregiverFormViewController {
+    private enum Entry {
+        case sent(SentMessage), received(ReceivedMessage)
+        var id: String { switch self { case .sent(let message): return message.id; case .received(let message): return message.id } }
+        var time: TimeInterval { switch self { case .sent(let message): return message.sentAt ?? message.createdAt; case .received(let message): return message.sentAt } }
+        /// One of theirs that hasn't been played.
+        var isNew: Bool { if case .received(let message) = self { return message.state == "queued" && message.available }; return false }
+        var mediaAction: String { if case .received = self { return "receivedMessageMedia" }; return "sentMessageMedia" }
+    }
     private let list = UIStackView()
+    private let record = PorchStyle.button("Record a message", symbol: "mic.fill")
+    private let footer = PorchStyle.label("", size: 15)
     private var loading = false
     private var opening = false
     private var posterTask: Task<Void, Never>?
+    /// The bedside's name, from the family snapshot or their messages, whichever loads first.
+    private var loadedName: String?
+    /// The messages last shown, so a reload keeps the place and moves to one that's just arrived.
+    private var shown: [String]?
+    private var unplayed: Int?
+    private var name: String {
+        let state = FamilyCoordinator.shared.state
+        return state?.people.first(where: { $0.role == .bedside })?.name ?? loadedName ?? state?.householdName ?? "your loved one"
+    }
     override func viewDidLoad() {
         super.viewDidLoad()
-        let state = FamilyCoordinator.shared.state
-        title = "Messages to \(state?.people.first { $0.role == .bedside }?.name ?? state?.householdName ?? "your loved one")"
-        list.axis = .vertical; list.spacing = 20
-        form.addArrangedSubview(list)
+        list.axis = .vertical; list.spacing = 16
+        footer.textAlignment = .center
+        record.accessibilityIdentifier = "messages.record"
+        record.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.navigationController?.pushViewController(MessageComposerViewController(recipient: self.name), animated: true)
+        }, for: .touchUpInside)
+        [list, record, footer].forEach { form.addArrangedSubview($0) }
         hideKeyboardControl()
+        familyChanged()
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadMessages))
     }
+    deinit { NotificationCenter.default.removeObserver(self) }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
+    /// Reloads when a new message from the bedside arrives while this is open.
+    @objc private func familyChanged() {
+        updateName()
+        let count = FamilyCoordinator.shared.state?.newMessages
+        if let count, let unplayed, count > unplayed { reloadMessages() }
+        unplayed = count ?? unplayed
+    }
+    private func updateName() {
+        title = "Messages with \(name)"
+        record.configuration?.title = "Record a message for \(name)"
+        record.isHidden = FamilyCoordinator.shared.state?.messagesEnabled == false
+        footer.text = "Your messages wait on \(name)'s Porch until they're played. When you miss a Porch call from \(name), they can leave you a message here."
+    }
     @objc private func reloadMessages() {
         guard !loading, let credential = PorchDevice.credential(for: .family) else { return }
         loading = true
         Task { [weak self] in
             defer { self?.loading = false }
             do {
-                let messages = try await FamilyService(credential).send("listMessages").messages ?? []
-                self?.render(messages)
-            } catch {
+                let response = try await FamilyService(credential).send("listMessages")
                 guard let self else { return }
-                self.show([PorchStyle.label(error.localizedDescription)])
+                let received = response.received ?? []
+                if let sender = received.first?.fromName { self.loadedName = sender; self.updateName() }
+                self.render((response.messages ?? []).map(Entry.sent) + received.map(Entry.received))
+            } catch {
+                self?.show([PorchStyle.label(error.localizedDescription)])
             }
         }
     }
@@ -326,75 +488,130 @@ final class SentMessagesViewController: CaregiverFormViewController {
         list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
         views.forEach { list.addArrangedSubview($0) }
     }
-    private func render(_ messages: [SentMessage]) {
-        guard !messages.isEmpty else { show([PorchStyle.label("You haven't sent any messages yet.")]); return }
-        var missing: [(String, MessagePosterView)] = []
-        show(messages.map { (message: SentMessage) -> UIView in
-            let type = message.kind == "voicemail" ? "Voicemail" : message.mode == "video" ? "Video message" : "Audio message"
-            let replayable = message.replayable == true
-            var views: [UIView] = []
-            let cached = message.mode == "video" ? MessagePosters.cached(message.id) : nil
-            if message.mode == "video", cached != nil || replayable {
-                let poster = MessagePosterView(image: cached, playable: replayable)
-                poster.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
-                if poster.image == nil { missing.append((message.id, poster)) }
-                views.append(poster)
+    private func render(_ unsorted: [Entry]) {
+        let entries = unsorted.sorted { $0.time < $1.time }
+        defer { shown = entries.map(\.id) }
+        guard !entries.isEmpty else {
+            let empty = PorchStyle.label("No messages yet.", size: 17, color: PorchStyle.ink, weight: .semibold)
+            empty.textAlignment = .center
+            show([empty]); return
+        }
+        var views: [UIView] = [], days: [UIView] = [], rows: [String: UIView] = [:]
+        var missing: [(Entry, MessagePosterView)] = []
+        for entry in entries {
+            let day = MessageText.day(entry.time)
+            if (days.last as? UILabel)?.text != day {
+                let heading = PorchStyle.label(day, size: 15, weight: .semibold)
+                heading.textAlignment = .center; heading.accessibilityTraits = .header
+                days.append(heading); views.append(heading)
             }
-            if replayable {
-                let play = PorchStyle.button(message.mode == "video" ? "Watch again" : "Listen again", symbol: "play.fill", filled: false)
-                play.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
-                views.append(play)
-            }
+            let (row, poster) = self.row(entry)
+            if let poster, poster.image == nil { missing.append((entry, poster)) }
+            rows[entry.id] = row; views.append(row)
+        }
+        show(views)
+        for heading in days {
+            list.setCustomSpacing(10, after: heading)
+            if let index = views.firstIndex(of: heading), index > 0 { list.setCustomSpacing(36, after: views[index - 1]) }
+        }
+        loadPosters(missing)
+        // Opening goes to the first of theirs that hasn't been played, or else to the newest.
+        if shown == nil { reveal(entries.first(where: \.isNew).flatMap { rows[$0.id] }) }
+        else if entries.last?.id != shown?.last { reveal(nil) }
+    }
+    private func row(_ entry: Entry) -> (UIView, MessagePosterView?) {
+        switch entry {
+        case .sent(let message):
+            let playable = message.replayable == true, video = message.mode == "video"
+            let cached = video ? MessagePosters.cached(message.id) : nil
+            let type = message.kind == "voicemail" ? "Voicemail" : video ? "Video message" : "Audio message"
+            let bubble = MessageBubble(mine: true, title: type, length: MessageText.length(message.durationSeconds), video: video, poster: cached,
+                                       showsPoster: video && (cached != nil || playable), playable: playable, new: false)
+            bubble.accessibilityLabel = "Your \(type.lowercased()), \(MessageText.length(message.durationSeconds)), sent \(MessageText.when(entry.time))"
+            bubble.addAction(UIAction { [weak self] _ in self?.play(entry) }, for: .touchUpInside)
+            var actions: [UIView] = []
             if message.state == "uploading" || message.state == "queued" {
                 let unsend = PorchStyle.button("Unsend", symbol: "arrow.uturn.backward", filled: false)
                 unsend.configuration?.baseForegroundColor = .systemRed
+                unsend.configuration?.contentInsets = .init(top: 8, leading: 12, bottom: 8, trailing: 2)
                 unsend.addAction(UIAction { [weak self] _ in self?.confirmUnsend(message) }, for: .touchUpInside)
-                views.append(unsend)
+                actions.append(unsend)
             }
-            return section("\(type) · \(MessageText.length(message.durationSeconds))", detail: status(message), views: views)
-        })
-        loadPosters(missing)
+            return (layout(mine: true, caption: "You · \(MessageText.time(entry.time))", bubble: bubble, status: .sent(message, to: name), actions: actions), bubble.poster)
+        case .received(let message):
+            let video = message.mode == "video"
+            let type = video ? "Video message" : "Audio message"
+            let bubble = MessageBubble(mine: false, title: type, length: MessageText.length(message.durationSeconds), video: video,
+                                       poster: video ? MessagePosters.cached(message.id) : nil, showsPoster: video && message.available, playable: message.available, new: entry.isNew)
+            bubble.accessibilityLabel = "\(type) from \(message.fromName), \(MessageText.length(message.durationSeconds)), left \(MessageText.when(entry.time))"
+            bubble.addAction(UIAction { [weak self] _ in self?.play(entry) }, for: .touchUpInside)
+            return (layout(mine: false, caption: "\(message.fromName) · \(MessageText.time(entry.time))", bubble: bubble, status: .received(message), actions: []), bubble.poster)
+        }
     }
-    private func play(_ message: SentMessage) {
+    /// Who and when over the bubble, then whether it's been played. Theirs keep to the left, this phone's to the right.
+    private func layout(mine: Bool, caption: String, bubble: MessageBubble, status: MessageStatus, actions: [UIView]) -> UIView {
+        let top = PorchStyle.label(caption, size: 14, weight: .semibold)
+        var views: [UIView] = [top, bubble, status.tag()]
+        if let note = status.note { views.append(PorchStyle.label(note, size: 15)) }
+        views += actions
+        for case let label as UILabel in views { label.textAlignment = mine ? .right : .left; label.isAccessibilityElement = false }
+        bubble.accessibilityValue = [status.text, status.note].compactMap { $0 }.joined(separator: ". ")
+        let stack = UIStackView(arrangedSubviews: views)
+        stack.axis = .vertical; stack.spacing = 8; stack.alignment = mine ? .trailing : .leading
+        stack.setCustomSpacing(6, after: top)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        let row = UIView()
+        row.addSubview(stack)
+        let width = stack.widthAnchor.constraint(equalTo: row.widthAnchor, multiplier: 0.84)
+        width.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: row.topAnchor), stack.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            width, stack.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+            mine ? stack.trailingAnchor.constraint(equalTo: row.trailingAnchor) : stack.leadingAnchor.constraint(equalTo: row.leadingAnchor)
+        ] + views.map { $0 is UIButton ? $0.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor) : $0.widthAnchor.constraint(equalTo: stack.widthAnchor) })
+        return row
+    }
+    /// Scrolls to a message, or with none to the newest at the bottom.
+    private func reveal(_ row: UIView?) {
+        view.layoutIfNeeded()
+        let inset = scroll.adjustedContentInset
+        let top = -inset.top, bottom = max(top, scroll.contentSize.height + inset.bottom - scroll.bounds.height)
+        let y = row.map { $0.convert($0.bounds, to: scroll).minY - 16 } ?? bottom
+        scroll.setContentOffset(CGPoint(x: 0, y: min(bottom, max(top, y))), animated: false)
+    }
+    private func play(_ entry: Entry) {
         guard !opening, let credential = PorchDevice.credential(for: .family) else { return }
         opening = true
         Task { [weak self] in
             defer { self?.opening = false }
             do {
-                guard let media = try await FamilyService(credential).send("sentMessageMedia", ["messageID": message.id]).media,
+                let service = FamilyService(credential)
+                guard let media = try await service.send(entry.mediaAction, ["messageID": entry.id]).media,
                       let url = URL(string: media.url), let self else { return }
                 playMessage(from: url, on: self)
+                if entry.isNew {
+                    _ = try? await service.send("receivedMessagePlayed", ["messageID": entry.id])
+                    self.reloadMessages()
+                }
             } catch { if let self { showPorchError(error, on: self) } }
         }
     }
     /// Makes missing preview frames one at a time; each is kept, so this happens once per video.
-    private func loadPosters(_ missing: [(String, MessagePosterView)]) {
+    private func loadPosters(_ missing: [(Entry, MessagePosterView)]) {
         posterTask?.cancel()
         guard !missing.isEmpty, let credential = PorchDevice.credential(for: .family) else { return }
         posterTask = Task {
-            for (id, poster) in missing {
+            for (entry, poster) in missing {
                 guard !Task.isCancelled else { return }
-                guard let media = try? await FamilyService(credential).send("sentMessageMedia", ["messageID": id]).media,
+                guard let media = try? await FamilyService(credential).send(entry.mediaAction, ["messageID": entry.id]).media,
                       let url = URL(string: media.url), let image = await MessagePosters.frame(from: url) else { continue }
-                MessagePosters.save(image, for: id)
+                MessagePosters.save(image, for: entry.id)
                 poster.image = image
             }
         }
     }
-    private func status(_ message: SentMessage) -> String {
-        let sent = "Sent \(MessageText.when(message.sentAt ?? message.createdAt))"
-        switch message.state {
-        case "uploading": return "Still sending. Open it again if it doesn't finish."
-        case "queued": return message.deliveredAt != nil ? "\(sent). On their Porch, not played yet." : "\(sent). Waiting for their Porch to download it."
-        case "played": return "\(sent). Played \(MessageText.when(message.playedAt))." + (message.replayable == true ? "" : " The recording was deleted after 90 days.")
-        case "expired": return "\(sent). Not played within a week, so it was removed."
-        case "removed": return "\(sent). A caregiver removed it."
-        case "unsent": return "You unsent this message."
-        default: return "This message didn't finish sending."
-        }
-    }
     private func confirmUnsend(_ message: SentMessage) {
-        let alert = UIAlertController(title: "Unsend this message?", message: "It will be removed from their Porch before it plays.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Unsend this message?", message: "It will be removed from \(name)'s Porch before it plays.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Unsend", style: .destructive) { [weak self] _ in
             guard let credential = PorchDevice.credential(for: .family) else { return }
@@ -515,7 +732,7 @@ final class MessageQueueViewController: CaregiverFormViewController {
 }
 
 extension Notification.Name {
-    /// A message notification was tapped: show the messages the bedside left for this phone.
+    /// A message notification was tapped: show the thread with the bedside.
     static let porchOpenReceivedMessages = Notification.Name("porch.messages.openReceived")
 }
 
@@ -577,114 +794,5 @@ extension Notification.Name {
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         await MainActor.run { NotificationCenter.default.post(name: .porchOpenReceivedMessages, object: nil) }
-    }
-}
-
-/// Messages the bedside left for this phone when its call wasn't answered, newest first.
-/// Playing one marks it played; each can be played again while the recording is kept (90 days).
-final class ReceivedMessagesViewController: CaregiverFormViewController {
-    private let list = UIStackView()
-    private var loading = false
-    private var opening = false
-    private var posterTask: Task<Void, Never>?
-    private let footer = PorchStyle.label("", size: 15)
-    /// The bedside's name, from the family snapshot or the messages themselves, whichever loads first.
-    private var loadedName: String?
-    private var from: String { FamilyCoordinator.shared.state?.people.first(where: { $0.role == .bedside })?.name ?? loadedName ?? "Your loved one" }
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        list.axis = .vertical; list.spacing = 20
-        form.addArrangedSubview(list)
-        form.addArrangedSubview(footer)
-        hideKeyboardControl()
-        name()
-        NotificationCenter.default.addObserver(self, selector: #selector(name), name: .porchFamilyChanged, object: nil)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadMessages))
-    }
-    deinit { NotificationCenter.default.removeObserver(self) }
-    @objc private func name() {
-        title = "Messages from \(from)"
-        footer.text = "When you miss a Porch call from \(from), they can leave a message here."
-    }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
-    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
-    @objc private func reloadMessages() {
-        guard !loading, let credential = PorchDevice.credential(for: .family) else { return }
-        loading = true
-        Task { [weak self] in
-            defer { self?.loading = false }
-            do {
-                let messages = try await FamilyService(credential).send("listMessages").received ?? []
-                if let sender = messages.first?.fromName { self?.loadedName = sender; self?.name() }
-                self?.render(messages)
-            } catch {
-                self?.show([PorchStyle.label(error.localizedDescription)])
-            }
-        }
-    }
-    private func show(_ views: [UIView]) {
-        list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
-        views.forEach { list.addArrangedSubview($0) }
-    }
-    private func render(_ messages: [ReceivedMessage]) {
-        guard !messages.isEmpty else { show([PorchStyle.label("No messages from \(from) yet.")]); return }
-        var missing: [(String, MessagePosterView)] = []
-        show(messages.map { (message: ReceivedMessage) -> UIView in
-            var views: [UIView] = []
-            let cached = message.mode == "video" ? MessagePosters.cached(message.id) : nil
-            if message.mode == "video", message.available {
-                let poster = MessagePosterView(image: cached, playable: true)
-                poster.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
-                if cached == nil { missing.append((message.id, poster)) }
-                views.append(poster)
-            }
-            if message.available {
-                let play = PorchStyle.button(message.mode == "video" ? "Watch" : "Listen", symbol: "play.fill", filled: message.state == "queued")
-                play.addAction(UIAction { [weak self] _ in self?.play(message) }, for: .touchUpInside)
-                views.append(play)
-            }
-            let type = message.mode == "video" ? "Video message" : "Audio message"
-            return section("\(message.state == "queued" ? "New · " : "")\(type) · \(MessageText.length(message.durationSeconds))", detail: status(message), views: views)
-        })
-        loadPosters(missing)
-    }
-    private func status(_ message: ReceivedMessage) -> String {
-        let left = "Left \(MessageText.when(message.sentAt))"
-        switch message.state {
-        case "queued": return message.available ? "\(left). Not played yet." : "\(left). It was deleted after 90 days."
-        case "played": return "\(left). Played \(MessageText.when(message.playedAt))." + (message.available ? "" : " The recording was deleted after 90 days.")
-        default: return "\(left). Not played within 90 days, so it was deleted."
-        }
-    }
-    private func play(_ message: ReceivedMessage) {
-        guard !opening, let credential = PorchDevice.credential(for: .family) else { return }
-        opening = true
-        Task { [weak self] in
-            defer { self?.opening = false }
-            do {
-                let service = FamilyService(credential)
-                guard let media = try await service.send("receivedMessageMedia", ["messageID": message.id]).media,
-                      let url = URL(string: media.url), let self else { return }
-                playMessage(from: url, on: self)
-                if message.state == "queued" {
-                    _ = try? await service.send("receivedMessagePlayed", ["messageID": message.id])
-                    self.reloadMessages()
-                }
-            } catch { if let self { showPorchError(error, on: self) } }
-        }
-    }
-    /// Makes missing preview frames one at a time; each is kept, so this happens once per video.
-    private func loadPosters(_ missing: [(String, MessagePosterView)]) {
-        posterTask?.cancel()
-        guard !missing.isEmpty, let credential = PorchDevice.credential(for: .family) else { return }
-        posterTask = Task {
-            for (id, poster) in missing {
-                guard !Task.isCancelled else { return }
-                guard let media = try? await FamilyService(credential).send("receivedMessageMedia", ["messageID": id]).media,
-                      let url = URL(string: media.url), let image = await MessagePosters.frame(from: url) else { continue }
-                MessagePosters.save(image, for: id)
-                poster.image = image
-            }
-        }
     }
 }
