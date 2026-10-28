@@ -1,9 +1,11 @@
-// The equipment on the pilot page. Families provide all of it; costs are what each part cost on
-// Amazon in October 2026.
+// The equipment on the pilot page. Families provide all of it and can shop around for everything
+// but the Cell2Jack; costs are what the parts I use cost on Amazon in October 2026.
 export type Part = {
   id: string;
   name: string;
   cost?: number;
+  // What any replacement has to do. Exact parts can't be swapped for another brand.
+  rule: { label: string; text: string; exact?: boolean };
   description: string;
   href?: string;
   photo: { src: string; alt: string };
@@ -13,8 +15,11 @@ export const parts: Part[] = [
   {
     id: "ipad",
     name: "iPad",
-    description:
-      "One with an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later. A spare one is perfect. It stays plugged in and on your Wi-Fi.",
+    rule: {
+      label: "Any newer iPad",
+      text: "It needs an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later.",
+    },
+    description: "A spare one is perfect. It stays plugged in, on your Wi-Fi and open to Porch.",
     photo: {
       src: "/pilot/ipad.jpg",
       alt: "An iPad in its stand, showing Porch’s clock and a Call someone button.",
@@ -24,8 +29,11 @@ export const parts: Part[] = [
     id: "stand",
     name: "Sturdy iPad stand",
     cost: 30,
-    description:
-      "A weighted base and a folding aluminum arm hold the iPad steady at eye level, so it won’t tip when someone taps the screen. The clamp fits any iPad.",
+    rule: {
+      label: "Any brand",
+      text: "Look for one that holds the iPad steady at eye level and won’t tip when someone taps the screen.",
+    },
+    description: "Mine has a weighted base, a folding aluminum arm and a clamp that fits any iPad.",
     href: "https://www.amazon.com/dp/B0H3N2YPKJ",
     photo: {
       src: "/pilot/stand.jpg",
@@ -36,8 +44,11 @@ export const parts: Part[] = [
     id: "hub",
     name: "USB hub",
     cost: 19,
-    description:
-      "Plugs into the iPad’s USB-C port. Your iPad’s charger plugs into the hub, so the iPad stays charged with the phone plugged in too.",
+    rule: {
+      label: "Any brand",
+      text: "Look for a USB-C hub with a charging port for the iPad’s charger and a USB port for the Cell2Jack.",
+    },
+    description: "It plugs into the iPad’s USB-C port, so the iPad stays charged with the phone plugged in too.",
     href: "https://www.amazon.com/dp/B0BQLLB61B",
     photo: {
       src: "/pilot/hub.jpg",
@@ -48,8 +59,12 @@ export const parts: Part[] = [
     id: "phone",
     name: "Big-button phone",
     cost: 28,
+    rule: {
+      label: "Any brand",
+      text: "Look for a corded home phone with big number keys. Room for a photo on each key makes it easiest.",
+    },
     description:
-      "A corded phone with a photo under each big button. Pressing someone’s photo calls them on Porch. The phone is only the keypad: you see and hear each other on the iPad.",
+      "Mine has a photo under each big button, and pressing someone’s photo calls them on Porch. The phone is only the keypad: you see and hear each other on the iPad.",
     href: "https://www.amazon.com/dp/B0FZ99J2QG",
     photo: {
       src: "/pilot/phone.jpg",
@@ -60,6 +75,11 @@ export const parts: Part[] = [
     id: "cell2jack",
     name: "Cell2Jack",
     cost: 37,
+    rule: {
+      label: "Must be a Cell2Jack",
+      text: "Porch’s driver is built for it, so other adapters won’t work.",
+      exact: true,
+    },
     description:
       "Made to connect home phones to a cell phone. Here it connects the big-button phone to the USB hub, and Porch reads the button presses through it.",
     href: "https://www.amazon.com/dp/B089984QRT",
@@ -70,5 +90,5 @@ export const parts: Part[] = [
   },
 ];
 
-// What everything but the iPad costs together.
+// What the parts I use, other than the iPad, cost together.
 export const equipmentCost = parts.reduce((sum, part) => sum + (part.cost ?? 0), 0);

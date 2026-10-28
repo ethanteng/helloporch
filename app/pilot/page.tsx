@@ -87,8 +87,8 @@ export default function PilotPage() {
             <div className={styles.sectionIntro}>
               <h2 id="kit-title">The equipment you provide</h2>
               <p>
-                You provide all of the hardware, including the iPad. Everything but the iPad is on Amazon, for
-                about ${equipmentCost} in all.
+                You provide all of the hardware, including the iPad. Below is what I use, but you’re free to
+                shop around or use what you already have. The one part that has to match is the Cell2Jack.
               </p>
             </div>
             <div className={styles.parts}>
@@ -96,7 +96,7 @@ export default function PilotPage() {
                 <PartCard key={part.id} part={part} />
               ))}
               <aside className={styles.total} aria-labelledby="total-title">
-                <h3 id="total-title">Your shopping list</h3>
+                <h3 id="total-title">What mine cost</h3>
                 <ul>
                   {parts.map((part) => (
                     <li key={part.id}>
@@ -190,7 +190,7 @@ export default function PilotPage() {
             <ul className={styles.involves}>
               <li>
                 <h3>All the equipment, including the iPad.</h3>
-                <p>A newer iPad, plus about ${equipmentCost} for the stand, hub, phone and Cell2Jack.</p>
+                <p>A newer iPad, plus a stand, hub, phone and Cell2Jack. Mine cost about ${equipmentCost}.</p>
               </li>
               <li>
                 <h3>A spot with Wi-Fi and an outlet.</h3>
@@ -242,6 +242,9 @@ function PartCard({ part }: { part: Part }) {
           <h3 id={`${part.id}-title`}>{part.name}</h3>
           <span className={styles.price}>{part.cost ? `$${part.cost}` : "Your own"}</span>
         </div>
+        <p className={`${styles.rule} ${part.rule.exact ? styles.exact : ""}`}>
+          <strong>{part.rule.label}.</strong> {part.rule.text}
+        </p>
         <p>{part.description}</p>
         {part.href && (
           <a href={part.href} className={styles.buy} target="_blank" rel="noopener noreferrer">

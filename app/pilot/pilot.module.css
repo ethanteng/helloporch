@@ -234,6 +234,29 @@
   text-wrap: pretty;
 }
 
+/* What a replacement has to do. The one part that can't be swapped gets a warmer tint. */
+.partCopy > .rule {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.partCopy > .exact {
+  background: oklch(0.92 0.05 40);
+  color: var(--brown-ink);
+}
+
+.rule strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.exact strong {
+  color: var(--brown-ink);
+}
+
 .buy {
   margin-top: auto;
   padding-top: 6px;
