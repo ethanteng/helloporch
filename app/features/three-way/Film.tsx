@@ -18,12 +18,14 @@ const AT = {
   form: [3.0, 3.45],
   typeName: [3.8, 4.4],
   typeNumber: [4.7, 6.1],
-  formOut: [6.8, 7.2],
+  press: [6.3, 7.3],
+  formOut: [7.4, 7.8],
   toPorch: [8.4, 9.0],
   zoomIn: [9.2, 10.0],
   bankAnswers: 11.2,
   zoomOut: [13.0, 13.6],
   toPhone: [13.6, 14.2],
+  onTheCall: [14.5, 15.7],
   end: [17.6, 18.2],
 } as const;
 
@@ -78,18 +80,22 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
   const answered = t >= AT.bankAnswers;
   const guest = t >= AT.formOut[0] ? { name: "Bank", answered } : undefined;
   const form = ramp(t, ...AT.form) * (1 - ramp(t, ...AT.formOut));
+  // The one tap the film shows, Call and add to this call, and then "Bank is on the call".
+  const press = t >= AT.press[0] && t <= AT.press[1] ? (t - AT.press[0]) / (AT.press[1] - AT.press[0]) : undefined;
+  const onTheCall = t >= AT.onTheCall[0] ? Math.min(1, (t - AT.onTheCall[0]) / (AT.onTheCall[1] - AT.onTheCall[0])) : undefined;
 
   return (
     <>
       {phoneShown > 0 && (
         <div className={styles.phoneShot} style={shot(phoneShown)}>
           <Phone light={form > 0.5}>
-            <CallScreen device="phone" title={mom.name} status={["Video call connected"]} remote={mom} self={caller} guest={guest}>
+            <CallScreen device="phone" title={mom.name} status={["Video call connected"]} remote={mom} self={caller} guest={guest} highlight={onTheCall}>
               <Sheet shown={form}>
                 <AddPhoneForm
                   name={typed("Bank", t, ...AT.typeName)}
                   number={typed("(800) 555-0199", t, ...AT.typeNumber)}
-                  typing={t < AT.typeName[1] + 0.2 ? "name" : t < AT.formOut[0] ? "number" : undefined}
+                  typing={t < AT.typeName[1] + 0.2 ? "name" : t < AT.press[0] ? "number" : undefined}
+                  press={press}
                 />
               </Sheet>
             </CallScreen>
