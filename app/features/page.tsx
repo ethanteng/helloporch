@@ -85,20 +85,20 @@ function Screenshots({ shots }: { shots: Screenshot[] }) {
   return (
     <div className={styles.clips}>
       {shots.map((shot) => (
-        <article key={shot.id} id={shot.id} className={styles.clip} aria-labelledby={`${shot.id}-title`}>
-          <Image
-            src={shot.image}
-            alt={shot.alt}
-            width={1080}
-            height={1920}
-            sizes="(max-width: 900px) min(100vw, 440px), 400px"
-            className={styles.screenshot}
-          />
+        <article key={shot.id} id={shot.id} className={`${styles.clip} ${styles.textFirst}`} aria-labelledby={`${shot.id}-title`}>
           <div className={styles.clipCopy}>
             <p className={styles.duration}>{shot.label}</p>
             <h2 id={`${shot.id}-title`}>{shot.title}</h2>
             <p>{shot.description}</p>
           </div>
+          <Image
+            src={shot.image}
+            alt={shot.alt}
+            width={1080}
+            height={1200}
+            sizes="(max-width: 900px) min(100vw, 440px), 400px"
+            className={styles.screenshot}
+          />
         </article>
       ))}
     </div>

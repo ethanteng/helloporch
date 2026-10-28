@@ -96,6 +96,11 @@
   scroll-margin-top: 24px;
 }
 
+/* Copy above the picture: the roomier padding moves to the top. */
+.textFirst {
+  padding: 32px 12px 12px;
+}
+
 .player {
   border-radius: 26px;
   overflow: hidden;

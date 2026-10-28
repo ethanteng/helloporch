@@ -1,6 +1,6 @@
 // Short portrait clips of the Porch prototype, grouped by tab on the features page.
 // Posters are caption-free frames (or crops) from the clips, so the player controls don't cover burned-in text.
-// Settings with nothing to watch get a screenshot instead, cropped to the same 9:16 frame.
+// Settings with nothing to watch get a screenshot instead, cropped to the part of the screen that matters.
 export type Clip = {
   id: string;
   title: string;
