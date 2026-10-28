@@ -11,29 +11,31 @@ import styles from "./film.module.css";
 // function of the time, so scripts/render-three-way-film.mjs can step through it frame by frame with
 // `window.__film.seek(seconds)`. Opened without ?render, it plays on a loop.
 
-const DURATION = 20.5;
+const DURATION = 21.5;
 
 // When things happen, in seconds.
 const AT = {
   form: [3.0, 3.45],
   typeName: [3.8, 4.4],
   typeNumber: [4.7, 6.1],
-  press: [6.3, 7.3],
-  formOut: [7.4, 7.8],
-  toPorch: [8.4, 9.0],
-  zoomIn: [9.2, 10.0],
-  bankAnswers: 11.2,
-  zoomOut: [13.0, 13.6],
-  toPhone: [13.6, 14.2],
-  onTheCall: [14.5, 15.7],
-  end: [17.6, 18.2],
+  formZoom: [6.2, 6.8],
+  press: [6.9, 7.9],
+  formOut: [8.0, 8.4],
+  toPorch: [9.2, 9.8],
+  zoomIn: [10.0, 10.8],
+  bankAnswers: 12.0,
+  zoomOut: [13.8, 14.4],
+  toPhone: [14.4, 15.0],
+  phoneZoom: [15.1, 15.8],
+  onTheCall: [15.8, 17.0],
+  end: [18.4, 19.0],
 } as const;
 
 const CAPTIONS: { from: number; to: number; text: ReactNode }[] = [
   { from: 0, to: 3.0, text: <>The bank insists that <em>Mom</em> be on the call.</> },
-  { from: 3.0, to: 8.4, text: <>Call her on Porch, then <em>add the bank.</em></> },
-  { from: 8.4, to: 13.6, text: <>Mom hears the bank and <em>answers for herself.</em></> },
-  { from: 13.6, to: 17.6, text: <>You handle <em>the menus</em> and the hold music.</> },
+  { from: 3.0, to: 9.2, text: <>Call her on Porch, then <em>add the bank.</em></> },
+  { from: 9.2, to: 14.4, text: <>Mom hears the bank and <em>answers for herself.</em></> },
+  { from: 14.4, to: 18.4, text: <>You handle <em>the menus</em> and the hold music.</> },
 ];
 
 declare global {
@@ -77,6 +79,9 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
   const porchShown = ramp(t, ...AT.toPorch) * (1 - ramp(t, ...AT.toPhone));
   // Moves in close on the Porch's heading, small at the iPad's real size, while it says who's joining.
   const zoom = ramp(t, ...AT.zoomIn) * (1 - ramp(t, ...AT.zoomOut));
+  // The phone moves in on its lower panel, raising it toward the middle of the frame: on Call and add to this call,
+  // staying there as the form slides away to show "Calling Bank…", and later on "Bank is on the call".
+  const phoneZoom = t < AT.toPorch[1] ? ramp(t, ...AT.formZoom) : ramp(t, ...AT.phoneZoom);
   const answered = t >= AT.bankAnswers;
   const guest = t >= AT.formOut[0] ? { name: "Bank", answered } : undefined;
   const form = ramp(t, ...AT.form) * (1 - ramp(t, ...AT.formOut));
@@ -87,7 +92,7 @@ function Scenes({ t, people }: { t: number; people: ThreeWayPeople }) {
   return (
     <>
       {phoneShown > 0 && (
-        <div className={styles.phoneShot} style={shot(phoneShown)}>
+        <div className={styles.phoneShot} style={shot(phoneShown, 1 + phoneZoom, -130 * phoneZoom)}>
           <Phone light={form > 0.5}>
             <CallScreen device="phone" title={mom.name} status={["Video call connected"]} remote={mom} self={caller} guest={guest} highlight={onTheCall}>
               <Sheet shown={form}>
@@ -152,6 +157,10 @@ function fade(t: number, from: number, to: number): CSSProperties {
   return { opacity: shown, transform: `translateY(${(1 - shown) * 12}px)` };
 }
 
-function shot(shown: number, zoom = 1): CSSProperties {
-  return { opacity: shown, transform: `translateX(-50%) scale(${(0.96 + shown * 0.04) * zoom})` };
+/** Fades a device in, scaled about its transform origin by `zoom` and moved up or down by `rise` frame units. */
+function shot(shown: number, zoom = 1, rise = 0): CSSProperties {
+  return {
+    opacity: shown,
+    transform: `translateX(-50%) translateY(calc(${rise} * var(--u))) scale(${(0.96 + shown * 0.04) * zoom})`,
+  };
 }
