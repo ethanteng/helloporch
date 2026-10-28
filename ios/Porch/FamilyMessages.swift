@@ -363,7 +363,10 @@ struct MessageStatus {
         config.cornerStyle = .capsule
         config.contentInsets = .init(top: 6, leading: 10, bottom: 6, trailing: 12)
         config.baseForegroundColor = colors.foreground; config.baseBackgroundColor = colors.background
+        // Large text wraps rather than cutting off the time.
+        config.titleLineBreakMode = .byWordWrapping
         let tag = UIButton(configuration: config)
+        tag.titleLabel?.numberOfLines = 0
         // The bubble above reads it out.
         tag.isUserInteractionEnabled = false; tag.isAccessibilityElement = false
         return tag
@@ -373,6 +376,7 @@ struct MessageStatus {
 /// One message in the thread; tapping it plays the message. This phone's own are green.
 final class MessageBubble: UIControl {
     private(set) var poster: MessagePosterView?
+    private var labels: [UILabel] = []
     init(mine: Bool, title: String, length: String, video: Bool, poster image: UIImage?, showsPoster: Bool, playable: Bool, new: Bool) {
         super.init(frame: .zero)
         let ink = mine ? UIColor.white : PorchStyle.ink
@@ -382,7 +386,8 @@ final class MessageBubble: UIControl {
         let icon = UIImageView(image: UIImage(systemName: video ? "video.fill" : playable ? "play.circle.fill" : "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: video ? 22 : 34)))
         icon.tintColor = ink
         icon.setContentHuggingPriority(.required, for: .horizontal); icon.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let words = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 17, color: ink, weight: .semibold), PorchStyle.label(length, size: 15, color: ink.withAlphaComponent(0.8))])
+        labels = [PorchStyle.label(title, size: 17, color: ink, weight: .semibold), PorchStyle.label(length, size: 15, color: ink.withAlphaComponent(0.8))]
+        let words = UIStackView(arrangedSubviews: labels)
         words.axis = .vertical; words.spacing = 2
         let line = UIStackView(arrangedSubviews: [icon, words])
         line.spacing = 12; line.alignment = .center
@@ -407,6 +412,14 @@ final class MessageBubble: UIControl {
     }
     required init?(coder: NSCoder) { fatalError("Use init(mine:title:length:video:poster:showsPoster:playable:new:)") }
     override var isHighlighted: Bool { didSet { alpha = isHighlighted ? 0.7 : 1 } }
+    /// Beside the icon, the words only get their width after a layout pass, so with large text they'd cut off
+    /// instead of wrapping. Wrapping at that width makes the bubble grow on the next pass.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        for label in labels where label.bounds.width > 0 && label.preferredMaxLayoutWidth != label.bounds.width {
+            label.preferredMaxLayoutWidth = label.bounds.width
+        }
+    }
 }
 
 /// Messages between this phone and the bedside in one thread, oldest first like a text conversation: theirs
@@ -435,6 +448,8 @@ final class MessageThreadViewController: CaregiverFormViewController {
     private var unplayed: Int?
     /// A reload asked for while one was loading.
     private var reloadQueued = false
+    /// The refresh button was tapped, so a failed load is reported rather than left for the next poll.
+    private var reportFailure = false
     private var name: String {
         let state = FamilyCoordinator.shared.state
         return state?.people.first(where: { $0.role == .bedside })?.name ?? loadedName ?? state?.householdName ?? "your loved one"
@@ -452,7 +467,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
         hideKeyboardControl()
         familyChanged()
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reloadMessages))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(refreshTapped))
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
@@ -460,9 +475,9 @@ final class MessageThreadViewController: CaregiverFormViewController {
     /// Reloads when a new message from the bedside arrives while this is open.
     @objc private func familyChanged() {
         updateName()
-        let count = FamilyCoordinator.shared.state?.newMessages
-        if let count, let unplayed, count > unplayed { reloadMessages() }
-        unplayed = count ?? unplayed
+        guard let count = FamilyCoordinator.shared.state?.newMessages, let unplayed else { return }
+        // A new one counts as seen only once a load succeeds, so a failed load is tried again on the next poll.
+        if count > unplayed { reloadMessages() } else { self.unplayed = count }
     }
     private func updateName() {
         title = "Messages with \(name)"
@@ -475,6 +490,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
         // The load already running may have started before the newest message, so another follows it.
         guard !loading else { reloadQueued = true; return }
         loading = true
+        let count = FamilyCoordinator.shared.state?.newMessages
         Task { [weak self] in
             defer {
                 self?.loading = false
@@ -486,11 +502,17 @@ final class MessageThreadViewController: CaregiverFormViewController {
                 let received = response.received ?? []
                 if let sender = received.first?.fromName { self.loadedName = sender; self.updateName() }
                 self.render((response.messages ?? []).map(Entry.sent) + received.map(Entry.received))
+                self.unplayed = count ?? self.unplayed; self.reportFailure = false
             } catch {
-                self?.show([PorchStyle.label(error.localizedDescription)])
+                guard let self else { return }
+                // Messages already on screen stay; only a refresh someone asked for says it failed.
+                if self.shown == nil { self.show([PorchStyle.label(error.localizedDescription)]) }
+                else if self.reportFailure { showPorchError(error, on: self) }
+                self.reportFailure = false
             }
         }
     }
+    @objc private func refreshTapped() { reportFailure = true; reloadMessages() }
     private func show(_ views: [UIView]) {
         list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
         views.forEach { list.addArrangedSubview($0) }
