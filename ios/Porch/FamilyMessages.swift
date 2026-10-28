@@ -433,6 +433,8 @@ final class MessageThreadViewController: CaregiverFormViewController {
     /// The messages last shown, so a reload keeps the place and moves to one that's just arrived.
     private var shown: [String]?
     private var unplayed: Int?
+    /// A reload asked for while one was loading.
+    private var reloadQueued = false
     private var name: String {
         let state = FamilyCoordinator.shared.state
         return state?.people.first(where: { $0.role == .bedside })?.name ?? loadedName ?? state?.householdName ?? "your loved one"
@@ -469,10 +471,15 @@ final class MessageThreadViewController: CaregiverFormViewController {
         footer.text = "Your messages wait on \(name)'s Porch until they're played. When you miss a Porch call from \(name), they can leave you a message here."
     }
     @objc private func reloadMessages() {
-        guard !loading, let credential = PorchDevice.credential(for: .family) else { return }
+        guard let credential = PorchDevice.credential(for: .family) else { return }
+        // The load already running may have started before the newest message, so another follows it.
+        guard !loading else { reloadQueued = true; return }
         loading = true
         Task { [weak self] in
-            defer { self?.loading = false }
+            defer {
+                self?.loading = false
+                if self?.reloadQueued == true { self?.reloadQueued = false; self?.reloadMessages() }
+            }
             do {
                 let response = try await FamilyService(credential).send("listMessages")
                 guard let self else { return }
