@@ -1,5 +1,6 @@
 // Short portrait clips of the Porch prototype, grouped by tab on the features page.
 // Posters are caption-free frames (or crops) from the clips, so the player controls don't cover burned-in text.
+// Settings with nothing to watch get a screenshot instead, cropped to the part of the screen that matters.
 export type Clip = {
   id: string;
   title: string;
@@ -7,6 +8,15 @@ export type Clip = {
   duration: string;
   src: string;
   poster: string;
+};
+
+export type Screenshot = {
+  id: string;
+  title: string;
+  description: string;
+  label: string;
+  image: string;
+  alt: string;
 };
 
 export const calling: Clip[] = [
@@ -84,5 +94,17 @@ export const accessibility: Clip[] = [
     duration: "4 min 24 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Form%20factor%20selection%20with%20closing%20card%20compressed.mp4",
     poster: "/features/choosing-the-keypad.jpg",
+  },
+];
+
+export const safety: Screenshot[] = [
+  {
+    id: "block-unknown-callers",
+    title: "Scammers can’t get through.",
+    description:
+      "Porch blocks unknown callers from the day it’s set up, so only the people on their keypad and numbers you allow can ring.",
+    label: "On by default",
+    image: "/features/block-unknown-callers.png",
+    alt: "Porch’s Calls settings in caregiver mode on an iPhone. Under “Calls to Mom,” Block unknown callers is switched on, with the note “Only keypad contacts and numbers you allow can ring.” Below it, Blocked numbers shows 4, with 1 allowed.",
   },
 ];
