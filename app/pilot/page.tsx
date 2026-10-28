@@ -3,7 +3,7 @@ import Image from "next/image";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
-import { equipmentCost, parts, type Part } from "./parts";
+import { equipmentCost, parts, priceLabel, type Part } from "./parts";
 import styles from "./pilot.module.css";
 
 export const metadata: Metadata = {
@@ -96,24 +96,24 @@ export default function PilotPage() {
                 <PartCard key={part.id} part={part} />
               ))}
               <aside className={styles.total} aria-labelledby="total-title">
-                <h3 id="total-title">What mine cost</h3>
+                <h3 id="total-title">Your shopping list</h3>
                 <ul>
                   {parts.map((part) => (
                     <li key={part.id}>
                       <span>{part.name}</span>
-                      <span>{part.cost ? `$${part.cost}` : "Your own"}</span>
+                      <span>{priceLabel(part)}</span>
                     </li>
                   ))}
                 </ul>
                 <p>
                   <span>Total</span>
-                  <span>${equipmentCost} + iPad</span>
+                  <span>About ${equipmentCost} + iPad</span>
                 </p>
               </aside>
             </div>
             <p className={styles.note}>
               To find your iPad’s model, open <strong>Settings → General → About</strong>. Prices are from Amazon
-              in October 2026 and may change.
+              in October 2026 and may change, and other brands will cost more or less.
             </p>
           </section>
 
@@ -190,7 +190,7 @@ export default function PilotPage() {
             <ul className={styles.involves}>
               <li>
                 <h3>All the equipment, including the iPad.</h3>
-                <p>A newer iPad, plus a stand, hub, phone and Cell2Jack. Mine cost about ${equipmentCost}.</p>
+                <p>A newer iPad, plus a stand, hub, phone and Cell2Jack. Together they cost about ${equipmentCost}.</p>
               </li>
               <li>
                 <h3>A spot with Wi-Fi and an outlet.</h3>
@@ -240,7 +240,7 @@ function PartCard({ part }: { part: Part }) {
       <div className={styles.partCopy}>
         <div className={styles.partHeading}>
           <h3 id={`${part.id}-title`}>{part.name}</h3>
-          <span className={styles.price}>{part.cost ? `$${part.cost}` : "Your own"}</span>
+          <span className={styles.price}>{priceLabel(part)}</span>
         </div>
         <p className={`${styles.rule} ${part.rule.exact ? styles.exact : ""}`}>
           <strong>{part.rule.label}.</strong> {part.rule.text}
@@ -248,7 +248,8 @@ function PartCard({ part }: { part: Part }) {
         <p>{part.description}</p>
         {part.href && (
           <a href={part.href} className={styles.buy} target="_blank" rel="noopener noreferrer">
-            View on Amazon<span className={styles.visuallyHidden}> (opens in a new tab)</span>
+            {part.rule.exact ? "Buy on Amazon" : "View on Amazon"}
+            <span className={styles.visuallyHidden}> (opens in a new tab)</span>
           </a>
         )}
       </div>
