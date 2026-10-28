@@ -92,3 +92,9 @@ export const parts: Part[] = [
 
 // What the parts I use, other than the iPad, cost together.
 export const equipmentCost = parts.reduce((sum, part) => sum + (part.cost ?? 0), 0);
+
+// Families can shop around for any part that isn't exact, so its cost is only an estimate.
+export function priceLabel(part: Part) {
+  if (!part.cost) return "Your own";
+  return part.rule.exact ? `$${part.cost}` : `About $${part.cost}`;
+}
