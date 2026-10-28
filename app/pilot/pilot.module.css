@@ -379,7 +379,7 @@
 /* ---------- What the pilot asks ---------- */
 .involves {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   width: min(100%, 880px);
   margin: 0 auto;
@@ -457,6 +457,10 @@
     margin-inline: auto;
   }
 
+  .involves {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   /* Cards stack one to a row, at the width they have on a phone. */
   .parts {
     grid-template-columns: minmax(0, 1fr);
@@ -468,7 +472,6 @@
 
 @media (max-width: 600px) {
   .install,
-  .involves,
   .devices {
     grid-template-columns: minmax(0, 1fr);
   }

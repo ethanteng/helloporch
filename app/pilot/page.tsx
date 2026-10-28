@@ -189,10 +189,6 @@ export default function PilotPage() {
             </div>
             <ul className={styles.involves}>
               <li>
-                <h3>All the equipment, including the iPad.</h3>
-                <p>A newer iPad, plus a stand, hub, phone and Cell2Jack. Together they cost about ${equipmentCost}.</p>
-              </li>
-              <li>
                 <h3>A spot with Wi-Fi and an outlet.</h3>
                 <p>Somewhere your family member spends their day, with the iPad left on and open to Porch.</p>
               </li>
