@@ -49,8 +49,10 @@
   transform-origin: 50% 0;
 }
 
+/* Zooms about the phone's lower panel: Call and add to this call, then what the bank is doing. */
 .phoneShot {
   width: calc(320 * var(--u));
+  transform-origin: 50% 72%;
 }
 
 .porchShot {
