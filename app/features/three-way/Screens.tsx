@@ -71,7 +71,8 @@ type Guest = { name: string; answered: boolean };
 
 /**
  * A call with video. On a family phone, `guest` is a phone this person added, such as the bank, with its keypad and
- * hang-up. On the Porch, `status` carries what the bedside says about who's joining.
+ * hang-up; `highlight` runs from 0 to 1 as the film rings what the added phone is doing. On the Porch, `status`
+ * carries what the bedside says about who's joining.
  */
 export function CallScreen({
   device,
@@ -80,6 +81,7 @@ export function CallScreen({
   remote,
   self,
   guest,
+  highlight,
   children,
 }: {
   device: "phone" | "porch";
@@ -88,6 +90,7 @@ export function CallScreen({
   remote: Person;
   self: Person;
   guest?: Guest;
+  highlight?: number;
   children?: ReactNode;
 }) {
   const phone = device === "phone";
@@ -112,7 +115,9 @@ export function CallScreen({
           <div className={styles.panel}>
             {guest && (
               <>
-                <p className={styles.guestStatus}>{guest.answered ? `${guest.name} is on the call` : `Calling ${guest.name}…`}</p>
+                <p className={styles.guestStatus} style={highlight === undefined ? undefined : ringStyle(highlight)}>
+                  {guest.answered ? `${guest.name} is on the call` : `Calling ${guest.name}…`}
+                </p>
                 <div className={styles.row}>
                   <CallButton title="Keypad" icon="keypad" disabled={!guest.answered} />
                   <CallButton title={`Hang up ${guest.name}`} icon="hangUp" end />
@@ -154,8 +159,11 @@ export function Sheet({ shown = 1, children }: { shown?: number; children: React
   );
 }
 
-/** The Add a phone form, with what's been typed so far and the field being typed in. */
-export function AddPhoneForm({ name, number, typing }: { name: string; number: string; typing?: "name" | "number" }) {
+/**
+ * The Add a phone form, with what's been typed so far and the field being typed in. `press` runs from 0 to 1 while
+ * Call and add to this call is pointed out and tapped.
+ */
+export function AddPhoneForm({ name, number, typing, press }: { name: string; number: string; typing?: "name" | "number"; press?: number }) {
   return (
     <>
       <div className={styles.navBar}>
@@ -178,7 +186,7 @@ export function AddPhoneForm({ name, number, typing }: { name: string; number: s
             <Icon name="contact" />
             Choose from Contacts
           </span>
-          <span className={styles.formButton} data-filled>
+          <span className={styles.formButton} data-filled style={press === undefined ? undefined : pressStyle(press)}>
             <Icon name="dial" />
             Call and add to this call
           </span>
@@ -186,6 +194,38 @@ export function AddPhoneForm({ name, number, typing }: { name: string; number: s
       </div>
     </>
   );
+}
+
+// The film's highlights, in the site's tomato, as `p` runs from 0 to 1. A ring draws the eye in the first 40%,
+// then a softer ring pulses out.
+
+// A button presses in as the ring pulses out, and the ring fades with it.
+function pressStyle(p: number): CSSProperties {
+  const glow = Math.min(1, p / 0.4);
+  const tap = Math.max(0, (p - 0.4) / 0.6);
+  const down = Math.sin(Math.PI * tap);
+  return {
+    transform: `scale(${1 - 0.05 * down})`,
+    filter: `brightness(${1 - 0.18 * down})`,
+    boxShadow: [
+      `0 0 0 calc(${4 * glow * (1 - tap)} * var(--pt)) rgb(224 93 61)`,
+      `0 0 0 calc(${6 + 22 * tap} * var(--pt)) rgb(224 93 61 / ${0.3 * glow * (1 - tap)})`,
+    ].join(", "),
+  };
+}
+
+// A status turns into a tomato pill, which stays once the pulse has gone. The first shadow pads the pill.
+function ringStyle(p: number): CSSProperties {
+  const glow = Math.min(1, p / 0.4);
+  const pulse = Math.max(0, (p - 0.4) / 0.6);
+  return {
+    borderRadius: "calc(10 * var(--pt))",
+    background: `rgb(224 93 61 / ${glow})`,
+    boxShadow: [
+      `0 0 0 calc(4 * var(--pt)) rgb(224 93 61 / ${glow})`,
+      `0 0 0 calc(${8 + 22 * pulse} * var(--pt)) rgb(224 93 61 / ${0.3 * glow * (1 - pulse)})`,
+    ].join(", "),
+  };
 }
 
 function Field({ label, value, placeholder, helper, caret }: { label: string; value: string; placeholder: string; helper: string; caret: boolean }) {
