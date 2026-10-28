@@ -1,0 +1,86 @@
+/* The film is a 9:16 frame laid out on a 540 × 960 grid: --u is one unit at the frame's current width. */
+.film {
+  position: relative;
+  width: min(100vw, calc(100vh * 9 / 16));
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
+  overflow: hidden;
+  container-type: inline-size;
+  background: var(--bg);
+}
+
+.film > * {
+  --u: calc(100cqw / 540);
+}
+
+.caption {
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(226 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(28 * var(--u)) calc(44 * var(--u)) calc(8 * var(--u));
+  font: 400 calc(40 * var(--u)) / 1.12 var(--serif);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.caption em {
+  font-weight: 600;
+  color: var(--tomato-deep);
+}
+
+.phoneShot,
+.porchShot {
+  position: absolute;
+  left: 50%;
+  top: calc(228 * var(--u));
+  transform-origin: 50% 0;
+}
+
+.phoneShot {
+  width: calc(320 * var(--u));
+}
+
+.porchShot {
+  width: calc(470 * var(--u));
+  transform-origin: 50% 9%;
+}
+
+.end {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(22 * var(--u));
+  padding: 0 calc(48 * var(--u));
+  background: var(--bg);
+  text-align: center;
+}
+
+.logo {
+  font-size: calc(46 * var(--u));
+}
+
+.endTitle {
+  font: 400 calc(54 * var(--u)) / 1.05 var(--serif);
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.endTitle em {
+  font-weight: 600;
+  color: var(--tomato-deep);
+}
+
+.endLine {
+  font: 400 calc(23 * var(--u)) / 1.45 var(--sans);
+  color: var(--muted);
+  text-wrap: balance;
+}

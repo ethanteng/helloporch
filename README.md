@@ -154,6 +154,7 @@ Phone fallback needs a LiveKit outbound SIP trunk connected to Twilio, with its 
 The site at helloporch.store has the home page, [features](https://helloporch.store/features), the [pilot](https://helloporch.store/pilot) guide, the [story](https://helloporch.store/story) and the [privacy policy](https://helloporch.store/privacy).
 
 - **Waitlist.** Both waitlist forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer goes in the subscriber's `porch_who` field. Each request is also logged as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those logs only briefly, so MailerLite is the record.
+- **3-way calling.** The features page draws the app's 3-way calling screens, with the faces from `public/features/three-way/mom.jpg` and `ethan.jpg`, and plays a 24-second film of the same screens. To remake the film, run `npm run dev`, then `node scripts/render-three-way-film.mjs "3-way calling compressed.mp4"` (it needs macOS and Google Chrome), and upload the file to the clips' Blob store under the same name.
 - **Demo video.** It defaults to the v2 file on Vercel Blob. To change it, set `NEXT_PUBLIC_DEMO_VIDEO_URL` to the new `.mp4` URL and redeploy. The value is built into the page.
 - **Analytics.** Google Analytics runs only on production deployments.
 
