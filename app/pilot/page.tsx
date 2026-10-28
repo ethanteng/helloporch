@@ -9,7 +9,7 @@ import styles from "./pilot.module.css";
 export const metadata: Metadata = {
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "What a pilot family provides for Porch: an iPad, a stand, a USB hub, a big-button phone and a Cell2Jack. Then how to install the Porch app with TestFlight and connect the phone.",
+    "What a pilot family provides for Porch: an iPad, a stand, a USB hub, a big-button phone and a Cell2Jack. Then how to install the Porch app with TestFlight.",
 };
 
 export default function PilotPage() {
@@ -27,7 +27,7 @@ export default function PilotPage() {
             <p className={styles.lede}>
               Thank you for helping me test Porch. You provide the equipment: an iPad and a big-button phone,
               plus a few parts to connect them. Porch is the app that runs on it. Here’s what to get and how to
-              set it all up yourself.
+              install the app.
             </p>
           </header>
 
@@ -180,43 +180,6 @@ export default function PilotPage() {
             </ol>
             <p className={styles.note}>
               Turn on automatic updates in TestFlight, because each test version stops working after 90 days.
-            </p>
-          </section>
-
-          <section className={styles.section} aria-labelledby="phone-setup-title">
-            <div className={styles.sectionIntro}>
-              <h2 id="phone-setup-title">Connecting the big-button phone</h2>
-              <p>Once Porch is set up on the iPad, connecting the phone takes a few minutes.</p>
-            </div>
-            <ol className={styles.install}>
-              <li>
-                <h3>Plug it in.</h3>
-                <p>Plug the phone into the Cell2Jack, and the Cell2Jack into the hub.</p>
-              </li>
-              <li>
-                <h3>Turn on the driver.</h3>
-                <p>
-                  Open the iPad’s Settings app, find <strong>Porch</strong>, and turn on its USB driver. This lets
-                  Porch read the phone’s buttons.
-                </p>
-              </li>
-              <li>
-                <h3>Replug the Cell2Jack.</h3>
-                <p>Unplug the Cell2Jack for ten seconds, then plug it back in.</p>
-              </li>
-              <li>
-                <h3>Turn on the keypad in Porch.</h3>
-                <p>
-                  In Porch’s caregiver mode, open <strong>Advanced</strong> and turn on{" "}
-                  <strong>Use Cell2Jack phone keypad</strong>. When <strong>Phone keypad ready</strong> appears
-                  under Call someone, lift the receiver and press a photo to try it.
-                </p>
-              </li>
-            </ol>
-            <p className={styles.note}>
-              The keys only work with the receiver lifted. The Cell2Jack may say the phone isn’t connected when
-              you pick up; pressing a photo stops it. Putting the receiver back ends the call, like a regular
-              phone, unless you turn off <strong>Hang up when the receiver is put back</strong> in Advanced.
             </p>
           </section>
 
