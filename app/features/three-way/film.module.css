@@ -13,6 +13,14 @@
   --u: calc(100cqw / 540);
 }
 
+/* The caption's strip, over anything zoomed up into it. */
+.band {
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(226 * var(--u));
+  background: var(--bg);
+}
+
 .caption {
   position: absolute;
   inset: 0 0 auto;
@@ -41,8 +49,10 @@
   transform-origin: 50% 0;
 }
 
+/* Zooms about the phone's lower panel: Call and add to this call, then what the bank is doing. */
 .phoneShot {
   width: calc(320 * var(--u));
+  transform-origin: 50% 72%;
 }
 
 .porchShot {
@@ -77,10 +87,4 @@
 .endTitle em {
   font-weight: 600;
   color: var(--tomato-deep);
-}
-
-.endLine {
-  font: 400 calc(23 * var(--u)) / 1.45 var(--sans);
-  color: var(--muted);
-  text-wrap: balance;
 }
