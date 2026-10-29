@@ -203,8 +203,9 @@ extension Notification.Name {
         update.supportsHolding = false; update.supportsGrouping = false; update.supportsUngrouping = false; update.supportsDTMF = false
         // Apple's advice for every CallKit app: send the configuration again just before reporting a call. It hands
         // the system this app's current audio session, without which a call can ring and connect with no sound
-        // until Porch is relaunched.
-        provider.configuration = Self.configuration()
+        // until Porch is relaunched. A call that can't ring is ended at once, and a call this phone is on, possibly
+        // one CallKit doesn't know about, keeps the audio session it has.
+        if !rejected { provider.configuration = Self.configuration() }
         provider.reportNewIncomingCall(with: id, update: update) { [weak self] error in
             completion()
             Task { @MainActor in
