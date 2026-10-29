@@ -158,6 +158,8 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         let families: [String], family: String?, nickname: String?
     }
     private var shown: Shown?
+    /// The family the form on screen was built for. A name typed for one family must not be saved onto another.
+    private var formCredential: FamilyCredential?
     private lazy var chooser = PhotoChooser(presenter: self) { [weak self] data in
         guard let self else { return }
         guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
@@ -194,6 +196,8 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         let families = PorchDevice.families, current = PorchDevice.currentFamily
         let several = families.count > 1
         let paired = current != nil
+        // Switching family drops a half-typed name. The field still showed the previous family until this redraw.
+        if current?.deviceID != formCredential?.deviceID { editedName = nil; editedFamily = nil }
         let photoID = me?.profile?.photoID
         let photo = photoID.map { FamilyPhotos.shared.store.contains($0) } == true
         // A new phone, or a photo saved elsewhere: download it, and try again on later check-ins if that fails.
@@ -205,6 +209,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
                          family: several ? current?.deviceID : nil, nickname: several ? current.flatMap { PorchDevice.nickname($0) } : nil)
         guard next != shown else { return }
         shown = next
+        formCredential = current
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
         // Names are the only things to type, so the keyboard choice shows only with them.
         setKeyboardControlVisible(paired && (me != nil || several))
@@ -279,7 +284,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     }
     /// Saves a new name or photo: a photo is uploaded first, and NSNull removes it.
     private func saveProfile(_ change: [String: Any]) {
-        guard !saving, let credential = PorchDevice.credential(for: .family) else { return }
+        guard !saving, let credential = formCredential ?? PorchDevice.credential(for: .family) else { return }
         saving = true
         Task { [weak self] in
             guard let self else { return }
@@ -298,7 +303,11 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     private func choose(among families: [FamilyCredential], current: FamilyCredential) {
         let rows = families.map { family -> UIView in
             let chosen = family.deviceID == current.deviceID
-            let row = actionRow(PorchDevice.familyName(family) ?? "Family", symbol: chosen ? "checkmark.circle.fill" : "circle") { FamilyCoordinator.shared.select(family) }
+            let row = actionRow(PorchDevice.familyName(family) ?? "Family", symbol: chosen ? "checkmark.circle.fill" : "circle") { [weak self] in
+                FamilyCoordinator.shared.select(family)
+                // After the row action, so redrawing doesn't remove this button while it is handling the tap.
+                DispatchQueue.main.async { self?.view.endEditing(true) }
+            }
             row.accessibilityTraits = chosen ? [.button, .selected] : .button
             return row
         }
