@@ -19,4 +19,11 @@ public enum IncomingCallRinging {
         guard current != callID, current != nil || onAnotherCall else { return false }
         return !finished.contains(callID)
     }
+
+    /// A push CallKit already ended, because this phone was busy, is a missed call once a check-in lists that same call.
+    /// A guest invitation is not: ending one while it rings counts as a decline, so it runs out as missed on its own.
+    public static func endAsMissed(_ callID: UUID, snapshotCallID: String?, guest: Bool) -> Bool {
+        guard !guest, let snapshotCallID else { return false }
+        return snapshotCallID.caseInsensitiveCompare(callID.uuidString) == .orderedSame
+    }
 }

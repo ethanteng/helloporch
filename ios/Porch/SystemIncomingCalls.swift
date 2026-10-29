@@ -29,6 +29,8 @@ extension Notification.Name {
     private var audioActive = false
     private var connected = false
     private var recentIDs: [UUID] = []
+    /// Pushes CallKit already ended because this phone was busy. Hung up as missed once that family's check-in lists the call.
+    private var awaitingMissed: [UUID] = []
     private var mute = false
     /// Whether this call's camera belongs on while Porch is open. Leaving Porch turns
     /// the camera off; returning turns it back on unless the person turned it off.
@@ -165,7 +167,10 @@ extension Notification.Name {
         guard call.kind == "call", call.state == "pending", credential.role == PorchDevice.experience,
               let id = UUID(uuidString: call.id) else { return }
         if uuid == id { self.call = call; return }
-        guard canRing(id) else { return }
+        // A push during another call was reported and ended. This check-in is the first time that family's snapshot
+        // may list it, which is when it can be hung up as missed. A call only a check-in saw is not in that list: it
+        // rings once the other call is over.
+        guard canRing(id) else { finishBusyCall(id, profile: credential, call: call); return }
         report(id: id, recipient: call.to, name: call.callerName, mode: call.mode, expiresAt: call.expiresAt, completion: {})
         if uuid == id { self.call = call }
     }
@@ -178,7 +183,10 @@ extension Notification.Name {
         // can't be reported again, so remember it before the check-in that runs once the other call is over.
         let rejected = !canRing(id)
         let blocked = IncomingCallRinging.pushBlocked(id, current: uuid, onAnotherCall: onAnotherCall(), finished: recentIDs)
-        if blocked { recentIDs.append(id); recentIDs = Array(recentIDs.suffix(32)) }
+        if blocked {
+            recentIDs.append(id); recentIDs = Array(recentIDs.suffix(32))
+            awaitingMissed.append(id); awaitingMissed = Array(awaitingMissed.suffix(32))
+        }
         // A family phone answers as the member the call is for: each of its families knows it by a different ID.
         let profile = PorchDevice.experience == .family ? PorchDevice.family(memberID: recipient) : PorchDevice.credential(for: .bedside)
         let family = Self.familyName(of: profile)
@@ -203,11 +211,9 @@ extension Notification.Name {
                 guard let self else { return }
                 if rejected {
                     if error == nil { self.provider.reportCall(with: id, endedAt: Date(), reason: .failed) }
-                    // The other family is still ringing. This phone already showed the call to CallKit and ended
-                    // it, so hang up as missed once this family's check-in shows that call. A guest ring has a
-                    // different id; ending that here would count as a decline, so it runs out as missed instead.
-                    if blocked, let profile, FamilyCoordinator.shared.state(for: profile)?.call?.id == id.uuidString.lowercased() {
-                        self.endUnanswered(id, profile: profile)
+                    // The snapshot often does not list this call until the next check-in. Hang up then, in `receive`.
+                    if blocked, let profile {
+                        self.finishBusyCall(id, profile: profile, call: FamilyCoordinator.shared.state(for: profile)?.call)
                     }
                     return
                 }
@@ -226,6 +232,16 @@ extension Notification.Name {
                 self.changed()
             }
         }
+    }
+
+    /// The phone was already on a call, so this one was shown to CallKit and ended. Tell that family it was missed
+    /// once its check-in lists this call. A guest invitation is left to time out: ending it while it rings is a decline.
+    private func finishBusyCall(_ id: UUID, profile: FamilyCredential, call: FamilyCallRecord?) {
+        guard awaitingMissed.contains(id), let call, call.state == "pending",
+              call.id.caseInsensitiveCompare(id.uuidString) == .orderedSame else { return }
+        awaitingMissed.removeAll { $0 == id }
+        guard IncomingCallRinging.endAsMissed(id, snapshotCallID: call.id, guest: call.guest == true) else { return }
+        endUnanswered(id, profile: profile)
     }
 
     /// The phone was already on a call, so this one was shown to CallKit and ended. Tell that family it was missed.

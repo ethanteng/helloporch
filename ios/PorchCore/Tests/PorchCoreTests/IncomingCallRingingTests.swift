@@ -28,4 +28,13 @@ final class IncomingCallRingingTests: XCTestCase {
         XCTAssertFalse(IncomingCallRinging.canRing(teng, current: nil, onAnotherCall: false, finished: [teng]), "already handed to CallKit")
         XCTAssertTrue(IncomingCallRinging.canRing(teng, current: nil, onAnotherCall: false, finished: [lee]), "a check-in that never reported it still rings once the other call is over")
     }
+    /// The push often arrives before the check-in that lists the call. That check-in hangs it up as missed.
+    /// A guest ring uses the same id in its own snapshot, and ending it would count as a decline.
+    func testABusyPushIsMissedOnceTheCheckInShowsItAndAGuestRingIsLeftToTimeOut() {
+        let id = UUID()
+        XCTAssertTrue(IncomingCallRinging.endAsMissed(id, snapshotCallID: id.uuidString.lowercased(), guest: false))
+        XCTAssertFalse(IncomingCallRinging.endAsMissed(id, snapshotCallID: nil, guest: false), "the check-in has not listed it yet")
+        XCTAssertFalse(IncomingCallRinging.endAsMissed(id, snapshotCallID: UUID().uuidString, guest: false))
+        XCTAssertFalse(IncomingCallRinging.endAsMissed(id, snapshotCallID: id.uuidString.lowercased(), guest: true), "ending a guest ring counts as a decline")
+    }
 }
