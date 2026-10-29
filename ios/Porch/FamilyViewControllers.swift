@@ -250,8 +250,11 @@ final class FamilyHomeViewController: CaregiverFormViewController {
                 let microphone = await AVCaptureDevice.requestAccess(for: .audio)
                 let camera = mode == .video ? await AVCaptureDevice.requestAccess(for: .video) : true
                 guard microphone && camera else { throw FamilyServiceError(message: "Allow Porch to use the microphone and camera in Settings before calling.", status: 403) }
+                // Another family can start ringing during the permission prompt or this request. Placing the call anyway
+                // runs both, and answering the incoming one closes this screen while its call stays connected.
+                guard !SystemIncomingCalls.shared.hasCall else { return }
                 let session = try await FamilyCoordinator.shared.startCall(to: person, mode: mode, dropIn: dropIn, in: family)
-                guard self.view.window != nil, UIApplication.shared.applicationState == .active else { await session.end(); return }
+                guard self.view.window != nil, UIApplication.shared.applicationState == .active, !SystemIncomingCalls.shared.hasCall else { await session.end(); return }
                 let screen = try NativeCallViewController.paired(session)
                 screen.onUnanswered = { [weak self] in self?.offerVoicemail(to: person.name, title: "\(person.name) didn't answer", in: family) }
                 self.present(screen, animated: true)
