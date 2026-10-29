@@ -75,6 +75,14 @@ final class PorchContainerViewController: UIViewController {
     func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
     @objc private func familyChanged() {
         let coordinator = FamilyCoordinator.shared
+        // A family phone rings for whichever of its families is calling. Only the bedside takes drop-ins.
+        if PorchDevice.experience == .family {
+            for link in coordinator.links {
+                guard let state = link.state, let call = state.call, call.state == "pending", call.to == state.me.id, call.kind == "call" else { continue }
+                SystemIncomingCalls.shared.receive(call, credential: link.credential)
+            }
+            return
+        }
         guard let credential = coordinator.credential, let state = coordinator.state else { return }
         guard let call = state.call, call.state == "pending", call.to == state.me.id else { if state.call?.state == "ended" || state.call == nil { incomingID = nil }; return }
         if call.kind == "call" {

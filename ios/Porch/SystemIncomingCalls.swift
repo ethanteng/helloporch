@@ -52,11 +52,17 @@ extension Notification.Name {
     var hasCall: Bool { uuid != nil }
     func owns(_ callID: String) -> Bool { uuid?.uuidString.lowercased() == callID.lowercased() }
     var callerContact: CallContact? {
-        guard let call, let state = FamilyCoordinator.shared.state else { return nil }
+        guard let call, let credential, let state = FamilyCoordinator.shared.state(for: credential) else { return nil }
         return ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: call, in: state)
     }
-    var callerName: String { callerContact?.name ?? call?.callerName ?? incomingName }
+    var callerName: String { callerContact?.name ?? FamilyNames.caller(call?.callerName ?? incomingName, family: callingFamily) }
     private var incomingName = "Family"
+    /// Which family is calling, on a phone in more than one.
+    private var callingFamily: String?
+    private static func familyName(of profile: FamilyCredential?) -> String? {
+        guard let profile, profile.role == .family, PorchDevice.families.count > 1 else { return nil }
+        return PorchDevice.familyName(profile)
+    }
     private var mode: NativeCall.Mode = .voice
     var isVideo: Bool { mode == .video }
 
@@ -88,43 +94,39 @@ extension Notification.Name {
         let previous = registrationTask
         registrationTask?.cancel()
         guard let token = pushToken else { return }
-        let profile = PorchDevice.credential(for: PorchDevice.experience)
+        // The bedside rings for its own household. A family phone rings for every family it's in, and the others stop.
+        let experience = PorchDevice.experience
+        let bedside = [PorchDevice.credential(for: .bedside)].compactMap { $0 }, families = PorchDevice.families
+        let profiles = experience == .bedside ? bedside : families, others = experience == .bedside ? families : bedside
         // Migrate existing installations while unlocked, before a locked launch.
-        if let profile { try? PorchDevice.save(profile) }
+        for profile in profiles { try? PorchDevice.save(profile) }
         let environment = Bundle.main.object(forInfoDictionaryKey: "PorchAPNsEnvironment") as? String ?? "production"
         registrationTask = Task {
             do {
                 await previous?.value
                 try Task.checkCancellation()
-                for role in [PorchExperience.bedside, .family] where role != profile?.role {
-                    if let other = PorchDevice.credential(for: role) {
-                        _ = try? await FamilyService(other).send("registerVoIP", ["token": NSNull()])
-                    }
-                }
-                guard let profile else { pushReady = false; changed(); return }
+                for other in others { _ = try? await FamilyService(other).send("registerVoIP", ["token": NSNull()]) }
+                guard !profiles.isEmpty else { pushReady = false; changed(); return }
                 var microphone = AVCaptureDevice.authorizationStatus(for: .audio)
                 if microphone == .notDetermined && UIApplication.shared.applicationState == .active {
                     _ = await AVCaptureDevice.requestAccess(for: .audio)
                     microphone = AVCaptureDevice.authorizationStatus(for: .audio)
                 }
                 try Task.checkCancellation()
-                let enabled = PorchDevice.experience == profile.role && microphone == .authorized
+                let enabled = PorchDevice.experience == experience && microphone == .authorized
                 let values: [String: Any] = enabled ? ["token": token, "environment": environment] : ["token": NSNull()]
-                let response = try await FamilyService(profile).send("registerVoIP", values)
-                pushReady = response.pushReady == true
+                var ready = true
+                for profile in profiles {
+                    do { ready = try await FamilyService(profile).send("registerVoIP", values).pushReady == true && ready }
+                    // A family that removed this phone can't ring it anyway; the others still can.
+                    catch let failure as FamilyServiceError where failure.status == 401 {}
+                    catch { ready = false }
+                }
+                try Task.checkCancellation()
+                pushReady = ready
             } catch { if !Task.isCancelled { pushReady = false } }
             changed()
         }
-    }
-
-    func prepareForPairing() async throws {
-        registrationTask?.cancel()
-        await registrationTask?.value
-        if let previous = PorchDevice.credential(for: .family) {
-            do { _ = try await FamilyService(previous).send("registerVoIP", ["token": NSNull()]) }
-            catch { if (error as? FamilyServiceError)?.status != 401 { throw error } }
-        }
-        pushReady = false
     }
 
     func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
@@ -138,10 +140,8 @@ extension Notification.Name {
         let previous = registrationTask
         registrationTask = Task {
             await previous?.value
-            for role in [PorchExperience.bedside, .family] {
-                if let profile = PorchDevice.credential(for: role) {
-                    _ = try? await FamilyService(profile).send("registerVoIP", ["token": NSNull()])
-                }
+            for profile in [PorchDevice.credential(for: .bedside)].compactMap({ $0 }) + PorchDevice.families {
+                _ = try? await FamilyService(profile).send("registerVoIP", ["token": NSNull()])
             }
         }
     }
@@ -167,14 +167,17 @@ extension Notification.Name {
                         expiresAt: TimeInterval, completion: @escaping () -> Void) {
         if uuid == id { completion(); return }
         let rejected = uuid != nil || recentIDs.contains(id)
+        // A family phone answers as the member the call is for: each of its families knows it by a different ID.
+        let profile = PorchDevice.experience == .family ? PorchDevice.family(memberID: recipient) : PorchDevice.credential(for: .bedside)
+        let family = Self.familyName(of: profile)
         if !rejected {
             uuid = id; incomingName = String(name.prefix(80)); self.mode = mode
-            expiry = expiresAt; credential = PorchDevice.credential(for: PorchDevice.experience)
+            expiry = expiresAt; credential = profile; callingFamily = family
             inactivity = CallInactivityTimer(timeout: CallPreferences.disconnectAfterSilence() ? TimeInterval(CallPreferences.silenceSeconds()) : nil)
             ending = false; answered = false; connected = false; wantsCamera = false; status = "Incoming Porch call"
         }
         let update = CXCallUpdate()
-        update.localizedCallerName = String(name.prefix(80))
+        update.localizedCallerName = FamilyNames.caller(String(name.prefix(80)), family: family)
         update.remoteHandle = CXHandle(type: .generic, value: "Porch family")
         update.hasVideo = mode == .video
         update.supportsHolding = false; update.supportsGrouping = false; update.supportsUngrouping = false; update.supportsDTMF = false
@@ -414,7 +417,7 @@ extension Notification.Name {
             // Do not restore automatic audio handling until this room has stopped.
             AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = true
             try? AudioManager.shared.setEngineAvailability(.default)
-            self.room = nil; call = nil; uuid = nil; credential = nil; answered = false
+            self.room = nil; call = nil; uuid = nil; credential = nil; callingFamily = nil; answered = false
             connected = false; audioActive = false; mute = false; wantsCamera = false; mediaTask = nil; cameraTask = nil
             endBackgroundTask(); changed()
         }
@@ -514,7 +517,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         let calls = SystemIncomingCalls.shared
         if let credential = calls.familyCredential, credential.role == .family, let call = calls.call, call.source == "porch", call.guest != true {
             guests = CallGuestControls(host: self, credential: credential, callID: call.id, room: { SystemIncomingCalls.shared.room }) {
-                .init(call: SystemIncomingCalls.shared.call, canAddPhone: SystemIncomingCalls.shared.canAddPhoneGuests, family: FamilyCoordinator.shared.state?.family ?? [])
+                .init(call: SystemIncomingCalls.shared.call, canAddPhone: SystemIncomingCalls.shared.canAddPhoneGuests, family: FamilyCoordinator.shared.state(for: credential)?.family ?? [])
             }
         }
         CallScreenLayout.install(in: view, video: stage, preview: localVideo, placeholder: placeholder, title: title, status: status,
@@ -535,7 +538,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         let peers = calls.room?.remoteParticipants.values.map { $0 } ?? []
         let bedside = PorchDevice.experience == .bedside
         // Family see Mom first. The bedside sees whoever called it first.
-        let mom = FamilyCoordinator.shared.state?.people.first { $0.role == .bedside }
+        let mom = calls.familyCredential.flatMap { FamilyCoordinator.shared.state(for: $0) }?.people.first { $0.role == .bedside }
         if calls.call?.source == "porch", calls.answered {
             if bedside {
                 let lines = CallPeople.bedsideLines(peers, call: calls.call) + (leftNotice.map { [$0] } ?? [])

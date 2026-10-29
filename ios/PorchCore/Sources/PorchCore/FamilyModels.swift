@@ -326,12 +326,32 @@ public struct CallHistoryEntry: Codable, Equatable, Identifiable {
     }
 }
 
-public struct FamilyCredential: Codable {
+public struct FamilyCredential: Codable, Equatable {
     public let origin: URL
     public let credential: String
     public let role: PorchExperience
     public init(origin: URL, credential: String, role: PorchExperience) {
         self.origin = origin; self.credential = credential; self.role = role
+    }
+    /// This device's ID in its household, which is also its member ID there. A phone in several families has a
+    /// different one in each, so calls and messages can say which family they're for.
+    public var deviceID: String { String(credential.split(separator: ".").first ?? "") }
+}
+
+/// What a phone in more than one family shows to tell them apart, such as two sets of parents who are both "Mom" and
+/// "Dad" on their own Porch.
+public enum FamilyNames {
+    /// Each family can have several phones; a phone can be in up to this many families.
+    public static let limit = 4
+    /// The name this phone gave the family, or else the one its caregiver did.
+    public static func family(nickname: String?, householdName: String?) -> String? {
+        [nickname, householdName].lazy.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
+    }
+    /// Who's calling, with their family when the phone is in more than one: "Mom · Lee family". A family named after
+    /// the person calling adds nothing.
+    public static func caller(_ name: String, family: String?) -> String {
+        guard let family, !family.isEmpty, family.caseInsensitiveCompare(name) != .orderedSame else { return name }
+        return "\(name) · \(family)"
     }
 }
 public struct FamilyInvitation {

@@ -770,7 +770,8 @@ extension Notification.Name {
 @MainActor final class FamilyMessageAlerts: NSObject, UNUserNotificationCenterDelegate {
     static let shared = FamilyMessageAlerts()
     private var token: String?
-    private var registered: (credential: String, token: String?)?
+    /// The token each family last accepted for this phone, by pairing; empty for none.
+    private var registered: [String: String] = [:]
     private var task: Task<Void, Never>?
 
     func start() {
@@ -778,14 +779,14 @@ extension Notification.Name {
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
     }
 
-    /// Asks once for permission on a paired family phone, then registers with APNs. A device used as
-    /// the bedside stops receiving its family pairing's message notifications.
+    /// Asks once for permission on a paired family phone, then registers with APNs for every family it's in. A device
+    /// used as the bedside stops receiving its families' message notifications.
     func register() {
         #if DEBUG
         // Automated simulator checks don't stop at the permission prompt.
         if ProcessInfo.processInfo.arguments.contains("--family-silent") { return }
         #endif
-        guard PorchDevice.experience == .family, PorchDevice.credential(for: .family) != nil else { send(nil); return }
+        guard PorchDevice.experience == .family, !PorchDevice.families.isEmpty else { send(nil); return }
         Task {
             let center = UNUserNotificationCenter.current()
             var settings = await center.notificationSettings()
@@ -802,18 +803,23 @@ extension Notification.Name {
         send(PorchDevice.experience == .family ? token : nil)
     }
     private func send(_ token: String?) {
-        guard let credential = PorchDevice.credential(for: .family), registered?.credential != credential.credential || registered?.token != token else { return }
+        let families = PorchDevice.families.filter { registered[$0.credential] != token ?? "" }
+        guard !families.isEmpty else { return }
         let environment = Bundle.main.object(forInfoDictionaryKey: "PorchAPNsEnvironment") as? String ?? "production"
         let previous = task
         task = Task { [weak self] in
             await previous?.value
             let values: [String: Any] = token.map { ["token": $0, "environment": environment] } ?? ["token": NSNull()]
-            if (try? await FamilyService(credential).send("registerAlerts", values)) != nil { self?.registered = (credential.credential, token) }
+            for credential in families {
+                if (try? await FamilyService(credential).send("registerAlerts", values)) != nil { self?.registered[credential.credential] = token ?? "" }
+            }
         }
     }
+    /// The badge counts unplayed messages from every family.
     @objc private func familyChanged() {
-        guard PorchDevice.experience == .family, let state = FamilyCoordinator.shared.state, state.me.role == .family else { return }
-        let count = state.newMessages ?? 0
+        let states = FamilyCoordinator.shared.links.compactMap(\.state).filter { $0.me.role == .family }
+        guard PorchDevice.experience == .family, !states.isEmpty else { return }
+        let count = states.reduce(0) { $0 + ($1.newMessages ?? 0) }
         if #available(iOS 16.0, *) { UNUserNotificationCenter.current().setBadgeCount(count) }
         else { UIApplication.shared.applicationIconBadgeNumber = count }
     }
@@ -821,7 +827,10 @@ extension Notification.Name {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
     }
+    /// Opens the thread with whoever left the message. Each family knows this phone by its own ID, which the
+    /// notification carries.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        await MainActor.run { NotificationCenter.default.post(name: .porchOpenReceivedMessages, object: nil) }
+        let recipient = response.notification.request.content.userInfo["recipientID"] as? String
+        await MainActor.run { NotificationCenter.default.post(name: .porchOpenReceivedMessages, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
     }
 }

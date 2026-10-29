@@ -21,7 +21,19 @@ From a phone, caregiver mode covers the settings the server holds: the display n
 
 The PIN is kept in the phone's memory only. Caregiver mode locks after ten idle minutes, when Porch leaves the foreground, or when the PIN or approval changes. Wrong PINs from a phone count against that phone alone (five per 15 minutes), so they can't lock out the bedside iPad. A caregiver can't remove their own phone or change their own caregiver access; another caregiver or the bedside iPad can.
 
-To move a phone to a different family, tap your photo → **Join a different family** and use the new family's invitation. The phone stays in its current family until the new invitation is accepted, then leaves the old one automatically.
+## More than one family
+
+A phone can be in up to four families, such as both sets of parents. Tap your photo → **Join another family** and use that family's invitation. The phone stays in the families it's already in, and asks what to call the new one, such as "Sarah's parents", so two bedsides that are both "Mom" can be told apart. That name is only on this phone.
+
+Each family is its own pairing: the families never learn about each other, and each knows the phone as a different member, with its own name, photo, drop-in approval and caregiver access. Porch checks in with every family while it's open, and the phone's push registration goes to each of them.
+
+- **Home screen.** Each family has its own section under its name, with the bedside's availability, call and drop-in buttons, messages and held voicemail. With one family, the screen looks as it always has.
+- **Calls.** Any family can ring the phone. The call screen and CallKit show the caller with their family, such as "Mom · Sarah's parents". The phone takes one call at a time: if another family calls during a call, it shows there as missed.
+- **Messages.** Notifications say which family they're from, so tapping one opens that family's thread. Each family's notifications group separately. The app badge counts unplayed messages from every family once Porch has checked in. Until then, a new notification's badge counts only its own family.
+- **Settings.** Choose a family at the top to see and change your name, photo and caregiver mode there, rename it on this phone, or **Leave** it. Caregiver mode is for one family at a time and locks when you switch.
+- **Removed by a family.** Its section says so, with **Remove from this phone**. The other families keep working.
+
+A new invitation from a family the phone is already in replaces its pairing there, as joining always did: the phone leaves its old pairing once the new invitation is accepted.
 
 ## Names and photos
 

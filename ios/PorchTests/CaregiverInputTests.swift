@@ -157,26 +157,98 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(try accessibility(), kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
     }
 
-    @MainActor func testBothPairedCallingCredentialsAreAvailableAfterFirstUnlock() throws {
-        for role in [PorchExperience.bedside, .family] {
-            let account = "porch.family.\(role.rawValue)"
-            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: Bundle.main.bundleIdentifier!, kSecAttrAccount as String: account]
-            let previous = NativeCallSettings.readSecret(account)
-            var previousAttributes: CFTypeRef?
-            var attributes = query; attributes[kSecReturnAttributes as String] = true
-            SecItemCopyMatching(attributes as CFDictionary, &previousAttributes)
-            let wasBackgroundAccessible = (previousAttributes as? [String: Any])?[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
-            defer {
-                if let previous { try? NativeCallSettings.writeSecret(previous, account: account, accessibleAfterFirstUnlock: wasBackgroundAccessible) }
-                else { SecItemDelete(query as CFDictionary) }
+    /// Runs `body`, then puts back this device's pairings, its old single-family copy and what it calls each family.
+    @MainActor private func preservingPairings(_ body: () throws -> Void) rethrows {
+        let accounts = ["porch.family.bedside", "porch.family.family", "porch.family.families"]
+        func query(_ account: String) -> [String: Any] {
+            [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!, kSecAttrAccount as String: account]
+        }
+        let saved = accounts.map { account -> (Data, Bool)? in
+            guard let data = NativeCallSettings.readSecret(account) else { return nil }
+            var attributes = query(account); attributes[kSecReturnAttributes as String] = true
+            var found: CFTypeRef?
+            SecItemCopyMatching(attributes as CFDictionary, &found)
+            return (data, (found as? [String: Any])?[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        }
+        let defaults = UserDefaults.standard, keys = ["porch.family.current", "porch.family.nicknames", "porch.family.households"]
+        let values = keys.map { defaults.object(forKey: $0) }
+        defer {
+            for (account, previous) in zip(accounts, saved) {
+                if let previous { try? NativeCallSettings.writeSecret(previous.0, account: account, accessibleAfterFirstUnlock: previous.1) }
+                else { SecItemDelete(query(account) as CFDictionary) }
             }
-            let profile = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "test-device.test-secret", role: role)
-            try PorchDevice.save(profile)
-            var result: CFTypeRef?
-            XCTAssertEqual(SecItemCopyMatching(attributes as CFDictionary, &result), errSecSuccess)
-            XCTAssertEqual((result as? [String: Any])?[kSecAttrAccessible as String] as? String, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
-            XCTAssertEqual(PorchDevice.credential(for: role)?.credential, profile.credential)
+            for (key, value) in zip(keys, values) { defaults.set(value, forKey: key) }
+        }
+        try body()
+    }
+
+    @MainActor func testBothPairedCallingCredentialsAreAvailableAfterFirstUnlock() throws {
+        try preservingPairings {
+            for role in [PorchExperience.bedside, .family] {
+                // A family phone keeps every family it's in under one account.
+                let account = role == .family ? "porch.family.families" : "porch.family.bedside"
+                var attributes: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: Bundle.main.bundleIdentifier!, kSecAttrAccount as String: account]
+                attributes[kSecReturnAttributes as String] = true
+                let profile = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "test-device.test-secret", role: role)
+                try PorchDevice.save(profile)
+                if role == .family { PorchDevice.select(profile) }
+                var result: CFTypeRef?
+                XCTAssertEqual(SecItemCopyMatching(attributes as CFDictionary, &result), errSecSuccess)
+                XCTAssertEqual((result as? [String: Any])?[kSecAttrAccessible as String] as? String, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+                XCTAssertEqual(PorchDevice.credential(for: role)?.credential, profile.credential)
+            }
+        }
+    }
+
+    /// A phone in both sets of parents' families keeps both pairings. Taking one off leaves the other ringing.
+    @MainActor func testAFamilyPhoneKeepsEveryFamilyItJoins() throws {
+        try preservingPairings {
+            let origin = URL(string: "https://example.invalid")!
+            let lee = FamilyCredential(origin: origin, credential: "lee-device.lee-secret", role: .family)
+            let teng = FamilyCredential(origin: origin, credential: "teng-device.teng-secret", role: .family)
+            // Paired before Porch allowed more than one family: the pairing is under the old single-family account.
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!,
+                           kSecAttrAccount as String: "porch.family.families"] as CFDictionary)
+            try NativeCallSettings.writeSecret(try JSONEncoder().encode(lee), account: "porch.family.family", accessibleAfterFirstUnlock: true)
+            UserDefaults.standard.removeObject(forKey: "porch.family.current")
+            XCTAssertEqual(PorchDevice.families, [lee])
+            XCTAssertEqual(PorchDevice.credential(for: .family), lee)
+            try PorchDevice.save(teng)
+            XCTAssertEqual(PorchDevice.families, [lee, teng], "joining another family keeps the first")
+            XCTAssertEqual(PorchDevice.currentFamily, lee, "the screens stay on the family they showed")
+            PorchDevice.select(teng)
+            XCTAssertEqual(PorchDevice.credential(for: .family), teng)
+            try PorchDevice.save(lee)
+            XCTAssertEqual(PorchDevice.families, [lee, teng], "saving a family again keeps its place")
+            // Calls and messages say which member they're for, and each family knows this phone by its own ID.
+            XCTAssertEqual(PorchDevice.family(memberID: "lee-device"), lee)
+            XCTAssertEqual(PorchDevice.family(memberID: "teng-device"), teng)
+            XCTAssertNil(PorchDevice.family(memberID: "someone-else"))
+            XCTAssertNil(PorchDevice.family(memberID: nil))
+            // Both are "Mom" until this phone names one, or a check-in says what its caregiver called it.
+            let data = try JSONSerialization.data(withJSONObject: ["householdID": "lee-home", "householdName": "Lee family", "dropInEnabled": false,
+                "me": ["id": "lee-device", "name": "Ethan", "role": "family", "permissions": ["audio": false, "video": false], "online": true],
+                "people": [[String: Any]](), "busy": false, "serverTime": 1])
+            PorchDevice.noteHousehold(try JSONDecoder().decode(FamilySnapshot.self, from: data), for: lee)
+            XCTAssertEqual(PorchDevice.familyName(lee), "Lee family")
+            XCTAssertEqual(PorchDevice.householdID(lee), "lee-home")
+            XCTAssertNil(PorchDevice.familyName(teng))
+            PorchDevice.setNickname("  Sarah's parents ", for: teng)
+            XCTAssertEqual(PorchDevice.familyName(teng), "Sarah's parents")
+            PorchDevice.setNickname("Mom & Dad", for: lee)
+            XCTAssertEqual(PorchDevice.familyName(lee), "Mom & Dad", "the name chosen here wins")
+            PorchDevice.setNickname(" ", for: lee)
+            XCTAssertNil(PorchDevice.nickname(lee))
+            XCTAssertEqual(PorchDevice.familyName(lee), "Lee family")
+            try PorchDevice.removeFamily(teng)
+            XCTAssertEqual(PorchDevice.families, [lee])
+            XCTAssertEqual(PorchDevice.currentFamily, lee, "the family left is the one shown")
+            XCTAssertNil(PorchDevice.nickname(teng))
+            try PorchDevice.removeFamily(lee)
+            XCTAssertEqual(PorchDevice.families, [])
+            XCTAssertNil(PorchDevice.credential(for: .family), "the old single-family copy doesn't come back")
+            XCTAssertNil(PorchDevice.familyName(lee))
         }
     }
 
