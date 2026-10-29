@@ -11,10 +11,18 @@ final class PorchContainerViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(changeExperience), name: .porchExperienceChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         FamilyCoordinator.shared.canReceive = { [weak self] in self?.readyForIncoming == true }
+        SystemIncomingCalls.shared.onAnotherCall = { [weak self] in self?.onFamilyPhoneCall == true }
         NotificationCenter.default.addObserver(self, selector: #selector(systemCallChanged), name: .porchSystemCallChanged, object: nil)
         installExperience()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
+    /// A family phone's own call screen is open, such as for a call it started to one of its families. CallKit doesn't
+    /// know about that call, so another family's waits. The bedside, in one household, takes calls as before.
+    private var onFamilyPhoneCall: Bool {
+        guard PorchDevice.experience == .family else { return false }
+        return [presentedViewController, content?.presentedViewController].compactMap { $0 }
+            .contains { sequence(first: $0, next: { $0.presentedViewController }).contains { $0 is NativeCallViewController } }
+    }
     private var readyForIncoming: Bool {
         guard UIApplication.shared.applicationState == .active, presentedViewController == nil, view.window != nil else { return false }
         if let clock = content as? CallViewController {

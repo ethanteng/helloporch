@@ -199,7 +199,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
                     }
                 for (title, symbol, mode, drop) in calls {
                     let button = PorchStyle.button(title, symbol: symbol, filled: !drop)
-                    button.isEnabled = family.error == nil && person.online && !state.busy && !starting
+                    // While another family's call rings or is on, CallKit has it: a call from here would be cut off.
+                    button.isEnabled = family.error == nil && person.online && !state.busy && !starting && !SystemIncomingCalls.shared.hasCall
                     button.addAction(UIAction { [weak self] _ in self?.call(person, mode: mode, dropIn: drop, in: credential) }, for: .touchUpInside)
                     views.append(button)
                 }
@@ -240,7 +241,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         present(alert, animated: true)
     }
     private func call(_ person: FamilyPerson, mode: NativeCall.Mode, dropIn: Bool, in family: FamilyCredential) {
-        guard !starting else { return }; starting = true
+        guard !starting, !SystemIncomingCalls.shared.hasCall else { return }; starting = true
         FamilyCoordinator.shared.select(family); refresh()
         Task { [weak self] in
             guard let self else { return }

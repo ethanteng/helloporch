@@ -50,6 +50,9 @@ extension Notification.Name {
     private(set) var canAddPhoneGuests = false
     var familyCredential: FamilyCredential? { credential }
     var hasCall: Bool { uuid != nil }
+    /// Whether this device is on a call CallKit doesn't know about, such as one a family phone started. Another family's
+    /// call can't ring over it: answering would close that call's screen with the call still connected.
+    var onAnotherCall: () -> Bool = { false }
     func owns(_ callID: String) -> Bool { uuid?.uuidString.lowercased() == callID.lowercased() }
     var callerContact: CallContact? {
         guard let call, let credential, let state = FamilyCoordinator.shared.state(for: credential) else { return nil }
@@ -161,18 +164,19 @@ extension Notification.Name {
         guard call.kind == "call", call.state == "pending", credential.role == PorchDevice.experience,
               let id = UUID(uuidString: call.id) else { return }
         if uuid == id { self.call = call; return }
-        guard IncomingCallCheckIn.reports(id, current: uuid, finished: recentIDs) else { return }
+        guard canRing(id) else { return }
         report(id: id, recipient: call.to, name: call.callerName, mode: call.mode, expiresAt: call.expiresAt, completion: {})
         if uuid == id { self.call = call }
     }
+    private func canRing(_ id: UUID) -> Bool { IncomingCallRinging.canRing(id, current: uuid, onAnotherCall: onAnotherCall(), finished: recentIDs) }
 
     private func report(id: UUID, recipient: String?, name: String, mode: NativeCall.Mode,
                         expiresAt: TimeInterval, completion: @escaping () -> Void) {
         if uuid == id { completion(); return }
-        // A second family's push has to be reported while this call is up, and CallKit then ends it. That UUID
-        // can't be reported again, so remember it before the check-in that runs once this call is over.
-        let blocked = IncomingCallCheckIn.pushBlocked(by: uuid, callID: id, finished: recentIDs)
-        let rejected = uuid != nil || recentIDs.contains(id)
+        // A second family's push has to be reported while another call is up, and CallKit then ends it. That UUID
+        // can't be reported again, so remember it before the check-in that runs once the other call is over.
+        let rejected = !canRing(id)
+        let blocked = IncomingCallRinging.pushBlocked(id, current: uuid, onAnotherCall: onAnotherCall(), finished: recentIDs)
         if blocked { recentIDs.append(id); recentIDs = Array(recentIDs.suffix(32)) }
         // A family phone answers as the member the call is for: each of its families knows it by a different ID.
         let profile = PorchDevice.experience == .family ? PorchDevice.family(memberID: recipient) : PorchDevice.credential(for: .bedside)
