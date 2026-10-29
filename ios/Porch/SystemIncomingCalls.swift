@@ -156,9 +156,12 @@ extension Notification.Name {
                expiresAt: (values["expiresAt"] as? NSNumber)?.doubleValue ?? 0, completion: completion)
     }
 
+    /// A call a check-in says is ringing this device. Unlike a VoIP push, it needn't be reported when Porch can't take it.
     func receive(_ call: FamilyCallRecord, credential: FamilyCredential) {
         guard call.kind == "call", call.state == "pending", credential.role == PorchDevice.experience,
               let id = UUID(uuidString: call.id) else { return }
+        if uuid == id { self.call = call; return }
+        guard IncomingCallCheckIn.reports(id, current: uuid, finished: recentIDs) else { return }
         report(id: id, recipient: call.to, name: call.callerName, mode: call.mode, expiresAt: call.expiresAt, completion: {})
         if uuid == id { self.call = call }
     }
