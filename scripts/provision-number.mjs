@@ -42,12 +42,12 @@ try {
     const sip = new SipClient(url.replace('wss:', 'https:'), key, secret, { requestTimeout: 10, failover: false });
     const [outbound] = await sip.listSipOutboundTrunk({ trunkIds: [outboundID] });
     if (!outbound?.numbers.includes(number)) throw new SetupError("That number isn't on the outbound trunk, so calls out couldn't show it.");
-    console.log(`Plan: the number that already rings the bedside ${bedsideName} becomes its Porch number, shown in Porch and used for its calls out.`);
+    console.log(`Plan: the number that already rings the bedside ${bedsideName} becomes its Porch number, used as caller ID for its calls out.`);
     console.log('Routing and the trunks stay as they are. Nothing is bought and no calls are placed.');
     if (!apply) { console.log('Read-only plan complete. Use --apply to save it.'); process.exit(0); }
     await holdPlace(store, house.id, Infinity);
     await mutate(store, house.id, latest => { latest.porchNumber ??= { number, assignedAt: now }; delete latest.phoneSetup; });
-    console.log(`Saved. The bedside ${bedsideName} shows its Porch number, and its calls out use it.`);
+    console.log(`Saved. The bedside ${bedsideName}'s calls out now use its Porch number as caller ID.`);
   } else {
     const settings = numberSettings();
     if (!settings) throw new SetupError('Load TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, PORCH_SERVER_ORIGIN, LIVEKIT_SIP_URI, LIVEKIT_SIP_OUTBOUND_TRUNK_ID and PORCH_MAX_PHONE_NUMBERS privately with --env-file.');
@@ -57,7 +57,8 @@ try {
     await mutate(store, house.id, latest => { if (!latest.porchNumber) latest.phoneSetup = { areaCode, attempts: 0, retryAt: now }; });
     const saved = await ensurePorchNumber(store, house.id, now, settings, numberServices(settings));
     if (!saved.porchNumber) throw new SetupError('Another request is setting up this number right now. Run this again in two minutes.');
-    console.log(`Bought and routed a number for the bedside ${bedsideName}. Porch shows it on the bedside and family phones.`);
+    console.log(`Bought and routed a number for the bedside ${bedsideName}. It's in the Twilio console under Phone Numbers, named “Porch ${house.id}”.`);
+    console.log("Porch sends it to the family's apps, which will show it once the setup screens are built.");
   }
 } catch (error) {
   // Provider exceptions may contain phone numbers or credentials; keep those out. Porch's own messages don't.
