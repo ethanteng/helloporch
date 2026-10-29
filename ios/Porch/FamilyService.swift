@@ -314,7 +314,9 @@ struct FamilyCallSession {
                     } catch {
                         if Task.isCancelled { return }
                         link.error = error.localizedDescription
-                        link.accessRemoved = (error as? FamilyServiceError)?.status == 401
+                        // A dropped connection isn't the family putting the phone back. Only a later successful
+                        // check-in clears the removal, so the card doesn't fill back in with calls that fail.
+                        if (error as? FamilyServiceError)?.status == 401 { link.accessRemoved = true }
                         self.changed()
                     }
                     let seconds: UInt64 = link.state?.call.map { $0.state != "ended" } == true ? 1 : credential.role == .family ? 3 : 2
