@@ -338,7 +338,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     static func paired(_ session: FamilyCallSession, contact original: CallContact? = nil) throws -> NativeCallViewController {
         let call = try NativeCall(room: "paired-\(session.call.id.prefix(8))", mode: session.call.mode)
-        let saved = original ?? session.peerContact ?? FamilyCoordinator.shared.state.flatMap { state in
+        let saved = original ?? session.peerContact ?? FamilyCoordinator.shared.state(for: session.credential).flatMap { state in
             ((try? CallSlots.load()) ?? CallSlots()).incomingContact(for: session.call, in: state)
         }
         // Someone without a keypad number still shows the photo Porch has for them.
@@ -403,7 +403,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         // Family on a Porch call with the bedside can ring in another family member, and caregivers can add a phone.
         if let session = familySession, session.credential.role == .family, session.call.source != "phone" {
             guests = CallGuestControls(host: self, credential: session.credential, callID: session.call.id, room: { [weak self] in self?.room }) {
-                let state = FamilyCoordinator.shared.state
+                let state = FamilyCoordinator.shared.state(for: session.credential)
                 return .init(call: state?.call?.id == session.call.id ? state?.call : nil, canAddPhone: state?.canAddPhoneGuests == true, family: state?.family ?? [])
             }
         }
@@ -599,7 +599,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         // changes once the bedside leaves.
         if hasConnectedPeer, let session = familySession, session.call.source == "porch" {
             if session.credential.role == .bedside {
-                let current = FamilyCoordinator.shared.state?.call.flatMap { $0.id == session.call.id ? $0 : nil }
+                let current = FamilyCoordinator.shared.state(for: session.credential)?.call.flatMap { $0.id == session.call.id ? $0 : nil }
                 let lines = CallPeople.bedsideLines(peers, call: current) + (leftNotice.map { [$0] } ?? [])
                 if !lines.isEmpty { statusLabel.text = ([statusLabel.text ?? ""] + lines).joined(separator: "\n") }
             } else if !peers.isEmpty, !peers.contains(where: { $0.identity?.stringValue == session.peerID }) {
@@ -616,7 +616,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     @objc private func familyChanged() {
-        guard let session = familySession, let state = FamilyCoordinator.shared.state, !isEnding, !isSwitchingToPhone else { return }
+        // A family phone in several families follows the one this call is in.
+        guard let session = familySession, let state = FamilyCoordinator.shared.state(for: session.credential), !isEnding, !isSwitchingToPhone else { return }
         guard let call = state.call, call.id == session.call.id, call.state != "ended" else {
             finish(message: BedsideText.language != .english ? "Call ended. Returning to Porch…" : state.call?.reason ?? "Call ended. Returning to Porch…"); return
         }

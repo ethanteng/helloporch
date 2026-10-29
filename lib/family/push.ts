@@ -59,10 +59,12 @@ export async function sendVoIPPush(device: VoIPRegistration, call: IncomingCallP
   return sendAPNs(device, { topic: `${process.env.APNS_BUNDLE_ID}.voip`, pushType: "voip", id: call.callID, expiration: 0, payload: { aps: {}, ...call } }, createSession);
 }
 
-/** A visible notification on a family phone. APNs keeps it for a week if the phone is off. */
-export type MessageAlert = { messageID: string; title: string; body: string; badge: number };
+/** A visible notification on a family phone. APNs keeps it for a week if the phone is off.
+ * `recipientID` is the member it's for. A phone in several families is a different member in each, so this says which
+ * family's thread to open, and keeps each family's notifications in their own group. */
+export type MessageAlert = { messageID: string; recipientID: string; title: string; body: string; badge: number };
 export async function sendAlertPush(device: VoIPRegistration, alert: MessageAlert, createSession: typeof connect = connect, now = Math.floor(Date.now() / 1000)): Promise<PushResult> {
   if (!voipConfigured()) return { delivered: false };
   return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: alert.messageID, expiration: now + 7 * 86400,
-    payload: { aps: { alert: { title: alert.title, body: alert.body }, sound: "default", badge: alert.badge, "thread-id": "porch-messages" }, messageID: alert.messageID } }, createSession);
+    payload: { aps: { alert: { title: alert.title, body: alert.body }, sound: "default", badge: alert.badge, "thread-id": `porch-messages-${alert.recipientID}` }, messageID: alert.messageID, recipientID: alert.recipientID } }, createSession);
 }

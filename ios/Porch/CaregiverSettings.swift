@@ -113,10 +113,10 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func familyChanged() {
-        if remote != nil {
+        if let remote {
             // Polls every few seconds: withdrawn approval, a removed device or the idle timeout locks right away.
-            let coordinator = FamilyCoordinator.shared
-            if coordinator.accessRemoved || coordinator.state?.me.caregiver == false {
+            let link = FamilyCoordinator.shared.link(for: remote)
+            if link?.accessRemoved == true || link?.state?.me.caregiver == false {
                 lock(FamilyServiceError(message: "Caregiver mode is no longer available on this phone.", status: 403))
             } else if !RemoteCaregiverSession.shared.isActive { lock(nil) }
             // A poll is not a reason to redraw. A photo that just finished downloading is: the open

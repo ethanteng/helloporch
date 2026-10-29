@@ -77,16 +77,17 @@ test('message alerts are ordinary notifications for the app, kept by APNs for a 
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  try {
-  assert.deepEqual(await sendAlertPush({token:'ab'.repeat(32),environment:'production'},{messageID:'x',title:'t',body:'b',badge:1}),{delivered:false},'unconfigured');
+  assert.deepEqual(await sendAlertPush({token:'ab'.repeat(32),environment:'production'},{messageID:'x',recipientID:'r',title:'t',body:'b',badge:1}),{delivered:false},'unconfigured');
   Object.assign(process.env,{APNS_KEY_ID:'test',APNS_TEAM_ID:'team',APNS_PRIVATE_KEY:privateKey.export({type:'pkcs8',format:'pem'}).toString(),APNS_BUNDLE_ID:'com.example.porch'});
   const session=()=>connect(`http://127.0.0.1:${server.address().port}`);
-  const alert={messageID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',title:'Mom left you a message',body:'Audio message · 0:12',badge:2};
+  const alert={messageID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',recipientID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',title:'Mom left you a message',body:'Audio message · 0:12',badge:2};
   assert.equal((await sendAlertPush({token:'cd'.repeat(32),environment:'sandbox'},alert,session,1800000000)).delivered,true);
   const {headers,body}=received[0];
   assert.equal(headers['apns-topic'],'com.example.porch');
   assert.equal(headers['apns-push-type'],'alert'); assert.equal(headers['apns-priority'],'10');
   assert.equal(headers['apns-expiration'],String(1800000000+7*86400)); assert.equal(headers['apns-id'],alert.messageID);
-  assert.deepEqual(body,{aps:{alert:{title:alert.title,body:alert.body},sound:'default',badge:2,'thread-id':'porch-messages'},messageID:alert.messageID});
+  // A phone in several families opens the right family's thread, and groups each family's messages apart.
+  assert.deepEqual(body,{aps:{alert:{title:alert.title,body:alert.body},sound:'default',badge:2,'thread-id':`porch-messages-${alert.recipientID}`},messageID:alert.messageID,recipientID:alert.recipientID});
  } finally {
   server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
   keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);

@@ -456,6 +456,31 @@ test('offline family devices receive ordinary-call pushes once after the winning
  assert.equal((await f.send('acceptCall',{callID:call.id,available:true},family.credential)).status,410);
 });
 
+test('one phone can be in two families, such as both sets of parents, and each rings it as its own member',async()=>{
+ const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push({device,call});return {delivered:true};}});
+ const lee=await f.setup(), teng=await f.setup();
+ assert.notEqual(lee.family.state.householdID,teng.family.state.householdID);
+ assert.notEqual(lee.family.state.me.id,teng.family.state.me.id,'the phone is a different member in each');
+ // The same phone registers the same token with both.
+ const registration={token:'ab'.repeat(32),environment:'sandbox'};
+ for (const {family} of [lee,teng]) assert.equal((await f.json('registerVoIP',registration,family.credential)).state.householdID,family.state.householdID);
+ for (const {family} of [lee,teng]) { await f.json('poll',{available:false},family.credential); }
+ f.advance(31);
+ const call=(await f.json('startCall',{targetID:teng.family.state.me.id,mode:'voice',kind:'call'},teng.bedside.credential)).state.call;
+ assert.deepEqual(pushes.map(p=>p.call.recipientID),[teng.family.state.me.id],'the push says which family is calling');
+ assert.equal((await f.json('poll',{available:true},lee.family.credential)).state.call,null,'the other family knows nothing of it');
+ assert.equal((await f.json('poll',{available:true},lee.family.credential)).state.busy,false);
+ assert.equal((await f.send('acceptCall',{callID:call.id,available:true},lee.family.credential)).status,404,"one family's pairing can't answer the other's call");
+ assert.equal((await f.json('acceptCall',{callID:call.id,available:true},teng.family.credential)).state.call.state,'accepted');
+ // Leaving one family leaves the other as it was.
+ await f.json('endCall',{callID:call.id},teng.family.credential);
+ await f.json('leaveHousehold',{},teng.family.credential);
+ assert.equal((await f.send('poll',{available:true},teng.family.credential)).status,401);
+ assert.equal((await f.json('poll',{available:true},lee.family.credential)).state.me.id,lee.family.state.me.id);
+ const people=(await f.json('poll',{available:true},lee.bedside.credential)).state.people;
+ assert.deepEqual(people.map(p=>[p.id,p.canReceiveCalls]),[[lee.family.state.me.id,true]]);
+});
+
 test('family see when someone was last noticed at the bedside iPad, and only the bedside can report it',async()=>{
  const f=fixture(),{bedside,family}=await f.setup();
  const seen=async()=>(await f.json('poll',{available:true},family.credential)).state.bedsideAttendedAt;

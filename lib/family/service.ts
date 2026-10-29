@@ -144,7 +144,7 @@ async function alertRecipient(store: FamilyStore, householdID: string, recipient
   if (!registration) return;
   const from = house.members.find(m => m.role === "bedside")?.name ?? house.name;
   const length = `${Math.floor(message.durationSeconds / 60)}:${String(message.durationSeconds % 60).padStart(2, "0")}`;
-  const result = await (dependencies.sendAlert ?? sendAlertPush)(registration, { messageID: message.id, title: `${from} left you a message`,
+  const result = await (dependencies.sendAlert ?? sendAlertPush)(registration, { messageID: message.id, recipientID, title: `${from} left you a message`,
     body: `${message.mode === "video" ? "Video" : "Audio"} message · ${length}`, badge: unheardCount(house, recipientID, now) });
   if (result.invalidToken) await mutate(store, householdID, current => {
     const member = current.members.find(m => m.id === recipientID);

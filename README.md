@@ -31,6 +31,7 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 **For family**, on an iPhone or iPad in family mode:
 
 - Private invitations and pairing, with no server addresses or codes to type.
+- One phone can be in up to four families, such as both sets of parents. Each family has its own section on the home screen, and calls show which family is calling.
 - Calls ring through CallKit, even when the phone is locked.
 - Before calling, see whether someone is at the bedside iPad, or how long ago someone was. Touches and key presses count, and so can the iPad's camera if a caregiver turns that on. A caregiver can turn it off.
 - Send messages, and get a notification when the bedside leaves one.

@@ -13,10 +13,18 @@ final class PorchContainerViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(changeExperience), name: .porchExperienceChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         FamilyCoordinator.shared.canReceive = { [weak self] in self?.readyForIncoming == true }
+        SystemIncomingCalls.shared.onAnotherCall = { [weak self] in self?.onFamilyPhoneCall == true }
         NotificationCenter.default.addObserver(self, selector: #selector(systemCallChanged), name: .porchSystemCallChanged, object: nil)
         installExperience()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
+    /// A family phone's own call screen is open, such as for a call it started to one of its families. CallKit doesn't
+    /// know about that call, so another family's waits. The bedside, in one household, takes calls as before.
+    private var onFamilyPhoneCall: Bool {
+        guard PorchDevice.experience == .family else { return false }
+        return [presentedViewController, content?.presentedViewController].compactMap { $0 }
+            .contains { sequence(first: $0, next: { $0.presentedViewController }).contains { $0 is NativeCallViewController } }
+    }
     private var readyForIncoming: Bool {
         guard UIApplication.shared.applicationState == .active, presentedViewController == nil, view.window != nil else { return false }
         if let clock = content as? CallViewController {
@@ -78,6 +86,14 @@ final class PorchContainerViewController: UIViewController {
     func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
     @objc private func familyChanged() {
         let coordinator = FamilyCoordinator.shared
+        // A family phone rings for whichever of its families is calling. Only the bedside takes drop-ins.
+        if PorchDevice.experience == .family {
+            for link in coordinator.links {
+                guard let state = link.state, let call = state.call, call.state == "pending", call.to == state.me.id, call.kind == "call" else { continue }
+                SystemIncomingCalls.shared.receive(call, credential: link.credential)
+            }
+            return
+        }
         guard let credential = coordinator.credential, let state = coordinator.state else { return }
         guard let call = state.call, call.state == "pending", call.to == state.me.id else { if state.call?.state == "ended" || state.call == nil { incomingID = nil }; return }
         if call.kind == "call" {

@@ -408,6 +408,22 @@ final class FamilyModelTests: XCTestCase {
         XCTAssertThrowsError(try BedsideInvitation(url: link, defaultOrigin: server))
         XCTAssertThrowsError(try FamilyInvitation(url: setup, defaultOrigin: server))
     }
+    func testEachFamilyKnowsThisPhoneByItsOwnDeviceID() {
+        let credential = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "0b3f1f4e-0000-4000-8000-000000000001.\(String(repeating: "c", count: 64))", role: .family)
+        XCTAssertEqual(credential.deviceID, "0b3f1f4e-0000-4000-8000-000000000001")
+        XCTAssertEqual(FamilyCredential(origin: credential.origin, credential: "", role: .family).deviceID, "")
+    }
+    /// Two sets of parents are often both "Mom" and "Dad". The name the phone gave a family wins, then the household's.
+    func testAPhoneInSeveralFamiliesTellsThemApart() {
+        XCTAssertEqual(FamilyNames.family(nickname: "Sarah's parents", householdName: "Mom"), "Sarah's parents")
+        XCTAssertEqual(FamilyNames.family(nickname: "  ", householdName: " Lee family "), "Lee family")
+        XCTAssertEqual(FamilyNames.family(nickname: nil, householdName: "Lee family"), "Lee family")
+        XCTAssertNil(FamilyNames.family(nickname: nil, householdName: nil))
+        XCTAssertEqual(FamilyNames.caller("Mom", family: "Lee family"), "Mom · Lee family")
+        XCTAssertEqual(FamilyNames.caller("Mom", family: "mom"), "Mom", "a family named after the caller adds nothing")
+        XCTAssertEqual(FamilyNames.caller("Mom", family: nil), "Mom")
+        XCTAssertEqual(FamilyNames.caller("Mom", family: ""), "Mom")
+    }
     func testLinkedContactSurvivesPersistenceWithoutChangingPhoneFallback() throws {
         let key = UUID().uuidString
         let defaults = UserDefaults(suiteName: key)!
