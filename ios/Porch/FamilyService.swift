@@ -56,8 +56,15 @@ enum PorchDevice {
             UserDefaults.standard.set(names, forKey: key)
         }
     }
-    /// What this phone calls a family, shown only once it's in more than one: the name chosen here, or its household's.
+    /// What this phone calls a family, shown only once it's in more than one: the name chosen here, or its household's,
+    /// numbered when a family it joined earlier has the same one.
     static func familyName(_ credential: FamilyCredential) -> String? {
+        let all = families
+        guard let index = all.firstIndex(where: { $0.deviceID == credential.deviceID }) else { return unnumberedName(credential) }
+        return FamilyNames.distinct(all.map(unnumberedName))[index]
+    }
+    /// The name chosen here, or its household's, before any number that tells it from another family's.
+    static func unnumberedName(_ credential: FamilyCredential) -> String? {
         FamilyNames.family(nickname: nickname(credential), householdName: (UserDefaults.standard.dictionary(forKey: householdsKey)?[credential.deviceID] as? [String: String])?["name"])
     }
     static func nickname(_ credential: FamilyCredential) -> String? { UserDefaults.standard.dictionary(forKey: nicknamesKey)?[credential.deviceID] as? String }

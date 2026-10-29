@@ -156,12 +156,14 @@ final class FamilyHomeViewController: CaregiverFormViewController {
                 block.addArrangedSubview(heading)
                 if let error = family.error { block.addArrangedSubview(PorchStyle.label(error, size: 17)) }
             }
-            // A family that removed this phone can't reach it again. Taking it off leaves the others as they are.
+            // A family that removed this phone can't reach it again, so what it last showed, such as its messages, is
+            // left out. Taking it off leaves the others as they are.
             if family.removed {
                 let remove = PorchStyle.button(several ? "Remove \(family.name ?? "this family") from this phone" : "Remove this family from this phone", symbol: "minus.circle", filled: false)
                 remove.configuration?.baseForegroundColor = .systemRed
                 remove.addAction(UIAction { [weak self] _ in self?.confirmRemoval(of: credential, named: family.name) }, for: .touchUpInside)
                 block.addArrangedSubview(remove)
+                continue
             }
             guard let state = coordinator.link(for: credential)?.state else {
                 if family.error == nil {
@@ -278,7 +280,9 @@ final class FamilyPairingViewController: CaregiverFormViewController {
         form.addArrangedSubview(section("Your Porch invite", detail: "Paste the link the caregiver sent you. It works once, for 24 hours.", views: views))
         // `field` resets capitalization; a family's name is capitalized word by word.
         nickname.autocapitalizationType = .words
-        if adding { form.addArrangedSubview(PorchStyle.label("This phone will still get calls from \(Self.names(PorchDevice.families)).", size: 17, color: PorchStyle.ink)) }
+        // A family that removed this phone doesn't call it any more.
+        let calling = PorchDevice.families.filter { FamilyCoordinator.shared.link(for: $0)?.accessRemoved != true }
+        if adding, !calling.isEmpty { form.addArrangedSubview(PorchStyle.label("This phone will still get calls from \(Self.names(calling)).", size: 17, color: PorchStyle.ink)) }
         join.addTarget(self, action: #selector(pair), for: .touchUpInside)
     }
     /// "Lee family", "Lee family and Mom", "Lee family, Mom and Dad".
@@ -288,6 +292,19 @@ final class FamilyPairingViewController: CaregiverFormViewController {
         return names.dropLast().joined(separator: ", ") + " and " + last
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
+    private func askForName(of family: FamilyCredential, sharing name: String, numbered: String) {
+        let alert = UIAlertController(title: "Another family here is called \(name)", message: "What do you call the one you just joined? Until you name it, it's \(numbered). Only on this phone.", preferredStyle: .alert)
+        alert.addTextField { field in field.placeholder = "For example, Sarah's parents"; field.autocapitalizationType = .words }
+        let done: () -> Void = { [weak self] in self?.navigationController?.popToRootViewController(animated: true) }
+        alert.addAction(UIAlertAction(title: "Not now", style: .cancel) { _ in done() })
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak alert] _ in
+            PorchDevice.setNickname(alert?.textFields?.first?.text, for: family)
+            // The home screen and incoming calls use it too.
+            NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+            done()
+        })
+        present(alert, animated: true)
+    }
     @objc private func pair() {
         guard task == nil else { return }
         do {
@@ -300,9 +317,11 @@ final class FamilyPairingViewController: CaregiverFormViewController {
                 do {
                     let pending = try PorchDevice.pending(role: .family, origin: invite.origin, invitation: invite.code)
                     // Reopening an invitation this phone already used returns the same identity, which doesn't add one.
+                    // Which family an invitation is from is known only once it's claimed, and claiming one for a fifth
+                    // family would use it up, so a new invitation from one of the four is turned away too.
                     let families = PorchDevice.families
                     guard families.count < FamilyNames.limit || families.contains(where: { $0.deviceID == pending.deviceID }) else {
-                        throw FamilyServiceError(message: "This phone is in \(FamilyNames.limit) families, the most Porch allows. Leave one in Settings first.", status: 409)
+                        throw FamilyServiceError(message: "This phone is in \(FamilyNames.limit) families, the most Porch allows. To join another, or to join one of these again with a new invitation, leave one in Settings first.", status: 409)
                     }
                     var registration = PorchDevice.registration(pending); registration["code"] = invite.code
                     let response = try await FamilyService(origin: invite.origin).send("claimInvite", registration)
@@ -320,13 +339,18 @@ final class FamilyPairingViewController: CaregiverFormViewController {
                         catch { throw FamilyServiceError(message: "Couldn't switch families. Check your internet and tap Join family again.", status: 503) }
                     }
                     try PorchDevice.save(joined)
+                    if let state = response.state { PorchDevice.noteHousehold(state, for: joined) }
                     let kept = replaced.compactMap { PorchDevice.nickname($0) }.first
                     for previous in replaced { try PorchDevice.removeFamily(previous) }
                     if let name = familyNickname?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty { PorchDevice.setNickname(name, for: joined) }
                     else if let kept { PorchDevice.setNickname(kept, for: joined) }
                     PorchDevice.select(joined)
                     FamilyCoordinator.shared.start()
-                    self.navigationController?.popToRootViewController(animated: true)
+                    // Two sets of parents are often both "Mom". Left unnamed, the new one is numbered, so ask now, while
+                    // it's clear which one it is.
+                    if let name = PorchDevice.unnumberedName(joined), let numbered = PorchDevice.familyName(joined), numbered != name {
+                        self.askForName(of: joined, sharing: name, numbered: numbered)
+                    } else { self.navigationController?.popToRootViewController(animated: true) }
                 } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
             }
         } catch { showPorchError(error, on: self) }

@@ -343,6 +343,18 @@ public struct FamilyCredential: Codable, Equatable {
 public enum FamilyNames {
     /// Each family can have several phones; a phone can be in up to this many families.
     public static let limit = 4
+    /// What each of a phone's families is called, in the order it joined them, numbered where two would read the same:
+    /// two families that are both "Mom" are "Mom" and "Mom 2" until the phone names one.
+    public static func distinct(_ names: [String?]) -> [String?] {
+        var used = Set<String>()
+        return names.map { name in
+            guard let name else { return nil }
+            var distinct = name, number = 1
+            while used.contains(distinct.lowercased()) { number += 1; distinct = "\(name) \(number)" }
+            used.insert(distinct.lowercased())
+            return distinct
+        }
+    }
     /// The name this phone gave the family, or else the one its caregiver did.
     public static func family(nickname: String?, householdName: String?) -> String? {
         [nickname, householdName].lazy.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }

@@ -252,6 +252,33 @@ final class CaregiverInputTests: XCTestCase {
         }
     }
 
+    /// Both bedsides are "Mom" until this phone names one: the family joined later shows as "Mom 2" meanwhile.
+    @MainActor func testTwoFamiliesCalledMomAreNumberedUntilOneIsNamed() throws {
+        try preservingPairings {
+            let origin = URL(string: "https://example.invalid")!
+            let lee = FamilyCredential(origin: origin, credential: "lee-device.lee-secret", role: .family)
+            let teng = FamilyCredential(origin: origin, credential: "teng-device.teng-secret", role: .family)
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!,
+                           kSecAttrAccount as String: "porch.family.families"] as CFDictionary)
+            try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
+            for (family, id) in [(lee, "lee-home"), (teng, "teng-home")] {
+                PorchDevice.setNickname(nil, for: family)
+                try PorchDevice.save(family)
+                let data = try JSONSerialization.data(withJSONObject: ["householdID": id, "householdName": "Mom", "dropInEnabled": false,
+                    "me": ["id": family.deviceID, "name": "Ethan", "role": "family", "permissions": ["audio": false, "video": false], "online": true],
+                    "people": [[String: Any]](), "busy": false, "serverTime": 1])
+                PorchDevice.noteHousehold(try JSONDecoder().decode(FamilySnapshot.self, from: data), for: family)
+            }
+            XCTAssertEqual(PorchDevice.families.map(PorchDevice.familyName), ["Mom", "Mom 2"])
+            XCTAssertEqual(PorchDevice.unnumberedName(teng), "Mom", "what joining compares, to ask for a name")
+            PorchDevice.setNickname("Sarah's parents", for: teng)
+            XCTAssertEqual(PorchDevice.families.map(PorchDevice.familyName), ["Mom", "Sarah's parents"])
+            PorchDevice.setNickname(nil, for: teng)
+            try PorchDevice.removeFamily(lee)
+            XCTAssertEqual(PorchDevice.familyName(teng), "Mom", "with the other one gone, there's nothing to tell it from")
+        }
+    }
+
     @MainActor private func localizedBedside(_ language: BedsideLanguage = .traditionalChinese) -> () -> Void {
         let defaults = UserDefaults.standard
         let saved = defaults.object(forKey: "porch.bedsideDisplay.v1"), experience = defaults.object(forKey: "porch.experience")
