@@ -12,4 +12,15 @@ final class IncomingCallCheckInTests: XCTestCase {
         XCTAssertFalse(IncomingCallCheckIn.reports(lee, current: nil, finished: [lee]))
         XCTAssertTrue(IncomingCallCheckIn.reports(teng, current: nil, finished: [lee]), "still ringing once the other call is over")
     }
+
+    /// The second family's VoIP push is reported and ended while the first call is up. That UUID can't ring again.
+    func testAPushDuringAnotherCallIsFinishedSoALaterCheckInDoesNotReportIt() {
+        let lee = UUID(), teng = UUID()
+        XCTAssertTrue(IncomingCallCheckIn.pushBlocked(by: lee, callID: teng, finished: []))
+        XCTAssertFalse(IncomingCallCheckIn.pushBlocked(by: nil, callID: teng, finished: []), "nothing else is up, so the push can ring")
+        XCTAssertFalse(IncomingCallCheckIn.pushBlocked(by: lee, callID: lee, finished: []))
+        XCTAssertFalse(IncomingCallCheckIn.pushBlocked(by: lee, callID: teng, finished: [teng]), "already remembered")
+        XCTAssertFalse(IncomingCallCheckIn.reports(teng, current: nil, finished: [teng]), "already handed to CallKit")
+        XCTAssertTrue(IncomingCallCheckIn.reports(teng, current: nil, finished: [lee]), "a check-in that never reported it still rings once the other call is over")
+    }
 }

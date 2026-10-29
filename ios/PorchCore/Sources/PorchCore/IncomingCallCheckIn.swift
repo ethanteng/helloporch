@@ -9,4 +9,12 @@ public enum IncomingCallCheckIn {
     public static func reports(_ callID: UUID, current: UUID?, finished: [UUID]) -> Bool {
         current == nil && !finished.contains(callID)
     }
+
+    /// A VoIP push has to be reported to CallKit immediately, even when another call is already up. CallKit then
+    /// ends that report, and the same call cannot be reported again later. Remember it as finished. A check-in that
+    /// only saw the call, and never reported it, is not finished: it rings once the other call is over.
+    public static func pushBlocked(by current: UUID?, callID: UUID, finished: [UUID]) -> Bool {
+        guard let current, current != callID else { return false }
+        return !finished.contains(callID)
+    }
 }

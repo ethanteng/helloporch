@@ -169,7 +169,11 @@ extension Notification.Name {
     private func report(id: UUID, recipient: String?, name: String, mode: NativeCall.Mode,
                         expiresAt: TimeInterval, completion: @escaping () -> Void) {
         if uuid == id { completion(); return }
+        // A second family's push has to be reported while this call is up, and CallKit then ends it. That UUID
+        // can't be reported again, so remember it before the check-in that runs once this call is over.
+        let blocked = IncomingCallCheckIn.pushBlocked(by: uuid, callID: id, finished: recentIDs)
         let rejected = uuid != nil || recentIDs.contains(id)
+        if blocked { recentIDs.append(id); recentIDs = Array(recentIDs.suffix(32)) }
         // A family phone answers as the member the call is for: each of its families knows it by a different ID.
         let profile = PorchDevice.experience == .family ? PorchDevice.family(memberID: recipient) : PorchDevice.credential(for: .bedside)
         let family = Self.familyName(of: profile)
@@ -194,6 +198,12 @@ extension Notification.Name {
                 guard let self else { return }
                 if rejected {
                     if error == nil { self.provider.reportCall(with: id, endedAt: Date(), reason: .failed) }
+                    // The other family is still ringing. This phone already showed the call to CallKit and ended
+                    // it, so hang up as missed once this family's check-in shows that call. A guest ring has a
+                    // different id; ending that here would count as a decline, so it runs out as missed instead.
+                    if blocked, let profile, FamilyCoordinator.shared.state(for: profile)?.call?.id == id.uuidString.lowercased() {
+                        self.endUnanswered(id, profile: profile)
+                    }
                     return
                 }
                 guard self.uuid == id else { return }
@@ -210,6 +220,27 @@ extension Notification.Name {
                 self.pollTask = Task { await self.poll(id: id, profile: profile) }
                 self.changed()
             }
+        }
+    }
+
+    /// The phone was already on a call, so this one was shown to CallKit and ended. Tell that family it was missed.
+    private func endUnanswered(_ id: UUID, profile: FamilyCredential) {
+        final class Background: @unchecked Sendable {
+            private let lock = NSLock()
+            var id = UIBackgroundTaskIdentifier.invalid
+            func end() {
+                lock.lock()
+                let current = id
+                id = .invalid
+                lock.unlock()
+                if current != .invalid { UIApplication.shared.endBackgroundTask(current) }
+            }
+        }
+        let background = Background()
+        background.id = UIApplication.shared.beginBackgroundTask(withName: "Missed Porch call") { background.end() }
+        Task { @MainActor in
+            _ = try? await FamilyService(profile).send("endCall", ["callID": id.uuidString.lowercased(), "unanswered": true])
+            background.end()
         }
     }
 
