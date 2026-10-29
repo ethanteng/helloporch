@@ -86,8 +86,8 @@ class DistributionProfileTests(unittest.TestCase):
 
     def test_family_signed_bundle_checks_signer_and_forbids_driver_entitlements(self):
         candidate = profile()
-        for driver_entitlement in [False, True]:
-            with self.subTest(driver_entitlement=driver_entitlement), tempfile.TemporaryDirectory() as folder:
+        for driver_entitlement, links in [(False, True), (True, True), (False, False)]:
+            with self.subTest(driver_entitlement=driver_entitlement, links=links), tempfile.TemporaryDirectory() as folder:
                 bundle = Path(folder)
                 (bundle / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": APP, "CFBundleVersion": "1"}))
                 (bundle / "Settings.bundle").mkdir()
@@ -97,6 +97,8 @@ class DistributionProfileTests(unittest.TestCase):
                                 "com.apple.developer.team-identifier": TEAM, "aps-environment": "production"}
                 if driver_entitlement:
                     entitlements[COMMUNICATES] = True
+                if links:
+                    entitlements["com.apple.developer.associated-domains"] = ["applinks:helloporch.store"]
                 def codesign(command, **kwargs):
                     for value in command:
                         if value.startswith("--extract-certificates="):
@@ -106,6 +108,9 @@ class DistributionProfileTests(unittest.TestCase):
                      patch("distribution_profiles.subprocess.run", side_effect=codesign):
                     if driver_entitlement:
                         with self.assertRaisesRegex(ValueError, "must not request DriverKit"):
+                            verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")
+                    elif not links:
+                        with self.assertRaisesRegex(ValueError, "Associated Domains"):
                             verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")
                     else:
                         result = verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")

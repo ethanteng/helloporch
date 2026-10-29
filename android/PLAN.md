@@ -150,7 +150,9 @@ Port the tests alongside the code. Sources are in [PorchCoreTests](../ios/PorchC
   - `BedsideAttendance` and `AttendanceTracker`: what family see about someone at the bedside, and the seconds the bedside reports.
   - `ContactPhotoStore`: SHA-256 IDs, path-traversal checks, prune unreferenced photos after 24 h.
 - **Phone numbers.** `PhoneNumberNormalization` on libphonenumber: reject extensions, and use the device region.
-- **Invitation parsing.** `porch://pair?server=<origin>&code=<64 hex>` and `porch://activate?…`, with the same strict rules as [FamilyModels.swift:267-303](../ios/PorchCore/Sources/PorchCore/FamilyModels.swift): exactly two query items; no path, user, port or fragment.
+- **Invitation parsing.** The same rules as `FamilyInvitation` and `PorchWebLinks` in [FamilyModels.swift](../ios/PorchCore/Sources/PorchCore/FamilyModels.swift):
+  - `porch://pair?server=<origin>&code=<64 hex>` and `porch://activate?…`: exactly two query items; no path, user, port or fragment.
+  - Web links for the app's own server, `https://helloporch.store/join#code=<64 hex>` and `/setup#code=…`, opened as Android App Links. That needs an `assetlinks.json` beside the Apple file in `app/.well-known/`.
 - **Shared contract fixtures.** Save real response JSON from the server tests to `tests/fixtures/`. Decode the fixtures in both the PorchCore and `:core` tests, so a server change that breaks either client fails CI.
 
 ### Server client, credentials and polling

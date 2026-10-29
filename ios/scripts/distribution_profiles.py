@@ -97,6 +97,9 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
         require(signed_id == f"{team}.{identifier}", "Signature has the wrong application identifier")
         if index == 0:
             require(ent.get("aps-environment") == "production", "App signature is missing production push")
+            domains = ent.get(ASSOCIATED_DOMAINS)
+            require(isinstance(domains, list) and "applinks:helloporch.store" in domains,
+                    "App signature is missing Associated Domains for helloporch.store")
             if family:
                 require(not any(key.startswith(DRIVER) for key in ent),
                         "Family signature must not request DriverKit entitlements")
