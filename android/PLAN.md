@@ -181,7 +181,7 @@ Port the tests alongside the code. Sources are in [PorchCoreTests](../ios/PorchC
     - Keypad-number report, retrying after 30 s, or 600 s after a 403 or 429.
 - **Links and pairing.**
   - Handle `porch://pair` and `porch://activate` from intents, and also accept a pasted link.
-  - Family pairing: `claimInvite`, then `leaveHousehold` on any previous family (ignore 401 or 404), save, start polling.
+  - Family pairing: `claimInvite`, then add the family to the ones the phone is in (up to four, as on iOS). Only a previous pairing with the same household is left with `leaveHousehold` (ignore 401 or 404). Save, then start polling every family. Route VoIP pushes and message notifications by `recipientID`, the phone's member ID in that family ([ios/FAMILY-SETUP.md](../ios/FAMILY-SETUP.md#more-than-one-family)).
   - Bedside: activation link, then `enrollBedside` with name and PIN. Refuse if the device is already enrolled.
 - **Mode switch.** Unregister push for the old role, then restart the coordinator.
 - **CI.** `.github/workflows/android-build.yml` runs on `android/**` changes: build, `:core` unit tests, Android lint.

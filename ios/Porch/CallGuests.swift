@@ -168,7 +168,7 @@ import PorchCore
             defer { self.ringing = false; self.refresh() }
             do {
                 let response = try await FamilyService(self.credential).send("addPorchGuest", ["callID": self.callID, "memberID": person.id])
-                if FamilyCoordinator.shared.credential?.credential == self.credential.credential { FamilyCoordinator.shared.update(response) }
+                FamilyCoordinator.shared.update(response)
                 if let added = response.porchGuest { self.invited = added; self.porchStates[added.id] = added.state }
             } catch { if let host = self.host { showPorchError(error, on: host) } }
         }
@@ -196,7 +196,7 @@ import PorchCore
         let response: FamilyResponse
         do { response = try await FamilyService(credential).send("addPhoneGuest", ["callID": callID, "phoneNumber": number, "label": label], timeout: 25) }
         catch { if (error as? FamilyServiceError)?.status ?? 502 >= 500 { settle = 6_000_000_000 }; throw error }
-        if FamilyCoordinator.shared.credential?.credential == credential.credential { FamilyCoordinator.shared.update(response) }
+        FamilyCoordinator.shared.update(response)
         guard let added = response.phoneGuest else { throw FamilyServiceError(message: "Couldn't add that phone number.", status: 502) }
         track(added)
     }
@@ -209,7 +209,7 @@ import PorchCore
             defer { self.hangUpButton.isEnabled = true; self.refresh() }
             do {
                 let response = try await FamilyService(self.credential).send("removePhoneGuest", ["callID": self.callID, "guestID": current.id])
-                if FamilyCoordinator.shared.credential?.credential == self.credential.credential { FamilyCoordinator.shared.update(response) }
+                FamilyCoordinator.shared.update(response)
                 guard self.guest?.id == current.id else { return }
                 self.finished.insert(current.id); self.guest = nil; self.legSeen = false; self.answered = false
                 self.show("You hung up \(current.label).")

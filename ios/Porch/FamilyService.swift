@@ -15,8 +15,76 @@ enum PorchDevice {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "porch.experience"); NotificationCenter.default.post(name: .porchExperienceChanged, object: nil) }
     }
     static var defaultOrigin: URL { URL(string: Bundle.main.object(forInfoDictionaryKey: "PorchServerURL") as? String ?? "https://porch-calling-prototype.vercel.app")! }
+    /// The bedside's pairing, or on a family phone the family its screens are showing (see `families`).
     static func credential(for role: PorchExperience) -> FamilyCredential? {
-        NativeCallSettings.readSecret("porch.family.\(role.rawValue)").flatMap { try? JSONDecoder().decode(FamilyCredential.self, from: $0) }
+        role == .family ? currentFamily : stored("porch.family.bedside")
+    }
+    private static func stored(_ account: String) -> FamilyCredential? {
+        NativeCallSettings.readSecret(account).flatMap { try? JSONDecoder().decode(FamilyCredential.self, from: $0) }
+    }
+    private static let familiesAccount = "porch.family.families"
+    private static let currentFamilyKey = "porch.family.current"
+    private static let nicknamesKey = "porch.family.nicknames"
+    private static let householdsKey = "porch.family.households"
+    /// Every family this phone has joined, such as both sets of parents, in the order it joined them. Each is its own
+    /// pairing: the families never learn about each other. A phone paired before Porch allowed more than one family
+    /// keeps its pairing under the old single-family account until the list is first saved.
+    static var families: [FamilyCredential] {
+        guard let data = NativeCallSettings.readSecret(familiesAccount) else { return [stored("porch.family.family")].compactMap { $0 } }
+        return (try? JSONDecoder().decode([FamilyCredential].self, from: data)) ?? []
+    }
+    /// The family whose messages, profile and caregiver mode the phone's screens are showing.
+    static var currentFamily: FamilyCredential? {
+        let all = families, current = UserDefaults.standard.string(forKey: currentFamilyKey)
+        return all.first { $0.deviceID == current } ?? all.first
+    }
+    static func select(_ credential: FamilyCredential) { UserDefaults.standard.set(credential.deviceID, forKey: currentFamilyKey) }
+    /// The pairing a call or message for `memberID` belongs to. Each family knows this phone by a different ID.
+    static func family(memberID: String?) -> FamilyCredential? { memberID.flatMap { id in families.first { $0.deviceID == id } } }
+    /// Readable after the first unlock, so a call can ring on a locked phone that just restarted.
+    private static func saveFamilies(_ families: [FamilyCredential]) throws {
+        try NativeCallSettings.writeSecret(try JSONEncoder().encode(families), account: familiesAccount, accessibleAfterFirstUnlock: true)
+        // The old single-family copy is in the list now. Left behind, a removed family would come back.
+        if NativeCallSettings.readSecret("porch.family.family")?.isEmpty == false { try? NativeCallSettings.writeSecret(Data(), account: "porch.family.family") }
+    }
+    /// Takes a family off this phone, with what the phone called it. Leaving it on the server is up to the caller.
+    static func removeFamily(_ credential: FamilyCredential) throws {
+        try saveFamilies(families.filter { $0.deviceID != credential.deviceID })
+        for key in [nicknamesKey, householdsKey] {
+            var names = UserDefaults.standard.dictionary(forKey: key) ?? [:]
+            names[credential.deviceID] = nil
+            UserDefaults.standard.set(names, forKey: key)
+        }
+    }
+    /// What this phone calls a family, shown only once it's in more than one: the name chosen here, or its household's,
+    /// numbered when a family it joined earlier has the same one.
+    static func familyName(_ credential: FamilyCredential) -> String? {
+        let all = families
+        guard let index = all.firstIndex(where: { $0.deviceID == credential.deviceID }) else { return unnumberedName(credential) }
+        return FamilyNames.distinct(all.map(unnumberedName))[index]
+    }
+    /// The name chosen here, or its household's, before any number that tells it from another family's.
+    static func unnumberedName(_ credential: FamilyCredential) -> String? {
+        FamilyNames.family(nickname: nickname(credential), householdName: (UserDefaults.standard.dictionary(forKey: householdsKey)?[credential.deviceID] as? [String: String])?["name"])
+    }
+    static func nickname(_ credential: FamilyCredential) -> String? { UserDefaults.standard.dictionary(forKey: nicknamesKey)?[credential.deviceID] as? String }
+    static func setNickname(_ nickname: String?, for credential: FamilyCredential) {
+        var names = UserDefaults.standard.dictionary(forKey: nicknamesKey) ?? [:]
+        if let trimmed = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty { names[credential.deviceID] = String(trimmed.prefix(80)) }
+        else { names[credential.deviceID] = nil }
+        UserDefaults.standard.set(names, forKey: nicknamesKey)
+    }
+    /// The household a family's pairing belongs to, as it last checked in: so a call that rings before Porch has
+    /// checked in can still say which family it's from, and a second invitation to the same family replaces the first.
+    static func noteHousehold(_ state: FamilySnapshot, for credential: FamilyCredential) {
+        let household = ["id": state.householdID, "name": state.householdName]
+        var households = UserDefaults.standard.dictionary(forKey: householdsKey) ?? [:]
+        guard households[credential.deviceID] as? [String: String] != household else { return }
+        households[credential.deviceID] = household
+        UserDefaults.standard.set(households, forKey: householdsKey)
+    }
+    static func householdID(_ credential: FamilyCredential) -> String? {
+        (UserDefaults.standard.dictionary(forKey: householdsKey)?[credential.deviceID] as? [String: String])?["id"]
     }
     static var bedsideActivation: URL? {
         NativeCallSettings.readSecret("porch.bedside.activation").flatMap { String(data: $0, encoding: .utf8) }.flatMap { $0.isEmpty ? nil : URL(string: $0) }
@@ -48,6 +116,7 @@ enum PorchDevice {
               let data = try? Data(contentsOf: folder.appendingPathComponent("PorchDebugFamily.json")),
               let fixture = try? JSONDecoder().decode(Fixture.self, from: data) else { return }
         try? save(fixture.profile)
+        if fixture.profile.role == .family { select(fixture.profile) }
         if let contacts = fixture.contacts {
             var slots = CallSlots()
             for (digit, contact) in contacts { if let digit = Int(digit) { try? slots.setContact(contact, for: digit) } }
@@ -58,8 +127,15 @@ enum PorchDevice {
         try? FileManager.default.removeItem(at: folder.appendingPathComponent("PorchDebugFamily.json"))
     }
     #endif
+    /// Saves the bedside's pairing, or adds a family to the ones this phone is in. A family already here (the same
+    /// device identity) keeps its place. Both are readable after the first unlock, so a call can ring on a locked phone.
     static func save(_ credential: FamilyCredential) throws {
-        try NativeCallSettings.writeSecret(try JSONEncoder().encode(credential), account: "porch.family.\(credential.role.rawValue)", accessibleAfterFirstUnlock: true)
+        guard credential.role == .family else {
+            try NativeCallSettings.writeSecret(try JSONEncoder().encode(credential), account: "porch.family.bedside", accessibleAfterFirstUnlock: true); return
+        }
+        var all = families
+        if let index = all.firstIndex(where: { $0.deviceID == credential.deviceID }) { all[index] = credential } else { all.append(credential) }
+        try saveFamilies(all)
     }
 }
 
@@ -181,69 +257,117 @@ struct FamilyCallSession {
 
 @MainActor final class FamilyCoordinator {
     static let shared = FamilyCoordinator()
-    private(set) var state: FamilySnapshot?
-    private(set) var error: String?
-    /// The server no longer recognizes this device (a caregiver removed it, or it left).
-    private(set) var accessRemoved = false
-    private(set) var credential: FamilyCredential?
+    /// One household this device belongs to, and what it last heard from it. The bedside has one; a family phone has
+    /// one for each family it joined, and checks in with all of them so any of them can reach it.
+    final class Link {
+        let credential: FamilyCredential
+        fileprivate(set) var state: FamilySnapshot?
+        fileprivate(set) var error: String?
+        /// The server no longer recognizes this device (a caregiver removed it, or it left).
+        fileprivate(set) var accessRemoved = false
+        fileprivate var task: Task<Void, Never>?
+        init(_ credential: FamilyCredential) { self.credential = credential }
+    }
+    private(set) var links: [Link] = []
+    /// The device ID of the family the screens are showing (see `PorchDevice.currentFamily`).
+    private var currentID: String?
+    private var current: Link? { links.first { $0.credential.deviceID == currentID } ?? links.first }
+    var state: FamilySnapshot? { current?.state }
+    var error: String? { current?.error }
+    var accessRemoved: Bool { current?.accessRemoved ?? false }
+    var credential: FamilyCredential? { current?.credential }
     var canReceive: () -> Bool = { false }
-    private var task: Task<Void, Never>?
     private var generation = UUID()
     var isActive = false
     private var reportingKeypad = false
     /// When a failed report may be retried, for that device and those numbers.
     private var keypadRetry: (credential: String, numbers: [String], after: Date)?
 
+    func link(for credential: FamilyCredential) -> Link? { links.first { $0.credential.credential == credential.credential } }
+    /// What one family last said. A call keeps following its own family, whichever one the screens show.
+    func state(for credential: FamilyCredential) -> FamilySnapshot? { link(for: credential)?.state }
+
     func start() {
         pause()
         isActive = true
-        credential = PorchDevice.credential(for: PorchDevice.experience)
-        state = nil; error = nil; accessRemoved = false
+        let credentials = PorchDevice.experience == .family ? PorchDevice.families : [PorchDevice.credential(for: .bedside)].compactMap { $0 }
+        currentID = PorchDevice.credential(for: PorchDevice.experience)?.deviceID
+        links = credentials.map(Link.init)
         FamilyMessageAlerts.shared.register()
-        guard let credential else { changed(); return }
+        guard !links.isEmpty else { changed(); return }
         SystemIncomingCalls.shared.registerDevice()
         let generation = UUID(); self.generation = generation
-        task = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self, self.isActive, self.generation == generation else { return }
-                do {
-                    var values: [String: Any] = ["available": self.canReceive()]
-                    // How long ago someone was at the bedside iPad, so family can tell whether to call now. Never before
-                    // this launch's first poll says that's on. While a caregiver has it off, nothing is kept to report later.
-                    if credential.role == .bedside, self.state?.shareAttendance == false { AttendanceTracker.shared.forget() }
-                    else if credential.role == .bedside, self.state?.shareAttendance == true, let seconds = AttendanceTracker.shared.secondsSince { values["attendedSeconds"] = seconds }
-                    let result = try await FamilyService(credential).send("poll", PollOrder.next(values))
-                    guard !Task.isCancelled, self.generation == generation else { return }
-                    self.state = result.state; self.error = nil; self.accessRemoved = false; self.changed()
-                } catch {
-                    if Task.isCancelled { return }
-                    self.error = error.localizedDescription
-                    self.accessRemoved = (error as? FamilyServiceError)?.status == 401
-                    self.changed()
+        for link in links {
+            let credential = link.credential
+            link.task = Task { [weak self] in
+                while !Task.isCancelled {
+                    guard let self, self.isActive, self.generation == generation else { return }
+                    do {
+                        var values: [String: Any] = ["available": self.canReceive()]
+                        // How long ago someone was at the bedside iPad, so family can tell whether to call now. Never before
+                        // this launch's first poll says that's on. While a caregiver has it off, nothing is kept to report later.
+                        if credential.role == .bedside, link.state?.shareAttendance == false { AttendanceTracker.shared.forget() }
+                        else if credential.role == .bedside, link.state?.shareAttendance == true, let seconds = AttendanceTracker.shared.secondsSince { values["attendedSeconds"] = seconds }
+                        let result = try await FamilyService(credential).send("poll", PollOrder.next(values))
+                        guard !Task.isCancelled, self.generation == generation else { return }
+                        link.state = result.state; link.error = nil; link.accessRemoved = false; self.changed()
+                    } catch {
+                        if Task.isCancelled { return }
+                        link.error = error.localizedDescription
+                        // A dropped connection isn't the family putting the phone back. Only a later successful
+                        // check-in clears the removal, so the card doesn't fill back in with calls that fail.
+                        if (error as? FamilyServiceError)?.status == 401 { link.accessRemoved = true }
+                        self.changed()
+                    }
+                    let seconds: UInt64 = link.state?.call.map { $0.state != "ended" } == true ? 1 : credential.role == .family ? 3 : 2
+                    do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }
                 }
-                let seconds: UInt64 = self.state?.call.map { $0.state != "ended" } == true ? 1 : credential.role == .family ? 3 : 2
-                do { try await Task.sleep(nanoseconds: seconds * 1_000_000_000) } catch { return }
             }
         }
     }
     func pause() {
-        isActive = false; task?.cancel(); task = nil; generation = UUID()
+        isActive = false; generation = UUID()
         // An in-flight keypad report belongs to the session that started it. A failed report's wait is kept:
         // Porch pauses whenever it stops being active, and a wrong PIN mustn't be retried on every return.
         reportingKeypad = false
-        if let credential {
+        for link in links {
+            link.task?.cancel(); link.task = nil
             // Numbered now, after any poll still in flight.
-            let values = PollOrder.next(["available": false])
+            let values = PollOrder.next(["available": false]), credential = link.credential
             Task { _ = try? await FamilyService(credential).send("poll", values) }
         }
     }
+    /// Shows a family phone's screens for one of its families. Caregiver mode was opened for the other one, so it ends.
+    func select(_ credential: FamilyCredential) {
+        guard credential.role == .family, credential.deviceID != current?.credential.deviceID else { return }
+        PorchDevice.select(credential); currentID = credential.deviceID
+        RemoteCaregiverSession.shared.end()
+        changed()
+    }
+    /// Takes a family off this phone once it has left it, or the family removed it. The others keep ringing.
+    func forget(_ credential: FamilyCredential) throws {
+        try PorchDevice.removeFamily(credential)
+        if isActive { start() }
+        else { link(for: credential)?.task?.cancel(); links.removeAll { $0.credential.credential == credential.credential }; changed() }
+    }
+    /// Leaves a family on the server, then takes it off this phone.
+    func leave(_ credential: FamilyCredential) async throws {
+        do { _ = try await FamilyService(credential).send("leaveHousehold") }
+        // Already removed, or its household is gone: nothing is left to leave.
+        catch let failure as FamilyServiceError where [401, 404].contains(failure.status) {}
+        try forget(credential)
+    }
+    /// A response's snapshot belongs to the family that knows this device by its member ID.
     func update(_ response: FamilyResponse) {
-        if let state = response.state { self.state = state; error = nil; changed() }
+        guard let state = response.state, let link = links.first(where: { $0.credential.deviceID == state.me.id }) else { return }
+        link.state = state; link.error = nil; changed()
     }
     /// A family member's photo finished downloading: keypad contacts and open screens can show it.
     func photoLoaded() { changed() }
     private func changed() {
-        if let state, let credential { FamilyPhotos.shared.sync(state, credential: credential) }
+        let known = links.compactMap { link in link.state.map { (state: $0, credential: link.credential) } }
+        FamilyPhotos.shared.sync(known, everyFamily: known.count == links.count)
+        for family in known where family.credential.role == .family { PorchDevice.noteHousehold(family.state, for: family.credential) }
         if let state, state.me.role == .bedside {
             do {
                 var slots = try CallSlots.load()
@@ -252,7 +376,7 @@ struct FamilyCallSession {
                 if slots != previous { try slots.save() }
                 PorchNaturalVoice.prefetch(state, slots: slots)
                 reportKeypad(slots)
-            } catch { self.error = error.localizedDescription }
+            } catch { current?.error = error.localizedDescription }
         }
         NotificationCenter.default.post(name: .porchFamilyChanged, object: self)
     }
@@ -286,11 +410,12 @@ struct FamilyCallSession {
             }
         }
     }
-    func startCall(to person: FamilyPerson, mode: NativeCall.Mode, dropIn: Bool) async throws -> FamilyCallSession {
-        try await startCall(targetID: person.id, name: person.name, mode: mode, dropIn: dropIn)
+    /// `family`: which of a family phone's families to call in; the one its screens show if not given.
+    func startCall(to person: FamilyPerson, mode: NativeCall.Mode, dropIn: Bool, in family: FamilyCredential? = nil) async throws -> FamilyCallSession {
+        try await startCall(targetID: person.id, name: person.name, mode: mode, dropIn: dropIn, in: family)
     }
-    func startCall(targetID: String?, name: String, mode: NativeCall.Mode, dropIn: Bool, waitSeconds: Int = 45) async throws -> FamilyCallSession {
-        guard let credential else { throw FamilyServiceError(message: "Pair this device first.", status: 401) }
+    func startCall(targetID: String?, name: String, mode: NativeCall.Mode, dropIn: Bool, waitSeconds: Int = 45, in family: FamilyCredential? = nil) async throws -> FamilyCallSession {
+        guard let credential = family ?? credential else { throw FamilyServiceError(message: "Pair this device first.", status: 401) }
         var values: [String: Any] = ["mode": mode.rawValue, "kind": dropIn ? "dropIn" : "call", "waitSeconds": waitSeconds]
         if let targetID { values["targetID"] = targetID } else { values["unlinked"] = true }
         let result = try await FamilyService(credential).send("startCall", values)

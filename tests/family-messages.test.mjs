@@ -169,7 +169,7 @@ test('the bedside leaves a message for one family member, who plays it and can p
   assert.equal(sent.state,'queued');
   await f.json('completeMessage',{messageID:created.message.id},f.bedside.credential);
   assert.equal(f.alerts.length,1,'a retried completion notifies once');
-  assert.deepEqual(f.alerts[0],{device:{token,environment:'sandbox'},alert:{messageID:sent.id,title:'Mom left you a message',body:'Video message · 0:42',badge:1}});
+  assert.deepEqual(f.alerts[0],{device:{token,environment:'sandbox'},alert:{messageID:sent.id,recipientID:f.ethan.state.me.id,title:'Mom left you a message',body:'Video message · 0:42',badge:1}});
   assert.deepEqual(await f.queue(),[],'it never joins the bedside queue');
   assert.equal(await f.unheard(f.ethan),1); assert.equal(await f.unheard(f.sam),0);
   assert.equal((await f.json('poll',{available:true},f.bedside.credential)).state.newMessages,undefined);
