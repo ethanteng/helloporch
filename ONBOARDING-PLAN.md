@@ -139,7 +139,11 @@ Size: small, but it blocks inviting other families. Everything else can be built
 
 Size: large. Nothing in the app depends on it, so it can ship first.
 
-**Status:** built on the branch `claude/porch-phone-numbers` (PR 1), in [numbers.ts](lib/family/numbers.ts), with its tests in [phone-numbers.test.mjs](tests/phone-numbers.test.mjs). It's documented in [INBOUND-PHONE-CALLS.md](ios/INBOUND-PHONE-CALLS.md#a-number-for-each-household). Not yet tried with real Twilio or LiveKit accounts.
+**Status:** built on the branch `claude/porch-phone-numbers` (PR 1), in [numbers.ts](lib/family/numbers.ts), with its tests in [phone-numbers.test.mjs](tests/phone-numbers.test.mjs). It's documented in [INBOUND-PHONE-CALLS.md](ios/INBOUND-PHONE-CALLS.md#a-number-for-each-household). Merged in PR #62.
+
+Tried for real on 2026-10-28:
+- Hainie's existing number was recorded with `--adopt`.
+- Bella Vista got a bought 510 number, the first purchase, which also created the shared trunk. Calls to it ring Bella Vista and reach voicemail, its phone fallback shows it as caller ID, calling back rings Bella Vista, and Mom's number still rings Mom.
 
 ### 1.1 Each household calls out from its own number
 
@@ -288,26 +292,29 @@ Size: small to medium. These ship before inviting other families.
 
 Size: medium. Can run alongside phase 1.
 
+**Status:** built in PR 3 on the branch `claude/porch-invite-links`. The links and helpers are in [invite-links.ts](lib/invite-links.ts), and the pages share [InviteLanding.tsx](components/InviteLanding.tsx). `/bedside` comes with replacing the bedside (PR 8), and the QR code on `/setup` is left for later.
+
 ### 4.1 Universal links
 
-- `app/.well-known/apple-app-site-association/route.ts` serves JSON for app ID `7U9T57JPF7.com.ethanteng.helloporch` with paths `/setup`, `/join` and `/bedside`, as `application/json`, without redirects.
+- `app/.well-known/apple-app-site-association/route.ts` serves JSON for app ID `7U9T57JPF7.com.ethanteng.helloporch` with paths `/join` and `/setup`, as `application/json`. `helloporch.store` serves it without a redirect; `www` redirects to it.
 - Add `com.apple.developer.associated-domains` = `applinks:helloporch.store` to [Porch.entitlements](ios/Porch/Porch.entitlements), and to [PorchFamily.entitlements](ios/Porch/PorchFamily.entitlements) while that build still exists.
 - [PorchApp.swift](ios/Porch/PorchApp.swift): handle `scene(_:continue:)` and `connectionOptions.userActivities` alongside `openURLContexts`.
 
 ### 4.2 `https` links in the app
 
-- `FamilyInvitation` ([FamilyModels.swift:270](ios/PorchCore/Sources/PorchCore/FamilyModels.swift:270)) accepts `https://helloporch.store/join#code=<64 hex>`, and `BedsideInvitation` accepts `/setup` and `/bedside`. An optional `server=` for non-default servers must be on an allow list. `porch://pair` and `porch://activate` keep working.
-- New family invites are built as `https` links ([FamilyModels.swift:288](ios/PorchCore/Sources/PorchCore/FamilyModels.swift:288)), with the share text above.
+- `FamilyInvitation` ([FamilyModels.swift](ios/PorchCore/Sources/PorchCore/FamilyModels.swift)) accepts `https://helloporch.store/join#code=<64 hex>`, and `BedsideInvitation` accepts `/setup`. A web link names no server: the app reads it as its own server (`PorchServerURL`, passed as `defaultOrigin`). An invitation for any other server keeps the porch:// form, so no allow list is needed. `porch://pair` and `porch://activate` keep working.
+- New family invites are `https` links for the app's own server, with the share text above. `create-bedside-invite.mjs` writes an `https` setup link the same way. App Review links stay porch://, which every build opens.
 - Codes stay after `#`, so they never reach server logs.
 - PorchCore tests cover both formats.
 
 ### 4.3 Pages
 
-All three read the fragment in a client component, clear it with `history.replaceState`, and are `noindex`. Google Analytics is left off them, so a code can't reach it in `page_location`: move them into a route group without the GA tag in [layout.tsx](app/layout.tsx).
+Both read the fragment in a client component, clear it with `history.replaceState`, and are `noindex` with no referrer. Google Analytics never loads on them: [Analytics.tsx](components/Analytics.tsx) leaves it out for their paths, so a code can't reach it.
 
-- **`/setup`** (the family's invitation): what they need, then **Get Porch** (TestFlight) and **Open setup in Porch** (`porch://activate?…`, built from the fragment). It also shows a QR code of the same link, for when it's opened on a computer.
+- **`/setup`** (the family's invitation): what they need, then **Get Porch** (TestFlight), **Open setup in Porch** (`porch://activate?…`, built from the fragment) and **Copy setup link** for the activation field. A QR code of the same link, for when it's opened on a computer, is left for later.
 - **`/join`** (a relative's invitation): **Get Porch**, then **Open invitation in Porch**, and **Copy invitation** for the existing paste field.
-- **`/bedside`** (replacing the bedside iPad, phase 6.2): like `/setup`, for a household that already exists.
+- The porch:// buttons also let a Porch from before this change open the invitation.
+- **`/bedside`** (replacing the bedside iPad, phase 6.2) comes with PR 8.
 
 ## Phase 5: setup in the app
 
@@ -422,12 +429,12 @@ Size: small.
 | --- | --- | --- |
 | 1 | Each household calls out from its own number; shared inbound trunk made with the first number; `numbers.ts`; number actions and snapshot fields; blocking on for new households; `provision-number.mjs` for Hainie and Bella Vista; tests. **Built** | – |
 | 2 | Spending guards: fallback destinations, daily call cap, voice ceiling, health check | – |
-| 3 | Universal links, `https` invites, `/setup`, `/join`, `/bedside` | – |
+| 3 | Universal links, `https` invites, `/setup`, `/join`; the number message fix. **Built** | – |
 | 4 | Keypad and settings backup | – |
 | 5 | Private invitations and the admin page: passkey sign-in, sessions, household list, invitations, and the Porches, System, Activity and Passkeys pages | 3 |
 | 6 | Welcome screen, setup flow, number step, Connect the phone, QR code, checklist, number display | 1, 3, 5 |
 | 7 | Delete this Porch, by a caregiver or on the admin page | 1, 4, 5 |
-| 8 | Replace the bedside with restore from backup; forgotten PIN | 3, 4, 5 |
+| 8 | Replace the bedside with restore from backup, including the `/bedside` link and page; forgotten PIN | 3, 4, 5 |
 | 9 | Daily check for offline and unfinished Porches | 5 |
 | 10 | When the driver is approved: the Cell2Jack TestFlight build for everyone, `PorchFamily` retired, docs, privacy, first invitations | all, and Apple |
 
@@ -435,11 +442,11 @@ PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; t
 
 ## Check early, before building on it
 
-- `fromNumber` with Twilio Termination for a number bought by the API. One real outgoing call from a second number answers it.
-- Whether the LiveKit inbound trunk needs each number listed, and its limit on numbers.
-- That a number bought with `VoiceUrl` set rings through voicemail mode end to end on the first call.
+- ~~`fromNumber` with Twilio Termination for a number bought by the API.~~ Works (Bella Vista, 2026-10-28).
+- LiveKit's limit on numbers per inbound trunk. Porch lists each number, which works.
+- ~~That a number bought with `VoiceUrl` set rings through voicemail mode end to end on the first call.~~ Works (Bella Vista, 2026-10-28).
 - Universal links in a TestFlight build, opened from Messages and from the Camera app.
-- Whether Google Analytics records `#` fragments on this site.
+- ~~Whether Google Analytics records `#` fragments on this site.~~ Moot: it never loads on invitation pages.
 - How large a keypad backup gets with twelve photos, to size the Redis record and the Blob uploads.
 - Where helloporch.store's DNS is managed, and that the calling project can take `admin.helloporch.store`.
 - Passkey sign-in with `@simplewebauthn/server` in Next.js 16 Server Actions, and the Proxy rewrite for `admin.helloporch.store`, on a preview deployment.

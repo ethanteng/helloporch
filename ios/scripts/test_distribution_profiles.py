@@ -23,7 +23,7 @@ def profile(driver=False):
             "application-identifier": TEAM + "." + (DRIVER_ID if driver else APP),
             "beta-reports-active": True, "get-task-allow": False,
             **({DRIVER: True, USB: [{"idVendor": 6790, "idProduct": 29987}]} if driver else
-               {"aps-environment": "production", COMMUNICATES: True})}}
+               {"aps-environment": "production", COMMUNICATES: True, "com.apple.developer.associated-domains": "*"})}}
 
 
 class DistributionProfileTests(unittest.TestCase):
@@ -45,6 +45,17 @@ class DistributionProfileTests(unittest.TestCase):
         del candidate["Entitlements"]["aps-environment"]
         with self.assertRaisesRegex(ValueError, "Push Notifications"):
             validate_profile(candidate, TEAM, APP, communicates=False)
+
+    def test_app_profile_needs_associated_domains_for_invitation_links(self):
+        candidate = profile()
+        del candidate["Entitlements"]["com.apple.developer.associated-domains"]
+        with self.assertRaisesRegex(ValueError, "Associated Domains"):
+            validate_profile(candidate, TEAM, APP, communicates=False)
+        candidate["Entitlements"]["com.apple.developer.associated-domains"] = ["applinks:example.com"]
+        with self.assertRaisesRegex(ValueError, "Associated Domains"):
+            validate_profile(candidate, TEAM, APP, communicates=False)
+        candidate["Entitlements"]["com.apple.developer.associated-domains"] = ["applinks:helloporch.store"]
+        validate_profile(candidate, TEAM, APP, communicates=False)
 
     def test_family_rejects_accidentally_embedded_driver(self):
         with tempfile.TemporaryDirectory() as folder:

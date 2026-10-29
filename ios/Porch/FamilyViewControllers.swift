@@ -208,7 +208,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
         guard task == nil else { return }
         do {
             guard let url = URL(string: link.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") else { throw FamilyInvitation.InvitationError.invalid }
-            let invite = try FamilyInvitation(url: url)
+            let invite = try FamilyInvitation(url: url, defaultOrigin: PorchDevice.defaultOrigin)
             join.isEnabled = false; view.endEditing(true)
             task = Task { [weak self] in
                 guard let self else { return }; defer { self.task = nil; self.join.isEnabled = true }
@@ -525,7 +525,10 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     private let inviteHint = PorchStyle.label("", size: 17)
     @objc private func finishedInvite() { navigationController?.popViewController(animated: true) }
     private func shareInvite(_ link: URL) {
-        let share = UIActivityViewController(activityItems: ["Join our Porch! This link works once, for 24 hours.", link], applicationActivities: nil)
+        // A web link opens Porch, or shows how to get it first.
+        let note = link.scheme == "https" ? "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It works once, for 24 hours."
+            : "Join our Porch! This link works once, for 24 hours."
+        let share = UIActivityViewController(activityItems: [note, link], applicationActivities: nil)
         share.popoverPresentationController?.sourceView = create
         share.popoverPresentationController?.sourceRect = create.bounds
         present(share, animated: true)
@@ -567,7 +570,7 @@ final class FamilyInviteViewController: CaregiverFormViewController {
                 guard let code = response.code, let invitationID = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
                 FamilyCoordinator.shared.update(response); self.onCreated?(invitationID, self.personName.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
                 self.onAdminChanged?(response.admin)
-                let link = FamilyInvitation.url(origin: credential.origin, code: code)
+                let link = FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin)
                 self.invitationLink = link; self.invitationExpiry = response.expiresAt ?? 0
                 self.personName.isEnabled = false; self.audio.isEnabled = false; self.video.isEnabled = false; self.caregiver.isEnabled = false
                 self.create.configuration?.title = "Share invitation again"

@@ -118,14 +118,14 @@ final class PorchContainerViewController: UIViewController {
     }
     func openInvitation(_ url: URL) {
         guard presentedViewController == nil, content?.presentedViewController == nil else { return }
-        if (try? BedsideInvitation(url: url)) != nil {
+        if (try? BedsideInvitation(url: url, defaultOrigin: PorchDevice.defaultOrigin)) != nil {
             guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This iPad is already set up. Open the activation link on the new iPad instead.", status: 409), on: self); return }
             do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
             PorchDevice.experience = .bedside
             DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup() }
             return
         }
-        guard (try? FamilyInvitation(url: url)) != nil else { return }
+        guard (try? FamilyInvitation(url: url, defaultOrigin: PorchDevice.defaultOrigin)) != nil else { return }
         PorchDevice.experience = .family
         guard let nav = content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
         nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
@@ -225,7 +225,7 @@ final class CaregiverPINViewController: CaregiverFormViewController {
                     _ = try await FamilyService(profile).send(self.creating ? "initializeCaregiverPIN" : "verifyPIN", self.creating ? ["pin": value] : [:], pin: self.creating ? nil : value)
                 } else {
                     let linkText = self.activation.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    let invitation = try linkText.isEmpty ? nil : BedsideInvitation(url: URL(string: linkText) ?? URL(fileURLWithPath: "/"))
+                    let invitation = try linkText.isEmpty ? nil : BedsideInvitation(url: URL(string: linkText) ?? URL(fileURLWithPath: "/"), defaultOrigin: PorchDevice.defaultOrigin)
                     let origin = invitation?.origin ?? URL(string: NativeCallSettings.savedURL) ?? PorchDevice.defaultOrigin
                     let pending = try PorchDevice.pending(role: .bedside, origin: origin, invitation: invitation?.code ?? "")
                     var registration = PorchDevice.registration(pending)

@@ -334,11 +334,38 @@ public struct FamilyCredential: Codable {
         self.origin = origin; self.credential = credential; self.role = role
     }
 }
+/// Invitation links on Porch's website: https://helloporch.store/join#code=… for a family member and /setup#code=… for a
+/// new bedside. They open Porch as universal links, or show how to get it, and keep the code after `#` so it never
+/// reaches a server's logs. A web link names no server: it's for the one the app is built with (`defaultOrigin`), and an
+/// invitation for any other server keeps the porch:// form.
+public enum PorchWebLinks {
+    public static let host = "helloporch.store"
+    static func code(_ url: URL, path: String) -> String? {
+        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false), parts.scheme == "https",
+              let host = parts.host?.lowercased(), host == Self.host || host == "www.\(Self.host)",
+              parts.path == path || parts.path == path + "/", parts.user == nil, parts.password == nil, parts.port == nil,
+              parts.query == nil, let fragment = parts.percentEncodedFragment,
+              let items = URLComponents(string: "?" + fragment)?.queryItems, items.count == 1, items[0].name == "code",
+              let code = items[0].value, code.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else { return nil }
+        return code
+    }
+    static func sameServer(_ a: URL, _ b: URL) -> Bool {
+        a.scheme?.lowercased() == b.scheme?.lowercased() && a.host?.lowercased() == b.host?.lowercased() && a.port == b.port
+    }
+}
+
 public struct FamilyInvitation {
     public let origin: URL
     public let code: String
-    public init(url: URL) throws { try self.init(url: url, host: "pair") }
-    fileprivate init(url: URL, host: String) throws {
+    /// `defaultOrigin` is the server a web link means. Without it, only porch:// links are accepted.
+    public init(url: URL, defaultOrigin: URL? = nil) throws { try self.init(url: url, host: "pair", webPath: "/join", defaultOrigin: defaultOrigin) }
+    fileprivate init(url: URL, host: String, webPath: String, defaultOrigin: URL?) throws {
+        if url.scheme?.lowercased() == "https" {
+            guard let defaultOrigin, let code = PorchWebLinks.code(url, path: webPath) else { throw InvitationError.invalid }
+            self.origin = try NativeCallServer(url: defaultOrigin.absoluteString, accessCode: "invitation-validation-only").baseURL
+            self.code = code
+            return
+        }
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
               parts.scheme == "porch", parts.host == host, parts.path.isEmpty,
               parts.user == nil, parts.password == nil, parts.port == nil, parts.fragment == nil,
@@ -351,7 +378,12 @@ public struct FamilyInvitation {
         self.origin = try NativeCallServer(url: server, accessCode: "invitation-validation-only").baseURL
         self.code = code
     }
-    public static func url(origin: URL, code: String) -> URL {
+    /// The link to share: a web link for the app's own server (`defaultOrigin`), which opens Porch or shows how to get it,
+    /// and porch:// for any other.
+    public static func url(origin: URL, code: String, defaultOrigin: URL? = nil) -> URL {
+        if let defaultOrigin, PorchWebLinks.sameServer(origin, defaultOrigin) {
+            return URL(string: "https://\(PorchWebLinks.host)/join#code=\(code)")!
+        }
         var parts = URLComponents()
         parts.scheme = "porch"; parts.host = "pair"
         parts.queryItems = [URLQueryItem(name: "server", value: origin.absoluteString), URLQueryItem(name: "code", value: code)]
@@ -366,8 +398,8 @@ public struct FamilyInvitation {
 public struct BedsideInvitation {
     public let origin: URL
     public let code: String
-    public init(url: URL) throws {
-        let invitation = try FamilyInvitation(url: url, host: "activate")
+    public init(url: URL, defaultOrigin: URL? = nil) throws {
+        let invitation = try FamilyInvitation(url: url, host: "activate", webPath: "/setup", defaultOrigin: defaultOrigin)
         origin = invitation.origin; code = invitation.code
     }
 }
