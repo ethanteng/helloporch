@@ -1,0 +1,121 @@
+.page {
+  min-height: 100dvh;
+  padding: 0 16px 48px;
+}
+
+.header {
+  display: flex;
+  justify-content: center;
+  padding: clamp(20px, 4vw, 32px) 0;
+}
+
+.card {
+  max-width: 640px;
+  margin-inline: auto;
+  padding: clamp(24px, 5vw, 44px);
+  border-radius: clamp(24px, 3vw, 32px);
+  background: var(--paper);
+  box-shadow: 0 24px 48px -32px oklch(0.3 0.05 50 / 0.45);
+}
+
+.title {
+  margin: 0 0 12px;
+  font: 400 clamp(34px, 6vw, 52px) / 1.05 var(--serif);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 0;
+  font: 400 clamp(18px, 2vw, 20px) / 1.55 var(--sans);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.needs,
+.steps h2 {
+  margin-top: 28px;
+}
+
+.needs h2,
+.steps h2 {
+  margin-bottom: 8px;
+  font: 600 20px / 1.3 var(--sans);
+}
+
+.needs ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  font: 400 18px / 1.5 var(--sans);
+}
+
+.steps {
+  margin: 0;
+  padding-left: 22px;
+  font: 400 18px / 1.5 var(--sans);
+}
+
+.steps li::marker {
+  font-weight: 600;
+}
+
+.steps p {
+  margin: 0 0 14px;
+  color: var(--muted-2);
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font: 600 18px / 1.2 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--tomato-deep);
+  color: #fff;
+}
+
+.primary[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.secondary {
+  border: 2px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 4px;
+}
+
+.note {
+  font-style: italic;
+}
+
+.problem {
+  margin-top: 28px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--honey);
+  font: 500 18px / 1.5 var(--sans);
+}

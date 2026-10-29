@@ -47,11 +47,21 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
         self.window = window
         Cell2JackKeypad.shared.root = window.rootViewController
         Cell2JackKeypad.shared.windowScene = scene
-        if let url = options.urlContexts.first?.url { (window.rootViewController as? PorchContainerViewController)?.openInvitation(url) }
+        if let url = options.urlContexts.first?.url ?? options.userActivities.lazy.compactMap(Self.webLink).first {
+            (window.rootViewController as? PorchContainerViewController)?.openInvitation(url)
+        }
     }
 
     func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
         if let url = contexts.first?.url { (window?.rootViewController as? PorchContainerViewController)?.openInvitation(url) }
+    }
+
+    /// An invitation link from helloporch.store, tapped in Messages or scanned with the camera (see `PorchWebLinks`).
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        if let url = Self.webLink(userActivity) { (window?.rootViewController as? PorchContainerViewController)?.openInvitation(url) }
+    }
+    private static func webLink(_ activity: NSUserActivity) -> URL? {
+        activity.activityType == NSUserActivityTypeBrowsingWeb ? activity.webpageURL : nil
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {

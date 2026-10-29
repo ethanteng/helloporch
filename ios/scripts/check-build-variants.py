@@ -58,7 +58,12 @@ for config in objects[family["buildConfigurationList"]]["buildConfigurations"]:
     assert "Cell2JackBridge.m" in settings["EXCLUDED_SOURCE_FILE_NAMES"]
     assert "Cell2JackLogCapture.swift" in settings["EXCLUDED_SOURCE_FILE_NAMES"]
     entitlements = plistlib.loads((ios / settings["CODE_SIGN_ENTITLEMENTS"]).read_bytes())
-    assert entitlements == {"aps-environment": "$(APS_ENVIRONMENT)"}
+    assert entitlements == {"aps-environment": "$(APS_ENVIRONMENT)",
+                            "com.apple.developer.associated-domains": ["applinks:helloporch.store"]}
+for config in objects[normal["buildConfigurationList"]]["buildConfigurations"]:
+    settings = objects[config]["buildSettings"]
+    entitlements = plistlib.loads((ios / settings["CODE_SIGN_ENTITLEMENTS"]).read_bytes())
+    assert entitlements.get("com.apple.developer.associated-domains") == ["applinks:helloporch.store"], entitlements
 
 def build_setting(target_name, key):
     values = [objects[config]["buildSettings"].get(key)

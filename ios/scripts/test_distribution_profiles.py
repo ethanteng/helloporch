@@ -23,7 +23,7 @@ def profile(driver=False):
             "application-identifier": TEAM + "." + (DRIVER_ID if driver else APP),
             "beta-reports-active": True, "get-task-allow": False,
             **({DRIVER: True, USB: [{"idVendor": 6790, "idProduct": 29987}]} if driver else
-               {"aps-environment": "production", COMMUNICATES: True})}}
+               {"aps-environment": "production", COMMUNICATES: True, "com.apple.developer.associated-domains": "*"})}}
 
 
 class DistributionProfileTests(unittest.TestCase):
@@ -45,6 +45,17 @@ class DistributionProfileTests(unittest.TestCase):
         del candidate["Entitlements"]["aps-environment"]
         with self.assertRaisesRegex(ValueError, "Push Notifications"):
             validate_profile(candidate, TEAM, APP, communicates=False)
+
+    def test_app_profile_needs_associated_domains_for_invitation_links(self):
+        candidate = profile()
+        del candidate["Entitlements"]["com.apple.developer.associated-domains"]
+        with self.assertRaisesRegex(ValueError, "Associated Domains"):
+            validate_profile(candidate, TEAM, APP, communicates=False)
+        candidate["Entitlements"]["com.apple.developer.associated-domains"] = ["applinks:example.com"]
+        with self.assertRaisesRegex(ValueError, "Associated Domains"):
+            validate_profile(candidate, TEAM, APP, communicates=False)
+        candidate["Entitlements"]["com.apple.developer.associated-domains"] = ["applinks:helloporch.store"]
+        validate_profile(candidate, TEAM, APP, communicates=False)
 
     def test_family_rejects_accidentally_embedded_driver(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -75,8 +86,8 @@ class DistributionProfileTests(unittest.TestCase):
 
     def test_family_signed_bundle_checks_signer_and_forbids_driver_entitlements(self):
         candidate = profile()
-        for driver_entitlement in [False, True]:
-            with self.subTest(driver_entitlement=driver_entitlement), tempfile.TemporaryDirectory() as folder:
+        for driver_entitlement, links in [(False, True), (True, True), (False, False)]:
+            with self.subTest(driver_entitlement=driver_entitlement, links=links), tempfile.TemporaryDirectory() as folder:
                 bundle = Path(folder)
                 (bundle / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": APP, "CFBundleVersion": "1"}))
                 (bundle / "Settings.bundle").mkdir()
@@ -86,6 +97,8 @@ class DistributionProfileTests(unittest.TestCase):
                                 "com.apple.developer.team-identifier": TEAM, "aps-environment": "production"}
                 if driver_entitlement:
                     entitlements[COMMUNICATES] = True
+                if links:
+                    entitlements["com.apple.developer.associated-domains"] = ["applinks:helloporch.store"]
                 def codesign(command, **kwargs):
                     for value in command:
                         if value.startswith("--extract-certificates="):
@@ -95,6 +108,9 @@ class DistributionProfileTests(unittest.TestCase):
                      patch("distribution_profiles.subprocess.run", side_effect=codesign):
                     if driver_entitlement:
                         with self.assertRaisesRegex(ValueError, "must not request DriverKit"):
+                            verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")
+                    elif not links:
+                        with self.assertRaisesRegex(ValueError, "Associated Domains"):
                             verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")
                     else:
                         result = verify_bundle(bundle, TEAM, APP, DRIVER_ID, "family")

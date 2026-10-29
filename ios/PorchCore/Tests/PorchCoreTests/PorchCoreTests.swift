@@ -386,6 +386,28 @@ final class FamilyModelTests: XCTestCase {
             XCTAssertThrowsError(try FamilyInvitation(url: URL(string: raw)!))
         }
     }
+    func testWebInvitationsAreForTheAppsOwnServerAndKeepTheirCodeAfterTheHash() throws {
+        let server = URL(string: "https://porch.example")!, code = String(repeating: "b", count: 64)
+        let link = FamilyInvitation.url(origin: server, code: code, defaultOrigin: server)
+        XCTAssertEqual(link.absoluteString, "https://helloporch.store/join#code=\(code)")
+        let parsed = try FamilyInvitation(url: link, defaultOrigin: server)
+        XCTAssertEqual(parsed.origin, server); XCTAssertEqual(parsed.code, code)
+        // Another server keeps the porch:// form, which names it.
+        XCTAssertEqual(FamilyInvitation.url(origin: URL(string: "https://other.example")!, code: code, defaultOrigin: server).scheme, "porch")
+        // Without the app's own server, a web link can't be read.
+        XCTAssertThrowsError(try FamilyInvitation(url: link))
+        XCTAssertEqual(try FamilyInvitation(url: URL(string: "https://www.helloporch.store/join/#code=\(code)")!, defaultOrigin: server).code, code)
+        for raw in ["https://helloporch.store/join?code=\(code)", "https://helloporch.store/join#code=short", "https://evil.example/join#code=\(code)",
+                    "http://helloporch.store/join#code=\(code)", "https://helloporch.store/setup#code=\(code)", "https://helloporch.store/join#code=\(code)&server=https://evil.example",
+                    "https://helloporch.store:8443/join#code=\(code)", "https://user@helloporch.store/join#code=\(code)", "https://helloporch.store/join"] {
+            XCTAssertThrowsError(try FamilyInvitation(url: URL(string: raw)!, defaultOrigin: server), raw)
+        }
+        // A bedside's setup link is its own kind.
+        let setup = URL(string: "https://helloporch.store/setup#code=\(code)")!
+        XCTAssertEqual(try BedsideInvitation(url: setup, defaultOrigin: server).origin, server)
+        XCTAssertThrowsError(try BedsideInvitation(url: link, defaultOrigin: server))
+        XCTAssertThrowsError(try FamilyInvitation(url: setup, defaultOrigin: server))
+    }
     func testEachFamilyKnowsThisPhoneByItsOwnDeviceID() {
         let credential = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "0b3f1f4e-0000-4000-8000-000000000001.\(String(repeating: "c", count: 64))", role: .family)
         XCTAssertEqual(credential.deviceID, "0b3f1f4e-0000-4000-8000-000000000001")

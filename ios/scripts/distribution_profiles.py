@@ -12,6 +12,7 @@ from pathlib import Path
 DRIVER = "com.apple.developer.driverkit"
 USB = DRIVER + ".transport.usb"
 COMMUNICATES = DRIVER + ".communicates-with-drivers"
+ASSOCIATED_DOMAINS = "com.apple.developer.associated-domains"
 
 
 def require(condition, message):
@@ -44,6 +45,10 @@ def validate_profile(profile, team, bundle, driver=False, now=None, communicates
             "Driver: profile lacks USB distribution permission for Cell2Jack (VID 0x1A86, PID 0x7523)")
     else:
         require(ent.get("aps-environment") == "production", "App: production Push Notifications are missing")
+        # Invitation links from helloporch.store open the app. App Store profiles grant the capability as "*".
+        domains = ent.get(ASSOCIATED_DOMAINS)
+        require(domains == "*" or (isinstance(domains, list) and "applinks:helloporch.store" in domains),
+                "App: Associated Domains is missing; enable it for the App ID, then regenerate the profile")
         if communicates:
             require(ent.get(COMMUNICATES) is True, "App: DriverKit Communicates with Drivers is missing")
     return {"name": profile["Name"], "uuid": profile["UUID"], "bundleID": bundle,
@@ -92,6 +97,9 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
         require(signed_id == f"{team}.{identifier}", "Signature has the wrong application identifier")
         if index == 0:
             require(ent.get("aps-environment") == "production", "App signature is missing production push")
+            domains = ent.get(ASSOCIATED_DOMAINS)
+            require(isinstance(domains, list) and "applinks:helloporch.store" in domains,
+                    "App signature is missing Associated Domains for helloporch.store")
             if family:
                 require(not any(key.startswith(DRIVER) for key in ent),
                         "Family signature must not request DriverKit entitlements")

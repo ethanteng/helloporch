@@ -11,7 +11,7 @@ A bedside sets up its number from caregiver mode with the `assignPhoneNumber` ac
 1. Buys a local US number from Twilio, with its voice webhook set to `/api/calls/inbound/voice` on `PORCH_SERVER_ORIGIN`. The number works in [voicemail mode](#voicemail) from its first call.
 2. Adds it to **Porch inbound (shared)**, one LiveKit inbound trunk for every number Porch buys. The first number creates the trunk, with the same settings as `configure-inbound.mjs --voicemail`: the digest login, the forwarded caller-verification header, a 120-second ringing cap and a 30-minute limit. It also creates one individual dispatch rule for it. Like the setup script, Porch refuses while a dispatch rule without trunks exists.
 3. Adds it to the outbound trunk, so the household's phone fallback and the numbers caregivers [add to a call](FAMILY-SETUP.md#adding-a-phone-number-to-a-call) show it as caller ID. Calling back rings that bedside.
-4. Saves the `phone-number:` route, and the number on the household. Everyone in the family sees it in Porch.
+4. Saves the `phone-number:` route, and the number on the household. Every family member's app receives it as `porchNumber`; the app will show it once the setup screens are built. Until then, find it in the Twilio console under Phone Numbers, named "Porch" and the household ID.
 
 Each step can be repeated:
 - **If Twilio or LiveKit fails,** the bedside's poll tries again after a minute, then waits twice as long each time, up to an hour. It picks up where it stopped.

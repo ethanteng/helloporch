@@ -4,6 +4,8 @@ import PorchCore
 final class PorchContainerViewController: UIViewController {
     private var content: UIViewController?
     private var incomingID: String?
+    /// An invitation that switched modes, opened once the new screen is in place.
+    private var afterSwitch: (() -> Void)?
     override var childForStatusBarHidden: UIViewController? { content }
     override var childForStatusBarStyle: UIViewController? { content }
     override func viewDidLoad() {
@@ -52,6 +54,7 @@ final class PorchContainerViewController: UIViewController {
                 self.installExperience(); self.incomingID = nil
                 Cell2JackKeypad.shared.refresh()
                 if UIApplication.shared.applicationState == .active { FamilyCoordinator.shared.start() }
+                let opening = self.afterSwitch; self.afterSwitch = nil; opening?()
             }
             // Stop the bedside camera before the clock is removed and the next screen starts a call.
             if let clock = self.content as? CallViewController { clock.releaseCamera(then: swap) } else { swap() }
@@ -133,18 +136,33 @@ final class PorchContainerViewController: UIViewController {
         else { show() }
     }
     func openInvitation(_ url: URL) {
-        guard presentedViewController == nil, content?.presentedViewController == nil else { return }
-        if (try? BedsideInvitation(url: url)) != nil {
-            guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This iPad is already set up. Open the activation link on the new iPad instead.", status: 409), on: self); return }
-            do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
-            PorchDevice.experience = .bedside
-            DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup() }
+        let bedside = (try? BedsideInvitation(url: url, defaultOrigin: PorchDevice.defaultOrigin)) != nil
+        guard bedside || (try? FamilyInvitation(url: url, defaultOrigin: PorchDevice.defaultOrigin)) != nil else { return }
+        // Something is on screen, such as a call or caregiver mode. Say so rather than drop the link.
+        if let open = presentedViewController ?? content?.presentedViewController {
+            var top = open; while let next = top.presentedViewController { top = next }
+            showPorchError(FamilyServiceError(message: "Finish what's open in Porch, then tap the invitation link again.", status: 409), on: top)
             return
         }
-        guard (try? FamilyInvitation(url: url)) != nil else { return }
-        PorchDevice.experience = .family
-        guard let nav = content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
-        nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
+        if bedside {
+            guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This iPad is already set up. Open the activation link on the new iPad instead.", status: 409), on: self); return }
+            do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
+            // The clock presents setup once its camera has stopped, on the next turn so a link that launched Porch
+            // finds the clock in its window.
+            showExperience(.bedside) { DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup() } }
+            return
+        }
+        showExperience(.family) { [weak self] in
+            guard let nav = self?.content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
+            nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
+        }
+    }
+    /// Runs `then` with `experience` on screen. Switching rebuilds the screen once the bedside camera has stopped,
+    /// so `then` waits for that; already in that mode, nothing is rebuilt.
+    private func showExperience(_ experience: PorchExperience, then: @escaping () -> Void) {
+        guard PorchDevice.experience != experience else { then(); return }
+        afterSwitch = then
+        PorchDevice.experience = experience
     }
 }
 
@@ -241,7 +259,7 @@ final class CaregiverPINViewController: CaregiverFormViewController {
                     _ = try await FamilyService(profile).send(self.creating ? "initializeCaregiverPIN" : "verifyPIN", self.creating ? ["pin": value] : [:], pin: self.creating ? nil : value)
                 } else {
                     let linkText = self.activation.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    let invitation = try linkText.isEmpty ? nil : BedsideInvitation(url: URL(string: linkText) ?? URL(fileURLWithPath: "/"))
+                    let invitation = try linkText.isEmpty ? nil : BedsideInvitation(url: URL(string: linkText) ?? URL(fileURLWithPath: "/"), defaultOrigin: PorchDevice.defaultOrigin)
                     let origin = invitation?.origin ?? URL(string: NativeCallSettings.savedURL) ?? PorchDevice.defaultOrigin
                     let pending = try PorchDevice.pending(role: .bedside, origin: origin, invitation: invitation?.code ?? "")
                     var registration = PorchDevice.registration(pending)
