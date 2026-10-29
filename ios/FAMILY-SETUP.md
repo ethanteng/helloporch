@@ -29,7 +29,7 @@ Each family is its own pairing: the families never learn about each other, and e
 
 - **Home screen.** Each family has its own section under its name, with the bedside's availability, call and drop-in buttons, messages and held voicemail. With one family, the screen looks as it always has.
 - **Calls.** Any family can ring the phone. The call screen and CallKit show the caller with their family, such as "Mom · Sarah's parents". The phone takes one call at a time: if another family calls during a call, including one the phone made, it shows there as missed. While another family's call rings, the call buttons wait for it.
-- **Messages.** Tapping a notification opens the thread of the family it came from, and each family's notifications group separately. The notification's text comes from the server, so it doesn't name the family. The app badge counts unplayed messages from every family once Porch has checked in. Until then, a new notification's badge counts only its own family.
+- **Messages.** Tapping a notification opens the thread of the family it came from, and each family's notifications group separately. The notification's text comes from the server, so it doesn't name the family. The app badge counts unplayed messages from every family once Porch has checked in with each of them. Until then, a new notification's badge counts only its own family.
 - **Settings.** Choose a family at the top to see and change your name, photo and caregiver mode there, rename it on this phone, or **Leave** it. Caregiver mode is for one family at a time and locks when you switch.
 - **Removed by a family.** Its section says so, with **Remove from this phone**, and no longer shows its calls or messages. The other families keep working.
 

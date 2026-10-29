@@ -118,15 +118,16 @@ extension Notification.Name {
                 try Task.checkCancellation()
                 let enabled = PorchDevice.experience == experience && microphone == .authorized
                 let values: [String: Any] = enabled ? ["token": token, "environment": environment] : ["token": NSNull()]
-                var ready = true
+                // Ready once a family has taken the registration, and every other family that still has this phone too.
+                var ready: Bool?
                 for profile in profiles {
-                    do { ready = try await FamilyService(profile).send("registerVoIP", values).pushReady == true && ready }
+                    do { let accepted = try await FamilyService(profile).send("registerVoIP", values).pushReady == true; ready = (ready ?? true) && accepted }
                     // A family that removed this phone can't ring it anyway; the others still can.
                     catch let failure as FamilyServiceError where failure.status == 401 {}
                     catch { ready = false }
                 }
                 try Task.checkCancellation()
-                pushReady = ready
+                pushReady = ready ?? false
             } catch { if !Task.isCancelled { pushReady = false } }
             changed()
         }

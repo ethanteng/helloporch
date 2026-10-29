@@ -815,11 +815,13 @@ extension Notification.Name {
             }
         }
     }
-    /// The badge counts unplayed messages from every family.
+    /// The badge counts unplayed messages from every family, once each has checked in or failed to (see `MessageBadge`).
+    /// A family that removed this phone counts none: its messages can't be played here any more.
     @objc private func familyChanged() {
-        let states = FamilyCoordinator.shared.links.compactMap(\.state).filter { $0.me.role == .family }
-        guard PorchDevice.experience == .family, !states.isEmpty else { return }
-        let count = states.reduce(0) { $0 + ($1.newMessages ?? 0) }
+        let unplayed = FamilyCoordinator.shared.links.filter { $0.credential.role == .family }.map { link -> Int? in
+            link.accessRemoved ? 0 : link.state.map { $0.newMessages ?? 0 } ?? (link.error != nil ? 0 : nil)
+        }
+        guard PorchDevice.experience == .family, let count = MessageBadge.count(unplayed) else { return }
         if #available(iOS 16.0, *) { UNUserNotificationCenter.current().setBadgeCount(count) }
         else { UIApplication.shared.applicationIconBadgeNumber = count }
     }

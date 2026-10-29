@@ -328,6 +328,13 @@ final class FamilyPairingViewController: CaregiverFormViewController {
                     let response = try await FamilyService(origin: invite.origin).send("claimInvite", registration)
                     guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
                     let joined = FamilyCredential(origin: invite.origin, credential: token, role: .family)
+                    // A pairing that hasn't checked in since this phone began remembering households doesn't say which
+                    // one it's in yet. Ask it once, so a new invitation from that family still replaces it.
+                    for family in families where family.deviceID != joined.deviceID && family.origin == joined.origin
+                        && FamilyCoordinator.shared.state(for: family) == nil && PorchDevice.householdID(family) == nil {
+                        let values = PollOrder.next(["available": FamilyCoordinator.shared.canReceive()])
+                        if let state = try? await FamilyService(family).send("poll", values).state { PorchDevice.noteHousehold(state, for: family) }
+                    }
                     // A new invitation from a family this phone is already in replaces its old pairing there, as it
                     // always has. It leaves only once the family has accepted this phone again.
                     let replaced = families.filter { $0.deviceID != joined.deviceID && $0.origin == joined.origin && response.state?.householdID != nil
