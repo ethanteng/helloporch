@@ -90,7 +90,7 @@ The site runs at http://localhost:3000. Fill in only the services you need. Neve
 | Phone numbers | `PORCH_SERVER_ORIGIN`, `PORCH_MAX_PHONE_NUMBERS` (nothing is bought without it), optional `PORCH_INBOUND_NUMBER` |
 | ElevenLabs | `ELEVENLABS_API_KEY` |
 | Server secrets | `PORCH_CONTACT_SETUP_CODE` (signing and recovery secret), legacy `PORCH_CALL_ACCESS_CODE` and `PORCH_PHONE_NUMBERS` |
-| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL` |
+| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL` |
 
 To try the apps against a local server without real families, `scripts/seed-family-preview.mjs` creates sample devices in an isolated store prefix ([details](ios/FAMILY-SETUP.md#verify)).
 
@@ -156,13 +156,14 @@ The site at helloporch.store has the home page, [features](https://helloporch.st
 - **Waitlist.** Both waitlist forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer goes in the subscriber's `porch_who` field. Each request is also logged as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those logs only briefly, so MailerLite is the record.
 - **3-way calling.** The features page plays a 24-second film drawn from the app's 3-way calling screens, with the faces from `public/features/three-way/mom.jpg` and `ethan.jpg`. To remake it, run `npm run dev`, then `node scripts/render-three-way-film.mjs film.mp4` (it needs macOS and Google Chrome). Upload the file to the clips' Blob store under a new name, since browsers cache Blob files by name, and point `FILM` in `app/features/ThreeWayCalling.tsx` at it.
 - **Demo video.** It defaults to the v2 file on Vercel Blob. To change it, set `NEXT_PUBLIC_DEMO_VIDEO_URL` to the new `.mp4` URL and redeploy. The value is built into the page.
-- **Analytics.** Google Analytics runs only on production deployments.
+- **Invitations.** `/join` and `/setup` are the pages for a family invitation and a new bedside. The one-time code stays after `#`. Set `NEXT_PUBLIC_TESTFLIGHT_URL` on the website project so those pages can link to TestFlight. Without it, they ask the sender for that link.
+- **Analytics.** Google Analytics runs only on production deployments, and those invitation pages never load it, so a code in the page address stays off the report.
 
 ## Status
 
 - **Pilot.** Families join by invitation. Bedsides that use Cell2Jack run development builds installed from a Mac, while family devices and other bedsides use TestFlight.
 - **Waiting on Apple.** A TestFlight build with the Cell2Jack driver needs Apple's DriverKit USB entitlement, which was requested on 2026-10-18. App Review access is described in [ios/README.md](ios/README.md#app-review-access-and-resubmission).
-- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). So far, only per-household phone numbers are built. Porch won't open to families beyond the pilot until Apple approves the driver.
+- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). Per-household phone numbers and the helloporch.store invitation links are built. Porch won't open to families beyond the pilot until Apple approves the driver.
 
 ## Legacy
 
