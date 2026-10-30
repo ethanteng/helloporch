@@ -1,6 +1,6 @@
 # Self-serve onboarding plan
 
-A family you invite should be able to go from your private link to a working Porch on their own: a bedside iPad with its Cell2Jack phone and its own phone number, the caregiver's phone paired, and their relatives invited. Drafted 2026-10-24, with the decisions below folded in the same day. Nothing here is built yet.
+A family you invite should be able to go from your private link to a working Porch on their own: a bedside iPad with its Cell2Jack phone and its own phone number, the caregiver's phone paired, and their relatives invited. Drafted 2026-10-24, with the decisions below folded in the same day. What's built so far is marked in [Order of pull requests](#order-of-pull-requests).
 
 ## Requirements
 
@@ -23,7 +23,7 @@ Settled on 2026-10-24.
 | Invitation lifetime | 14 days |
 | TestFlight builds after the driver is approved | One `Porch` build with the driver for every device; `PorchFamily` retires |
 | Offline households | Keep the number until a caregiver or the administrator deletes the household. Nothing is deleted or released automatically |
-| Administration | A protected admin page at `admin.helloporch.store`, signed in with a passkey, for use from a computer. Nothing for the administrator in the phone app |
+| Administration | A protected admin page at `admin.helloporch.store`, signed in with a password, for use from a computer. Nothing for the administrator in the phone app. A password replaced the planned passkey on 2026-10-29 |
 | Keypad backup | Yes. The bedside keeps a copy of its keypad and settings on the server, restored on a replacement iPad (phase 6) |
 | Unknown callers | Blocked by default on new households |
 | Area code | Suggested from the iPad's location, and can be changed |
@@ -50,7 +50,7 @@ Problems that appear as soon as there's a second real family:
 
 ## What everyone experiences
 
-**You**, on a computer: `https://admin.helloporch.store`, signed in with your passkey (Touch ID on the Mac).
+**You**, on a computer: `https://admin.helloporch.store`, signed in with the admin password.
 
 - **Invite a new family:** type who it's for, such as "Lee family". The page shows the link with **Copy link** and **Copy message**: "Here's your private link to set up Porch. Open it on the iPad that will stay with your loved one: https://helloporch.store/setup#…". Send it by text or email.
 - **Invitations:** each shows as waiting, set up, expired or cancelled.
@@ -121,7 +121,7 @@ None of this repeats per family.
 **Admin page** (phase 2)
 - In Vercel, add `admin.helloporch.store` to the calling project (`porch-calling-prototype`), with its DNS record. The admin page runs there because Redis, Twilio and LiveKit are already set up in that project; the website project has none of them.
 - Set `PORCH_ADMIN_ENABLED=1` in the calling project only, so the website project never serves the admin page.
-- Run a new `scripts/admin-setup-link.mjs` once with the recovery secret. It writes a private one-use link, valid for an hour, to register your passkey. Run it again only if every passkey is lost.
+- Run `node scripts/admin-password.mjs` once and save what it prints as `PORCH_ADMIN_PASSWORD_HASH`, a Sensitive variable in the calling project, then redeploy. Keep the password in your password manager. Running it again changes the password, which signs out every session.
 
 ## Phase 0: the Cell2Jack build for everyone (when Apple approves)
 
@@ -228,29 +228,30 @@ Size: medium to large. This replaces the recovery-secret script for new families
 - The `/admin` routes answer 404 on any other host, and on any deployment without `PORCH_ADMIN_ENABLED`, which includes the website project.
 - Every admin response is `noindex` and `Cache-Control: no-store`, with a content security policy that allows no third-party scripts and `frame-ancestors 'none'`.
 
-### 2.2 Signing in with a passkey
+### 2.2 Signing in with a password
 
-- **Passkeys (WebAuthn),** with `@simplewebauthn/server` and its browser package, rather than writing the signature and CBOR checks by hand. The relying party is `admin.helloporch.store`, and user verification is required, so it's Touch ID or the device passcode every time. Passkeys sync through iCloud Keychain, so a phone works too if ever needed.
-- **The first passkey** comes from the one-use link `admin-setup-link.mjs` writes. More can be added from the admin page while signed in, and removed, except the last one.
-- **Sessions** are stored in Redis, as the Next.js guide recommends, not just in a signed cookie:
-  - a random session ID saved as `admin-session:<hash>`
+- **A password** you keep in your password manager. Porch keeps only its scrypt hash, in `PORCH_ADMIN_PASSWORD_HASH`, made by `scripts/admin-password.mjs` ([password.ts](lib/admin/password.ts)). It needs at least 15 characters. Changing it signs out every session.
+- **Sessions** are stored in Redis, as the Next.js guide recommends, not just in a signed cookie ([auth.ts](lib/admin/auth.ts)):
+  - a random session ID saved by its hash, as `admin-session:<hash>`
   - a 12-hour lifetime
   - a `__Host-` cookie that's HttpOnly, Secure and SameSite=Strict
 
-  **Sign out** deletes the session, and **Sign out everywhere** deletes them all.
-- **Rate limits:** sign-in attempts are limited per IP address.
-- **Asking again for risky actions:** deleting a Porch, allowing a PIN reset and making a bedside link ask for the passkey again. Deleting also needs the Porch's name typed.
-- **Checks on every action:** changes go through Server Actions, which Next.js only accepts from the same host. Each Server Action and each page also checks the session itself, since the guide treats Proxy checks as optimistic only.
-- **Activity log:** `admin-log` in Redis keeps the last 500 entries: sign-ins, passkeys added or removed, invitations made or cancelled, deletions, PIN-reset allowances and bedside links.
+  **Sign out** ends the session, and **Sign out everywhere** ends them all.
+- **Rate limits:** ten wrong passwords pause sign-in from that address for 15 minutes, and a hundred from anywhere pause it everywhere for an hour. A paused sign-in doesn't check the password, so it tells an attacker nothing.
+- **Asking again for risky actions:** deleting a Porch, allowing a PIN reset and making a bedside link ask for the password again, with the same limits. Deleting also needs the Porch's name typed. These come with PRs 7 and 8.
+- **Checks on every action:** changes go through Server Actions, which Next.js only accepts from the same host. Each Server Action and each page also checks the session itself, since the guide treats Proxy checks as optimistic only. Every admin function takes the session, and refuses one that sign-in didn't make.
+- **Activity log:** `admin-log` in Redis keeps the last 500 entries: sign-ins and sign-outs, sign-in pauses, invitations made or cancelled, and later deletions, PIN-reset allowances and bedside links.
+
+**Status:** built in PR 5 on the branch `claude/porch-admin-page`. The website's pages moved into `app/(site)/` so the admin page could have its own root layout; their addresses are the same. Without a top-level layout, an address that matches nothing gets Next.js's plain 404 page.
 
 ### 2.3 Pages
 
 - **Invitations:** a form for the label, then the link with **Copy link** and **Copy message**.
   - The link appears only once, since Porch keeps only a hash of it. If it's lost, **Cancel** it and make a new one.
   - The list shows each invitation's label, state, expiry and household once set up. Waiting ones have **Cancel**; expired ones have **Send again**, which makes a new link.
-- **Porches:** a table of every household, and a page for each with **Delete this Porch** (6.1), **New bedside link** (6.2) and **Allow a PIN reset** (6.3).
-- **System:** numbers in use against `PORCH_MAX_PHONE_NUMBERS`, natural-voice characters this month against the ceiling, and the result of the health check.
-- **Activity** and **Passkeys.**
+- **Porches:** a table of every household. A page for each, with **Delete this Porch** (6.1), **New bedside link** (6.2) and **Allow a PIN reset** (6.3), comes with those PRs.
+- **System:** numbers in use against `PORCH_MAX_PHONE_NUMBERS`, and the result of the health check. Natural-voice characters this month against the ceiling comes with PR 2, which starts counting them.
+- **Activity,** with **Sign out everywhere.**
 
 The admin page is built for a computer screen but stays usable at phone width.
 
@@ -258,12 +259,12 @@ The admin page is built for a computer screen but stays usable at phone width.
 
 The admin page calls the same server functions the family API uses, never a copy of them.
 
-- **Household list:** add a `households` list in Redis, written when a household is created, and add Hainie and Bella Vista to it once. The store can't scan keys, and both the admin page and the daily job (6.4) need it.
+- **Household list:** a `households` list in Redis, written when a household is created ([activations.ts](lib/family/activations.ts)). The store can't scan keys, and both the admin page and the daily job (6.4) need it. Hainie and Bella Vista come from `numbers:households`, the list of number holders, so they needn't be added by hand.
 - **Invitations:**
   - **Create:** takes a label such as "Lee family" and creates the same `activation:<hash>` record `createBedsideInvite` makes today ([service.ts:160](lib/family/service.ts:160)), plus the label and when it was made. It lasts 14 days instead of 24 hours. It's still for one device, with the existing retry on the same device after a lost response.
-  - **List** and **cancel.**
+  - **List,** **cancel,** and **send again** with a new link. Cancelling marks the activation record, which `enrollBedside` then refuses. A link already used can't be cancelled.
 - **Porches list:** for every household: its bedside name, invitation label if any, Porch number, when it was set up, when the bedside was last seen, the number of family devices, and whether setup is finished. It never includes messages, family members' names, keypad contents or call details.
-- **Setup from an invitation:** when `enrollBedside` uses an invitation ([service.ts:189](lib/family/service.ts:189)), it saves the new household's ID on the invitation.
+- **Setup from an invitation:** when `enrollBedside` uses an invitation, it saves the new household's ID on the invitation, and a creation time on the household.
 - `createBedsideInvite` with the recovery secret stays, for App Review links and as a backup. [create-bedside-invite.mjs](scripts/create-bedside-invite.mjs) writes the new `https` link.
 - With invitations as the only way in, no IP limits or App Attest are needed for families yet. `PORCH_MAX_PHONE_NUMBERS` stays as a safety limit.
 
@@ -273,8 +274,8 @@ Cover:
 - signed out: every admin page and Server Action refuses
 - sessions: expired, signed out, and deleted by **Sign out everywhere**
 - the wrong host, and a deployment without `PORCH_ADMIN_ENABLED`, both answering 404
-- passkey registration with a used or expired setup link, and refusing to remove the last passkey
-- deleting, PIN resets and bedside links refused without asking for the passkey again
+- the password hash, and the sign-in pauses
+- deleting, PIN resets and bedside links refused without asking for the password again (PRs 7 and 8)
 - invitations: expiry, a link used twice, and a cancelled link
 - the Porches list holding no private details
 - each action leaving an activity entry
@@ -352,7 +353,7 @@ Size: large. **Delete this Porch** and the keypad backup should ship before invi
 Two ways to start it, with the same deletion:
 
 - **A caregiver**, on the bedside: caregiver mode → **Family & drop-in → Delete this Porch**, with the PIN and typing the name to confirm.
-- **You**, on the admin page: **Porches → the Porch → Delete this Porch**, typing its name and confirming with your passkey. Deleting Hainie asks a second time.
+- **You**, on the admin page: **Porches → the Porch → Delete this Porch**, typing its name and confirming with the admin password. Deleting Hainie asks a second time.
 
 New `deleteHousehold` action:
 
@@ -413,7 +414,7 @@ The bedside keeps a copy of its keypad and settings on the server. The iPad stay
 Size: small.
 
 - Rewrite onboarding in [FAMILY-SETUP.md](ios/FAMILY-SETUP.md). In [INBOUND-PHONE-CALLS.md](ios/INBOUND-PHONE-CALLS.md), describe automatic numbers, the shared trunk and blocking on by default, keeping `configure-inbound.mjs` for Hainie and recovery. Update [BUILD-VARIANTS.md](ios/BUILD-VARIANTS.md) and [CELL2JACK-CALLS.md](ios/CELL2JACK-CALLS.md) for one build, and [README.md](README.md).
-- Privacy policy ([app/privacy](app/privacy/page.tsx)) and App Store privacy labels:
+- Privacy policy ([app/(site)/privacy](<app/(site)/privacy/page.tsx>)) and App Store privacy labels:
   - the iPad's approximate location from its IP address, used once to suggest an area code
   - the assigned number
   - the keypad and settings backup, including names, numbers and photos
@@ -431,7 +432,7 @@ Size: small.
 | 2 | Spending guards: fallback destinations, daily call cap, voice ceiling, health check | – |
 | 3 | Universal links, `https` invites, `/setup`, `/join`; the number message fix. **Built** | – |
 | 4 | Keypad and settings backup | – |
-| 5 | Private invitations and the admin page: passkey sign-in, sessions, household list, invitations, and the Porches, System, Activity and Passkeys pages | 3 |
+| 5 | Private invitations and the admin page: password sign-in, sessions, household list, invitations, and the Porches, System and Activity pages. **Built** | 3 |
 | 6 | Welcome screen, setup flow, number step, Connect the phone, QR code, checklist, number display | 1, 3, 5 |
 | 7 | Delete this Porch, by a caregiver or on the admin page | 1, 4, 5 |
 | 8 | Replace the bedside with restore from backup, including the `/bedside` link and page; forgotten PIN | 3, 4, 5 |
@@ -449,7 +450,7 @@ PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; t
 - ~~Whether Google Analytics records `#` fragments on this site.~~ Moot: it never loads on invitation pages.
 - How large a keypad backup gets with twelve photos, to size the Redis record and the Blob uploads.
 - Where helloporch.store's DNS is managed, and that the calling project can take `admin.helloporch.store`.
-- Passkey sign-in with `@simplewebauthn/server` in Next.js 16 Server Actions, and the Proxy rewrite for `admin.helloporch.store`, on a preview deployment.
+- ~~Passkey sign-in in Next.js 16 Server Actions.~~ A password instead. The Proxy rewrite and the admin page's content security policy on the calling project's production deployment, once `admin.helloporch.store` is added: tried only on the dev server so far.
 - After approval: the `Porch` TestFlight build on an iPhone, and the driver switch on an M-series iPad.
 
 ## Device checks before inviting other families
@@ -464,10 +465,10 @@ PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; t
 - **Outgoing caller ID:** phone fallback and **Add someone → A phone number** show the new household's own number, and a callback rings the new bedside, not Mom's.
 - **A relative's invite** opened in Messages, with and without Porch installed.
 - **The admin page:**
-  - signing in with the passkey on the Mac
+  - signing in with the password on the Mac
   - signed out, every page and action refuses
   - sessions end after 12 hours and on sign-out
-  - risky actions ask for the passkey again
+  - risky actions ask for the password again
   - `helloporch.store/admin` on the website answers 404
   - it shows the new household, and cancel and expiry work for invitations
 - **Deleting a household,** once by its caregiver and once from the admin page: the number is released, family phones are told, and calling the old number no longer rings anything.

@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { AccessToken, RoomConfiguration, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
+import { activationKey, createActivation, markInvitationSetUp, rememberHousehold, type Activation } from "./activations.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
 import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
@@ -176,9 +177,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       // Review may start weeks after submission. These still authorize just one fresh
       // household, never access to an existing family or the operator's recovery secret.
       requireValue(input.purpose === undefined || input.purpose === "appReview", "Choose a valid activation purpose.");
-      const seconds = input.purpose === "appReview" ? 90 * 86400 : 86400;
-      const code = randomBytes(32).toString("hex"), expiresAt = now + seconds;
-      requireValue(await store.create(`activation:${hash(code)}`, JSON.stringify({ expiresAt }), seconds), "Couldn't create an activation. Try again.", 409);
+      const { code, expiresAt } = await createActivation(store, now, input.purpose === "appReview" ? 90 * 86400 : 86400);
       return callJSON({ code, expiresAt });
     }
     if (action === "setCaregiverPIN") {
@@ -199,15 +198,19 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const { deviceID, secret } = registration(input);
       const id = deviceID;
       const bedsideName = name(input.name ?? "Your loved one");
+      // The admin page's invitation this bedside was set up from, which then shows the household.
+      let invitationID: string | undefined;
       if (enrolling && input.activation !== undefined) {
         requireValue(typeof input.activation === "string" && codePattern.test(input.activation), "Open a valid bedside activation link.");
-        const key = `activation:${hash(input.activation)}`;
+        const key = activationKey(input.activation);
         let claimed = false;
         for (let n = 0; n < 12; n++) {
           const raw = await store.get(key);
           requireValue(raw, "This activation link expired. Request a new one.", 410);
-          const activation = JSON.parse(raw);
+          const activation: Activation = JSON.parse(raw);
+          requireValue(!activation.cancelled, "This setup link was cancelled. Ask for a new one.", 410);
           requireValue(activation.expiresAt > now, "This activation link expired. Request a new one.", 410);
+          invitationID = activation.invitationID;
           if (activation.claimedBy) {
             requireValue(activation.claimedBy === deviceID && activation.claimHash === hash(secret), "This activation link was already used.", 410);
             claimed = true; break;
@@ -216,13 +219,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         requireValue(claimed, "Activation is busy. Try again.", 409);
       } else await checkCaregiverCode(request, store, now);
+      // Also on a retry, in case a lost response came after the household was made but before these.
+      const listed = async () => { await rememberHousehold(store, id); if (invitationID) await markInvitationSetUp(store, invitationID, id, now); };
       await reserveDevice(store, deviceID, secret, id, "bedside");
       const me: Member = { id: deviceID, name: bedsideName, role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
       // A bedside set up from the app gets its number in setup, and turns away unknown callers from the start: its new
       // number may have belonged to someone else, whose callers and robocalls still dial it. Its keypad is known to be
       // empty, so blocking can be on before the iPad first reports it. Households made by older setups keep their own
       // number and choice.
-      const house: Household = { id, name: me.name, dropInEnabled: false, members: [me], invites: [],
+      const house: Household = { id, name: me.name, createdAt: now, dropInEnabled: false, members: [me], invites: [],
         ...(enrolling ? { numberFromSetup: true, blockUnknownCallers: true, keypadNumbers: [] } : {}) };
       if (!await store.create(`house:${id}`, JSON.stringify(house))) {
         const existing: Household = JSON.parse((await store.get(`house:${id}`))!);
@@ -234,10 +239,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           }
         }
         await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
+        await listed();
         return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(existing, owner, now, pushEnabled) });
       }
       if (enrolling) await initializeCaregiverPIN(input.pin, store, id);
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
+      await listed();
       return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(house, me, now, pushEnabled) });
     }
     if (action === "claimInvite") {

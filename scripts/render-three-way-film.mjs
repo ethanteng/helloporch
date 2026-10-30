@@ -1,4 +1,4 @@
-// Records the 3-way calling film (app/features/three-way/Film.tsx) to a 1080 × 1920 MP4. Headless Chrome steps
+// Records the 3-way calling film (app/(site)/features/three-way/Film.tsx) to a 1080 × 1920 MP4. Headless Chrome steps
 // through the film one frame at a time over the DevTools protocol, and scripts/encode-frames.swift encodes the
 // frames with AVFoundation, so it needs macOS with Google Chrome but nothing else.
 //

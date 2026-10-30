@@ -16,7 +16,7 @@ const areaCodePattern = /^[2-9](?!11)[0-9]{2}$/;
 const sharedTrunkName = "Porch inbound (shared)";
 const sharedTrunkKey = "numbers:inbound-trunk";
 // Households holding a number or getting one, counted against PORCH_MAX_PHONE_NUMBERS.
-const holdersKey = "numbers:households";
+export const holdersKey = "numbers:households";
 // Twilio's name for each number Porch buys, so a purchase whose response was lost can be found again.
 const label = (householdID: string) => `Porch ${householdID}`;
 // The wait before the bedside's poll tries again: a minute, doubling to an hour.
