@@ -56,6 +56,17 @@ final class BedsideOnIPadViewController: CaregiverFormViewController {
         let setup = BedsideSetup(onFinish: { keypad in releaseMicrophonePrompt(); onFinish(keypad) })
         return PorchStyle.navigation(needsLink ? SetupLinkViewController(setup) : SetupNameViewController(setup))
     }
+    /// A setup that stopped after its PIN, such as when Porch was closed: no Porch number yet, and the microphone or camera
+    /// never asked about. After the PIN, caregiver mode goes on from the number.
+    static var unfinished: Bool {
+        guard PorchDevice.credential(for: .bedside) != nil, let state = FamilyCoordinator.shared.state, state.porchNumber == nil else { return false }
+        return [AVMediaType.audio, .video].contains { AVCaptureDevice.authorizationStatus(for: $0) == .notDetermined }
+    }
+    static func resume(onFinish: @escaping (Bool) -> Void) -> UINavigationController {
+        SystemIncomingCalls.shared.holdsMicrophonePrompt = true
+        let setup = BedsideSetup(onFinish: { keypad in releaseMicrophonePrompt(); onFinish(keypad) })
+        return PorchStyle.navigation(SetupNumberViewController(setup))
+    }
     /// Once setup is over, registering for calls may ask for the microphone, and does now if setup didn't get it.
     static func releaseMicrophonePrompt() {
         SystemIncomingCalls.shared.holdsMicrophonePrompt = false
@@ -296,6 +307,7 @@ final class SetupNumberViewController: BedsideSetupStep {
                 if failure?.code == "noNumbers" || failure?.status == 400 {
                     self.showAreaChoice(true)
                     self.message.text = error.localizedDescription
+                    UIAccessibility.post(notification: .announcement, argument: error.localizedDescription)
                 }
                 else if failure?.code == "numberLimit" { self.waiting("\(error.localizedDescription) Porch keeps trying, and caregiver mode shows the number once it's ready.") }
                 else { self.waiting("\(error.localizedDescription) You can go on and get the number in caregiver mode later.") }
@@ -347,7 +359,6 @@ final class SetupDoneViewController: BedsideSetupStep {
     /// The number last drawn, so a poll that doesn't change it doesn't rebuild the labels.
     private var shownNumber: String?
     private var didRenderNumber = false
-    deinit { NotificationCenter.default.removeObserver(self) }
     override func viewDidLoad() {
         super.viewDidLoad(); hideKeyboardControl()
         navigationItem.hidesBackButton = true

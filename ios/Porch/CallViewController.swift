@@ -737,7 +737,11 @@ final class CallViewController: UIViewController {
             present(BedsideSetup.start { [weak self] keypad in if keypad { self?.showUnlockedSetup() } }, animated: true); return
         }
         let gate = CaregiverPINViewController(profile: profile)
-        gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
+        gate.onUnlock = { [weak self] in
+            // A setup that stopped after its PIN goes on from its number.
+            guard BedsideSetup.unfinished else { self?.showUnlockedSetup(); return }
+            self?.present(BedsideSetup.resume { [weak self] keypad in if keypad { self?.showUnlockedSetup() } }, animated: true)
+        }
         present(PorchStyle.navigation(gate), animated: true)
     }
 

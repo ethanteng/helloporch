@@ -225,7 +225,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         if let number = snapshot.porchNumber { return PorchNumber.display(number) }
         // A setup that stopped before the number step finishes it from here.
         guard let setUp = snapshot.phoneSetup else { return onBedside ? "Not set up" : nil }
-        return setUp.needsChoice == true ? "Choose an area code" : "Getting it…"
+        // Only the bedside can choose; number actions run as the iPad.
+        return setUp.needsChoice == true ? (onBedside ? "Choose an area code" : "Choose an area code on the iPad") : "Getting it…"
     }
     /// Who can call the household on its own number, with the number under its heading so it fits beside the pages. On
     /// the bedside, a number that isn't ready opens the number screen, where another area code can be tried.
@@ -236,7 +237,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         icon.setContentHuggingPriority(.required, for: .horizontal)
         icon.widthAnchor.constraint(equalToConstant: 26).isActive = true
         let value = PorchStyle.label(summary, size: 18, color: PorchStyle.ink, weight: .semibold)
-        value.numberOfLines = 1; value.adjustsFontSizeToFitWidth = true; value.minimumScaleFactor = 0.7
+        // A number stays on one line; what's happening with one that isn't ready can wrap.
+        if snapshot?.porchNumber != nil { value.numberOfLines = 1; value.adjustsFontSizeToFitWidth = true; value.minimumScaleFactor = 0.7 }
         let text = UIStackView(arrangedSubviews: [PorchStyle.label("Porch number", size: 15), value])
         text.axis = .vertical; text.spacing = 2
         let row: UIView
