@@ -53,6 +53,22 @@ test('without a pilot group, the family is still saved with their answers', asyn
   });
 });
 
+test('someone waiting for Android is saved with just their email', async () => {
+  const response = await signUp({ email: ' Ann@Example.com ', platform: 'android' });
+  assert.equal(response.status, 200);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].body, {
+    email: 'ann@example.com',
+    fields: { porch_pilot_interface: 'android' },
+    groups: ['pilot-group'],
+  });
+});
+
+test('waiting for Android still needs a real email, and nothing else', async () => {
+  assert.equal((await signUp({ email: 'not an email', platform: 'android' })).status, 400);
+  assert.equal(sent.length, 0);
+});
+
 test('a sign-up missing an answer or the agreement is refused before MailerLite', async () => {
   const complete = { email: 'ann@example.com', interface: 'touch', ipad: true, agreed: true };
   for (const body of [

@@ -6,6 +6,7 @@ const INTERFACES = { touch: "touchscreen", phone: "big-button phone" } as const;
 // Signs a family up for the pilot from the pilot page. Adds them to MailerLite when MAILERLITE_API_KEY is set,
 // in MAILERLITE_PILOT_GROUP_ID if given, with their answers in the porch_pilot_interface and porch_pilot_ipad
 // fields, so the families waiting for the big-button phone can be emailed together once Apple approves it.
+// Someone waiting for Android is saved with just their email and porch_pilot_interface "android".
 // MailerLite upserts by email, so sending changed answers updates them. Every request is also logged, as the
 // waitlist does, but function logs expire quickly, so MailerLite is the real record.
 export async function POST(req: Request) {
@@ -18,11 +19,18 @@ export async function POST(req: Request) {
   if (!EMAIL_RE.test(email) || email.length > 254) {
     return Response.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
-  if (!choice || ipad === undefined || body?.agreed !== true) {
+
+  // HelloPorch is iPhone and iPad only. Waiting for Android needs no other answers.
+  const fields =
+    body?.platform === "android"
+      ? { porch_pilot_interface: "android" }
+      : choice && ipad !== undefined && body?.agreed === true
+        ? { porch_pilot_interface: INTERFACES[choice], porch_pilot_ipad: ipad ? "yes" : "no" }
+        : null;
+  if (!fields) {
     return Response.json({ error: "Please answer every step and agree to the pilot." }, { status: 400 });
   }
 
-  const fields = { porch_pilot_interface: INTERFACES[choice], porch_pilot_ipad: ipad ? "yes" : "no" };
   console.log(JSON.stringify({ event: "pilot_signup", email, ...fields, at: new Date().toISOString() }));
 
   const apiKey = process.env.MAILERLITE_API_KEY;

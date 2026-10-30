@@ -6,24 +6,29 @@ import { accessories, ipadNeeds, phoneCost, phoneParts, priceLabel, type Part } 
 import styles from "./pilot.module.css";
 
 type Choice = "touch" | "phone";
-type Answers = { email: string; choice: Choice; hasIpad: boolean };
+type IosAnswers = { platform: "ios"; email: string; choice: Choice; hasIpad: boolean };
+type AndroidAnswers = { platform: "android"; email: string };
+type Answers = IosAnswers | AndroidAnswers;
 
 const EMAIL_RE = /\S+@\S+\.\S+/;
 
-async function signUp({ email, choice, hasIpad }: Answers) {
+async function signUp(body: Record<string, unknown>) {
   const res = await fetch("/api/pilot", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, interface: choice, ipad: hasIpad, agreed: true }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Something went wrong");
 }
 
-// The pilot sign-up form, then a plan for the way their family member will call. Email comes first; how they'll
-// call comes before the iPad, because the big-button phone needs a newer iPad. The touchscreen and number pads
-// ship through TestFlight today; the big-button phone needs Apple's DriverKit approval for the Cell2Jack driver.
+// The pilot sign-up form, then a plan for the way their family member will call. Email comes first, then
+// whether iOS works for them: HelloPorch is only on iPhone and iPad right now, and someone waiting for
+// Android is saved with just their email. How they'll call comes before the iPad, because the big-button
+// phone needs a newer iPad. The touchscreen and number pads ship through TestFlight today; the big-button
+// phone needs Apple's DriverKit approval for the Cell2Jack driver.
 export default function PilotGuide() {
   const [email, setEmail] = useState("");
+  const [platform, setPlatform] = useState<"ios" | "android" | null>(null);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [hasIpad, setHasIpad] = useState<boolean | null>(null);
   const [agreed, setAgreed] = useState(false);
@@ -32,6 +37,7 @@ export default function PilotGuide() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const emailInput = useRef<HTMLInputElement>(null);
+  const platformGroup = useRef<HTMLDivElement>(null);
   const callGroup = useRef<HTMLDivElement>(null);
   const ipadGroup = useRef<HTMLDivElement>(null);
   const agreeBox = useRef<HTMLInputElement>(null);
@@ -44,7 +50,8 @@ export default function PilotGuide() {
     setChoice(next);
   };
 
-  // A message about a missing step goes away once they change anything.
+  // A message about a missing step goes away once they change an answer. Platform is left out: choosing
+  // Android sets it in the same moment the request starts, and this would wipe a failure from that request.
   useEffect(() => setError(null), [email, choice, hasIpad, agreed]);
 
   // Each sign-up, including a changed answer, brings the welcome and plan into view.
@@ -54,13 +61,14 @@ export default function PilotGuide() {
     welcome.current?.scrollIntoView({ block: "start" });
   }, [joined]);
 
-  const join = async (answers: Answers) => {
+  const joinIos = async (answers: Omit<IosAnswers, "platform">) => {
     setPending(true);
     setError(null);
     try {
-      await signUp(answers);
+      await signUp({ email: answers.email, interface: answers.choice, ipad: answers.hasIpad, agreed: true });
       setChoice(answers.choice);
-      setJoined(answers);
+      setPlatform("ios");
+      setJoined({ platform: "ios", ...answers });
       setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -69,28 +77,73 @@ export default function PilotGuide() {
     }
   };
 
+  // Android has nothing else to ask, so this saves their email as soon as they choose it.
+  const waitForAndroid = () => {
+    if (pending) return;
+    const value = email.trim();
+    if (!EMAIL_RE.test(value)) {
+      setError("Enter your email address.");
+      emailInput.current?.focus();
+      return;
+    }
+    setPlatform("android");
+    setPending(true);
+    setError(null);
+    signUp({ email: value, platform: "android" })
+      .then(() => {
+        setJoined({ platform: "android", email: value });
+        setEditing(false);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Something went wrong"))
+      .finally(() => setPending(false));
+  };
+
   // Points to the first step left unanswered, or signs them up.
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const value = email.trim();
+    if (EMAIL_RE.test(value) && platform === "android") {
+      waitForAndroid();
+      return;
+    }
     const missing: [string, HTMLElement | null | undefined] | null = !EMAIL_RE.test(value)
       ? ["Enter your email address.", emailInput.current]
-      : !choice
-        ? ["Choose how your family member will call.", callGroup.current?.querySelector("button")]
-        : hasIpad === null
-          ? ["Tell me whether you have an iPad that will work.", ipadGroup.current?.querySelector("button")]
-          : !agreed
-            ? ["Check the box to agree to what the pilot asks.", agreeBox.current]
-            : null;
+      : platform !== "ios"
+        ? ["Tell me if iOS works for you.", platformGroup.current?.querySelector("button")]
+        : !choice
+          ? ["Choose how your family member will call.", callGroup.current?.querySelector("button")]
+          : hasIpad === null
+            ? ["Tell me whether you have an iPad that will work.", ipadGroup.current?.querySelector("button")]
+            : !agreed
+              ? ["Check the box to agree to what the pilot asks.", agreeBox.current]
+              : null;
     if (missing) {
       setError(missing[0]);
       missing[1]?.focus();
       return;
     }
-    join({ email: value, choice: choice!, hasIpad: hasIpad! });
+    joinIos({ email: value, choice: choice!, hasIpad: hasIpad! });
   };
 
   if (joined && !editing) {
+    if (joined.platform === "android") {
+      return (
+        <section className={`${styles.section} ${styles.welcomeSection}`} aria-labelledby="welcome-title">
+          <div className={styles.welcome}>
+            <h2 id="welcome-title" ref={welcome} tabIndex={-1}>
+              I’ll email you when Android is ready.
+            </h2>
+            <p>
+              Thank you. I’ll write to <strong>{joined.email}</strong> when HelloPorch is available on Android.
+            </p>
+            <button type="button" onClick={() => setEditing(true)}>
+              Change your answer
+            </button>
+          </div>
+        </section>
+      );
+    }
+
     return (
       <>
         <section className={`${styles.section} ${styles.welcomeSection}`} aria-labelledby="welcome-title">
@@ -111,7 +164,7 @@ export default function PilotGuide() {
         ) : (
           <PhonePlan
             email={joined.email}
-            onStartNow={() => join({ ...joined, choice: "touch" })}
+            onStartNow={() => joinIos({ email: joined.email, choice: "touch", hasIpad: joined.hasIpad })}
             pending={pending}
             error={error}
           />
@@ -146,8 +199,36 @@ export default function PilotGuide() {
           </li>
 
           <li className={styles.step}>
-            <h3 id="call-question">How will your family member make & receive calls?</h3>
-            <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option once it's approved by Apple.</p>
+            <h3 id="ios-question">HelloPorch is only available on iOS right now.</h3>
+            <p>It runs on iPhone and iPad. There’s no Android app yet.</p>
+            <div ref={platformGroup} className={styles.answers} role="group" aria-labelledby="ios-question">
+              <button
+                type="button"
+                aria-pressed={platform === "ios"}
+                onClick={() => {
+                  setPlatform("ios");
+                  setError(null);
+                }}
+                disabled={pending}
+              >
+                Sounds good
+              </button>
+              <button type="button" aria-pressed={platform === "android"} onClick={waitForAndroid} disabled={pending}>
+                {pending && platform === "android" ? "Saving…" : "I’ll wait for Android"}
+              </button>
+            </div>
+            {platform !== "ios" && error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+          </li>
+
+          {platform === "ios" && (
+          <>
+          <li className={styles.step}>
+            <h3 id="call-question">How do you want your loved one to make & receive calls?</h3>
+            <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option later.</p>
             <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
               <button type="button" aria-pressed={choice === "touch"} onClick={() => pick("touch")}>
                 <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
@@ -196,7 +277,7 @@ export default function PilotGuide() {
             )}
             <div className={styles.always}>
               <p>
-                <strong>Whichever way they call, the iPad needs to be:</strong>
+                <strong>Either way, the iPad will need to be:</strong>
               </p>
               <ul>
                 <li>
@@ -208,7 +289,7 @@ export default function PilotGuide() {
                 </li>
                 <li>
                   <strong>In Guided Access, ideally.</strong> It’s an accessibility setting that keeps the iPad
-                  on Porch, so your family member only ever sees Porch. Turn it on in{" "}
+                  focused on Porch, so your family member only ever sees the Porch app. Turn it on in{" "}
                   <strong>Settings → Accessibility → Guided Access</strong>, then triple-click the top or Home
                   button while Porch is open.{" "}
                   <a href="https://support.apple.com/en-us/111795">Apple’s instructions</a>
@@ -216,8 +297,11 @@ export default function PilotGuide() {
               </ul>
             </div>
           </li>
+          </>
+          )}
         </ol>
 
+        {platform === "ios" && (
         <div className={styles.submit}>
           <label className={styles.agree}>
             <input
@@ -232,7 +316,7 @@ export default function PilotGuide() {
             </span>
           </label>
           <button type="submit" disabled={pending}>
-            {pending ? "Joining…" : joined ? "Save my answers" : "Join the pilot"}
+            {pending ? "Joining…" : joined?.platform === "ios" ? "Save my answers" : "Join the pilot"}
           </button>
           {error && (
             <p className="form-error" role="alert">
@@ -240,6 +324,7 @@ export default function PilotGuide() {
             </p>
           )}
         </div>
+        )}
       </form>
     </section>
   );
