@@ -8,7 +8,7 @@ import styles from "./pilot.module.css";
 export const metadata: Metadata = {
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "Three quick steps to get ready for the Porch pilot: Porch is on iPad and iPhone, you’ll need a recent iPad, and you choose the touchscreen, a number pad or a big-button phone.",
+    "What the Porch pilot asks of families, then three steps to get ready: Porch is on iPad and iPhone, you choose the touchscreen, a number pad or a big-button phone, and you check your iPad.",
 };
 
 export default function PilotPage() {
@@ -24,32 +24,36 @@ export default function PilotPage() {
               Getting ready for <em>the Porch pilot.</em>
             </h1>
             <p className={styles.lede}>
-              Thank you for helping me test Porch. Go through these three steps, and you’ll see what to get and
-              how to start.
+              Thank you for helping me test Porch. Here’s what the pilot asks of you, then three steps to see
+              what you’ll need.
             </p>
           </header>
 
-          <PilotGuide />
-
-          <section className={styles.section} aria-labelledby="involves-title">
+          <section className={`${styles.section} ${styles.first}`} aria-labelledby="involves-title">
             <div className={styles.sectionIntro}>
               <h2 id="involves-title">What the pilot asks of you</h2>
+              <p>
+                Porch is still a prototype, and the pilot is how I learn what to fix. By joining, you agree to
+                share how it’s going.
+              </p>
             </div>
             <ul className={styles.involves}>
               <li>
-                <h3>A spot with Wi-Fi and an outlet.</h3>
-                <p>Somewhere your family member spends their day, with the iPad left on and open to Porch.</p>
+                <h3>Answer my emails and surveys.</h3>
+                <p>Quick check-ins about what works, what doesn’t, and what you wish it did.</p>
               </li>
               <li>
-                <h3>Patience with rough edges.</h3>
-                <p>Porch is a prototype. Some things will break, and updates will come often.</p>
+                <h3>Talk with me face to face.</h3>
+                <p>Now and then, a conversation about how Porch is working for your family.</p>
               </li>
               <li>
-                <h3>Your honest feedback.</h3>
-                <p>Tell me what works, what doesn’t, and what you wish it did.</p>
+                <h3>Be patient with rough edges.</h3>
+                <p>Some things will break, and updates will come often.</p>
               </li>
             </ul>
           </section>
+
+          <PilotGuide />
 
           <section id="join" className={styles.join} aria-labelledby="join-title">
             <h2 id="join-title">

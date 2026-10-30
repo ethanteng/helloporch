@@ -12,12 +12,12 @@ export type Part = {
   photo: { src: string; alt: string };
 };
 
-// Which iPads work. The touchscreen and number pads run on the oldest iPadOS Porch supports, but the
-// Cell2Jack driver needs an M-series chip.
+// Which iPads work. The touchscreen and number pads need only iPadOS 15, which every iPad from 2015 on
+// can run, but the Cell2Jack driver needs an M-series chip.
 export const ipadNeeds = {
-  touch: "Any iPad with iPadOS 15 or later.",
+  touch: "Any iPad from 2015 or later works with the touchscreen or a number pad.",
   phone:
-    "An iPad with an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later.",
+    "The big-button phone needs a newer iPad, with an M1 chip or later: an iPad Pro from 2021 on, or an iPad Air from 2022 on.",
 };
 
 const stand: Part = {
@@ -80,7 +80,10 @@ export const phoneParts: Part[] = [
     id: "ipad",
     name: "iPad",
     cost: "own",
-    rule: { label: "M-series iPad", text: ipadNeeds.phone },
+    rule: {
+      label: "M1 chip or later",
+      text: "An iPad Pro from 2021 on, or an iPad Air from 2022 on, with iPadOS 16 or later.",
+    },
     description: "A spare one is perfect. It stays plugged in, on your Wi-Fi and open to Porch.",
     photo: {
       src: "/pilot/ipad.jpg",

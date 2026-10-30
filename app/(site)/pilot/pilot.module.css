@@ -46,9 +46,9 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 960px;
-  margin: clamp(40px, 5vw, 64px) auto 0;
-  padding: 0 clamp(16px, 3vw, 40px);
+  width: min(100%, 880px);
+  margin: 0 auto;
+  padding: 0;
   list-style: none;
 }
 
@@ -72,17 +72,25 @@
   color: var(--tomato-deep);
 }
 
-.step h2 {
+.step h3 {
   font: 400 clamp(28px, 3.2vw, 36px) / 1.1 var(--serif);
   letter-spacing: -0.02em;
   text-wrap: balance;
 }
 
 .step > p {
-  margin-top: -6px;
   font: 400 17px/1.55 var(--sans);
   color: var(--muted-2);
   text-wrap: pretty;
+}
+
+.step > h3 + p {
+  margin-top: -6px;
+}
+
+.step > p strong {
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .platforms {
@@ -138,11 +146,12 @@
   color: #fff;
 }
 
-.answer {
+/* How the iPad is kept, whichever way they call. */
+.always {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 18px 20px;
+  padding: 18px 20px 20px;
   border-radius: 20px;
   background: var(--bg);
   font: 400 16px/1.55 var(--sans);
@@ -150,14 +159,14 @@
   text-wrap: pretty;
 }
 
-.answer ul {
+.always ul {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding-left: 20px;
 }
 
-.answer strong {
+.always strong {
   font-weight: 600;
   color: var(--ink);
 }
@@ -391,6 +400,11 @@
   gap: clamp(28px, 4vw, 40px);
   padding: clamp(72px, 8vw, 104px) clamp(16px, 3vw, 40px) 0;
   scroll-margin-top: 24px;
+}
+
+/* The first section sits closer to the hero. */
+.first {
+  padding-top: clamp(48px, 6vw, 72px);
 }
 
 .sectionIntro {

@@ -8,110 +8,124 @@ import styles from "./pilot.module.css";
 type Choice = "touch" | "phone";
 
 // Three steps every family goes through, then a plan for the way their family member will call.
-// The touchscreen and number pads ship through TestFlight today; the big-button phone needs Apple's
+// How they'll call comes before the iPad, because the big-button phone needs a newer iPad. The
+// touchscreen and number pads ship through TestFlight today; the big-button phone needs Apple's
 // DriverKit approval for the Cell2Jack driver first.
 export default function PilotGuide() {
-  const [hasIpad, setHasIpad] = useState<boolean | null>(null);
   const [choice, setChoice] = useState<Choice | null>(null);
+  const [hasIpad, setHasIpad] = useState<boolean | null>(null);
   const plan = useRef<HTMLDivElement>(null);
+  const shown = choice && hasIpad !== null ? choice : null;
 
-  // Bring the plan into view each time the choice changes.
+  // Bring the plan into view when it first appears and each time the choice changes.
   useEffect(() => {
-    if (choice) plan.current?.scrollIntoView({ block: "start" });
-  }, [choice]);
+    if (shown) plan.current?.scrollIntoView({ block: "start" });
+  }, [shown]);
 
   return (
     <>
-      <ol className={styles.steps}>
-        <li className={styles.step}>
-          <h2>Porch is only on iPad and iPhone for now.</h2>
-          <p>
-            There’s no Android app yet. Family without an iPhone can still talk with your family member by
-            voice, from any phone.
-          </p>
-          <ul className={styles.platforms}>
-            <li>
-              <strong>Their iPad</strong> runs Porch by their chair or bed.
-            </li>
-            <li>
-              <strong>Family iPhones</strong> get the Porch app for video calls, drop-ins and messages.
-            </li>
-            <li>
-              <strong>Any other phone</strong> can call Porch’s own phone number, and Porch can call it.
-            </li>
-          </ul>
-        </li>
+      <section className={styles.section} aria-labelledby="setup-title">
+        <div className={styles.sectionIntro}>
+          <h2 id="setup-title">Getting set up</h2>
+          <p>Three steps, and you’ll see what to get and how to start.</p>
+        </div>
+        <ol className={styles.steps}>
+          <li className={styles.step}>
+            <h3>Porch is only on iPad and iPhone for now.</h3>
+            <p>
+              There’s no Android app yet. Family without an iPhone can still talk with your family member by
+              voice, from any phone.
+            </p>
+            <ul className={styles.platforms}>
+              <li>
+                <strong>Their iPad</strong> runs Porch by their chair or bed.
+              </li>
+              <li>
+                <strong>Family iPhones</strong> get the Porch app for video calls, drop-ins and messages.
+              </li>
+              <li>
+                <strong>Any other phone</strong> can call Porch’s own phone number, and Porch can call it.
+              </li>
+            </ul>
+          </li>
 
-        <li className={styles.step}>
-          <h2 id="ipad-question">Do you have a recent iPad?</h2>
-          <p>Porch runs on an iPad that stays plugged in and on your Wi-Fi, so a spare one is perfect.</p>
-          <div className={styles.answers} role="group" aria-labelledby="ipad-question">
-            <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
-              Yes, we have one
-            </button>
-            <button type="button" aria-pressed={hasIpad === false} onClick={() => setHasIpad(false)}>
-              No, not yet
-            </button>
-          </div>
-          <div aria-live="polite">
-            {hasIpad !== null && (
-              <div className={styles.answer}>
-                {hasIpad ? (
-                  <p>
-                    <strong>Check that it’s new enough.</strong> To see its model and iPadOS version, open{" "}
-                    <strong>Settings → General → About</strong>.
-                  </p>
-                ) : (
-                  <p>
-                    <strong>You’ll need one before you start.</strong> A refurbished or hand-me-down iPad is
-                    fine, as long as it’s new enough.
-                  </p>
-                )}
-                <ul>
-                  <li>
-                    <strong>For the touchscreen or a number pad:</strong> {ipadNeeds.touch}
-                  </li>
-                  <li>
-                    <strong>For a big-button phone:</strong> {ipadNeeds.phone}
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
-        </li>
+          <li className={styles.step}>
+            <h3 id="call-question">How will your family member call?</h3>
+            <p>Choose what’s easiest for them. You can start one way and change later.</p>
+            <div className={styles.choices} role="group" aria-labelledby="call-question">
+              <button type="button" aria-pressed={choice === "touch"} onClick={() => setChoice("touch")}>
+                <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
+                <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
+                <span className={styles.choiceText}>
+                  They tap the iPad’s screen to call someone, or press a key on a USB or Bluetooth number pad.
+                </span>
+              </button>
+              <button type="button" aria-pressed={choice === "phone"} onClick={() => setChoice("phone")}>
+                <span className={styles.status}>Waiting on Apple</span>
+                <span className={styles.choiceTitle}>A big-button phone</span>
+                <span className={styles.choiceText}>
+                  They pick up a corded home phone and press someone’s photo to call them.
+                </span>
+              </button>
+            </div>
+          </li>
 
-        <li className={styles.step}>
-          <h2 id="call-question">How will your family member call?</h2>
-          <p>Choose what’s easiest for them. You can start one way and change later.</p>
-          <div className={styles.choices} role="group" aria-labelledby="call-question">
-            <button type="button" aria-pressed={choice === "touch"} onClick={() => setChoice("touch")}>
-              <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
-              <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
-              <span className={styles.choiceText}>
-                They tap the iPad’s screen to call someone, or press a key on a USB or Bluetooth number pad.
-              </span>
-            </button>
-            <button type="button" aria-pressed={choice === "phone"} onClick={() => setChoice("phone")}>
-              <span className={styles.status}>Waiting on Apple</span>
-              <span className={styles.choiceTitle}>A big-button phone</span>
-              <span className={styles.choiceText}>
-                They pick up a corded home phone and press someone’s photo to call them.
-              </span>
-            </button>
-          </div>
-        </li>
-      </ol>
+          <li className={styles.step}>
+            <h3 id="ipad-question">Do you have an iPad that will work?</h3>
+            {/* Until they choose how to call, both requirements show. */}
+            <p aria-live="polite">
+              {choice !== "phone" && ipadNeeds.touch} {choice !== "touch" && ipadNeeds.phone}
+            </p>
+            <p>
+              Not sure which one you have? Open <strong>Settings → General → About</strong> to see its model name.
+            </p>
+            <div className={styles.always}>
+              <p>
+                <strong>Whichever way they call, the iPad needs to be:</strong>
+              </p>
+              <ul>
+                <li>
+                  <strong>Always plugged in,</strong> on your Wi-Fi, where your family member spends their day.
+                </li>
+                <li>
+                  <strong>Always unlocked, with Porch open.</strong> Porch keeps the screen awake by itself. If
+                  the iPad locks, the keys and drop-ins stop working until someone unlocks it.
+                </li>
+                <li>
+                  <strong>In Guided Access, ideally.</strong> It’s an accessibility setting that keeps the iPad
+                  on Porch, so your family member only ever sees Porch. Turn it on in{" "}
+                  <strong>Settings → Accessibility → Guided Access</strong>, then triple-click the top or Home
+                  button while Porch is open.{" "}
+                  <a href="https://support.apple.com/en-us/111795">Apple’s instructions</a>
+                </li>
+              </ul>
+            </div>
+            <div className={styles.answers} role="group" aria-labelledby="ipad-question">
+              <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
+                Yes, we have one
+              </button>
+              <button type="button" aria-pressed={hasIpad === false} onClick={() => setHasIpad(false)}>
+                No, not yet
+              </button>
+            </div>
+          </li>
+        </ol>
+      </section>
 
-      {choice && (
+      {shown && (
         <div ref={plan} className={styles.plan}>
-          {choice === "touch" ? <TouchPlan /> : <PhonePlan onStartNow={() => setChoice("touch")} />}
+          {shown === "touch" ? (
+            <TouchPlan hasIpad={hasIpad === true} />
+          ) : (
+            <PhonePlan onStartNow={() => setChoice("touch")} />
+          )}
         </div>
       )}
     </>
   );
 }
 
-function TouchPlan() {
+function TouchPlan({ hasIpad }: { hasIpad: boolean }) {
   return (
     <>
       <section className={styles.planCard} aria-labelledby="plan-title">
@@ -128,7 +142,10 @@ function TouchPlan() {
           <p className={`${styles.status} ${styles.ready}`}>Ready now</p>
           <h2 id="plan-title">You can start right away.</h2>
           <p className={styles.planIntro}>
-            All you need is the iPad. Porch isn’t on the App Store yet, so it comes through{" "}
+            {hasIpad
+              ? "All you need is your iPad."
+              : "All you need is an iPad from 2015 or later, and a refurbished or hand-me-down one is fine."}{" "}
+            Porch isn’t on the App Store yet, so it comes through{" "}
             <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a>, Apple’s free app for
             trying apps before they’re released.
           </p>
