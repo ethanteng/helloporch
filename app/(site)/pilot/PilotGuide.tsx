@@ -139,27 +139,8 @@ export default function PilotGuide() {
           </li>
 
           <li className={styles.step}>
-            <h3>Porch is only on iPad and iPhone for now.</h3>
-            <p>
-              There’s no Android app yet. Family without an iPhone can still talk with your family member by
-              voice, from any phone.
-            </p>
-            <ul className={styles.platforms}>
-              <li>
-                <strong>Their iPad</strong> runs Porch by their chair or bed.
-              </li>
-              <li>
-                <strong>Family iPhones</strong> get the Porch app for video calls, drop-ins and messages.
-              </li>
-              <li>
-                <strong>Any other phone</strong> can call Porch’s own phone number, and Porch can call it.
-              </li>
-            </ul>
-          </li>
-
-          <li className={styles.step}>
-            <h3 id="call-question">How will your family member call?</h3>
-            <p>Choose what’s easiest for them. You can start one way and change later.</p>
+            <h3 id="call-question">How will your family member make & receive calls?</h3>
+            <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option once it's approved by Apple.</p>
             <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
               <button type="button" aria-pressed={choice === "touch"} onClick={() => setChoice("touch")}>
                 <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
@@ -169,7 +150,7 @@ export default function PilotGuide() {
                 </span>
               </button>
               <button type="button" aria-pressed={choice === "phone"} onClick={() => setChoice("phone")}>
-                <span className={styles.status}>Waiting on Apple</span>
+                <span className={styles.status}>Pending approval from Apple</span>
                 <span className={styles.choiceTitle}>A big-button phone</span>
                 <span className={styles.choiceText}>
                   They pick up a corded home phone and press someone’s photo to call them.
