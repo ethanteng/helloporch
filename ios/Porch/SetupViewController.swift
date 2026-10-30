@@ -9,8 +9,8 @@ import PorchCore
 /// For a key that already has someone on it, it edits their phone numbers; the rest is on their page.
 final class SetupViewController: CaregiverFormViewController, CNContactPickerDelegate, PHPickerViewControllerDelegate, UIColorPickerViewControllerDelegate {
     var onSaveSlot: ((KeypadAction, CallContact?) throws -> Void)?
-    private let actionControl = UISegmentedControl(items: ["No action", "Person", "Call control", "Video toggle", "Messages"])
-    private let actionDetail = PorchStyle.label("", size: 16)
+    private var actionButtons: [KeypadAction: UIButton] = [:]
+    private lazy var chosenAction = initialAction
     private var actionGroup = UIView()
     private var personGroup = UIView()
     private var fallbackGroup = UIView()
@@ -65,15 +65,18 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         title = editingNumbers ? "Phone" : "Key \(key)"
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(save))
-        actionControl.selectedSegmentIndex = KeypadAction.allCases.firstIndex(of: initialAction) ?? 0
-        actionControl.accessibilityLabel = "Keypad action"
-        actionControl.addTarget(self, action: #selector(updateAction), for: .valueChanged)
-        actionControl.selectedSegmentTintColor = PorchStyle.accent
-        actionControl.backgroundColor = PorchStyle.page
-        actionControl.setTitleTextAttributes([.foregroundColor: PorchStyle.ink, .font: UIFont.systemFont(ofSize: 16, weight: .medium)], for: .normal)
-        actionControl.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 16, weight: .semibold)], for: .selected)
-        actionControl.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
-        actionGroup = section("What key \(key) does", views: [actionControl, actionDetail])
+        // One row per action, like the bedside language: side by side, their names were cut off.
+        let actions = UIStackView()
+        actions.axis = .vertical; actions.spacing = 4
+        for action in KeypadAction.allCases {
+            let button = PorchStyle.button(action.title, symbol: "circle", filled: false)
+            button.contentHorizontalAlignment = .leading
+            button.accessibilityIdentifier = "keypad.action.\(action.rawValue)"
+            button.addAction(UIAction { [weak self] _ in self?.chosenAction = action; self?.updateAction() }, for: .touchUpInside)
+            actionButtons[action] = button
+            actions.addArrangedSubview(button)
+        }
+        actionGroup = section("What key \(key) does", views: [actions])
         form.addArrangedSubview(actionGroup)
         nameField.text = initialContact?.customName
         selectedFamilyID = initialContact?.familyMemberID
@@ -315,15 +318,17 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         }
     }
 
-    private var chosenAction: KeypadAction { KeypadAction.allCases[actionControl.selectedSegmentIndex] }
-    @objc private func updateAction() {
+    private func updateAction() {
         view.endEditing(true)
+        for (action, button) in actionButtons {
+            let selected = action == chosenAction
+            button.configuration?.image = UIImage(systemName: selected ? "checkmark.circle.fill" : "circle")
+            button.accessibilityTraits = selected ? [.button, .selected] : [.button]
+        }
         let person = chosenAction == .person
         if !editingNumbers { personGroup.isHidden = !person; appearanceGroup.isHidden = !person }
         fallbackGroup.isHidden = !person
         setKeyboardControlVisible(person)
-        actionDetail.text = chosenAction == .callControl ? "Hold to decline a call." : nil
-        actionDetail.isHidden = actionDetail.text == nil
     }
     /// A family member on Porch goes by their Porch name and photo, so the name is only for someone added by phone.
     @objc private func configureFamilyLinks() {

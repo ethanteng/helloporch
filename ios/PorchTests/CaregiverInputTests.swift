@@ -1054,10 +1054,12 @@ final class CaregiverInputTests: XCTestCase {
 
     @MainActor func testEveryKeypadActionHasAnEditorChoice() {
         let editor = SetupViewController(slot: 8, contact: nil, action: .messages); editor.loadViewIfNeeded()
-        func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
-        let control = segments(editor.view).first { $0.accessibilityLabel == "Keypad action" }
-        XCTAssertEqual(control?.numberOfSegments, KeypadAction.allCases.count)
-        XCTAssertEqual(control?.selectedSegmentIndex, KeypadAction.allCases.firstIndex(of: .messages))
+        let choices = buttons(in: editor.view).filter { $0.accessibilityIdentifier?.hasPrefix("keypad.action.") == true }
+        func chosen() -> [String?] { choices.filter { $0.accessibilityTraits.contains(.selected) }.map(\.accessibilityIdentifier) }
+        XCTAssertEqual(choices.map { $0.configuration?.title }, KeypadAction.allCases.map(\.title), "Each action is a row with its whole name")
+        XCTAssertEqual(chosen(), ["keypad.action.messages"])
+        choices.first { $0.accessibilityIdentifier == "keypad.action.callControl" }?.sendActions(for: .touchUpInside)
+        XCTAssertEqual(chosen(), ["keypad.action.callControl"])
     }
 
     @MainActor func testUnenrolledBedsideSetupOffersTheWayBackToFamilyMode() {
