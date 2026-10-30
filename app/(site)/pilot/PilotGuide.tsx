@@ -1,35 +1,143 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { accessories, ipadNeeds, phoneCost, phoneParts, priceLabel, type Part } from "./parts";
 import styles from "./pilot.module.css";
 
 type Choice = "touch" | "phone";
+type Answers = { email: string; choice: Choice; hasIpad: boolean };
 
-// Three steps every family goes through, then a plan for the way their family member will call.
-// How they'll call comes before the iPad, because the big-button phone needs a newer iPad. The
-// touchscreen and number pads ship through TestFlight today; the big-button phone needs Apple's
-// DriverKit approval for the Cell2Jack driver first.
+const EMAIL_RE = /\S+@\S+\.\S+/;
+
+async function signUp({ email, choice, hasIpad }: Answers) {
+  const res = await fetch("/api/pilot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, interface: choice, ipad: hasIpad, agreed: true }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Something went wrong");
+}
+
+// The pilot sign-up form, then a plan for the way their family member will call. Email comes first; how they'll
+// call comes before the iPad, because the big-button phone needs a newer iPad. The touchscreen and number pads
+// ship through TestFlight today; the big-button phone needs Apple's DriverKit approval for the Cell2Jack driver.
 export default function PilotGuide() {
+  const [email, setEmail] = useState("");
   const [choice, setChoice] = useState<Choice | null>(null);
   const [hasIpad, setHasIpad] = useState<boolean | null>(null);
-  const plan = useRef<HTMLDivElement>(null);
-  const shown = choice && hasIpad !== null ? choice : null;
+  const [agreed, setAgreed] = useState(false);
+  const [joined, setJoined] = useState<Answers | null>(null);
+  const [editing, setEditing] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const emailInput = useRef<HTMLInputElement>(null);
+  const callGroup = useRef<HTMLDivElement>(null);
+  const ipadGroup = useRef<HTMLDivElement>(null);
+  const agreeBox = useRef<HTMLInputElement>(null);
+  const welcome = useRef<HTMLHeadingElement>(null);
 
-  // Bring the plan into view when it first appears and each time the choice changes.
+  // A message about a missing step goes away once they change anything.
+  useEffect(() => setError(null), [email, choice, hasIpad, agreed]);
+
+  // Each sign-up, including a changed answer, brings the welcome and plan into view.
   useEffect(() => {
-    if (shown) plan.current?.scrollIntoView({ block: "start" });
-  }, [shown]);
+    if (!joined) return;
+    welcome.current?.focus({ preventScroll: true });
+    welcome.current?.scrollIntoView({ block: "start" });
+  }, [joined]);
+
+  const join = async (answers: Answers) => {
+    setPending(true);
+    setError(null);
+    try {
+      await signUp(answers);
+      setChoice(answers.choice);
+      setJoined(answers);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  // Points to the first step left unanswered, or signs them up.
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const value = email.trim();
+    const missing: [string, HTMLElement | null | undefined] | null = !EMAIL_RE.test(value)
+      ? ["Enter your email address.", emailInput.current]
+      : !choice
+        ? ["Choose how your family member will call.", callGroup.current?.querySelector("button")]
+        : hasIpad === null
+          ? ["Tell me whether you have an iPad that will work.", ipadGroup.current?.querySelector("button")]
+          : !agreed
+            ? ["Check the box to agree to what the pilot asks.", agreeBox.current]
+            : null;
+    if (missing) {
+      setError(missing[0]);
+      missing[1]?.focus();
+      return;
+    }
+    join({ email: value, choice: choice!, hasIpad: hasIpad! });
+  };
+
+  if (joined && !editing) {
+    return (
+      <>
+        <section className={`${styles.section} ${styles.welcomeSection}`} aria-labelledby="welcome-title">
+          <div className={styles.welcome}>
+            <h2 id="welcome-title" ref={welcome} tabIndex={-1}>
+              You’re in the pilot.
+            </h2>
+            <p>
+              Thank you. I’ll be in touch at <strong>{joined.email}</strong>. Here’s what happens next.
+            </p>
+            <button type="button" onClick={() => setEditing(true)}>
+              Change your answers
+            </button>
+          </div>
+        </section>
+        {joined.choice === "touch" ? (
+          <TouchPlan email={joined.email} hasIpad={joined.hasIpad} />
+        ) : (
+          <PhonePlan
+            email={joined.email}
+            onStartNow={() => join({ ...joined, choice: "touch" })}
+            pending={pending}
+            error={error}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
-    <>
-      <section className={styles.section} aria-labelledby="setup-title">
-        <div className={styles.sectionIntro}>
-          <h2 id="setup-title">Getting set up</h2>
-          <p>Three steps, and you’ll see what to get and how to start.</p>
-        </div>
+    <section className={styles.section} aria-labelledby="setup-title">
+      <div className={styles.sectionIntro}>
+        <h2 id="setup-title">Join the pilot</h2>
+        <p>Fill this in, and you’ll see what to get and how to start.</p>
+      </div>
+      <form className={styles.form} onSubmit={onSubmit} noValidate>
         <ol className={styles.steps}>
+          <li className={styles.step}>
+            <h3>
+              <label htmlFor="pilot-email">What’s your email?</label>
+            </h3>
+            <p>I’ll use it for your TestFlight invitation and to check in with you during the pilot.</p>
+            <input
+              ref={emailInput}
+              id="pilot-email"
+              className={styles.email}
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </li>
+
           <li className={styles.step}>
             <h3>Porch is only on iPad and iPhone for now.</h3>
             <p>
@@ -52,7 +160,7 @@ export default function PilotGuide() {
           <li className={styles.step}>
             <h3 id="call-question">How will your family member call?</h3>
             <p>Choose what’s easiest for them. You can start one way and change later.</p>
-            <div className={styles.choices} role="group" aria-labelledby="call-question">
+            <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
               <button type="button" aria-pressed={choice === "touch"} onClick={() => setChoice("touch")}>
                 <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
                 <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
@@ -100,7 +208,7 @@ export default function PilotGuide() {
                 </li>
               </ul>
             </div>
-            <div className={styles.answers} role="group" aria-labelledby="ipad-question">
+            <div ref={ipadGroup} className={styles.answers} role="group" aria-labelledby="ipad-question">
               <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
                 Yes, we have one
               </button>
@@ -110,22 +218,35 @@ export default function PilotGuide() {
             </div>
           </li>
         </ol>
-      </section>
 
-      {shown && (
-        <div ref={plan} className={styles.plan}>
-          {shown === "touch" ? (
-            <TouchPlan hasIpad={hasIpad === true} />
-          ) : (
-            <PhonePlan onStartNow={() => setChoice("touch")} />
+        <div className={styles.submit}>
+          <label className={styles.agree}>
+            <input
+              ref={agreeBox}
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+            />
+            <span>
+              I agree to answer your emails and surveys, and to talk with you face to face about how Porch is
+              working for us.
+            </span>
+          </label>
+          <button type="submit" disabled={pending}>
+            {pending ? "Joining…" : joined ? "Save my answers" : "Join the pilot"}
+          </button>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
           )}
         </div>
-      )}
-    </>
+      </form>
+    </section>
   );
 }
 
-function TouchPlan({ hasIpad }: { hasIpad: boolean }) {
+function TouchPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
   return (
     <>
       <section className={styles.planCard} aria-labelledby="plan-title">
@@ -195,10 +316,10 @@ function TouchPlan({ hasIpad }: { hasIpad: boolean }) {
             <p>Install it from the App Store on the iPad, and on each of those iPhones.</p>
           </li>
           <li>
-            <h4>Send me email addresses.</h4>
+            <h4>Watch for my email.</h4>
             <p>
-              I need the Apple Account email for each of those devices. I’ll send each one an invitation to
-              the Porch pilot.
+              I’ll write to <strong>{email}</strong> for the Apple Account email on each of those devices, then
+              send each one an invitation to the Porch pilot.
             </p>
           </li>
           <li>
@@ -224,7 +345,17 @@ function TouchPlan({ hasIpad }: { hasIpad: boolean }) {
   );
 }
 
-function PhonePlan({ onStartNow }: { onStartNow: () => void }) {
+function PhonePlan({
+  email,
+  onStartNow,
+  pending,
+  error,
+}: {
+  email: string;
+  onStartNow: () => void;
+  pending: boolean;
+  error: string | null;
+}) {
   return (
     <>
       <section className={styles.planCard} aria-labelledby="plan-title">
@@ -243,8 +374,8 @@ function PhonePlan({ onStartNow }: { onStartNow: () => void }) {
           <h2 id="plan-title">The phone is waiting on Apple’s approval.</h2>
           <p className={styles.planIntro}>
             The big-button phone connects to the iPad through a small adapter called a Cell2Jack. Porch needs
-            Apple’s approval to use it, and I’m still waiting for that to come through. I’ll be in touch as
-            soon as it does.
+            Apple’s approval to use it, and I’m still waiting for that to come through. I’ll email you at{" "}
+            <strong>{email}</strong> as soon as it does.
           </p>
           <ol className={styles.howSteps}>
             <li>
@@ -268,9 +399,14 @@ function PhonePlan({ onStartNow }: { onStartNow: () => void }) {
               <strong>Want to start sooner?</strong> Start with the touchscreen now, and add the phone once
               Apple approves it.
             </p>
-            <button type="button" onClick={onStartNow}>
-              Start with the touchscreen
+            <button type="button" onClick={onStartNow} disabled={pending}>
+              {pending ? "Switching…" : "Start with the touchscreen"}
             </button>
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
           </div>
         </div>
       </section>

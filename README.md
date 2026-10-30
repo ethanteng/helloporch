@@ -66,6 +66,7 @@ The [family setup guide](ios/FAMILY-SETUP.md) describes all of this in detail.
 | `/api/calls/inbound/voice/…` | Twilio voice and voicemail webhooks | `lib/family/voicemail.ts` |
 | `GET /api/calls/health` | Release health check | `lib/calls/health.ts` |
 | `/api/waitlist` | Website waitlist (MailerLite) | `app/api/waitlist/route.ts` |
+| `/api/pilot` | Pilot sign-up form (MailerLite) | `app/api/pilot/route.ts` |
 | `/api/calls/token` | Legacy browser-call token (see [Legacy](#legacy)) | `lib/calls/server.ts` |
 | `admin.helloporch.store` | The admin page (see [Operating](#operating)) | `lib/admin/`, `proxy.ts` |
 
@@ -93,7 +94,7 @@ The site runs at http://localhost:3000. Fill in only the services you need. Neve
 | Phone numbers | `PORCH_SERVER_ORIGIN`, `PORCH_MAX_PHONE_NUMBERS` (nothing is bought without it), optional `PORCH_INBOUND_NUMBER` |
 | ElevenLabs | `ELEVENLABS_API_KEY` |
 | Server secrets | `PORCH_CONTACT_SETUP_CODE` (signing and recovery secret), legacy `PORCH_CALL_ACCESS_CODE` and `PORCH_PHONE_NUMBERS` |
-| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL` |
+| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `MAILERLITE_PILOT_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL` |
 
 To try the apps against a local server without real families, `scripts/seed-family-preview.mjs` creates sample devices in an isolated store prefix ([details](ios/FAMILY-SETUP.md#verify)).
 

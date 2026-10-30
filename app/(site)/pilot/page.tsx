@@ -8,7 +8,7 @@ import styles from "./pilot.module.css";
 export const metadata: Metadata = {
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "What the Porch pilot asks of families, then three steps to get ready: Porch is on iPad and iPhone, you choose the touchscreen, a number pad or a big-button phone, and you check your iPad.",
+    "What the Porch pilot asks of families, and the form to join it: your email, how your family member will call, and whether you have an iPad that will work.",
 };
 
 export default function PilotPage() {
@@ -24,8 +24,8 @@ export default function PilotPage() {
               Getting ready for <em>the Porch pilot.</em>
             </h1>
             <p className={styles.lede}>
-              Thank you for helping me test Porch. Here’s what the pilot asks of you, then three steps to see
-              what you’ll need.
+              Thank you for helping me test Porch. Here’s what the pilot asks of you, then a short form to join
+              and see what you’ll need.
             </p>
           </header>
 

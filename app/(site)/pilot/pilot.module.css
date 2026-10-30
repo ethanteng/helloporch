@@ -117,6 +117,22 @@
   color: var(--ink);
 }
 
+.email {
+  width: min(100%, 420px);
+  min-height: 52px;
+  padding: 12px 18px;
+  border: 1.5px solid oklch(0.82 0.04 70);
+  border-radius: 16px;
+  background: var(--bg);
+  font: 400 17px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.email:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 2px;
+}
+
 /* Yes or no. */
 .answers {
   display: flex;
@@ -246,11 +262,111 @@
   color: #fff;
 }
 
-/* ---------- The plan for their choice ---------- */
-.plan {
-  scroll-margin-top: 16px;
+/* Agreeing to the pilot and sending the form. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
+.submit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  width: min(100%, 880px);
+  margin: 0 auto;
+  padding: clamp(24px, 3vw, 32px) clamp(24px, 3vw, 36px);
+  border-radius: 32px;
+  background: var(--honey);
+}
+
+.agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font: 400 17px/1.55 var(--sans);
+  color: var(--ink);
+  cursor: pointer;
+  text-wrap: pretty;
+}
+
+.agree input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 2px 0 0;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.submit button,
+.welcome button {
+  min-height: 52px;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--ink);
+  font: 500 17px/1.4 var(--sans);
+  color: #fff;
+  cursor: pointer;
+}
+
+.submit button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* ---------- After they join ---------- */
+.welcomeSection {
+  padding-top: clamp(48px, 6vw, 72px);
+}
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 680px);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.welcome h2 {
+  font: 400 clamp(36px, 4.4vw, 52px) / 1.05 var(--serif);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.welcome h2 {
+  scroll-margin-top: 32px;
+}
+
+.welcome h2:focus {
+  outline: none;
+}
+
+.welcome p {
+  font: 400 clamp(17px, 1.8vw, 19px) / 1.6 var(--sans);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.welcome strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.welcome button {
+  min-height: 44px;
+  padding: 8px 20px;
+  border: 1.5px solid oklch(0.82 0.04 70);
+  background: transparent;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+/* ---------- The plan for their choice ---------- */
 .planCard {
   display: grid;
   grid-template-columns: minmax(0, 460px) minmax(0, 1fr);
