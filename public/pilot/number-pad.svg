@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" role="img" aria-label="A number pad with twelve keys">
+  <rect width="900" height="900" fill="#f3e8d6"/>
+  <ellipse cx="450" cy="742" rx="250" ry="34" fill="#5a3a24" opacity="0.14"/>
+  <rect x="230" y="150" width="440" height="580" rx="56" fill="#fdfbf7"/>
+  <rect x="230" y="150" width="440" height="580" rx="56" fill="none" stroke="#e2d4bd" stroke-width="4"/>
+  <g fill="#f4ede1" stroke="#ddcdb3" stroke-width="3">
+    <rect x="276" y="196" width="104" height="104" rx="26"/>
+    <rect x="398" y="196" width="104" height="104" rx="26"/>
+    <rect x="520" y="196" width="104" height="104" rx="26"/>
+    <rect x="276" y="324" width="104" height="104" rx="26"/>
+    <rect x="398" y="324" width="104" height="104" rx="26"/>
+    <rect x="520" y="324" width="104" height="104" rx="26"/>
+    <rect x="276" y="452" width="104" height="104" rx="26"/>
+    <rect x="398" y="452" width="104" height="104" rx="26"/>
+    <rect x="520" y="452" width="104" height="104" rx="26"/>
+    <rect x="276" y="580" width="104" height="104" rx="26"/>
+    <rect x="398" y="580" width="104" height="104" rx="26"/>
+    <rect x="520" y="580" width="104" height="104" rx="26"/>
+  </g>
+  <g fill="#3d2a1f" font-family="Helvetica, Arial, sans-serif" font-size="48" font-weight="600" text-anchor="middle">
+    <text x="328" y="265">1</text>
+    <text x="450" y="265">2</text>
+    <text x="572" y="265">3</text>
+    <text x="328" y="393">4</text>
+    <text x="450" y="393">5</text>
+    <text x="572" y="393">6</text>
+    <text x="328" y="521">7</text>
+    <text x="450" y="521">8</text>
+    <text x="572" y="521">9</text>
+    <text x="328" y="655">*</text>
+    <text x="450" y="649">0</text>
+    <text x="572" y="649">#</text>
+  </g>
+</svg>
