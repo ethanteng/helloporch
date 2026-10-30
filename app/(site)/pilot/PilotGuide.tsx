@@ -231,17 +231,25 @@ export default function PilotGuide() {
             <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option later.</p>
             <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
               <button type="button" aria-pressed={choice === "touch"} onClick={() => pick("touch")}>
-                <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
-                <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
-                <span className={styles.choiceText}>
-                  They tap the iPad’s screen to call someone, or press a key on a USB or Bluetooth number pad.
+                <ChoicePhotos photos={[{ src: "/pilot/ipad.jpg" }, { src: "/pilot/number-pad.svg" }]} />
+                <span className={styles.choiceBody}>
+                  <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
+                  <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
+                  <span className={styles.choiceText}>
+                    They tap the iPad’s screen to call someone, or press a key on a USB or Bluetooth number pad.
+                  </span>
                 </span>
               </button>
               <button type="button" aria-pressed={choice === "phone"} onClick={() => pick("phone")}>
-                <span className={styles.status}>Pending approval from Apple</span>
-                <span className={styles.choiceTitle}>A big-button phone</span>
-                <span className={styles.choiceText}>
-                  They pick up a corded home phone and press someone’s photo to call them.
+                <ChoicePhotos
+                  photos={[{ src: "/pilot/phone.jpg" }, { src: "/pilot/setup.jpg", position: "50% 30%" }]}
+                />
+                <span className={styles.choiceBody}>
+                  <span className={styles.status}>Pending approval from Apple</span>
+                  <span className={styles.choiceTitle}>A big-button phone</span>
+                  <span className={styles.choiceText}>
+                    They pick up a corded home phone and press someone’s photo to call them.
+                  </span>
                 </span>
               </button>
             </div>
@@ -520,6 +528,26 @@ function PhonePlan({
         </p>
       </section>
     </>
+  );
+}
+
+// Two square photos across the top of a calling choice. They only illustrate it, so the choice's text alone
+// names the button.
+function ChoicePhotos({ photos }: { photos: { src: string; position?: string }[] }) {
+  return (
+    <span className={styles.choicePhotos}>
+      {photos.map(({ src, position }) => (
+        <Image
+          key={src}
+          src={src}
+          alt=""
+          width={900}
+          height={900}
+          sizes="(max-width: 720px) 45vw, 190px"
+          style={position ? { objectPosition: position } : undefined}
+        />
+      ))}
+    </span>
   );
 }
 
