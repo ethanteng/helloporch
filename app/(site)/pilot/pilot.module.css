@@ -93,30 +93,6 @@
   color: var(--ink);
 }
 
-.platforms {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 0;
-  list-style: none;
-}
-
-.platforms li {
-  padding: 16px 18px 18px;
-  border-radius: 20px;
-  background: var(--bg);
-  font: 400 15px/1.5 var(--sans);
-  color: var(--muted-2);
-  text-wrap: pretty;
-}
-
-.platforms strong {
-  display: block;
-  margin-bottom: 2px;
-  font: 600 16px/1.4 var(--sans);
-  color: var(--ink);
-}
-
 .email {
   width: min(100%, 420px);
   min-height: 52px;
@@ -160,6 +136,30 @@
   border-color: var(--ink);
   background: var(--ink);
   color: #fff;
+}
+
+/* Which iPad their choice in step 3 needs. */
+.need {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 20px 18px;
+  border-left: 4px solid var(--tomato);
+  border-radius: 8px 20px 20px 8px;
+  background: var(--bg);
+  font: 400 17px/1.55 var(--sans);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.needLabel {
+  font: 600 14px/1.4 var(--sans);
+  color: var(--tomato-deep);
+}
+
+.needWaiting {
+  border-left-color: oklch(0.82 0.04 70);
+  color: var(--muted-2);
 }
 
 /* How the iPad is kept, whichever way they call. */
@@ -802,7 +802,6 @@
 }
 
 @media (max-width: 720px) {
-  .platforms,
   .choices {
     grid-template-columns: minmax(0, 1fr);
   }

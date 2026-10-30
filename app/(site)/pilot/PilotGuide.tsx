@@ -36,6 +36,13 @@ export default function PilotGuide() {
   const ipadGroup = useRef<HTMLDivElement>(null);
   const agreeBox = useRef<HTMLInputElement>(null);
   const welcome = useRef<HTMLHeadingElement>(null);
+  const need = choice && ipadNeeds[choice];
+
+  // The iPad they need depends on how they'll call, so a new choice asks about the iPad again.
+  const pick = (next: Choice) => {
+    if (next !== choice) setHasIpad(null);
+    setChoice(next);
+  };
 
   // A message about a missing step goes away once they change anything.
   useEffect(() => setError(null), [email, choice, hasIpad, agreed]);
@@ -142,14 +149,14 @@ export default function PilotGuide() {
             <h3 id="call-question">How will your family member make & receive calls?</h3>
             <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option once it's approved by Apple.</p>
             <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
-              <button type="button" aria-pressed={choice === "touch"} onClick={() => setChoice("touch")}>
+              <button type="button" aria-pressed={choice === "touch"} onClick={() => pick("touch")}>
                 <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
                 <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
                 <span className={styles.choiceText}>
                   They tap the iPad’s screen to call someone, or press a key on a USB or Bluetooth number pad.
                 </span>
               </button>
-              <button type="button" aria-pressed={choice === "phone"} onClick={() => setChoice("phone")}>
+              <button type="button" aria-pressed={choice === "phone"} onClick={() => pick("phone")}>
                 <span className={styles.status}>Pending approval from Apple</span>
                 <span className={styles.choiceTitle}>A big-button phone</span>
                 <span className={styles.choiceText}>
@@ -160,14 +167,33 @@ export default function PilotGuide() {
           </li>
 
           <li className={styles.step}>
-            <h3 id="ipad-question">Do you have an iPad that will work?</h3>
-            {/* Until they choose how to call, both requirements show. */}
-            <p aria-live="polite">
-              {choice !== "phone" && ipadNeeds.touch} {choice !== "touch" && ipadNeeds.phone}
-            </p>
-            <p>
-              Not sure which one you have? Open <strong>Settings → General → About</strong> to see its model name.
-            </p>
+            <h3 id="ipad-question">{need ? need.question : "Do you have an iPad that will work?"}</h3>
+            <div className={`${styles.need} ${need ? "" : styles.needWaiting}`} aria-live="polite">
+              {need ? (
+                <>
+                  <p className={styles.needLabel}>{need.label}</p>
+                  <p>{need.text}</p>
+                </>
+              ) : (
+                <p>Choose how they’ll call above, and this will show which iPad you need.</p>
+              )}
+            </div>
+            {need && (
+              <>
+                <p>
+                  Not sure which one you have? Open <strong>Settings → General → About</strong> to see its model
+                  name.
+                </p>
+                <div ref={ipadGroup} className={styles.answers} role="group" aria-labelledby="ipad-question">
+                  <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
+                    Yes, we have one
+                  </button>
+                  <button type="button" aria-pressed={hasIpad === false} onClick={() => setHasIpad(false)}>
+                    No, not yet
+                  </button>
+                </div>
+              </>
+            )}
             <div className={styles.always}>
               <p>
                 <strong>Whichever way they call, the iPad needs to be:</strong>
@@ -188,14 +214,6 @@ export default function PilotGuide() {
                   <a href="https://support.apple.com/en-us/111795">Apple’s instructions</a>
                 </li>
               </ul>
-            </div>
-            <div ref={ipadGroup} className={styles.answers} role="group" aria-labelledby="ipad-question">
-              <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
-                Yes, we have one
-              </button>
-              <button type="button" aria-pressed={hasIpad === false} onClick={() => setHasIpad(false)}>
-                No, not yet
-              </button>
             </div>
           </li>
         </ol>

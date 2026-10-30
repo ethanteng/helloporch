@@ -12,12 +12,19 @@ export type Part = {
   photo: { src: string; alt: string };
 };
 
-// Which iPads work. The touchscreen and number pads need only iPadOS 15, which every iPad from 2015 on
-// can run, but the Cell2Jack driver needs an M-series chip.
+// Which iPad each way of calling needs, as the pilot form asks it. The touchscreen and number pads need
+// only iPadOS 15, which every iPad from 2015 on can run, but the Cell2Jack driver needs an M-series chip.
 export const ipadNeeds = {
-  touch: "Any iPad from 2015 or later works with the touchscreen or a number pad.",
-  phone:
-    "The big-button phone needs a newer iPad, with an M1 chip or later: an iPad Pro from 2021 on, or an iPad Air from 2022 on.",
+  touch: {
+    question: "Do you have an iPad from 2015 or later?",
+    label: "For the touchscreen or a number pad",
+    text: "Almost any iPad works. It just needs to be from 2015 or later.",
+  },
+  phone: {
+    question: "Do you have an iPad with an M1 chip or newer?",
+    label: "For a big-button phone",
+    text: "The phone needs a newer iPad: an iPad Pro from 2021 on, or an iPad Air from 2022 on.",
+  },
 };
 
 const stand: Part = {
