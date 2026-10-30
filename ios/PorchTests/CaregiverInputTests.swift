@@ -1054,10 +1054,12 @@ final class CaregiverInputTests: XCTestCase {
 
     @MainActor func testEveryKeypadActionHasAnEditorChoice() {
         let editor = SetupViewController(slot: 8, contact: nil, action: .messages); editor.loadViewIfNeeded()
-        func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
-        let control = segments(editor.view).first { $0.accessibilityLabel == "Keypad action" }
-        XCTAssertEqual(control?.numberOfSegments, KeypadAction.allCases.count)
-        XCTAssertEqual(control?.selectedSegmentIndex, KeypadAction.allCases.firstIndex(of: .messages))
+        let choices = buttons(in: editor.view).filter { $0.accessibilityIdentifier?.hasPrefix("keypad.action.") == true }
+        func chosen() -> [String?] { choices.filter { $0.accessibilityTraits.contains(.selected) }.map(\.accessibilityIdentifier) }
+        XCTAssertEqual(choices.map { $0.configuration?.title }, KeypadAction.allCases.map(\.title), "Each action is a row with its whole name")
+        XCTAssertEqual(chosen(), ["keypad.action.messages"])
+        choices.first { $0.accessibilityIdentifier == "keypad.action.callControl" }?.sendActions(for: .touchUpInside)
+        XCTAssertEqual(chosen(), ["keypad.action.callControl"])
     }
 
     @MainActor func testUnenrolledBedsideSetupOffersTheWayBackToFamilyMode() {
@@ -1099,40 +1101,25 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")
         let sam = PersonViewController(admin: admin, memberID: "sam"); sam.loadViewIfNeeded()
         XCTAssertEqual(buttons(in: sam.view).filter { $0.configuration?.title == "Remove Sam" }.count, 1)
-        XCTAssertEqual(switches(sam.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Sam's calls drop in too"], "Calls drop in only as a drop-in they're approved for")
     }
 
-    @MainActor func testCaregiverModeSetsWhoseOrdinaryCallsDropIn() throws {
+    @MainActor func testPersonPageSetsPorchAppDropInsApart() throws {
         let data = try JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
-            ["id": "mia", "name": "Mia", "role": "family", "permissions": ["audio": true, "video": true], "online": true, "caregiver": false, "autoDropIn": true],
-            ["id": "ana", "name": "Ana", "role": "family", "permissions": ["audio": true, "video": false], "online": true, "caregiver": false, "autoDropIn": false]]])
+            ["id": "mia", "name": "Mia", "role": "family", "permissions": ["audio": true, "video": true], "online": true, "caregiver": false],
+            ["id": "noa", "name": "Noa", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": false]]])
         let state = try JSONDecoder().decode(FamilyAdminState.self, from: data)
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
         let dropIn = DropInSettingsViewController(admin: admin); dropIn.loadViewIfNeeded()
-        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video · Calls drop in" })
-        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Ana, Porch app, Audio" })
+        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video" })
+        XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Noa, can't drop in" })
         let family = PeopleSettingsViewController(admin: admin); family.loadViewIfNeeded()
-        XCTAssertTrue(rows(in: family.view).contains { $0.accessibilityLabel == "Mia. Porch is open. Audio and video drop-in · Calls drop in." })
+        XCTAssertTrue(rows(in: family.view).contains { $0.accessibilityLabel == "Mia. Porch is open. Audio and video drop-in." })
         func switches(_ view: UIView) -> [UISwitch] { descendants(view).compactMap { $0 as? UISwitch } }
         func texts(_ view: UIView) -> [String] { labels(in: view).compactMap(\.text) }
         let mia = PersonViewController(admin: admin, memberID: "mia"); mia.loadViewIfNeeded()
-        let calls = try XCTUnwrap(switches(mia.view).first { $0.accessibilityIdentifier == "person.autoDropIn" })
-        XCTAssertTrue(calls.isOn); XCTAssertTrue(calls.isEnabled)
-        XCTAssertEqual(calls.accessibilityLabel, "Mia's calls drop in too")
-        XCTAssertFalse(texts(mia.view).contains("Turn on audio or video drop-in first."))
-        let ana = PersonViewController(admin: admin, memberID: "ana"); ana.loadViewIfNeeded()
-        XCTAssertEqual(switches(ana.view).first { $0.accessibilityIdentifier == "person.autoDropIn" }?.isOn, false)
-        let kept = try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: ["householdName": "Pat", "dropInEnabled": true, "people": [
-            ["id": "noa", "name": "Noa", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": false, "autoDropIn": true]]]))
-        let keptAdmin = FamilyAdminViewController(remote: remote, state: kept); keptAdmin.loadViewIfNeeded()
-        let noa = PersonViewController(admin: keptAdmin, memberID: "noa"); noa.loadViewIfNeeded()
-        let saved = try XCTUnwrap(switches(noa.view).first { $0.accessibilityIdentifier == "person.autoDropIn" })
-        XCTAssertTrue(saved.isOn)
-        XCTAssertTrue(saved.isEnabled, "A saved choice can be turned off after drop-in approval is removed")
-        XCTAssertTrue(texts(noa.view).contains("Turn on audio or video drop-in first."))
-        let noaDropIn = DropInSettingsViewController(admin: keptAdmin); noaDropIn.loadViewIfNeeded()
-        XCTAssertTrue(rows(in: noaDropIn.view).contains { $0.accessibilityLabel == "Noa, can't drop in" })
+        XCTAssertTrue(texts(mia.view).contains("In Mia's Porch app"), "Porch app drop-ins are set apart from phone calls")
+        XCTAssertEqual(switches(mia.view).filter { $0.accessibilityIdentifier?.hasSuffix("DropIn") == true }.map(\.accessibilityLabel), ["Audio drop-in", "Video drop-in"])
     }
 
     @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {
