@@ -11,7 +11,10 @@ const phoneNumber = (number: string) => number.replace(/^\+1(\d{3})(\d{3})(\d{4}
 
 function seen(row: PorchRow, now: number) {
   if (row.lastSeenAt === undefined) return <span className="muted">Never</span>;
-  if (now - row.lastSeenAt > offlineAfter) return <span className="tag warn">Offline for {Math.floor((now - row.lastSeenAt) / 86400)} days</span>;
+  if (now - row.lastSeenAt > offlineAfter) {
+    const days = Math.floor((now - row.lastSeenAt) / 86400);
+    return <span className="tag warn">Offline for {days} {days === 1 ? "day" : "days"}</span>;
+  }
   return ago(row.lastSeenAt, now);
 }
 
