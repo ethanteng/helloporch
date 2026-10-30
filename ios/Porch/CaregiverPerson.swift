@@ -355,7 +355,8 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
 
     private func dropInGroup(_ subject: Subject, _ admin: FamilyAdminViewController) -> UIView? {
         let state = admin.current
-        var rows: [UIView] = []
+        // Porch app calls and phone calls are approved apart, so each gets its own card.
+        var cards: [(title: String, rows: [UIView])] = []
         if let person = subject.member {
             let audio = UISwitch(); audio.isOn = person.permissions.audio
             let video = UISwitch(); video.isOn = person.permissions.video
@@ -369,21 +370,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
                     }
                 }, for: .valueChanged)
             }
-            // Their Audio call and Video call drop in too, but only as the drop-ins approved above.
-            // The switch stays usable when that approval is later removed, so a saved choice can be turned off.
-            let approved = person.permissions.audio || person.permissions.video
-            let calls = UISwitch(); calls.isOn = person.autoDropIn == true
-            calls.isEnabled = approved || person.autoDropIn == true
-            calls.accessibilityIdentifier = "person.autoDropIn"
-            calls.addAction(UIAction { [weak self, weak admin, weak calls] _ in
-                guard let self, let admin, let calls else { return }
-                Task {
-                    if admin.onBedside, calls.isOn { guard await admin.requestMedia(video: person.permissions.video) else { self.render(); return } }
-                    await admin.perform("setAutoDropIn", ["memberID": person.id, "enabled": calls.isOn])
-                }
-            }, for: .valueChanged)
-            rows += [toggleRow("Audio drop-in", audio), toggleRow("Video drop-in", video),
-                     toggleRow("\(person.firstName)'s calls drop in too", detail: approved ? nil : "Turn on audio or video drop-in first.", calls)]
+            cards.append(("In \(person.firstName)'s Porch app", [toggleRow("Audio drop-in", audio), toggleRow("Video drop-in", video)]))
         }
         // Approvals live on the server, so a bedside that isn't paired yet can't offer them.
         if admin.onBedside, PorchDevice.credential(for: .bedside) != nil, let contact = subject.contact, let number = contact.phoneNumber {
@@ -400,11 +387,22 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
                     await admin.perform("setPhoneDropIn", phone.isOn ? ["number": number, "name": contact.name, "enabled": true] : ["number": number, "enabled": false])
                 }
             }, for: .valueChanged)
-            rows.append(toggleRow("Calls from \(PhoneNumberNormalization.display(number)) drop in", phone))
+            cards.append(("By phone", [toggleRow("Calls from \(PhoneNumberNormalization.display(number)) drop in", detail: "Audio only.", phone)]))
         }
-        guard !rows.isEmpty else { return nil }
+        guard !cards.isEmpty else { return nil }
         let detail = state?.dropInEnabled == false ? "Drop-ins are paused for everyone." : "Drop-ins connect without anyone answering."
-        return group("Drop-in", detail: detail, rows: rows)
+        let stack = UIStackView(arrangedSubviews: heading("Drop-in", detail: detail))
+        stack.axis = .vertical
+        stack.spacing = 14
+        if let first = stack.arrangedSubviews.first { stack.setCustomSpacing(4, after: first) }
+        for card in cards {
+            let caption = PorchStyle.label(card.title, size: 16, weight: .semibold)
+            caption.accessibilityTraits = .header
+            stack.addArrangedSubview(caption)
+            stack.setCustomSpacing(6, after: caption)
+            stack.addArrangedSubview(group(rows: card.rows))
+        }
+        return stack
     }
 
     private func caregiverGroup(_ person: FamilyPerson, _ admin: FamilyAdminViewController) -> UIView {

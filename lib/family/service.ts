@@ -4,7 +4,7 @@ import { callInput, callJSON, type CallServer } from "../calls/server.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -57,7 +57,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setAutoDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
   // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
@@ -72,7 +72,7 @@ function publicCall(call: Call, me: Member, house: Household) {
 function publicPerson(m: Member, now: number, pushEnabled: boolean, profiles = false) {
   const photo = displayPhoto(m);
   return { id: m.id, name: displayName(m), ...(photo ? { photoID: photo.id } : {}), role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled),
-    ...(m.role === "family" ? { caregiver: !!m.caregiver, autoDropIn: !!m.autoDropIn } : {}),
+    ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}),
     ...(profiles && m.role === "family" ? { invitedName: m.name, profile: publicProfile(m.profile), override: publicProfile(m.override) } : {}) };
 }
 // Unclaimed, unexpired invitations with the name the caregiver gave them, never their secret.
@@ -457,7 +457,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "leaveHousehold") {
         requireValue(me.role === "family", "A bedside device can't leave its household.", 403);
         removedMedia = profileMedia(me);
-        me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.autoDropIn; delete me.profile; delete me.override; delete me.pendingPhotos;
+        me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.profile; delete me.override; delete me.pendingPhotos;
         const call = house.call;
         const invite = activePorchGuest(call);
         if (call && call.state !== "ended" && invite?.memberID === me.id) dropGuest(call, invite);
@@ -491,7 +491,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (me.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
         return undefined;
       }
-      if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "setAutoDropIn" || action === "revoke" || action === "cancelInvites" || action === "cancelInvite" || action === "setCaregiver" || action === "setMessages" || action === "setPhoneDropIn") {
+      if (action === "createInvite" || action === "setPermissions" || action === "setDropIn" || action === "revoke" || action === "cancelInvites" || action === "cancelInvite" || action === "setCaregiver" || action === "setMessages" || action === "setPhoneDropIn") {
         if (action === "createInvite") {
           house.invites = house.invites.filter(i => !i.claimedBy && i.expiresAt > now);
           requireValue(house.invites.length < 10, "Cancel an unused invitation before creating another.");
@@ -534,15 +534,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           if (action === "revoke") {
             requireValue(target.id !== me.id, "To remove this device, choose Join a different family.", 403);
             removedMedia = profileMedia(target);
-            target.revoked = true; delete target.voip; delete target.alerts; delete target.caregiver; delete target.autoDropIn; delete target.profile; delete target.override; delete target.pendingPhotos;
+            target.revoked = true; delete target.voip; delete target.alerts; delete target.caregiver; delete target.profile; delete target.override; delete target.pendingPhotos;
           } else if (action === "setCaregiver") {
             requireValue(target.id !== me.id, "Another caregiver must change your caregiver access.", 403);
             requireValue(typeof input.enabled === "boolean", "Choose whether they can use caregiver mode.");
             if (input.enabled) target.caregiver = true; else delete target.caregiver;
-          } else if (action === "setAutoDropIn") {
-            // A call already ringing keeps its kind; drop-ins are still rechecked against their approval below.
-            requireValue(typeof input.enabled === "boolean", "Choose whether their calls drop in.");
-            if (input.enabled) target.autoDropIn = true; else delete target.autoDropIn;
           } else target.permissions = permissions(input.permissions);
         }
         const call = house.call, invite = activePorchGuest(call);
@@ -564,7 +560,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
         if (!online(target, now) && !(input.kind === "call" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
-        const kind = callKind(house, me, target, input.mode, input.kind, online(target, now));
+        const kind = input.kind;
         // Family phones call only the bedside, which rings for the caregiver's chosen time.
         const wait = me.role === "family" ? ringSeconds(house, kind) : input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");

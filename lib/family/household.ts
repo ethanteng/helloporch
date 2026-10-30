@@ -12,10 +12,9 @@ export type Profile = { name?: string; photo?: ProfilePhoto };
 /** A photo upload the server signed that hasn't been saved yet; deleted once `expiresAt` passes. */
 export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
- * `autoDropIn`: a caregiver set this family member's ordinary bedside calls to drop in (see `callKind`).
  * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`).
  * `attendedAt`: the bedside only, when it last noticed someone at the iPad (see `noteAttendance`). */
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; autoDropIn?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
@@ -216,11 +215,4 @@ export function noteAttendance(house: Household, member: Member, secondsAgo: unk
   const at = now - (secondsAgo as number);
   if (at < (house.attendanceSince ?? 0)) return;
   member.attendedAt = Math.max(member.attendedAt ?? 0, at);
-}
-/** What a new Porch call becomes. A family member whose calls a caregiver set to drop in drops in with an ordinary
- * call too, whenever they could have chosen that drop-in themselves and the bedside is ready for it. Otherwise it
- * rings as usual, by push if the bedside Porch is closed. */
-export function callKind(house: Household, caller: Member, target: Member, mode: Mode, requested: Call["kind"], bedsideReady: boolean): Call["kind"] {
-  if (requested === "dropIn" || !caller.autoDropIn || target.role !== "bedside" || !bedsideReady) return requested;
-  return house.dropInEnabled && caller.permissions[mode === "voice" ? "audio" : "video"] ? "dropIn" : "call";
 }

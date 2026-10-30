@@ -427,11 +427,9 @@ extension FamilyPerson {
     var dropInModes: String? {
         permissions.audio && permissions.video ? "Audio and video" : permissions.audio ? "Audio" : permissions.video ? "Video" : nil
     }
-    /// Their ordinary calls drop in, as the drop-in types they're approved for.
-    var callsDropIn: Bool { autoDropIn == true && dropInModes != nil }
     /// A one-line summary for the family list; nil when they can only make ordinary calls.
     var access: String? {
-        let parts = [dropInModes.map { "\($0) drop-in" }, callsDropIn ? "Calls drop in" : nil, caregiver == true ? "Caregiver" : nil].compactMap { $0 }
+        let parts = [dropInModes.map { "\($0) drop-in" }, caregiver == true ? "Caregiver" : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
@@ -650,7 +648,7 @@ final class DropInSettingsViewController: CaregiverPageViewController {
         let ink = enabled ? PorchStyle.ink : PorchStyle.secondary
         let people = state?.people ?? []
         var can: [UIView] = people.filter { $0.permissions.audio || $0.permissions.video }.map { person in
-            let modes = (person.dropInModes ?? "") + (person.callsDropIn ? " · Calls drop in" : "")
+            let modes = person.dropInModes ?? ""
             return PorchListRow([FamilyAdminViewController.avatar(person.name, photo: FamilyPhotos.shared.data(for: person.photoID), size: 36),
                                  FamilyAdminViewController.text(person.name, [modes], titleColor: ink)],
                                 label: "\(person.name), Porch app, \(modes)") { [weak self, weak admin] in
