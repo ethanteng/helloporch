@@ -237,6 +237,8 @@ final class SetupNumberViewController: BedsideSetupStep {
             // Without a suggestion, such as outside the US, the caregiver types one.
             let options = try? await FamilyService(credential).send("phoneNumberOptions", pin: NativeCallSettings.caregiverCode)
             if Task.isCancelled { return }
+            // The reply carries the household, including a number a background try already bought.
+            if let options { FamilyCoordinator.shared.update(options) }
             if let existing = options?.porchNumber { self.show(existing); return }
             if self.areaCode.text?.isEmpty != false { self.areaCode.text = options?.areaCode }
             for code in options?.nearby ?? [] {
