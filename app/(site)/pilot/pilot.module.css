@@ -169,11 +169,6 @@
   color: var(--tomato-deep);
 }
 
-.needWaiting {
-  border-left-color: oklch(0.82 0.04 70);
-  color: var(--muted-2);
-}
-
 /* How the iPad is kept, whichever way they call. */
 .always {
   display: flex;

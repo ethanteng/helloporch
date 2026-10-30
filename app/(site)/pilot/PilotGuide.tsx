@@ -247,34 +247,25 @@ export default function PilotGuide() {
             </div>
           </li>
 
+          {/* The iPad step waits for how they'll call, since that decides which iPad they need. */}
+          {need && (
           <li className={styles.step}>
-            <h3 id="ipad-question">{need ? need.question : "Do you have an iPad that will work?"}</h3>
-            <div className={`${styles.need} ${need ? "" : styles.needWaiting}`} aria-live="polite">
-              {need ? (
-                <>
-                  <p className={styles.needLabel}>{need.label}</p>
-                  <p>{need.text}</p>
-                </>
-              ) : (
-                <p>Choose how they’ll call above, and this will show which iPad you need.</p>
-              )}
+            <h3 id="ipad-question">{need.question}</h3>
+            <div className={styles.need} aria-live="polite">
+              <p className={styles.needLabel}>{need.label}</p>
+              <p>{need.text}</p>
             </div>
-            {need && (
-              <>
-                <p>
-                  Not sure which one you have? Open <strong>Settings → General → About</strong> to see its model
-                  name.
-                </p>
-                <div ref={ipadGroup} className={styles.answers} role="group" aria-labelledby="ipad-question">
-                  <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
-                    Yes, we have one
-                  </button>
-                  <button type="button" aria-pressed={hasIpad === false} onClick={() => setHasIpad(false)}>
-                    No, not yet
-                  </button>
-                </div>
-              </>
-            )}
+            <p>
+              Not sure which one you have? Open <strong>Settings → General → About</strong> to see its model name.
+            </p>
+            <div ref={ipadGroup} className={styles.answers} role="group" aria-labelledby="ipad-question">
+              <button type="button" aria-pressed={hasIpad === true} onClick={() => setHasIpad(true)}>
+                Yes, we have one
+              </button>
+              <button type="button" aria-pressed={hasIpad === false} onClick={() => setHasIpad(false)}>
+                No, not yet
+              </button>
+            </div>
             <div className={styles.always}>
               <p>
                 <strong>Either way, the iPad will need to be:</strong>
@@ -297,6 +288,7 @@ export default function PilotGuide() {
               </ul>
             </div>
           </li>
+          )}
           </>
           )}
         </ol>
