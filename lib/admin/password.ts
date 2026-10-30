@@ -7,8 +7,10 @@ export const maximumPasswordLength = 1024;
 type Cost = { N: number; r: number; p: number };
 const standardCost: Cost = { N: 32768, r: 8, p: 1 };
 
-function derive(password: string, salt: Buffer, cost: Cost) {
-  return new Promise<Buffer>((resolve, reject) => scrypt(password.normalize("NFKC"), salt, 32, { ...cost, maxmem: 256 * cost.N * cost.r },
+// The same text typed on a Mac or a phone gives the same key, whatever form its accented letters came in.
+const unicodeForm = "NFKC";
+function derive(typed: string, salt: Buffer, cost: Cost) {
+  return new Promise<Buffer>((resolve, reject) => scrypt(typed.normalize(unicodeForm), salt, 32, { ...cost, maxmem: 256 * cost.N * cost.r },
     (error, key) => error ? reject(error) : resolve(key)));
 }
 function parse(stored: string) {
