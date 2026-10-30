@@ -217,12 +217,24 @@ public struct FamilySnapshot: Codable, Equatable {
     /// Family devices: when someone was last noticed at the bedside iPad, in server time (see `BedsideAttendance`).
     /// Older servers don't send it, nor does one that hasn't heard of anyone there yet.
     public let bedsideAttendedAt: TimeInterval?
+    /// Everyone: the household's own phone number in E.164, which anyone can call it on. Older servers, and households
+    /// that don't have one yet, don't send it.
+    public let porchNumber: String?
+    /// The bedside and caregivers: a Porch number that's still being set up. Gone once `porchNumber` is there.
+    public let phoneSetup: PorchNumberSetup?
 
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {
         guard let bedsideLanguage, bedsideLanguage != language.rawValue else { return nil }
         return language
     }
+}
+/// A Porch number that isn't ready yet: the area code asked for, and why the last try failed, if it did. With
+/// `needsChoice`, that area code had no numbers, so Porch waits for a caregiver to choose another.
+public struct PorchNumberSetup: Codable, Equatable {
+    public let areaCode: String
+    public let error: String?
+    public let needsChoice: Bool?
 }
 /// The natural voices a caregiver can choose for each bedside language, and the household's choice.
 public struct NaturalVoices: Codable, Equatable {

@@ -83,6 +83,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     private var displayed: FamilyAdminState?
     /// Family photos on this device when the pages were last drawn, so one that finishes downloading is shown.
     private var displayedPhotos: Set<String> = []
+    /// The Porch number as the list last showed it, so one that's just been set up is shown.
+    private var displayedNumber: String?
     private var wasBeside: Bool?
     private var credential: FamilyCredential? { remote ?? PorchDevice.credential(for: .bedside) }
     var onBedside: Bool { remote == nil }
@@ -121,11 +123,11 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             } else if !RemoteCaregiverSession.shared.isActive { lock(nil) }
             // A poll is not a reason to redraw. A photo that just finished downloading is: the open
             // person page and the people list both start that download and otherwise keep the placeholder.
-            else if !busy, displayedPhotos != photosOnHand() { refresh() }
+            else if !busy, displayedPhotos != photosOnHand() || displayedNumber != numberSummary() { refresh() }
             return
         }
         guard !busy else { return }
-        if displayed != current || displayedPhotos != photosOnHand() { refresh() }
+        if displayed != current || displayedPhotos != photosOnHand() || displayedNumber != numberSummary() { refresh() }
     }
     @objc private func returnedToForeground() { if remote != nil && !RemoteCaregiverSession.shared.isActive { lock(nil) } }
     @objc private func leaveCaregiverMode() { RemoteCaregiverSession.shared.end(); navigationController?.popToRootViewController(animated: true) }
@@ -172,6 +174,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     func refresh() {
         displayed = current
         displayedPhotos = photosOnHand()
+        displayedNumber = numberSummary()
         // Shows family members' current names and photos on their keys. Saving the keypad keeps them.
         if remote == nil, var updated = slots, let state = FamilyCoordinator.shared.state { try? updated.reconcile(with: state); slots = updated }
         renderList()
@@ -195,7 +198,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             self.show(HouseholdNameViewController(admin: self))
         }
         household.accessibilityIdentifier = "caregiver.household"
-        list.addArrangedSubview(group(rows: [household]))
+        list.addArrangedSubview(group(rows: [household] + (numberRow().map { [$0] } ?? [])))
         let rows = CaregiverPage.pages(onBedside: onBedside).map { page -> UIView in
             let row = linkRow(page.title(onBedside: onBedside), value: value(for: page, state), symbol: page.symbol) { [weak self] in self?.open(page) }
             row.accessibilityIdentifier = "caregiver.page.\(page.rawValue)"
@@ -214,6 +217,41 @@ final class FamilyAdminViewController: CaregiverFormViewController {
             return row
         }
         list.addArrangedSubview(group("On the bedside iPad", rows: bedsideOnly))
+    }
+    private var snapshot: FamilySnapshot? { remote.map { FamilyCoordinator.shared.state(for: $0) } ?? FamilyCoordinator.shared.state }
+    /// The household's Porch number, or how getting one is going.
+    private func numberSummary() -> String? {
+        guard let snapshot else { return nil }
+        if let number = snapshot.porchNumber { return PorchNumber.display(number) }
+        // A setup that stopped before the number step finishes it from here.
+        guard let setUp = snapshot.phoneSetup else { return onBedside ? "Not set up" : nil }
+        return setUp.needsChoice == true ? "Choose an area code" : "Getting it…"
+    }
+    /// Who can call the household on its own number, with the number under its heading so it fits beside the pages. On
+    /// the bedside, a number that isn't ready opens the number screen, where another area code can be tried.
+    private func numberRow() -> UIView? {
+        guard let summary = numberSummary() else { return nil }
+        let icon = UIImageView(image: UIImage(systemName: "phone.fill")); icon.tintColor = PorchStyle.accent
+        icon.contentMode = .scaleAspectFit
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        icon.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        let value = PorchStyle.label(summary, size: 18, color: PorchStyle.ink, weight: .semibold)
+        value.numberOfLines = 1; value.adjustsFontSizeToFitWidth = true; value.minimumScaleFactor = 0.7
+        let text = UIStackView(arrangedSubviews: [PorchStyle.label("Porch number", size: 15), value])
+        text.axis = .vertical; text.spacing = 2
+        let row: UIView
+        if snapshot?.porchNumber == nil, onBedside {
+            row = PorchListRow([icon, text], label: "Porch number, \(summary)") { [weak self] in self?.openNumber() }
+        } else {
+            row = listRow([icon, text]); row.isAccessibilityElement = true; row.accessibilityLabel = "Porch number, \(summary)"
+        }
+        row.accessibilityIdentifier = "caregiver.porchNumber"
+        return row
+    }
+    private func openNumber() {
+        let screen = SetupNumberViewController(BedsideSetup())
+        screen.onContinue = { [weak screen] in screen?.navigationController?.popViewController(animated: true) }
+        show(screen)
     }
     /// What a page is set to, beside its name.
     private func value(for page: CaregiverPage, _ state: FamilyAdminState?) -> String? {

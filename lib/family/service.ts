@@ -223,11 +223,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const listed = async () => { await rememberHousehold(store, id); if (invitationID) await markInvitationSetUp(store, invitationID, id, now); };
       await reserveDevice(store, deviceID, secret, id, "bedside");
       const me: Member = { id: deviceID, name: bedsideName, role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
-      // A bedside set up from the app gets its number in setup, and turns away unknown callers from the start: its new
-      // number may have belonged to someone else, whose callers and robocalls still dial it. Its keypad is known to be
-      // empty, so blocking can be on before the iPad first reports it. Households made by older setups keep their own
-      // number and choice.
-      const house: Household = { id, name: me.name, createdAt: now, dropInEnabled: false, members: [me], invites: [],
+      // A bedside set up from the app starts with drop-in on, so family can look in without anyone answering; each
+      // person's drop-in is still approved on their invitation. It gets its number in setup, and turns away unknown
+      // callers from the start: its new number may have belonged to someone else, whose callers and robocalls still dial
+      // it. Its keypad is known to be empty, so blocking can be on before the iPad first reports it. Households made by
+      // older setups keep their own number and choices.
+      const house: Household = { id, name: me.name, createdAt: now, dropInEnabled: enrolling, members: [me], invites: [],
         ...(enrolling ? { numberFromSetup: true, blockUnknownCallers: true, keypadNumbers: [] } : {}) };
       if (!await store.create(`house:${id}`, JSON.stringify(house))) {
         const existing: Household = JSON.parse((await store.get(`house:${id}`))!);

@@ -47,6 +47,9 @@ extension Notification.Name {
     private(set) var call: FamilyCallRecord?
     private(set) var answered = false
     private(set) var pushReady = false
+    /// Bedside setup asks for the microphone on its own screen. Until it has, registering waits rather than asking over
+    /// whatever setup shows, and setup registers again afterwards.
+    var holdsMicrophonePrompt = false
     private(set) var status = "Incoming Porch call"
     /// Family caregivers: this call can add a regular phone, such as a bank (see CallGuests.swift).
     private(set) var canAddPhoneGuests = false
@@ -113,7 +116,7 @@ extension Notification.Name {
                 for other in others { _ = try? await FamilyService(other).send("registerVoIP", ["token": NSNull()]) }
                 guard !profiles.isEmpty else { pushReady = false; changed(); return }
                 var microphone = AVCaptureDevice.authorizationStatus(for: .audio)
-                if microphone == .notDetermined && UIApplication.shared.applicationState == .active {
+                if microphone == .notDetermined && UIApplication.shared.applicationState == .active && !holdsMicrophonePrompt {
                     _ = await AVCaptureDevice.requestAccess(for: .audio)
                     microphone = AVCaptureDevice.authorizationStatus(for: .audio)
                 }

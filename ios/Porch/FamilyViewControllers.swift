@@ -14,7 +14,7 @@ func showPorchError(_ error: Error, on controller: UIViewController) {
     alert.addAction(UIAlertAction(title: "OK", style: .default))
     controller.present(alert, animated: true)
 }
-final class FamilyHomeViewController: CaregiverFormViewController {
+final class FamilyHomeViewController: CaregiverFormViewController, CNContactViewControllerDelegate {
     private let status = PorchStyle.label("", size: 17)
     /// Under each bedside's name: someone is at the iPad, or how long ago someone was. It changes by the minute,
     /// so it's updated in place rather than rebuilding the screen. One for each family, by this phone's ID there.
@@ -36,6 +36,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let messages: Bool
         let held: Int
         let unheard: Int
+        /// The bedside's own phone number, which anyone can call it on.
+        let number: String?
     }
     private struct Presentation: Equatable {
         let families: [Family]
@@ -119,7 +121,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             let link = coordinator.link(for: credential), state = link?.state
             return Family(id: credential.deviceID, name: several ? PorchDevice.familyName(credential) ?? "Family" : nil, household: state?.householdID, people: state?.people ?? [],
                           permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: link?.error, removed: link?.accessRemoved == true,
-                          messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0)
+                          messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0, number: state?.porchNumber)
         }
         let next = Presentation(families: families, starting: starting, photo: coordinator.state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
         for credential in credentials {
@@ -219,7 +221,28 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             thread.accessibilityIdentifier = "family.messages"
             thread.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openMessages() } }, for: .touchUpInside)
             block.addArrangedSubview(thread)
+            // Anyone can call the bedside on its own number, from any phone.
+            if let number = family.number {
+                let shown = PorchStyle.label(PorchNumber.display(number), size: 28, color: PorchStyle.ink, weight: .bold)
+                shown.textAlignment = .center; shown.accessibilityIdentifier = "family.porchNumber"
+                let add = PorchStyle.button("Add to Contacts", symbol: "person.crop.circle.badge.plus", filled: false)
+                add.accessibilityIdentifier = "family.addPorchNumber"
+                add.addAction(UIAction { [weak self] _ in self?.addToContacts(number, name: from) }, for: .touchUpInside)
+                block.addArrangedSubview(section("\(from)'s Porch number", detail: "Anyone can call \(from)'s Porch on it, from any phone.", views: [shown, add]))
+            }
         }
+    }
+    /// A new contact for the bedside's Porch number, which they can change before saving. Porch never reads Contacts.
+    private func addToContacts(_ number: String, name: String) {
+        let contact = CNMutableContact()
+        contact.givenName = "\(name)'s Porch"
+        contact.phoneNumbers = [CNLabeledValue(label: CNLabelPhoneNumberMain, value: CNPhoneNumber(stringValue: number))]
+        let editor = CNContactViewController(forNewContact: contact)
+        editor.delegate = self
+        present(UINavigationController(rootViewController: editor), animated: true)
+    }
+    func contactViewController(_ viewController: CNContactViewController, didCompleteWith contact: CNContact?) {
+        viewController.dismiss(animated: true)
     }
     private func confirmRemoval(of family: FamilyCredential, named name: String?) {
         let alert = UIAlertController(title: "Remove \(name ?? "this family") from this phone?", message: "They've already removed this phone. To join again, you'll need a new invitation.", preferredStyle: .alert)
@@ -668,6 +691,8 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Invite someone"
         personName.text = prefilledName
+        // Family can drop in unless the caregiver turns it off for them.
+        audio.isOn = true; video.isOn = true
         func row(_ title: String, _ toggle: UISwitch) -> UIView {
             toggle.onTintColor = PorchStyle.accent
             let row = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink), toggle]); row.alignment = .center; row.spacing = 16; return row
