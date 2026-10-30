@@ -342,6 +342,10 @@ final class SetupPermissionsViewController: BedsideSetupStep {
 
 final class SetupDoneViewController: BedsideSetupStep {
     private let numberViews = UIStackView()
+    /// The number last drawn, so a poll that doesn't change it doesn't rebuild the labels.
+    private var shownNumber: String?
+    private var didRenderNumber = false
+    deinit { NotificationCenter.default.removeObserver(self) }
     override func viewDidLoad() {
         super.viewDidLoad(); hideKeyboardControl()
         navigationItem.hidesBackButton = true
@@ -356,8 +360,11 @@ final class SetupDoneViewController: BedsideSetupStep {
     }
     /// A number that was still being set up appears here once it's ready.
     @objc private func renderNumber() {
+        let assigned = FamilyCoordinator.shared.state?.porchNumber
+        guard !didRenderNumber || assigned != shownNumber else { return }
+        didRenderNumber = true; shownNumber = assigned
         numberViews.arrangedSubviews.forEach { numberViews.removeArrangedSubview($0); $0.removeFromSuperview() }
-        guard let assigned = FamilyCoordinator.shared.state?.porchNumber else {
+        guard let assigned else {
             numberViews.addArrangedSubview(PorchStyle.label("Porch is still getting \(lovedOne)'s phone number. Caregiver mode shows it once it's ready.", size: 17, color: PorchStyle.ink))
             return
         }
