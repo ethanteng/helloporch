@@ -215,7 +215,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             requireValue(activation.claimedBy === deviceID && activation.claimHash === hash(secret), "This activation link was already used.", 410);
             claimed = true; break;
           }
-          if (await store.compareAndSet(key, raw, JSON.stringify({ ...activation, claimedBy: deviceID, claimHash: hash(secret) }))) { claimed = true; break; }
+          if (await store.compareAndSet(key, raw, JSON.stringify({ ...activation, claimedBy: deviceID, claimHash: hash(secret), claimedAt: now }))) { claimed = true; break; }
         }
         requireValue(claimed, "Activation is busy. Try again.", 409);
       } else await checkCaregiverCode(request, store, now);

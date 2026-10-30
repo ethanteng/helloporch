@@ -6,7 +6,8 @@ import { test, beforeEach, afterEach } from 'node:test';
 import { handleFamily } from '../lib/family/service.ts';
 import { readActivity } from '../lib/admin/activity.ts';
 import { currentSession, failureLimits, sessionSeconds, signIn, signOut, signOutEverywhere } from '../lib/admin/auth.ts';
-import { cancelInvitation, createInvitation, invitationSeconds, listInvitations, sendAgain } from '../lib/admin/invitations.ts';
+import { cancelInvitation, createInvitation, invitationSeconds, listInvitations, sendAgain, settingUpSeconds } from '../lib/admin/invitations.ts';
+import { keptInvitations } from '../lib/family/activations.ts';
 import { checkPassword, hashPassword, validPasswordHash } from '../lib/admin/password.ts';
 import { listPorches } from '../lib/admin/porches.ts';
 import { adminHeaders, adminRoute, isAdminHost } from '../lib/admin/routing.ts';
@@ -135,6 +136,20 @@ test('wrong passwords pause sign-in from that address, even for the right passwo
   assert.ok(log.some(e => e.action === 'Sign-in paused after too many wrong passwords' && e.detail === 'From everywhere'));
 });
 
+test('wrong passwords tried all at once are each counted, and right ones count against nothing', async () => {
+  const f = await fixture();
+  const tries = await Promise.allSettled(Array.from({ length: 30 }, () => signIn(f.store, f.settings, { password: 'wrong', address: 'a' }, f.now())));
+  const statuses = tries.map(t => t.reason?.status);
+  assert.equal(statuses.filter(s => s === 401).length, failureLimits.address.attempts, 'only the limit had their password checked');
+  assert.equal(statuses.filter(s => s === 429).length, 30 - failureLimits.address.attempts);
+
+  const g = await fixture();
+  for (let n = 1; n < failureLimits.address.attempts; n++) await refused(() => signIn(g.store, g.settings, { password: 'wrong', address: 'a' }, g.now()), 401);
+  for (let n = 0; n < 3; n++) assert.ok((await g.session('a')).session, 'a right password gives its try back');
+  await refused(() => signIn(g.store, g.settings, { password: 'wrong', address: 'a' }, g.now()), 401);
+  await refused(() => signIn(g.store, g.settings, { password, address: 'a' }, g.now()), 429);
+});
+
 test('signed out, every admin read and change refuses', async () => {
   const f = await fixture();
   const forged = Object.create((await f.session()).session.constructor.prototype);
@@ -215,16 +230,52 @@ test('a cancelled or expired link no longer sets anything up, and can be sent ag
   assert.ok(await sendAgain(session, f.store, f.now(), cancelled.id));
 });
 
-test('a link used while it was being cancelled stays set up', async () => {
+test('a link used while it was being cancelled stays set up, and one whose setup stopped can be cancelled later', async () => {
   const f = await fixture();
   const { session } = await f.session();
   const made = await createInvitation(session, f.store, f.now(), 'Kim family');
-  // The iPad claims the link before the household is listed against the invitation.
-  const key = (await f.store.get('admin-invitations')) && JSON.parse(await f.store.get('admin-invitations'))[0].activation;
+  // The iPad claims the link before its household is made.
+  const key = JSON.parse(await f.store.get('admin-invitations'))[0].activation;
   const raw = await f.store.get(key);
-  await f.store.compareAndSet(key, raw, JSON.stringify({ ...JSON.parse(raw), claimedBy: randomUUID(), claimHash: 'x' }));
+  const device = { deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') };
+  await f.store.compareAndSet(key, raw, JSON.stringify({ ...JSON.parse(raw), claimedBy: device.deviceID, claimHash: 'x', claimedAt: f.now() }));
   await refused(() => cancelInvitation(session, f.store, f.now(), made.id), 409);
   assert.equal((await listInvitations(session, f.store, f.now()))[0].state, 'waiting');
+
+  // That setup never finished: a while later, Cancel stops the link, and sending it again works.
+  f.advance(settingUpSeconds);
+  await cancelInvitation(session, f.store, f.now(), made.id);
+  assert.equal((await listInvitations(session, f.store, f.now()))[0].state, 'cancelled');
+  assert.match((await (await f.enroll(codeOf(made.link), device)).json()).error, /cancelled/);
+  assert.ok(await sendAgain(session, f.store, f.now(), made.id));
+
+  // A setup that finished but wasn't listed against its invitation shows as set up instead of being cancelled.
+  const lost = await createInvitation(session, f.store, f.now(), 'Cho family');
+  const other = { deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') };
+  assert.equal((await f.enroll(codeOf(lost.link), other)).status, 200);
+  const list = JSON.parse(await f.store.get('admin-invitations'));
+  delete list[0].householdID; delete list[0].setUpAt;
+  f.store.set('admin-invitations', JSON.stringify(list));
+  await cancelInvitation(session, f.store, f.now(), lost.id);
+  const [row] = await listInvitations(session, f.store, f.now());
+  assert.deepEqual([row.label, row.state, row.householdID], ['Cho family', 'set up', other.deviceID]);
+});
+
+test('waiting invitations stay on the list, however many finished ones come after', async () => {
+  const f = await fixture();
+  const { session } = await f.session();
+  const waiting = await createInvitation(session, f.store, f.now(), 'Waiting family');
+  const finished = [];
+  for (let n = 0; n <= keptInvitations; n++) {
+    finished.push(await createInvitation(session, f.store, f.now(), `Family ${n}`));
+    await cancelInvitation(session, f.store, f.now(), finished.at(-1).id);
+  }
+  await createInvitation(session, f.store, f.now(), 'Newest family');
+  const ids = (await listInvitations(session, f.store, f.now())).map(i => i.id);
+  assert.equal(ids.length, keptInvitations + 2);
+  assert.ok(ids.includes(waiting.id) && !ids.includes(finished[0].id), 'the oldest finished one drops off');
+  await cancelInvitation(session, f.store, f.now(), waiting.id);
+  assert.equal((await listInvitations(session, f.store, f.now())).find(i => i.id === waiting.id).state, 'cancelled');
 });
 
 test('the Porches list covers older households and holds no private details', async () => {

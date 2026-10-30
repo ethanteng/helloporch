@@ -5,8 +5,8 @@ import { updateJSON, type FamilyStore } from "./store.ts";
 
 /** A one-use link that sets up a new bedside iPad and its household (`enrollBedside`). Only a hash of its code is kept.
  * `invitationID`: the admin page's invitation it was made for. `cancelled`: that invitation was cancelled.
- * `claimedBy` and `claimHash`: the device that used it, which may retry after a lost response. */
-export type Activation = { expiresAt: number; invitationID?: string; cancelled?: boolean; claimedBy?: string; claimHash?: string };
+ * `claimedBy`, `claimHash` and `claimedAt`: the device that used it and when; it may retry after a lost response. */
+export type Activation = { expiresAt: number; invitationID?: string; cancelled?: boolean; claimedBy?: string; claimHash?: string; claimedAt?: number };
 export const activationKey = (code: string) => `activation:${createHash("sha256").update(code).digest("hex")}`;
 
 export async function createActivation(store: FamilyStore, now: number, seconds: number, invitationID?: string) {
@@ -20,7 +20,8 @@ export async function createActivation(store: FamilyStore, now: number, seconds:
  * key of its link's record, never the link. `householdID` and `setUpAt` are filled in when the link is used. */
 export type BedsideInvitation = { id: string; label: string; createdAt: number; expiresAt: number; activation: string; householdID?: string; setUpAt?: number; cancelledAt?: number };
 export const invitationsKey = "admin-invitations";
-/** Older invitations drop off the list; their links keep working until they expire. */
+/** How many used, cancelled or expired invitations the list keeps, newest first. Waiting ones all stay, so each can still
+ * be cancelled until it expires. */
 export const keptInvitations = 200;
 
 export async function markInvitationSetUp(store: FamilyStore, invitationID: string, householdID: string, now: number) {

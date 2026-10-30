@@ -21,23 +21,36 @@ const failureCounts = (address: string) => [{ key: `admin-failures:${hash(addres
 /** Changing the password hash signs out every session, since each was made with the old one. */
 const passwordStamp = (settings: AdminSettings) => hash(settings.passwordHash).slice(0, 16);
 const generation = async (store: FamilyStore) => Number(await store.get(generationKey) ?? 0);
+/** Uncounts tries `signIn` counted, for a right password or one it never checked. A count that started over is left alone. */
+async function giveBack(store: FamilyStore, counted: { key: string; until: number; seconds: number }[]) {
+  for (const { key, until, seconds } of counted)
+    await updateJSON<Failures | null>(store, key, null, failures => failures?.until === until && failures.count > 0 ? { ...failures, count: failures.count - 1 } : undefined, seconds);
+}
 
 export async function signIn(store: FamilyStore, settings: AdminSettings, attempt: { password: unknown; address: string }, now: number) {
   const { password } = attempt;
   if (typeof password !== "string" || !password || password.length > maximumPasswordLength) throw new AdminError("Enter the admin password.");
-  // A paused address learns nothing about the password, right or wrong.
-  for (const { key, limit } of failureCounts(attempt.address)) {
-    const raw = await store.get(key), failures: Failures | null = raw ? JSON.parse(raw) : null;
-    if (failures && failures.until > now && failures.count >= limit.attempts) throw new AdminError("Sign-in is paused after too many wrong passwords. Try again later.", 429);
+  // Each try is counted before its password is checked, so tries made at the same moment can't all get in under the
+  // limit; a right password gives its try back. A paused address learns nothing about the password, right or wrong.
+  const counted: (Failures & { key: string; seconds: number; attempts: number; from: string })[] = [];
+  for (const { key, limit, from } of failureCounts(attempt.address)) {
+    let paused = false;
+    const failures = await updateJSON<Failures | null>(store, key, null, failures => {
+      paused = !!failures && failures.until > now && failures.count >= limit.attempts;
+      if (paused) return undefined;
+      return failures && failures.until > now ? { ...failures, count: failures.count + 1 } : { count: 1, until: now + limit.seconds };
+    }, limit.seconds);
+    if (paused) {
+      await giveBack(store, counted);
+      throw new AdminError("Sign-in is paused after too many wrong passwords. Try again later.", 429);
+    }
+    counted.push({ ...failures!, key, seconds: limit.seconds, attempts: limit.attempts, from });
   }
   if (!await checkPassword(password, settings.passwordHash)) {
-    for (const { key, limit, from } of failureCounts(attempt.address)) {
-      const counted = await updateJSON<Failures | null>(store, key, null, failures =>
-        failures && failures.until > now ? { ...failures, count: failures.count + 1 } : { count: 1, until: now + limit.seconds }, limit.seconds);
-      if (counted?.count === limit.attempts) await logActivity(store, now, "Sign-in paused after too many wrong passwords", from);
-    }
+    for (const { count, attempts, from } of counted) if (count === attempts) await logActivity(store, now, "Sign-in paused after too many wrong passwords", from);
     throw new AdminError("That password isn't right.", 401);
   }
+  await giveBack(store, counted);
   const token = randomBytes(32).toString("base64url"), expiresAt = now + sessionSeconds;
   const record: SessionRecord = { createdAt: now, expiresAt, generation: await generation(store), password: passwordStamp(settings) };
   if (!await store.create(sessionKey(token), JSON.stringify(record), sessionSeconds)) throw new AdminError("Couldn't sign in. Try again.", 409);
