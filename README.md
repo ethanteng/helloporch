@@ -10,8 +10,9 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 
 | Path | What it is |
 |---|---|
-| `app/`, `components/`, `public/` | The Next.js 16 website, plus the calling server's API routes under `app/api/` |
+| `app/`, `components/`, `public/` | The Next.js 16 website (`app/(site)/`), the admin page (`app/(admin)/`), and the calling server's API routes under `app/api/` |
 | `lib/calls/`, `lib/family/` | Server logic: households, pairing, calls, messages, phone numbers, push and speech |
+| `lib/admin/` | The admin page: password sign-in, sessions, invitations and the Porches list |
 | `ios/` | The universal iOS and iPadOS app, the `PorchCore` Swift package and the Cell2Jack USB driver ([ios/README.md](ios/README.md)) |
 | `scripts/` | Operator scripts for setup, number provisioning and checks |
 | `tests/` | Node tests for the server |
@@ -66,6 +67,7 @@ The [family setup guide](ios/FAMILY-SETUP.md) describes all of this in detail.
 | `GET /api/calls/health` | Release health check | `lib/calls/health.ts` |
 | `/api/waitlist` | Website waitlist (MailerLite) | `app/api/waitlist/route.ts` |
 | `/api/calls/token` | Legacy browser-call token (see [Legacy](#legacy)) | `lib/calls/server.ts` |
+| `admin.helloporch.store` | The admin page (see [Operating](#operating)) | `lib/admin/`, `proxy.ts` |
 
 ## Develop
 
@@ -133,13 +135,21 @@ See [RELEASING.md](RELEASING.md) for setup and recovery.
 
 | Script | Purpose |
 |---|---|
-| `scripts/create-bedside-invite.mjs` | Make a one-use activation link for a new bedside iPad |
+| `scripts/admin-password.mjs` | Make the admin page's password hash |
+| `scripts/create-bedside-invite.mjs` | Make a one-use activation link for a new bedside iPad, as a backup to the admin page |
 | `scripts/provision-number.mjs` | Give a household set up by hand a phone number, either an existing one or a newly bought one |
 | `scripts/configure-inbound.mjs` | Plan or apply the LiveKit inbound trunk, dispatch rule and number route |
 | `scripts/prepare-app-review.mjs` | Build the private access pack for Apple's App Review |
 | `scripts/verify-calling-deployment.mjs` | The health and commit check CI runs on each deploy |
 | `scripts/voice-samples.mjs` | Make a page for comparing ElevenLabs voices |
 | `npm run calls:check` | Check LiveKit credentials and the outbound trunk, without calling anyone |
+
+**Admin page.** `https://admin.helloporch.store`, from a computer, signed in with the admin password. Make a private setup link for a new family, see each invitation and every Porch, check the number limit and the calling server, and see everything done there.
+
+- The calling project serves it, with `PORCH_ADMIN_ENABLED=1` and `PORCH_ADMIN_PASSWORD_HASH` from `node scripts/admin-password.mjs`. Add `admin.helloporch.store` to that project's domains in Vercel. Every other host answers 404 for it, the website included.
+- Sessions last 12 hours. Wrong passwords pause sign-in from that address, and from everywhere after many more. **Sign out everywhere** on the Activity page, or a new password hash, ends every session.
+- Setup links last 14 days and set up one iPad. Porch keeps only a hash of each, so a link is shown once.
+- To try it locally, run `npm run dev` with those two settings and storage, and open `http://admin.localhost:3000`.
 
 Setup guides:
 
@@ -155,7 +165,7 @@ Phone fallback needs a LiveKit outbound SIP trunk connected to Twilio, with its 
 The site at helloporch.store has the home page, [features](https://helloporch.store/features), the [pilot](https://helloporch.store/pilot) guide, the [story](https://helloporch.store/story) and the [privacy policy](https://helloporch.store/privacy).
 
 - **Waitlist.** Both waitlist forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer goes in the subscriber's `porch_who` field. Each request is also logged as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those logs only briefly, so MailerLite is the record.
-- **3-way calling.** The features page plays a 24-second film drawn from the app's 3-way calling screens, with the faces from `public/features/three-way/mom.jpg` and `ethan.jpg`. To remake it, run `npm run dev`, then `node scripts/render-three-way-film.mjs film.mp4` (it needs macOS and Google Chrome). Upload the file to the clips' Blob store under a new name, since browsers cache Blob files by name, and point `FILM` in `app/features/ThreeWayCalling.tsx` at it.
+- **3-way calling.** The features page plays a 24-second film drawn from the app's 3-way calling screens, with the faces from `public/features/three-way/mom.jpg` and `ethan.jpg`. To remake it, run `npm run dev`, then `node scripts/render-three-way-film.mjs film.mp4` (it needs macOS and Google Chrome). Upload the file to the clips' Blob store under a new name, since browsers cache Blob files by name, and point `FILM` in `app/(site)/features/ThreeWayCalling.tsx` at it.
 - **Demo video.** It defaults to the v2 file on Vercel Blob. To change it, set `NEXT_PUBLIC_DEMO_VIDEO_URL` to the new `.mp4` URL and redeploy. The value is built into the page.
 - **Invitations.** `/join` and `/setup` are the pages for a family invitation and a new bedside. The one-time code stays after `#`. Set `NEXT_PUBLIC_TESTFLIGHT_URL` on the website project so those pages can link to TestFlight. Without it, they ask the sender for that link.
 - **Analytics.** Google Analytics runs only on production deployments, and those invitation pages never load it, so a code in the page address stays off the report.
@@ -164,7 +174,7 @@ The site at helloporch.store has the home page, [features](https://helloporch.st
 
 - **Pilot.** Families join by invitation. Bedsides that use Cell2Jack run development builds installed from a Mac, while family devices and other bedsides use TestFlight.
 - **Waiting on Apple.** A TestFlight build with the Cell2Jack driver needs Apple's DriverKit USB entitlement, which was requested on 2026-10-18. App Review access is described in [ios/README.md](ios/README.md#app-review-access-and-resubmission).
-- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). Per-household phone numbers and the helloporch.store invitation links are built. Porch won't open to families beyond the pilot until Apple approves the driver.
+- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). Per-household phone numbers, the helloporch.store invitation links and the admin page are built. Porch won't open to families beyond the pilot until Apple approves the driver.
 
 ## Legacy
 

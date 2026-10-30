@@ -461,8 +461,8 @@ The iPad needs Porch to stay open and unlocked, plus Guided Access. Android can 
 - **Review access.** Reuse `createBedsideInvite {purpose: "appReview"}`. Adapt `scripts/prepare-app-review.mjs` to write Play's "App access" instructions.
 - **Release workflow.** `.github/workflows/android-release.yml`: manual, verify-only by default, and it deploys the calling server first, like `testflight.yml`. The upload key goes in GitHub secrets.
 - **Website.**
-  - The privacy policy ([app/privacy/page.tsx](../app/privacy/page.tsx)): add Google/FCM as a processor next to Apple (line 36), say "tablet" or "device" where it says iPad, and add Android permission wording.
-  - The pilot page says there's no Android app (app/pilot/page.tsx:281).
+  - The privacy policy ([app/(site)/privacy/page.tsx](<../app/(site)/privacy/page.tsx>)): add Google/FCM as a processor next to Apple (line 36), say "tablet" or "device" where it says iPad, and add Android permission wording.
+  - The pilot page says there's no Android app (app/(site)/pilot/page.tsx:281).
 - **Docs.** `android/README.md` covering build, installing on the bedside tablet and dedicated-tablet setup. Link it from the main README.
 
 ## Estimates

@@ -32,3 +32,18 @@ export function familyStore(): FamilyStore {
   if (!url || !token || !url.startsWith("https://")) throw new Error("Family storage not configured");
   return new RedisFamilyStore(url, token, process.env.PORCH_FAMILY_STORE_PREFIX ?? "porch:family:v1:");
 }
+
+/** Changes the JSON value at `key`, starting from `empty` when there's none, and retries when another request changed it
+ * first. `change` returns the new value, or `undefined` to leave it as it is. `seconds`, when given, is how long the
+ * saved value lives. */
+export async function updateJSON<T>(store: FamilyStore, key: string, empty: T, change: (value: T) => T | undefined, seconds?: number): Promise<T> {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const raw = await store.get(key);
+    const value: T = raw === null ? empty : JSON.parse(raw);
+    const updated = change(value);
+    if (updated === undefined) return value;
+    const saved = JSON.stringify(updated);
+    if (raw === null ? await store.create(key, saved, seconds) : await store.compareAndSet(key, raw, saved, seconds)) return updated;
+  }
+  throw new Error("Porch is busy. Please try again.");
+}
