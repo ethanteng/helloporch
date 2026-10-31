@@ -10,7 +10,7 @@ const features = [
   "Regular phone calls and a phone number included",
   "No minute allowances or call-length limits",
   "Audio and video messages, plus telephone voicemail",
-  "One-press calling with touch or a compatible keypad",
+  "One-press calling with a USB number pad or big-button phone",
   "Caregiver controls and privacy settings",
 ];
 const dollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });

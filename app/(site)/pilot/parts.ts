@@ -3,7 +3,8 @@
 export type Part = {
   id: string;
   name: string;
-  cost?: number;
+  // Dollars, or "own" for something the family already has. Left out when there's no part to price.
+  cost?: number | "own";
   // What any replacement has to do. Exact parts can't be swapped for another brand.
   rule: { label: string; text: string; exact?: boolean };
   description: string;
@@ -11,13 +12,88 @@ export type Part = {
   photo: { src: string; alt: string };
 };
 
-export const parts: Part[] = [
+// Which iPad each way of calling needs, as the pilot form asks it. A number pad needs only iPadOS 15, which
+// every iPad from 2015 on can run, but the Cell2Jack driver needs an M-series chip.
+export const ipadNeeds = {
+  keypad: {
+    question: "Do you have an iPad from 2015 or later?",
+    label: "For a USB number pad",
+    text: "Almost any iPad works. It just needs to be from 2015 or later.",
+  },
+  phone: {
+    question: "Do you have an iPad with an M1 chip or newer?",
+    label: "For a big-button phone",
+    text: "The phone needs a newer iPad: an iPad Pro from 2021 on, or an iPad Air from 2022 on.",
+  },
+};
+
+const stand: Part = {
+  id: "stand",
+  name: "Sturdy iPad stand",
+  cost: 30,
+  rule: {
+    label: "Any brand",
+    text: "Look for one that holds the iPad steady at eye level and won’t tip over.",
+  },
+  description: "Mine has a weighted base, a folding aluminum arm and a clamp that fits any iPad.",
+  href: "https://www.amazon.com/dp/B0H3N2YPKJ",
+  photo: {
+    src: "/pilot/stand.jpg",
+    alt: "The back of the stand: a spring clamp holding the iPad, a black folding arm and a round base.",
+  },
+};
+
+const hub = {
+  id: "hub",
+  name: "USB hub",
+  cost: 19,
+  href: "https://www.amazon.com/dp/B0BQLLB61B",
+  photo: {
+    src: "/pilot/hub.jpg",
+    alt: "A slim black Anker USB hub with a charging cable and a white USB cable plugged in.",
+  },
+};
+
+// For a number pad Porch: a USB number pad and the hub or adapter it plugs into, which keeps the iPad
+// charging. The stand is recommended.
+export const keypadParts: Part[] = [
+  {
+    id: "number-pad",
+    name: "USB number pad",
+    cost: 30,
+    rule: {
+      label: "Any brand",
+      text: "Any USB number pad works. It plugs into the hub or adapter, so the iPad can charge at the same time.",
+    },
+    description:
+      "Each key does what you choose, such as calling someone, answering or hanging up. You see and hear each other on the iPad.",
+    href: "https://www.amazon.com/dp/B0BXT6Q3BZ",
+    photo: {
+      src: "/pilot/number-pad.jpg",
+      alt: "A silver Macally number pad with black keys for 0 to 9, arrows and enter, on a wooden table.",
+    },
+  },
+  {
+    ...hub,
+    // iPads from 2015 on include Lightning models, which a USB-C hub won't fit.
+    rule: {
+      label: "For an iPad with USB-C",
+      text: "Look for a USB-C hub with a charging port. If your iPad has the smaller Lightning port instead, get Apple’s Lightning to USB 3 Camera Adapter, which has a port for the charger too.",
+    },
+    description: "It plugs into the iPad’s USB-C port, with the charger and the number pad plugged into it.",
+  },
+  stand,
+];
+
+// For a big-button phone Porch.
+export const phoneParts: Part[] = [
   {
     id: "ipad",
     name: "iPad",
+    cost: "own",
     rule: {
-      label: "Any newer iPad",
-      text: "It needs an M-series chip and iPadOS 16 or later: an iPad Pro from 2021 or later, or an iPad Air from 2022 or later.",
+      label: "M1 chip or later",
+      text: "An iPad Pro from 2021 on, or an iPad Air from 2022 on, with iPadOS 16 or later.",
     },
     description: "A spare one is perfect. It stays plugged in, on your Wi-Fi and open to Porch.",
     photo: {
@@ -25,35 +101,14 @@ export const parts: Part[] = [
       alt: "An iPad in its stand, showing Porch’s clock and a Call someone button.",
     },
   },
+  stand,
   {
-    id: "stand",
-    name: "Sturdy iPad stand",
-    cost: 30,
-    rule: {
-      label: "Any brand",
-      text: "Look for one that holds the iPad steady at eye level and won’t tip when someone taps the screen.",
-    },
-    description: "Mine has a weighted base, a folding aluminum arm and a clamp that fits any iPad.",
-    href: "https://www.amazon.com/dp/B0H3N2YPKJ",
-    photo: {
-      src: "/pilot/stand.jpg",
-      alt: "The back of the stand: a spring clamp holding the iPad, a black folding arm and a round base.",
-    },
-  },
-  {
-    id: "hub",
-    name: "USB hub",
-    cost: 19,
+    ...hub,
     rule: {
       label: "Any brand",
       text: "Look for a USB-C hub with a charging port for the iPad’s charger and a USB port for the Cell2Jack.",
     },
     description: "It plugs into the iPad’s USB-C port, so the iPad stays charged with the phone plugged in too.",
-    href: "https://www.amazon.com/dp/B0BQLLB61B",
-    photo: {
-      src: "/pilot/hub.jpg",
-      alt: "A slim black Anker USB hub with a charging cable and a white USB cable plugged in.",
-    },
   },
   {
     id: "phone",
@@ -90,11 +145,12 @@ export const parts: Part[] = [
   },
 ];
 
-// What the parts I use, other than the iPad, cost together.
-export const equipmentCost = parts.reduce((sum, part) => sum + (part.cost ?? 0), 0);
+// What the phone parts I use, other than the iPad, cost together.
+export const phoneCost = phoneParts.reduce((sum, part) => sum + (typeof part.cost === "number" ? part.cost : 0), 0);
 
 // Families can shop around for any part that isn't exact, so its cost is only an estimate.
 export function priceLabel(part: Part) {
-  if (!part.cost) return "Your own";
+  if (part.cost === undefined) return null;
+  if (part.cost === "own") return "Your own";
   return part.rule.exact ? `$${part.cost}` : `About $${part.cost}`;
 }
