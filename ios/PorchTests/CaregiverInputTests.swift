@@ -4,6 +4,7 @@ import GameController
 import AVFoundation
 import Security
 import SafariServices
+import CoreImage
 import PorchCore
 @testable import Porch
 @testable import LiveKit
@@ -1720,6 +1721,178 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(areaCode.keyboardType, .numberPad)
         XCTAssertTrue(buttons(in: number.view).contains { $0.configuration?.title == "Get number" && !$0.isHidden })
         XCTAssertTrue(try XCTUnwrap(buttons(in: number.view).first { $0.configuration?.title == "Continue" }).isHidden, "The number can't be skipped")
+    }
+
+    private final class Connection: Cell2JackKeypadConnection {
+        var starts = 0, stops = 0
+        let update: (Cell2JackKeypadUpdate) -> Void
+        init(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) { self.update = update }
+        func start() { starts += 1 }
+        func stop() { stops += 1 }
+    }
+    @MainActor private func phoneStep(model: String = "iPad14,8") throws -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad, connections: () -> [Connection], done: () -> Int) {
+        let name = "setup-phone-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        addTeardownBlock { defaults.removePersistentDomain(forName: name) }
+        var connections: [Connection] = [], finished = 0
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }, enqueueRetry: { _, _ in }) { update in
+            let connection = Connection(update); connections.append(connection); return connection
+        }
+        keypad.activate()
+        let setup = BedsideSetup(); setup.name = "Mom"
+        let screen = SetupPhoneViewController(setup, keypad: keypad, model: model)
+        screen.onContinue = { finished += 1 }
+        screen.loadViewIfNeeded(); screen.viewDidAppear(false)
+        return (screen, keypad, { connections }, { finished })
+    }
+    @MainActor private func phoneStatus(_ screen: UIViewController) -> String? {
+        labels(in: screen.view).first { $0.accessibilityIdentifier == "setup.phoneStatus" }?.text
+    }
+
+    @MainActor func testSetupGoesOnToEachScreenThatHasSomethingToDo() {
+        let setup = BedsideSetup()
+        // Builds without the Cell2Jack go straight from the microphone and camera to the caregiver's phone.
+        let phone = setup.screen(from: .phone)
+        XCTAssertTrue(SetupPhoneViewController.offered ? phone is SetupPhoneViewController : phone is SetupYourPhoneViewController)
+        XCTAssertTrue(setup.screen(from: .yourPhone) is SetupYourPhoneViewController, "No caregiver's phone has joined")
+        XCTAssertTrue(setup.screen(from: .done) is SetupDoneViewController)
+    }
+
+    @MainActor func testConnectingThePhoneTurnsItsKeypadOnThenChecksAKeyAndHangingUp() throws {
+        let step = try phoneStep()
+        XCTAssertEqual(phoneStatus(step.screen), "Waiting for the phone…")
+        XCTAssertEqual(step.connections().count, 1, "The screen tries the Cell2Jack while the keypad is still off")
+        let proceed = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" })
+        let later = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" })
+        XCTAssertTrue(proceed.isHidden); XCTAssertFalse(later.isHidden)
+        step.connections()[0].update(.ready)
+        XCTAssertTrue(step.keypad.enabled, "Porch turns the phone keypad on once the Cell2Jack answers")
+        XCTAssertEqual(phoneStatus(step.screen), "The phone is connected. Lift the receiver and press a key.")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+        _ = step.screen.receiveCell2JackDigit(CallSlots.star)
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard *. Now put the receiver back.")
+        XCTAssertTrue(proceed.isHidden)
+        _ = step.screen.receiveCell2JackHangUp()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
+        XCTAssertFalse(proceed.isHidden); XCTAssertTrue(later.isHidden)
+        proceed.sendActions(for: .touchUpInside)
+        XCTAssertEqual(step.done(), 1)
+        XCTAssertFalse(step.keypad.trying); XCTAssertTrue(step.keypad.enabled)
+        XCTAssertEqual(step.connections()[0].stops, 0, "Switched on, the phone keypad stays connected")
+    }
+
+    @MainActor func testTheNewScreensUseTheWholeWidth() throws {
+        let setup = BedsideSetup(); setup.name = "Mom"
+        for screen in [try phoneStep().screen, SetupYourPhoneViewController(setup)] as [UIViewController] {
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 834, height: 1194))
+            window.rootViewController = UINavigationController(rootViewController: screen); window.makeKeyAndVisible()
+            screen.view.layoutIfNeeded()
+            let card = try XCTUnwrap(labels(in: screen.view).first { $0.text == "Connect the phone" || $0.text == "Add your phone" }?.superview?.superview)
+            // The form is the screen's width less its margins, up to 760 points: on an iPhone as on an iPad.
+            XCTAssertEqual(card.bounds.width, min(760, screen.view.bounds.width - 48), accuracy: 1, "\(type(of: screen)) squeezed its card")
+            window.isHidden = true
+        }
+    }
+
+    @MainActor func testThePhoneDroppingBeforeTheHangUpGoesBackToWaiting() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        _ = step.screen.receiveCell2JackDigit(3)
+        step.connections()[0].update(.finished("Phone keypad stopped"))
+        XCTAssertEqual(phoneStatus(step.screen), "Waiting for the phone…")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+    }
+
+    @MainActor func testComingBackAfterADropDuringTheHangUpWaitsAgain() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        _ = step.screen.receiveCell2JackDigit(3)
+        step.screen.viewWillDisappear(false)
+        // The driver stops while the screen is leaving, so that notice is ignored.
+        step.keypad.pause()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 3. Now put the receiver back.")
+        step.screen.viewDidAppear(false)
+        XCTAssertEqual(phoneStatus(step.screen), "Waiting for the phone…")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+    }
+
+    @MainActor func testWithoutHangingUpOnTheReceiverAKeyIsEnough() throws {
+        let step = try phoneStep()
+        step.keypad.setReceiverHangUp(false)
+        step.connections()[0].update(.ready)
+        _ = step.screen.receiveCell2JackDigit(3)
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 3. The phone is ready.")
+    }
+
+    @MainActor func testDoThisLaterLeavesThePhoneKeypadOff() throws {
+        let step = try phoneStep()
+        try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(step.done(), 1)
+        XCTAssertFalse(step.keypad.enabled); XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 1)
+    }
+
+    @MainActor func testDoThisLaterAfterThePhoneConnectsTurnsTheKeypadBackOff() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        XCTAssertTrue(step.keypad.enabled)
+        try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(step.done(), 1)
+        XCTAssertFalse(step.keypad.enabled, "Do this later undoes the enable this screen just did")
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 1)
+    }
+
+    @MainActor func testDoThisLaterLeavesAKeypadThatWasAlreadyOn() throws {
+        let step = try phoneStep()
+        step.keypad.setEnabled(true)
+        step.connections()[0].update(.ready)
+        try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue(step.keypad.enabled)
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 0, "It was already on, so the phone stays connected")
+    }
+
+    @MainActor func testLeavingThePhoneScreenStopsATrialThatHasNotTurnedTheKeypadOn() throws {
+        let step = try phoneStep()
+        step.screen.viewWillDisappear(false)
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertFalse(step.keypad.enabled)
+        XCTAssertEqual(step.connections()[0].stops, 1, "Dismissing the screen must not leave the desk phone live")
+    }
+
+    @MainActor func testLeavingAfterThePhoneAnswersLeavesTheKeypadOn() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        step.screen.viewWillDisappear(false)
+        XCTAssertTrue(step.keypad.enabled, "Answering already turned the keypad on")
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 0)
+    }
+
+    @MainActor func testAnIPadWithoutAnMChipCallsFromTheTouchscreen() throws {
+        let step = try phoneStep(model: "iPad15,7")
+        XCTAssertTrue(step.connections().isEmpty, "It never tries the Cell2Jack")
+        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text?.hasPrefix("A desk phone works with Porch only on an iPad with an M chip.") == true })
+        let proceed = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" })
+        XCTAssertFalse(proceed.isHidden)
+        proceed.sendActions(for: .touchUpInside)
+        XCTAssertEqual(step.done(), 1)
+    }
+
+    @MainActor func testAddYourPhoneAsksForTheirNameAndItsCodeReadsAsTheInvitation() throws {
+        let setup = BedsideSetup(); setup.name = "Mom"
+        let screen = SetupYourPhoneViewController(setup); screen.loadViewIfNeeded()
+        let all = descendants(screen.view)
+        XCTAssertNotNil(all.compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "setup.yourName" })
+        XCTAssertFalse(try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.showCode" }).isHidden)
+        XCTAssertFalse(try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.yourPhoneLater" }).isHidden, "Setup can go on without a phone")
+        XCTAssertTrue(try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.yourPhoneDone" }).isHidden)
+        XCTAssertTrue(try XCTUnwrap(all.first { $0.accessibilityIdentifier == "setup.code" }).superview?.isHidden == true)
+        let link = "https://helloporch.store/join#code=" + String(repeating: "ab", count: 32)
+        let image = try XCTUnwrap(SetupYourPhoneViewController.qrCode(link)?.cgImage)
+        let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+        XCTAssertEqual(detector.features(in: CIImage(cgImage: image)).compactMap { ($0 as? CIQRCodeFeature)?.messageString }, [link])
     }
 
     @MainActor func testDoneExplainsWhoCanCallAndGoesOnToTheKeypad() {
