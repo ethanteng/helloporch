@@ -679,11 +679,15 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     private var invitationExpiry: TimeInterval = 0
     private let inviteHint = PorchStyle.label("", size: 17)
     @objc private func finishedInvite() { navigationController?.popViewController(animated: true) }
-    private func shareInvite(_ link: URL) {
+    /// What sharing an invitation sends: a note, then the link.
+    static func shareItems(_ link: URL) -> [Any] {
         // A web link opens Porch, or shows how to get it first.
         let note = link.scheme == "https" ? "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It works once, for 24 hours."
             : "Join our Porch! This link works once, for 24 hours."
-        let share = UIActivityViewController(activityItems: [note, link], applicationActivities: nil)
+        return [note, link]
+    }
+    private func shareInvite(_ link: URL) {
+        let share = UIActivityViewController(activityItems: Self.shareItems(link), applicationActivities: nil)
         share.popoverPresentationController?.sourceView = create
         share.popoverPresentationController?.sourceRect = create.bounds
         present(share, animated: true)

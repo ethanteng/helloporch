@@ -250,6 +250,32 @@ final class Cell2JackRoutingTests: XCTestCase {
         keypad.setEnabled(false)
     }
 
+    @MainActor func testSetupsTrialConnectsWhileTheKeypadIsOffAndStopsWhenItEnds() throws {
+        let name = "cell2jack-trial-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connections: [Connection] = []
+        var pending: [DispatchWorkItem] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }, enqueueRetry: { _, work in pending.append(work) }) { update in
+            let connection = Connection(update); connections.append(connection); return connection
+        }
+        keypad.activate()
+        XCTAssertTrue(connections.isEmpty, "Off, so nothing connects until setup tries")
+        keypad.beginTrial()
+        XCTAssertEqual(connections.count, 1)
+        // The driver isn't on yet: the trial keeps retrying, as the switched-on keypad does.
+        connections[0].update(.finished("Phone keypad unavailable"))
+        XCTAssertEqual(pending.count, 1)
+        pending.removeFirst().perform()
+        XCTAssertEqual(connections.count, 2)
+        connections[1].update(.ready)
+        XCTAssertTrue(keypad.isReady); XCTAssertFalse(keypad.enabled, "Turning it on is up to the setup screen")
+        keypad.endTrial()
+        XCTAssertEqual(connections[1].stops, 1)
+        connections[1].update(.finished("/q sent"))
+        XCTAssertFalse(keypad.isReady)
+        XCTAssertTrue(pending.isEmpty); XCTAssertEqual(connections.count, 2)
+    }
     @MainActor func testUnexpectedUsbFailureReconnectsAndIgnoresOldClientCompletion() throws {
         let name = "cell2jack-recovery-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))

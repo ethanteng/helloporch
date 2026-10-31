@@ -322,7 +322,7 @@ Both read the fragment in a client component, clear it with `history.replaceStat
 
 Size: large. Depends on phases 1, 2 and 4.
 
-**Status:** split in two. PR 6a, on the branch `claude/porch-app-setup`, built 5.1, 5.2 and 5.6 in [BedsideSetup.swift](ios/Porch/BedsideSetup.swift), with the setup defaults from the decisions above. PR 6b has 5.3, 5.4 and 5.5.
+**Status:** split in two. PR 6a, on the branch `claude/porch-app-setup`, built 5.1, 5.2 and 5.6 in [BedsideSetup.swift](ios/Porch/BedsideSetup.swift), with the setup defaults from the decisions above. PR 6b, on the branch `claude/porch-setup-phone`, built 5.3 and 5.4 in the same file. The checklist (5.5) is PR 6c: it needs state on the server that the bedside and caregiver phones share.
 
 - **5.1 Welcome screen** on a device with no pairing in either mode: **Set up Porch for someone** or **I'm joining my family**.
   - **Set up** asks for the setup link from the invitation, unless Porch was opened by it. Without one it says "Ask whoever invited you for your setup link."
@@ -334,15 +334,16 @@ Size: large. Depends on phases 1, 2 and 4.
   - **Model check:** check the iPad's model identifier (`hw.machine`) against known M-series iPads. On a known non-M iPad, such as an iPad mini or the base iPad, say the phone keypad needs an M-series iPad and continue with touch. An unknown model gets a try.
   - **Turn on the driver:** a button opens Porch's page in Settings (`UIApplication.openSettingsURLString`) to turn on the driver, then "Unplug the Cell2Jack for ten seconds, then plug it back in." Confirm the exact Settings wording on a device with the distribution build.
   - **Turned on for them:** when the Cell2Jack reports ready, Porch turns on **Use Cell2Jack phone keypad** itself. It stays off by default for existing installs and for anyone who chooses **Do this later**.
-  - **Key test:** "Lift the receiver and press a key" shows the digit Porch heard, without acting on it. "Put the receiver back" confirms hang-up, and offers **Hang up when the receiver is put back** (on by default).
+  - **Key test:** "Lift the receiver and press a key" shows the digit Porch heard, without acting on it. "Put the receiver back" confirms hang-up. To keep setup free of choices, it doesn't offer **Hang up when the receiver is put back**: that stays on by default, and is in **This iPad**. With it turned off, a key is enough.
   - **Help after about 30 seconds of nothing:**
     - check the driver is on and replug
     - the phone must be on tone dialing, since pulse dialing isn't supported
     - the keys work only with the receiver lifted
     - the Cell2Jack may say the phone isn't connected when the receiver is lifted; pressing a key stops it
-  - **Do this later** leaves **Connect the phone** on the checklist, which opens the same steps. The touchscreen works meanwhile.
+  - **Do this later** leaves **Connect the phone** on the checklist, which opens the same steps. The touchscreen works meanwhile. Until the checklist, **This iPad → Connect the phone** in caregiver mode opens them.
   - **Phone guide:** write how Mom's picture phone is set up, including tone dialing and whatever its photo keys needed, for the `/setup` page and help.
 - **5.4 Add your phone.** A QR code (`CIQRCodeGenerator`) for one invite with caregiver access, shown only in caregiver mode behind the PIN. It refreshes after it's used or expires. **Send an invite instead** opens the share sheet.
+  - As built, it first asks for their name: an invitation needs one, and it's who Mom's Porch says is calling. Drop-in is approved as on other invitations once the iPad can use its microphone and camera. A used code shows "Your phone joined"; one that expired while Porch was away is replaced. Setup skips the screen when a caregiver's phone has already joined.
 - **5.5 Checklist** at the top of caregiver mode on the bedside and caregiver phones. Items can be dismissed.
 - **5.6 Porch number** on the family home screen and in caregiver mode, with **Add to Contacts** (`CNContactViewController`).
 - **5.7 Device and accessibility tests** of the new screens with VoiceOver, large text, both orientations, the Porch keyboard, a standard keypad and the Cell2Jack.
@@ -437,7 +438,8 @@ Size: small.
 | 4 | Keypad and settings backup | – |
 | 5 | Private invitations and the admin page: password sign-in, sessions, household list, invitations, and the Porches, System and Activity pages. **Built** | 3 |
 | 6a | Welcome screen, setup flow, number step, number display with Add to Contacts, setup defaults. **Built** | 1, 3, 5 |
-| 6b | Connect the phone, QR code for your phone, checklist | 6a |
+| 6b | Connect the phone, QR code for your phone. **Built** | 6a |
+| 6c | Checklist | 6b |
 | 7 | Delete this Porch, by a caregiver or on the admin page | 1, 4, 5 |
 | 8 | Replace the bedside with restore from backup, including the `/bedside` link and page; forgotten PIN | 3, 4, 5 |
 | 9 | Daily check for offline and unfinished Porches | 5 |

@@ -82,6 +82,10 @@ final class Cell2JackKeypad {
     private let enqueueRetry: (TimeInterval, DispatchWorkItem) -> Void
     private let makeConnection: (@escaping (Cell2JackKeypadUpdate) -> Void) -> Cell2JackKeypadConnection
     var enabled: Bool { defaults.bool(forKey: Self.enabledKey) }
+    /// Connecting while it's off, for setup's Connect the phone screen to test the phone before it's turned on.
+    private(set) var trying = false
+    /// The Cell2Jack is answering: the phone is plugged in and the driver is on.
+    private(set) var isReady = false
     var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
 
     init(defaults: UserDefaults = .standard,
@@ -114,6 +118,9 @@ final class Cell2JackKeypad {
         refresh()
     }
     func setReceiverHangUp(_ value: Bool) { defaults.set(value, forKey: Self.receiverHangUpKey) }
+    /// Connects even while the phone keypad is off, until `endTrial`. Turning it on is up to whoever started the trial.
+    func beginTrial() { trying = true; refresh() }
+    func endTrial() { trying = false; refresh() }
     func activate() {
         sceneActive = true
         if enabled { record(["kind": "sceneActive", "enabled": enabled, "bedside": isBedside(),
@@ -124,7 +131,7 @@ final class Cell2JackKeypad {
     func refresh() {
         // The scene delegate event is authoritative. UIApplication can still
         // report inactive while sceneDidBecomeActive is running.
-        wanted = enabled && isBedside() && sceneActive
+        wanted = (enabled || trying) && isBedside() && sceneActive
         if !wanted { stop(); return }
         guard worker == nil else { return }
         cancelRetry()
@@ -137,6 +144,7 @@ final class Cell2JackKeypad {
             switch update {
             case .ready:
                 guard self.generation == token, !self.stopping else { return }
+                self.isReady = true
                 self.changeStatus("Phone keypad ready")
                 self.record(["kind": "usbReady"])
             case .digits(let digits, let receivedAt):
@@ -182,7 +190,7 @@ final class Cell2JackKeypad {
                 let restart = self.stopping && self.wanted
                 let recoverable = self.worker?.supportsRecovery == true
                 self.worker = nil; self.connectionID = nil; self.stopping = false
-                self.generation = UUID()
+                self.generation = UUID(); self.isReady = false
                 self.changeStatus(message); self.record(["kind": "usbStopped", "result": message])
                 if self.backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(self.backgroundTask); self.backgroundTask = .invalid }
                 if restart { self.refresh() }
@@ -198,7 +206,7 @@ final class Cell2JackKeypad {
     }
     private func stop() {
         cancelRetry(); nextRetryDelay = 1
-        generation = UUID()
+        generation = UUID(); isReady = false
         guard let worker else { changeStatus(enabled ? "Phone keypad paused" : "Phone keypad off"); return }
         guard !stopping else { return }
         stopping = true; changeStatus("Stopping phone keypad…")
@@ -214,7 +222,7 @@ final class Cell2JackKeypad {
         retryID = UUID(); retryWork?.cancel(); retryWork = nil
     }
     private func scheduleRetry() {
-        guard wanted, enabled, sceneActive, isBedside(), worker == nil, retryWork == nil else { return }
+        guard wanted, enabled || trying, sceneActive, isBedside(), worker == nil, retryWork == nil else { return }
         let delay = nextRetryDelay
         nextRetryDelay = min(delay * 2, 15)
         let token = UUID(); retryID = token
