@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ipadNeeds, keypadParts, phoneCost, phoneParts, priceLabel, type Part } from "./parts";
+import { costOf, ipadNeeds, keypadParts, phoneParts, priceLabel, type Part } from "./parts";
 import styles from "./pilot.module.css";
 
 type Choice = "keypad" | "phone";
@@ -370,6 +370,7 @@ function KeypadPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
           {keypadParts.map((part) => (
             <PartCard key={part.id} part={part} />
           ))}
+          <ShoppingList parts={keypadParts} ipad wide />
         </div>
         <p className={styles.note}>
           Prices are from Amazon in October 2026 and may change, and other brands will cost more or less.
@@ -470,21 +471,7 @@ function PhonePlan({
           {phoneParts.map((part) => (
             <PartCard key={part.id} part={part} />
           ))}
-          <aside className={styles.total} aria-labelledby="total-title">
-            <h4 id="total-title">Your shopping list</h4>
-            <ul>
-              {phoneParts.map((part) => (
-                <li key={part.id}>
-                  <span>{part.name}</span>
-                  <span>{priceLabel(part)}</span>
-                </li>
-              ))}
-            </ul>
-            <p>
-              <span>Total</span>
-              <span>About ${phoneCost} + iPad</span>
-            </p>
-          </aside>
+          <ShoppingList parts={phoneParts} />
         </div>
         <p className={styles.note}>
           Prices are from Amazon in October 2026 and may change, and other brands will cost more or less.
@@ -514,6 +501,79 @@ function ChoicePhotos({ photos }: { photos: { src: string; position?: string }[]
   );
 }
 
+// Whether a part is required or optional, on its card and in the shopping list.
+function NeedTag({ need }: { need: Part["need"] }) {
+  return (
+    <span className={`${styles.partNeed} ${need === "required" ? styles.partRequired : ""}`}>
+      {need === "required" ? "Required" : "Optional"}
+    </span>
+  );
+}
+
+// What to buy: the required parts with their own total, then the optional ones. Every plan needs the family's
+// own iPad, so `ipad` adds a line for it when it isn't one of the cards. A `wide` list spans the row under
+// the cards, with required and optional side by side.
+function ShoppingList({ parts, ipad, wide }: { parts: Part[]; ipad?: boolean; wide?: boolean }) {
+  const required = parts.filter((part) => part.need === "required");
+  const optional = parts.filter((part) => part.need === "optional");
+  const requiredCost = costOf(parts, "required");
+  return (
+    <aside className={`${styles.total} ${wide ? styles.totalWide : ""}`} aria-labelledby="total-title">
+      <h4 id="total-title">Your shopping list</h4>
+      <div className={styles.totalGroup}>
+        <NeedTag need="required" />
+        <ul>
+          {ipad && (
+            <li>
+              <span>iPad</span>
+              <span>Your own</span>
+            </li>
+          )}
+          {required.map((part) => (
+            <li key={part.id}>
+              <span>{part.name}</span>
+              <span>{priceLabel(part)}</span>
+            </li>
+          ))}
+        </ul>
+        <p className={styles.totalSum}>
+          <span>Required total</span>
+          <span>About ${requiredCost} + iPad</span>
+        </p>
+        {required.map(
+          (part) =>
+            part.alternative &&
+            typeof part.cost === "number" && (
+              <p key={part.id} className={styles.totalNote}>
+                About ${requiredCost - part.cost + part.alternative.cost} + iPad with {part.alternative.name} in
+                place of the {part.name}.
+              </p>
+            ),
+        )}
+      </div>
+      {optional.length > 0 && (
+        <div className={styles.totalGroup}>
+          <NeedTag need="optional" />
+          <ul>
+            {optional.map((part) => (
+              <li key={part.id}>
+                <span>{part.name}</span>
+                <span>{priceLabel(part)}</span>
+              </li>
+            ))}
+          </ul>
+          {optional.length > 1 && (
+            <p className={styles.totalSum}>
+              <span>Optional total</span>
+              <span>About ${costOf(parts, "optional")}</span>
+            </p>
+          )}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function PartCard({ part }: { part: Part }) {
   const price = priceLabel(part);
   return (
@@ -528,18 +588,29 @@ function PartCard({ part }: { part: Part }) {
       />
       <div className={styles.partCopy}>
         <div className={styles.partHeading}>
-          <h4 id={`${part.id}-title`}>{part.name}</h4>
+          <NeedTag need={part.need} />
           {price && <span className={styles.price}>{price}</span>}
         </div>
+        <h4 id={`${part.id}-title`}>{part.name}</h4>
         <p className={`${styles.rule} ${part.rule.exact ? styles.exact : ""}`}>
           <strong>{part.rule.label}.</strong> {part.rule.text}
         </p>
         <p>{part.description}</p>
-        {part.href && (
-          <a href={part.href} className={styles.buy} target="_blank" rel="noopener noreferrer">
-            {part.rule.exact ? "Buy on Amazon" : "View on Amazon"}
-            <span className={styles.visuallyHidden}> (opens in a new tab)</span>
-          </a>
+        {(part.href || part.alternative) && (
+          <div className={styles.buyLinks}>
+            {part.href && (
+              <a href={part.href} className={styles.buy} target="_blank" rel="noopener noreferrer">
+                {part.rule.exact ? "Buy on Amazon" : "View on Amazon"}
+                <span className={styles.visuallyHidden}> (opens in a new tab)</span>
+              </a>
+            )}
+            {part.alternative && (
+              <a href={part.alternative.href} className={styles.buy} target="_blank" rel="noopener noreferrer">
+                {part.alternative.label}
+                <span className={styles.visuallyHidden}> (opens in a new tab)</span>
+              </a>
+            )}
+          </div>
         )}
       </div>
     </article>

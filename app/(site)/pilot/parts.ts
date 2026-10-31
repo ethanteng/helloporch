@@ -3,12 +3,17 @@
 export type Part = {
   id: string;
   name: string;
+  // Whether Porch works without it. The cards and shopping lists show required parts first.
+  need: "required" | "optional";
   // Dollars, or "own" for something the family already has. Left out when there's no part to price.
   cost?: number | "own";
   // What any replacement has to do. Exact parts can't be swapped for another brand.
   rule: { label: string; text: string; exact?: boolean };
   description: string;
   href?: string;
+  // A second listing for families whose iPad needs something else, such as a Lightning adapter in place of a
+  // hub. `name` is how the shopping list mentions it.
+  alternative?: { name: string; label: string; href: string; cost: number };
   photo: { src: string; alt: string };
 };
 
@@ -27,9 +32,11 @@ export const ipadNeeds = {
   },
 };
 
+// Porch works without a stand, so it's optional in both plans.
 const stand: Part = {
   id: "stand",
   name: "Sturdy iPad stand",
+  need: "optional",
   cost: 30,
   rule: {
     label: "Any brand",
@@ -46,20 +53,22 @@ const stand: Part = {
 const hub = {
   id: "hub",
   name: "USB hub",
+  need: "required",
   cost: 19,
   href: "https://www.amazon.com/dp/B0BQLLB61B",
   photo: {
     src: "/pilot/hub.jpg",
     alt: "A slim black Anker USB hub with a charging cable and a white USB cable plugged in.",
   },
-};
+} as const;
 
 // For a number pad Porch: a USB number pad and the hub or adapter it plugs into, which keeps the iPad
-// charging. The stand is recommended.
+// charging. The stand is optional.
 export const keypadParts: Part[] = [
   {
     id: "number-pad",
     name: "USB number pad",
+    need: "required",
     cost: 30,
     rule: {
       label: "Any brand",
@@ -78,9 +87,15 @@ export const keypadParts: Part[] = [
     // iPads from 2015 on include Lightning models, which a USB-C hub won't fit.
     rule: {
       label: "For an iPad with USB-C",
-      text: "Look for a USB-C hub with a charging port. If your iPad has the smaller Lightning port instead, get Apple’s Lightning to USB 3 Camera Adapter, which has a port for the charger too.",
+      text: "Look for a USB-C hub with a charging port. If your iPad has the smaller Lightning port instead, get a Lightning to USB adapter with its own charging port, for about $8.",
     },
     description: "It plugs into the iPad’s USB-C port, with the charger and the number pad plugged into it.",
+    alternative: {
+      name: "a Lightning adapter",
+      label: "View a Lightning adapter on Amazon",
+      href: "https://www.amazon.com/dp/B0F8NHNBG8",
+      cost: 8,
+    },
   },
   stand,
 ];
@@ -90,6 +105,7 @@ export const phoneParts: Part[] = [
   {
     id: "ipad",
     name: "iPad",
+    need: "required",
     cost: "own",
     rule: {
       label: "M1 chip or later",
@@ -101,7 +117,6 @@ export const phoneParts: Part[] = [
       alt: "An iPad in its stand, showing Porch’s clock and a Call someone button.",
     },
   },
-  stand,
   {
     ...hub,
     rule: {
@@ -113,6 +128,7 @@ export const phoneParts: Part[] = [
   {
     id: "phone",
     name: "Big-button phone",
+    need: "required",
     cost: 28,
     rule: {
       label: "Any brand",
@@ -129,6 +145,7 @@ export const phoneParts: Part[] = [
   {
     id: "cell2jack",
     name: "Cell2Jack",
+    need: "required",
     cost: 37,
     rule: {
       label: "Must be a Cell2Jack",
@@ -143,10 +160,15 @@ export const phoneParts: Part[] = [
       alt: "The Cell2Jack, a small white box with a blue light, a USB cable and a phone cord.",
     },
   },
+  stand,
 ];
 
-// What the phone parts I use, other than the iPad, cost together.
-export const phoneCost = phoneParts.reduce((sum, part) => sum + (typeof part.cost === "number" ? part.cost : 0), 0);
+// What the parts with this need cost together, leaving out anything the family already has.
+export function costOf(parts: Part[], need: Part["need"]) {
+  return parts
+    .filter((part) => part.need === need)
+    .reduce((sum, part) => sum + (typeof part.cost === "number" ? part.cost : 0), 0);
+}
 
 // Families can shop around for any part that isn't exact, so its cost is only an estimate.
 export function priceLabel(part: Part) {
