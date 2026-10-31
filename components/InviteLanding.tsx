@@ -23,7 +23,7 @@ const copy = {
     lede: "Open this page on the iPad that will stay with them. This link sets up one iPad.",
     device: "iPad",
     open: "Open setup in Porch",
-    paste: "In Porch, tap the gear and paste it into Bedside activation link.",
+    paste: "In Porch, tap Set up Porch for someone and paste it into Setup link.",
     copyLabel: "Copy setup link",
   },
 } as const;
