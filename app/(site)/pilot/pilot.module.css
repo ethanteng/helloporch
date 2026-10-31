@@ -540,6 +540,49 @@
   cursor: pointer;
 }
 
+/* What happens after joining with a number pad, in its own dark card so it stands apart from the parts. */
+.nextCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin: clamp(72px, 8vw, 104px) clamp(16px, 3vw, 40px) 0;
+  padding: clamp(40px, 6vw, 64px) clamp(20px, 6vw, 72px);
+  border-radius: clamp(32px, 4vw, 48px);
+  background: oklch(0.3 0.04 45);
+  color: #fff;
+  text-align: center;
+}
+
+.nextIcon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: oklch(0.85 0.1 80);
+  color: oklch(0.3 0.04 45);
+}
+
+.nextCard h3 {
+  font: 400 clamp(36px, 4.4vw, 52px) / 1.05 var(--serif);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.nextCard p {
+  max-width: 600px;
+  font: 400 clamp(18px, 2vw, 21px) / 1.55 var(--sans);
+  color: oklch(0.88 0.02 70);
+  text-wrap: pretty;
+}
+
+.nextCard strong {
+  font-weight: 600;
+  color: oklch(0.85 0.1 80);
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Sections ---------- */
 .section {
   display: flex;
