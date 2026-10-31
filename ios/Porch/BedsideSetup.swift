@@ -22,7 +22,7 @@ final class WelcomeViewController: CaregiverFormViewController {
         form.addArrangedSubview(privacy)
     }
     private func setUp() {
-        guard UIDevice.current.userInterfaceIdiom == .phone else { choose(.bedside); return }
+        guard !PorchDevice.canBeBedside else { choose(.bedside); return }
         navigationController?.pushViewController(BedsideOnIPadViewController(choose: choose), animated: true)
     }
 }

@@ -1400,7 +1400,9 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(settings.title, "Settings")
         let titles = buttons(in: settings.view).compactMap { $0.configuration?.title }
         XCTAssertTrue(titles.contains("Privacy policy"))
-        XCTAssertTrue(titles.contains { $0.hasPrefix("Use this ") && $0.hasSuffix(" as the bedside Porch") })
+        // Only an iPad can become the bedside.
+        XCTAssertEqual(titles.contains("Use this iPad as the bedside Porch"), UIDevice.current.userInterfaceIdiom == .pad)
+        XCTAssertFalse(titles.contains("Use this iPhone as the bedside Porch"))
         if FamilyCoordinator.shared.state?.me.caregiver != true {
             XCTAssertFalse(rows(in: settings.view).contains { $0.accessibilityIdentifier == "family.caregiverMode" }, "Caregiver mode shows only for caregivers")
         }
@@ -1702,6 +1704,33 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(chosen, UIDevice.current.userInterfaceIdiom == .pad ? [.bedside, .family] : [.family])
         if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertTrue(navigation.viewControllers.last is BedsideOnIPadViewController) }
         XCTAssertTrue(buttons(in: welcome.view).contains { $0.accessibilityIdentifier == "caregiver.privacy" })
+    }
+
+    /// A setup link opened on an iPhone, such as from the invitation email, leaves it a family device.
+    @MainActor func testASetupLinkOnAnIPhoneExplainsTheBedsideIsTheIPad() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+        let key = "porch.experience", saved = UserDefaults.standard.string(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        let activation = PorchDevice.bedsideActivation
+        let link = try XCTUnwrap(URL(string: "https://helloporch.store/setup#code=\(String(repeating: "a", count: 64))"))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        for experience in [nil, "family"] {
+            UserDefaults.standard.set(experience, forKey: key)
+            let welcoming = PorchDevice.needsWelcome
+            let container = PorchContainerViewController()
+            let window = UIWindow(windowScene: scene)
+            window.rootViewController = container; window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            container.openInvitation(link)
+            XCTAssertEqual(PorchDevice.experience, .family)
+            XCTAssertNotEqual(UserDefaults.standard.string(forKey: key), "bedside")
+            XCTAssertEqual(PorchDevice.bedsideActivation, activation, "The link isn't saved for setup")
+            if welcoming {
+                XCTAssertTrue((container.children.first as? UINavigationController)?.viewControllers.last is BedsideOnIPadViewController)
+            } else {
+                XCTAssertTrue(container.presentedViewController is UIAlertController)
+            }
+        }
     }
 
     @MainActor func testADeviceThatChoseItsModeNeverSeesTheWelcomeAgain() {

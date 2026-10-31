@@ -235,7 +235,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         if paired, families.count < FamilyNames.limit {
             links.append(textLink("Join another family") { [weak self] in self?.navigationController?.pushViewController(FamilyPairingViewController(), animated: true) })
         }
-        links.append(textLink("Use this \(device) as the bedside Porch") { [weak self] in self?.confirmBedside() })
+        if PorchDevice.canBeBedside { links.append(textLink("Use this \(device) as the bedside Porch") { [weak self] in self?.confirmBedside() }) }
         let linkStack = UIStackView(arrangedSubviews: links)
         linkStack.axis = .vertical; linkStack.alignment = .leading
         content.addArrangedSubview(linkStack)

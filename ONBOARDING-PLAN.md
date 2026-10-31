@@ -326,7 +326,7 @@ Size: large. Depends on phases 1, 2 and 4.
 
 - **5.1 Welcome screen** on a device with no pairing in either mode: **Set up Porch for someone** or **I'm joining my family**.
   - **Set up** asks for the setup link from the invitation, unless Porch was opened by it. Without one it says "Ask whoever invited you for your setup link."
-  - On an iPhone, it explains that the bedside runs on the iPad that stays with them.
+  - On an iPhone, it explains that the bedside runs on the iPad that stays with them. A setup link opened on an iPhone does the same, and family settings don't offer to make an iPhone the bedside.
 - **5.2 Bedside setup.** The steps above replace the creation form in `CaregiverPINViewController` ([PorchContainerViewController.swift:182](ios/Porch/PorchContainerViewController.swift:182)).
   - The number step can't be skipped. Call `assignPhoneNumber` with a longer timeout than the usual 12 seconds, such as 45, since the first number also makes the shared trunk. If buying is still pending because Twilio failed, **Continue** is allowed with "Porch will keep trying and let you know", so pairing family isn't blocked. The checklist shows the pending number.
   - The **Done** screen explains that unknown callers are blocked (1.6).

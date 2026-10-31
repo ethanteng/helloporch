@@ -13,9 +13,9 @@ export function reviewNotes(links, expiresAt) {
   const notes = `ACCESS FOR GUIDELINE 2.1(a)
 Porch uses device invitations and a caregiver PIN instead of a username/password. The private activation links below grant setup of fresh test families, separate from our users. Each link works for one bedside device; use a backup for another install. They expire ${new Date(expiresAt * 1000).toISOString().slice(0, 10)}. Pairing then stays saved. No email, SMS, developer account or operator assistance is needed.
 
-Use TWO devices running this build, ideally an iPad (bedside) and an iPhone (family). Either device can use either mode. No physical keypad, Cell2Jack or special accessory is required.
+Use TWO devices running this build: an iPad (bedside) and an iPhone or second iPad (family). The bedside runs only on iPad; an iPhone is always a family device. No physical keypad, Cell2Jack or special accessory is required.
 
-1. On the bedside device, open Porch, tap the gear. On iPhone, first choose gear > Use as the bedside Porch. Paste activation link 1 into Bedside activation link. Name it Review bedside. Choose and confirm your own six-digit PIN; keep it for caregiver settings. Tap Save PIN and continue.
+1. On the bedside iPad, open Porch, tap the gear. Paste activation link 1 into Bedside activation link. Name it Review bedside. Choose and confirm your own six-digit PIN; keep it for caregiver settings. Tap Save PIN and continue.
 2. In Caregiver mode > People, tap key 1 and keep Person. Enter Review family and tap Invite them. Share/copy the NEW family invitation to the second device, then Done and Save. Tap Review family on the keypad and set Calls start as to Video. The family invitation lasts 24 hours from creation; make a new one here if needed. Do not paste a bedside activation link into Join family.
 3. On the second device, use family mode (on a fresh iPad: gear > Use this device as a family member). Tap Join a family, paste the family invitation, and Join family. The bedside contact links automatically. Return the bedside to its clock.
 4. With both apps open, tap the bedside's Call someone > Review family; answer on the family device. Test video, mute, camera and hangup. Call the bedside back with Voice and Video. For background ringing, lock the family phone and call it from the bedside; answer, then open Porch for video.

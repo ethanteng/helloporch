@@ -159,6 +159,7 @@ final class PorchContainerViewController: UIViewController {
             return
         }
         if bedside {
+            guard PorchDevice.canBeBedside else { explainBedsideIsTheIPad(); return }
             guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This iPad is already set up. Open the activation link on the new iPad instead.", status: 409), on: self); return }
             do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
             // The clock presents setup once its camera has stopped, on the next turn so a link that launched Porch
@@ -170,6 +171,16 @@ final class PorchContainerViewController: UIViewController {
             guard let nav = self?.content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
             nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
         }
+    }
+    /// A setup link opened on an iPhone, such as from the invitation email. A phone that isn't set up yet shows the
+    /// same explanation as Set up on the welcome screen; one that's in a family is told where to open it.
+    private func explainBedsideIsTheIPad() {
+        guard welcoming, let navigation = content as? UINavigationController else {
+            showPorchError(FamilyServiceError(message: "This setup link is for the iPad that stays with your loved one. Open it on that iPad.", status: 409), on: self)
+            return
+        }
+        navigation.popToRootViewController(animated: false)
+        navigation.pushViewController(BedsideOnIPadViewController { [weak self] in self?.choose($0) }, animated: true)
     }
     /// Runs `then` with `experience` on screen. Switching rebuilds the screen once the bedside camera has stopped,
     /// so `then` waits for that; already in that mode, nothing is rebuilt.
