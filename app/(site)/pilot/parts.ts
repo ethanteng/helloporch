@@ -17,7 +17,7 @@ export type Part = {
 export const ipadNeeds = {
   keypad: {
     question: "Do you have an iPad from 2015 or later?",
-    label: "For a number pad",
+    label: "For a USB number pad",
     text: "Almost any iPad works. It just needs to be from 2015 or later.",
   },
   phone: {
@@ -54,16 +54,16 @@ const hub = {
   },
 };
 
-// For a number pad Porch. The number pad is the one part they need; the stand is recommended, and the hub is
-// only for a USB number pad.
+// For a number pad Porch: a USB number pad and the hub it plugs into, which keeps the iPad charging. The stand
+// is recommended.
 export const keypadParts: Part[] = [
   {
     id: "number-pad",
-    name: "Number pad",
+    name: "USB number pad",
     cost: 30,
     rule: {
       label: "Any brand",
-      text: "Any USB or Bluetooth number pad works. A Bluetooth one leaves the iPad’s charging port free.",
+      text: "Any USB number pad works. It plugs into the hub, so the iPad can charge at the same time.",
     },
     description:
       "Each key does what you choose, such as calling someone, answering or hanging up. You see and hear each other on the iPad.",
@@ -73,15 +73,15 @@ export const keypadParts: Part[] = [
       alt: "A silver Macally number pad with black keys for 0 to 9, arrows and enter, on a wooden table.",
     },
   },
-  stand,
   {
     ...hub,
     rule: {
-      label: "Only with a USB number pad",
+      label: "Any brand",
       text: "Look for a USB-C hub with a charging port, so the iPad charges while the number pad is plugged in.",
     },
     description: "It plugs into the iPad’s USB-C port, with the charger and the number pad plugged into it.",
   },
+  stand,
 ];
 
 // For a big-button phone Porch.
