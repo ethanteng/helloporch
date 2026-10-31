@@ -276,7 +276,7 @@ export default function PilotGuide() {
             </div>
             <div className={styles.always}>
               <p>
-                <strong>Either way, the iPad will need to be:</strong>
+                <strong>In addition, the iPad will need to be:</strong>
               </p>
               <ul>
                 <li>
@@ -458,7 +458,7 @@ function PhonePlan({
         </figure>
         <div className={styles.planCopy}>
           <p className={styles.status}>Waiting on Apple</p>
-          <h2 id="plan-title">The phone is waiting on Apple’s approval.</h2>
+          <h2 id="plan-title">We're still waiting on Apple’s approval.</h2>
           <p className={styles.planIntro}>
             The big-button phone connects to the iPad through a small adapter called a Cell2Jack. Porch needs
             Apple’s approval to use it, and I’m still waiting for that to come through. I’ll email you at{" "}
