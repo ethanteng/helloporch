@@ -6,6 +6,7 @@ const INTERFACES = { keypad: "number pad", phone: "big-button phone" } as const;
 // Signs a family up for the pilot from the pilot page. Adds them to MailerLite when MAILERLITE_API_KEY is set,
 // in MAILERLITE_PILOT_GROUP_ID if given, with their answers in the porch_pilot_interface and porch_pilot_ipad
 // fields, so the families waiting for the big-button phone can be emailed together once Apple approves it.
+// Another language their loved one needs goes in porch_pilot_language, blank when Porch already speaks theirs.
 // Someone waiting for Android is saved with just their email and porch_pilot_interface "android".
 // MailerLite upserts by email, so sending changed answers updates them. Every request is also logged, as the
 // waitlist does, but function logs expire quickly, so MailerLite is the real record.
@@ -15,6 +16,7 @@ export async function POST(req: Request) {
   const choice: keyof typeof INTERFACES | undefined =
     typeof body?.interface === "string" && Object.hasOwn(INTERFACES, body.interface) ? body.interface : undefined;
   const ipad = typeof body?.ipad === "boolean" ? body.ipad : undefined;
+  const language = typeof body?.language === "string" ? body.language.trim().slice(0, 100) : "";
 
   if (!EMAIL_RE.test(email) || email.length > 254) {
     return Response.json({ error: "Please enter a valid email address." }, { status: 400 });
@@ -25,7 +27,11 @@ export async function POST(req: Request) {
     body?.platform === "android"
       ? { porch_pilot_interface: "android" }
       : choice && ipad !== undefined
-        ? { porch_pilot_interface: INTERFACES[choice], porch_pilot_ipad: ipad ? "yes" : "no" }
+        ? {
+            porch_pilot_interface: INTERFACES[choice],
+            porch_pilot_ipad: ipad ? "yes" : "no",
+            porch_pilot_language: language,
+          }
         : null;
   if (!fields) {
     return Response.json({ error: "Please answer every step." }, { status: 400 });

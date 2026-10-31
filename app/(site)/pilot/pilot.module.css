@@ -105,7 +105,7 @@
   color: var(--ink);
 }
 
-.email {
+.textInput {
   width: min(100%, 420px);
   min-height: 52px;
   padding: 12px 18px;
@@ -116,9 +116,21 @@
   color: var(--ink);
 }
 
-.email:focus-visible {
+.textInput:focus-visible {
   outline: 2px solid var(--tomato-deep);
   outline-offset: 2px;
+}
+
+/* The label above an optional text box. */
+.fieldLabel {
+  margin-bottom: -6px;
+  font: 600 16px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.fieldLabel span {
+  font-weight: 400;
+  color: var(--muted);
 }
 
 /* Yes or no. */
