@@ -665,14 +665,15 @@
   padding: 0 12px;
 }
 
+/* Required or optional and the price share a line, with the name under them. */
 .partHeading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.partHeading h4 {
+.partCopy h4 {
   margin: 0;
   font: 400 clamp(24px, 2.2vw, 28px) / 1.15 var(--serif);
   letter-spacing: -0.015em;
@@ -716,19 +717,44 @@
   color: var(--brown-ink);
 }
 
-.buy {
+/* Sits at the bottom of the card, with a second listing under the first when there is one. */
+.buyLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-top: auto;
   padding-top: 6px;
+}
+
+.buy {
   width: fit-content;
   font: 500 16px/1.4 var(--sans);
   text-underline-offset: 4px;
 }
 
-/* The last card in the parts grid adds everything up. */
+/* Required or optional, on each part and in the shopping list. Required is dark so it reads first. */
+.partNeed {
+  width: fit-content;
+  padding: 3px 10px;
+  border: 1.5px solid oklch(0.72 0.05 65);
+  border-radius: 99px;
+  font: 600 12px/1.4 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.partRequired {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+/* The last card in the parts grid adds everything up: what's required, with its total, then what's optional. */
 .total {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
   padding: clamp(24px, 3vw, 32px);
   border-radius: 36px;
   background: var(--honey);
@@ -745,21 +771,53 @@
   list-style: none;
 }
 
+/* Under a row of cards, the list spans it with required and optional side by side. */
+.totalWide {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(24px, 4vw, 56px);
+  row-gap: 22px;
+  align-items: start;
+}
+
+.totalWide h4 {
+  grid-column: 1 / -1;
+}
+
+.totalGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .total li,
-.total > p {
+.totalSum {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 0;
+  padding: 10px 0;
   border-top: 1px solid oklch(0.78 0.06 75);
   font: 400 16px/1.5 var(--sans);
   color: var(--muted-2);
 }
 
-.total > p {
+.total li > span:last-child,
+.totalSum > span:last-child {
+  flex: none;
+  text-align: right;
+}
+
+.totalSum {
   border-top: 2px solid var(--ink);
   font-weight: 600;
   color: var(--ink);
+}
+
+.totalNote {
+  font: 400 14px/1.5 var(--sans);
+  color: var(--muted-2);
+  text-wrap: pretty;
 }
 
 /* ---------- What the pilot asks ---------- */
@@ -792,6 +850,10 @@
   }
 
   .involves {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .totalWide {
     grid-template-columns: minmax(0, 1fr);
   }
 
