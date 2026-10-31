@@ -443,7 +443,13 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
             // Turned on for them: from now on the phone is Mom's keypad, here and on the clock.
             if !keypad.enabled { keypad.setEnabled(true); enabledHere = true }
             if progress == .waiting { progress = .connected; render() }
-        } else if progress == .connected { progress = .waiting; render() }
+        } else {
+            switch progress {
+            // Unplugged, or the driver turned off, before the check finished: a hang-up meanwhile went unheard.
+            case .connected, .heard: progress = .waiting; render()
+            case .waiting, .done: break
+            }
+        }
     }
     /// Shows the key the phone sent, without acting on it.
     func receiveCell2JackDigit(_ digit: Int) -> String {
@@ -617,6 +623,7 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
         for view in [codeFrame, caption, send] { view?.isHidden = true }
         show.isHidden = false
         status.text = "That code ran out. Tap Show QR code for a new one."
+        UIAccessibility.post(notification: .announcement, argument: status.text)
     }
     private func share() {
         // An expired code is being replaced; its link would only say it ran out.

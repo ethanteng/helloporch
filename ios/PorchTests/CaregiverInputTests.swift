@@ -1794,6 +1794,15 @@ final class BedsideSetupTests: XCTestCase {
         }
     }
 
+    @MainActor func testThePhoneDroppingBeforeTheHangUpGoesBackToWaiting() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        _ = step.screen.receiveCell2JackDigit(3)
+        step.connections()[0].update(.finished("Phone keypad stopped"))
+        XCTAssertEqual(phoneStatus(step.screen), "Waiting for the phone…")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+    }
+
     @MainActor func testWithoutHangingUpOnTheReceiverAKeyIsEnough() throws {
         let step = try phoneStep()
         step.keypad.setReceiverHangUp(false)
