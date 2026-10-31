@@ -1809,6 +1809,44 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(step.connections()[0].stops, 1)
     }
 
+    @MainActor func testDoThisLaterAfterThePhoneConnectsTurnsTheKeypadBackOff() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        XCTAssertTrue(step.keypad.enabled)
+        try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(step.done(), 1)
+        XCTAssertFalse(step.keypad.enabled, "Do this later undoes the enable this screen just did")
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 1)
+    }
+
+    @MainActor func testDoThisLaterLeavesAKeypadThatWasAlreadyOn() throws {
+        let step = try phoneStep()
+        step.keypad.setEnabled(true)
+        step.connections()[0].update(.ready)
+        try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue(step.keypad.enabled)
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 0, "It was already on, so the phone stays connected")
+    }
+
+    @MainActor func testLeavingThePhoneScreenStopsATrialThatHasNotTurnedTheKeypadOn() throws {
+        let step = try phoneStep()
+        step.screen.viewWillDisappear(false)
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertFalse(step.keypad.enabled)
+        XCTAssertEqual(step.connections()[0].stops, 1, "Dismissing the screen must not leave the desk phone live")
+    }
+
+    @MainActor func testLeavingAfterThePhoneAnswersLeavesTheKeypadOn() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        step.screen.viewWillDisappear(false)
+        XCTAssertTrue(step.keypad.enabled, "Answering already turned the keypad on")
+        XCTAssertFalse(step.keypad.trying)
+        XCTAssertEqual(step.connections()[0].stops, 0)
+    }
+
     @MainActor func testAnIPadWithoutAnMChipCallsFromTheTouchscreen() throws {
         let step = try phoneStep(model: "iPad15,7")
         XCTAssertTrue(step.connections().isEmpty, "It never tries the Cell2Jack")

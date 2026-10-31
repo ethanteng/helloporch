@@ -390,6 +390,10 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private var progress = Progress.waiting
     private let keypad: Cell2JackKeypad
     private let mayWork: Bool
+    /// This screen turned the keypad on. Do this later undoes that; one that was already on stays on.
+    private var enabledHere = false
+    /// Leaving, so a stop callback doesn't put the waiting text back up.
+    private var leaving = false
     private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
     private let help = UIStackView()
     private let proceed = PorchStyle.button("Continue", symbol: "arrow.right")
@@ -433,14 +437,11 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         progress = keypad.isReady ? .connected : .waiting
         render(announce: false)
     }
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        if mayWork { keypad.beginTrial() }
-    }
     @objc private func keypadChanged() {
+        if leaving { return }
         if keypad.isReady {
             // Turned on for them: from now on the phone is Mom's keypad, here and on the clock.
-            if !keypad.enabled { keypad.setEnabled(true) }
+            if !keypad.enabled { keypad.setEnabled(true); enabledHere = true }
             if progress == .waiting { progress = .connected; render() }
         } else if progress == .connected { progress = .waiting; render() }
     }
@@ -478,10 +479,33 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
     }
     private func finish() {
-        helpTimer?.invalidate()
-        if mayWork { keypad.endTrial() }
+        // Do this later is the way out before the check finishes, and it leaves the keypad off.
+        let checked: Bool
+        if case .done = progress { checked = true } else { checked = false }
+        leaveTrial(turnOff: enabledHere && !checked)
         if let onContinue { onContinue(); return }
         navigationController?.setViewControllers([setup.screen(from: .yourPhone)], animated: true)
+    }
+    /// The screen is going away. A trial that is still running would keep the desk phone live with the keypad off.
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        leaveTrial(turnOff: false)
+    }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Coming back, such as after a cover, tries again. Opening Settings does not come through here.
+        leaving = false
+        guard mayWork else { return }
+        keypad.beginTrial()
+        if !keypad.isReady, progress == .connected { progress = .waiting; render(announce: false) }
+    }
+    /// Stops the trial. `turnOff` undoes an enable this screen just did, which Do this later asks for.
+    private func leaveTrial(turnOff: Bool) {
+        leaving = true
+        helpTimer?.invalidate()
+        guard mayWork else { return }
+        if turnOff { keypad.setEnabled(false) }
+        if keypad.trying { keypad.endTrial() }
     }
 }
 
