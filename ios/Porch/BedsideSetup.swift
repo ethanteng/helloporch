@@ -569,6 +569,8 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
         // Drop-in answers on this iPad, so it's approved only once the iPad can use what it needs.
         let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         let camera = microphone && AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+        // Replacing an expired code. A phone that joins with it, including via this reply, already counted.
+        let replacing = invitation != nil
         task = Task { [weak self] in
             guard let self else { return }
             defer { self.task = nil; self.show.isEnabled = true }
@@ -576,9 +578,11 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
                 let response = try await FamilyService(credential).send("createInvite", ["name": chosen, "permissions": ["audio": microphone, "video": camera], "caregiver": true], pin: NativeCallSettings.caregiverCode)
                 guard let code = response.code, let id = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
                 FamilyCoordinator.shared.update(response)
+                if replacing, self.invitation == nil { return }
                 self.showCode(id: id, link: FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin), expiresAt: response.expiresAt ?? 0)
             } catch {
                 if Task.isCancelled { return }
+                if replacing, self.invitation == nil { return }
                 if let shown = self.invitation, shown.expiresAt <= Date().timeIntervalSince1970 { self.codeExpired() }
                 showPorchError(error, on: self)
             }
