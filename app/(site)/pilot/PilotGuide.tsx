@@ -385,7 +385,7 @@ function KeypadPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
         </span>
         <h3 id="next-title">What happens next</h3>
         <p>
-          More detailed setup instructions will come to <strong>{email}</strong> soon.
+          I’ll send more detailed instructions to you at <strong>{email}</strong> soon.
         </p>
       </section>
     </>
