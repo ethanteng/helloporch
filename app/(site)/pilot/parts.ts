@@ -60,12 +60,14 @@ export const accessories: Part[] = [
   {
     id: "number-pad",
     name: "Number pad",
+    cost: 30,
     rule: {
       label: "Any brand",
       text: "Any USB or Bluetooth number pad works. A Bluetooth one leaves the iPad’s charging port free.",
     },
     description:
       "For anyone who finds buttons easier than the screen. You choose what each key does, such as calling someone or answering.",
+    href: "https://www.amazon.com/dp/B0BXT6Q3BZ",
     photo: {
       src: "/pilot/number-pad.jpg",
       alt: "A silver Macally number pad with black keys for 0 to 9, arrows and enter, on a wooden table.",
