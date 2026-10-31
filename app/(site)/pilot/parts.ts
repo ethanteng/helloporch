@@ -67,8 +67,8 @@ export const accessories: Part[] = [
     description:
       "For anyone who finds buttons easier than the screen. You choose what each key does, such as calling someone or answering.",
     photo: {
-      src: "/pilot/number-pad.svg",
-      alt: "An illustration of a number pad with twelve keys: 1 to 9, *, 0 and #.",
+      src: "/pilot/number-pad.jpg",
+      alt: "A silver Macally number pad with black keys for 0 to 9, arrows and enter, on a wooden table.",
     },
   },
   {

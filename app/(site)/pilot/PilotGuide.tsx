@@ -231,7 +231,7 @@ export default function PilotGuide() {
             <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option later.</p>
             <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
               <button type="button" aria-pressed={choice === "touch"} onClick={() => pick("touch")}>
-                <ChoicePhotos photos={[{ src: "/pilot/ipad.jpg" }, { src: "/pilot/number-pad.svg" }]} />
+                <ChoicePhotos photos={[{ src: "/pilot/ipad.jpg" }, { src: "/pilot/number-pad.jpg" }]} />
                 <span className={styles.choiceBody}>
                   <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
                   <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
