@@ -54,8 +54,8 @@ const hub = {
   },
 };
 
-// For a number pad Porch: a USB number pad and the hub it plugs into, which keeps the iPad charging. The stand
-// is recommended.
+// For a number pad Porch: a USB number pad and the hub or adapter it plugs into, which keeps the iPad
+// charging. The stand is recommended.
 export const keypadParts: Part[] = [
   {
     id: "number-pad",
@@ -63,7 +63,7 @@ export const keypadParts: Part[] = [
     cost: 30,
     rule: {
       label: "Any brand",
-      text: "Any USB number pad works. It plugs into the hub, so the iPad can charge at the same time.",
+      text: "Any USB number pad works. It plugs into the hub or adapter, so the iPad can charge at the same time.",
     },
     description:
       "Each key does what you choose, such as calling someone, answering or hanging up. You see and hear each other on the iPad.",
@@ -75,9 +75,10 @@ export const keypadParts: Part[] = [
   },
   {
     ...hub,
+    // iPads from 2015 on include Lightning models, which a USB-C hub won't fit.
     rule: {
-      label: "Any brand",
-      text: "Look for a USB-C hub with a charging port, so the iPad charges while the number pad is plugged in.",
+      label: "For an iPad with USB-C",
+      text: "Look for a USB-C hub with a charging port. If your iPad has the smaller Lightning port instead, get Apple’s Lightning to USB 3 Camera Adapter, which has a port for the charger too.",
     },
     description: "It plugs into the iPad’s USB-C port, with the charger and the number pad plugged into it.",
   },

@@ -332,8 +332,8 @@ function KeypadPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
           <h2 id="plan-title">You can start right away.</h2>
           <p className={styles.planIntro}>
             {hasIpad
-              ? "All you need is your iPad, a USB number pad and a USB hub."
-              : "All you need is a USB number pad, a USB hub and an iPad from 2015 or later. A refurbished or hand-me-down iPad is fine."}{" "}
+              ? "All you need is your iPad, a USB number pad and a hub to plug it into."
+              : "All you need is a USB number pad, a hub to plug it into and an iPad from 2015 or later. A refurbished or hand-me-down iPad is fine."}{" "}
             Porch isn’t on the App Store yet, so it comes through{" "}
             <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a>, Apple’s free app for
             trying apps before they’re released.
@@ -362,8 +362,8 @@ function KeypadPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
         <div className={styles.sectionIntro}>
           <h3 id="keypad-kit-title">What you’ll need</h3>
           <p>
-            You’ll need a USB number pad and a USB hub, which keeps the iPad charging while the number pad is
-            plugged in. A stand is a good idea too. Below is what I use, but you’re free to shop around.
+            You’ll need a USB number pad and a hub or adapter that keeps the iPad charging while the number pad
+            is plugged in. A stand is a good idea too. Below is what I use, but you’re free to shop around.
           </p>
         </div>
         <div className={styles.parts}>
