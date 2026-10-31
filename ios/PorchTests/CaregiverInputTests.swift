@@ -1803,6 +1803,19 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
     }
 
+    @MainActor func testComingBackAfterADropDuringTheHangUpWaitsAgain() throws {
+        let step = try phoneStep()
+        step.connections()[0].update(.ready)
+        _ = step.screen.receiveCell2JackDigit(3)
+        step.screen.viewWillDisappear(false)
+        // The driver stops while the screen is leaving, so that notice is ignored.
+        step.keypad.pause()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 3. Now put the receiver back.")
+        step.screen.viewDidAppear(false)
+        XCTAssertEqual(phoneStatus(step.screen), "Waiting for the phone…")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+    }
+
     @MainActor func testWithoutHangingUpOnTheReceiverAKeyIsEnough() throws {
         let step = try phoneStep()
         step.keypad.setReceiverHangUp(false)

@@ -503,7 +503,14 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         leaving = false
         guard mayWork else { return }
         keypad.beginTrial()
-        if !keypad.isReady, progress == .connected { progress = .waiting; render(announce: false) }
+        // A drop while this screen was leaving never got to change the check: the stop notice is ignored then.
+        // The phone has to be heard again, including a key that was already heard.
+        if !keypad.isReady {
+            switch progress {
+            case .connected, .heard: progress = .waiting; render(announce: false)
+            case .waiting, .done: break
+            }
+        }
     }
     /// Stops the trial. `turnOff` undoes an enable this screen just did, which Do this later asks for.
     private func leaveTrial(turnOff: Bool) {
