@@ -31,7 +31,6 @@ export default function PilotGuide() {
   const [platform, setPlatform] = useState<"ios" | "android" | null>(null);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [hasIpad, setHasIpad] = useState<boolean | null>(null);
-  const [agreed, setAgreed] = useState(false);
   const [joined, setJoined] = useState<Answers | null>(null);
   const [editing, setEditing] = useState(true);
   const [pending, setPending] = useState(false);
@@ -40,7 +39,6 @@ export default function PilotGuide() {
   const platformGroup = useRef<HTMLDivElement>(null);
   const callGroup = useRef<HTMLDivElement>(null);
   const ipadGroup = useRef<HTMLDivElement>(null);
-  const agreeBox = useRef<HTMLInputElement>(null);
   const welcome = useRef<HTMLHeadingElement>(null);
   const need = choice && ipadNeeds[choice];
 
@@ -52,7 +50,7 @@ export default function PilotGuide() {
 
   // A message about a missing step goes away once they change an answer. Platform is left out: choosing
   // Android sets it in the same moment the request starts, and this would wipe a failure from that request.
-  useEffect(() => setError(null), [email, choice, hasIpad, agreed]);
+  useEffect(() => setError(null), [email, choice, hasIpad]);
 
   // Each sign-up, including a changed answer, brings the welcome and plan into view.
   useEffect(() => {
@@ -65,7 +63,7 @@ export default function PilotGuide() {
     setPending(true);
     setError(null);
     try {
-      await signUp({ email: answers.email, interface: answers.choice, ipad: answers.hasIpad, agreed: true });
+      await signUp({ email: answers.email, interface: answers.choice, ipad: answers.hasIpad });
       setChoice(answers.choice);
       setPlatform("ios");
       setJoined({ platform: "ios", ...answers });
@@ -114,9 +112,7 @@ export default function PilotGuide() {
           ? ["Choose how your family member will call.", callGroup.current?.querySelector("button")]
           : hasIpad === null
             ? ["Tell me whether you have an iPad that will work.", ipadGroup.current?.querySelector("button")]
-            : !agreed
-              ? ["Check the box to agree to what the pilot asks.", agreeBox.current]
-              : null;
+            : null;
     if (missing) {
       setError(missing[0]);
       missing[1]?.focus();
@@ -303,18 +299,6 @@ export default function PilotGuide() {
 
         {platform === "ios" && (
         <div className={styles.submit}>
-          <label className={styles.agree}>
-            <input
-              ref={agreeBox}
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-            />
-            <span>
-              I agree to answer your emails and surveys, and to talk with you face to face about how Porch is
-              working for us.
-            </span>
-          </label>
           <button type="submit" disabled={pending}>
             {pending ? "Joining…" : joined?.platform === "ios" ? "Save my answers" : "Join the pilot"}
           </button>

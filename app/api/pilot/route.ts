@@ -24,11 +24,11 @@ export async function POST(req: Request) {
   const fields =
     body?.platform === "android"
       ? { porch_pilot_interface: "android" }
-      : choice && ipad !== undefined && body?.agreed === true
+      : choice && ipad !== undefined
         ? { porch_pilot_interface: INTERFACES[choice], porch_pilot_ipad: ipad ? "yes" : "no" }
         : null;
   if (!fields) {
-    return Response.json({ error: "Please answer every step and agree to the pilot." }, { status: 400 });
+    return Response.json({ error: "Please answer every step." }, { status: 400 });
   }
 
   console.log(JSON.stringify({ event: "pilot_signup", email, ...fields, at: new Date().toISOString() }));
