@@ -6,7 +6,7 @@ import { costOf, ipadNeeds, keypadParts, phoneParts, priceLabel, type Part } fro
 import styles from "./pilot.module.css";
 
 type Choice = "keypad" | "phone";
-type IosAnswers = { platform: "ios"; email: string; choice: Choice; hasIpad: boolean };
+type IosAnswers = { platform: "ios"; email: string; choice: Choice; hasIpad: boolean; language: string };
 type AndroidAnswers = { platform: "android"; email: string };
 type Answers = IosAnswers | AndroidAnswers;
 
@@ -31,6 +31,8 @@ export default function PilotGuide() {
   const [platform, setPlatform] = useState<"ios" | "android" | null>(null);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [hasIpad, setHasIpad] = useState<boolean | null>(null);
+  // Another language their loved one needs, if Porch doesn't speak theirs. Blank when it does.
+  const [language, setLanguage] = useState("");
   const [joined, setJoined] = useState<Answers | null>(null);
   const [editing, setEditing] = useState(true);
   const [pending, setPending] = useState(false);
@@ -77,7 +79,7 @@ export default function PilotGuide() {
     setPending(true);
     setError(null);
     try {
-      await signUp({ email: answers.email, interface: answers.choice, ipad: answers.hasIpad });
+      await signUp({ email: answers.email, interface: answers.choice, ipad: answers.hasIpad, language: answers.language });
       setChoice(answers.choice);
       setPlatform("ios");
       setReaskIpad(false);
@@ -134,7 +136,7 @@ export default function PilotGuide() {
       missing[1]?.focus();
       return;
     }
-    joinIos({ email: value, choice: choice!, hasIpad: hasIpad! });
+    joinIos({ email: value, choice: choice!, hasIpad: hasIpad!, language: language.trim() });
   };
 
   if (joined && !editing) {
@@ -180,7 +182,7 @@ export default function PilotGuide() {
               // An M1 iPad can run a number pad, so "yes" still holds. "No" only rules out an M1 iPad,
               // which is a different question than "an iPad from 2015 or later", so ask that before saving.
               if (joined.hasIpad) {
-                void joinIos({ email: joined.email, choice: "keypad", hasIpad: true });
+                void joinIos({ email: joined.email, choice: "keypad", hasIpad: true, language: joined.language });
                 return;
               }
               scrollToIpad.current = true;
@@ -214,7 +216,7 @@ export default function PilotGuide() {
             <input
               ref={emailInput}
               id="pilot-email"
-              className={styles.email}
+              className={styles.textInput}
               type="email"
               autoComplete="email"
               placeholder="you@example.com"
@@ -323,6 +325,29 @@ export default function PilotGuide() {
                 </li>
               </ul>
             </div>
+          </li>
+          )}
+
+          {/* Comes with the iPad step, so the steps keep their numbers. Optional: most families leave it blank. */}
+          {need && (
+          <li className={styles.step}>
+            <h3 id="language-question">Will Porch speak your loved one’s language?</h3>
+            <p>
+              Porch speaks English, Mandarin, Cantonese and Spanish. If your loved one needs a different
+              language, tell me which one and I’ll work on adding it.
+            </p>
+            <label className={styles.fieldLabel} htmlFor="pilot-language">
+              Another language they need <span>(optional)</span>
+            </label>
+            <input
+              id="pilot-language"
+              className={styles.textInput}
+              type="text"
+              autoComplete="off"
+              maxLength={100}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            />
           </li>
           )}
           </>

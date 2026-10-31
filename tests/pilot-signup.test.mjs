@@ -39,7 +39,7 @@ test('a pilot family goes into the pilot group with their answers', async () => 
   assert.equal(sent[0].init.headers.Authorization, 'Bearer test-key');
   assert.deepEqual(sent[0].body, {
     email: 'ann@example.com',
-    fields: { porch_pilot_interface: 'big-button phone', porch_pilot_ipad: 'no' },
+    fields: { porch_pilot_interface: 'big-button phone', porch_pilot_ipad: 'no', porch_pilot_language: '' },
     groups: ['pilot-group'],
   });
 });
@@ -49,8 +49,17 @@ test('without a pilot group, the family is still saved with their answers', asyn
   await signUp({ email: 'ann@example.com', interface: 'keypad', ipad: true });
   assert.deepEqual(sent[0].body, {
     email: 'ann@example.com',
-    fields: { porch_pilot_interface: 'number pad', porch_pilot_ipad: 'yes' },
+    fields: { porch_pilot_interface: 'number pad', porch_pilot_ipad: 'yes', porch_pilot_language: '' },
   });
+});
+
+test('another language a family needs is saved with their answers', async () => {
+  await signUp({ email: 'ann@example.com', interface: 'keypad', ipad: true, language: '  Tagalog ' });
+  assert.equal(sent[0].body.fields.porch_pilot_language, 'Tagalog');
+  await signUp({ email: 'ann@example.com', interface: 'keypad', ipad: true, language: 'x'.repeat(500) });
+  assert.equal(sent[1].body.fields.porch_pilot_language.length, 100);
+  await signUp({ email: 'ann@example.com', interface: 'keypad', ipad: true, language: 42 });
+  assert.equal(sent[2].body.fields.porch_pilot_language, '');
 });
 
 test('someone waiting for Android is saved with just their email', async () => {
