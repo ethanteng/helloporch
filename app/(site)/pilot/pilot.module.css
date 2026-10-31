@@ -462,8 +462,7 @@
   text-wrap: pretty;
 }
 
-.howSteps,
-.install {
+.howSteps {
   counter-reset: step;
   margin: 0;
   padding: 0;
@@ -477,15 +476,13 @@
   margin-top: 8px;
 }
 
-.howSteps li,
-.install li {
+.howSteps li {
   counter-increment: step;
   position: relative;
   padding-left: 52px;
 }
 
-.howSteps li::before,
-.install li::before {
+.howSteps li::before {
   content: counter(step);
   position: absolute;
   left: 0;
@@ -495,7 +492,6 @@
 }
 
 .howSteps h3,
-.install h4,
 .involves h3 {
   margin-bottom: 4px;
   font: 600 18px/1.4 var(--sans);
@@ -503,7 +499,6 @@
 }
 
 .howSteps p,
-.install p,
 .involves p {
   font: 400 17px/1.55 var(--sans);
   color: var(--muted-2);
@@ -579,6 +574,11 @@
   font: 400 clamp(17px, 1.8vw, 19px) / 1.6 var(--sans);
   color: var(--muted);
   text-wrap: pretty;
+}
+
+.sectionIntro strong {
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .note {
@@ -719,30 +719,6 @@
   color: var(--ink);
 }
 
-/* ---------- Installing ---------- */
-.install {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.install li {
-  padding: 24px 24px 30px;
-  border-radius: 32px;
-  background: var(--paper);
-}
-
-.install li::before {
-  position: static;
-  display: block;
-  margin-bottom: 12px;
-}
-
-.install strong {
-  font-weight: 600;
-  color: var(--ink);
-}
-
 /* ---------- What the pilot asks ---------- */
 .involves {
   display: grid;
@@ -762,12 +738,6 @@
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 1100px) {
-  .install {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 900px) {
   .planCard {
     grid-template-columns: minmax(0, 1fr);
@@ -798,10 +768,6 @@
 }
 
 @media (max-width: 600px) {
-  .install {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .part {
     border-radius: 32px;
   }

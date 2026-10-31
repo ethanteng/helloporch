@@ -376,41 +376,13 @@ function KeypadPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
         </p>
       </section>
 
-      <section className={styles.section} aria-labelledby="install-title">
+      <section className={styles.section} aria-labelledby="next-title">
         <div className={styles.sectionIntro}>
-          <h3 id="install-title">Installing Porch with TestFlight</h3>
-          <p>Install it on the iPad, and on the iPhone of each family member who wants the Porch app.</p>
+          <h3 id="next-title">What happens next</h3>
+          <p>
+            More detailed setup instructions will come to <strong>{email}</strong> soon.
+          </p>
         </div>
-        <ol className={styles.install}>
-          <li>
-            <h4>Get TestFlight.</h4>
-            <p>Install it from the App Store on the iPad, and on each of those iPhones.</p>
-          </li>
-          <li>
-            <h4>Watch for my email.</h4>
-            <p>
-              I’ll write to <strong>{email}</strong> for the Apple Account email on each of those devices, then
-              send each one an invitation to the Porch pilot.
-            </p>
-          </li>
-          <li>
-            <h4>Accept the invitation.</h4>
-            <p>
-              Open the email on that device and tap <strong>View in TestFlight</strong>, then{" "}
-              <strong>Accept</strong> and <strong>Install</strong>.
-            </p>
-          </li>
-          <li>
-            <h4>Set up the iPad.</h4>
-            <p>
-              I’ll send a private link that makes the iPad your family’s Porch. Then you choose a caregiver PIN
-              and invite each person from inside the app.
-            </p>
-          </li>
-        </ol>
-        <p className={styles.note}>
-          Turn on automatic updates in TestFlight, because each test version stops working after 90 days.
-        </p>
       </section>
     </>
   );
