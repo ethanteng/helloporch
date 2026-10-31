@@ -1,7 +1,7 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // How the family member will call, as it reads in MailerLite.
-const INTERFACES = { touch: "touchscreen", phone: "big-button phone" } as const;
+const INTERFACES = { keypad: "number pad", phone: "big-button phone" } as const;
 
 // Signs a family up for the pilot from the pilot page. Adds them to MailerLite when MAILERLITE_API_KEY is set,
 // in MAILERLITE_PILOT_GROUP_ID if given, with their answers in the porch_pilot_interface and porch_pilot_ipad

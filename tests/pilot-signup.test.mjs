@@ -46,10 +46,10 @@ test('a pilot family goes into the pilot group with their answers', async () => 
 
 test('without a pilot group, the family is still saved with their answers', async () => {
   delete process.env.MAILERLITE_PILOT_GROUP_ID;
-  await signUp({ email: 'ann@example.com', interface: 'touch', ipad: true, agreed: true });
+  await signUp({ email: 'ann@example.com', interface: 'keypad', ipad: true, agreed: true });
   assert.deepEqual(sent[0].body, {
     email: 'ann@example.com',
-    fields: { porch_pilot_interface: 'touchscreen', porch_pilot_ipad: 'yes' },
+    fields: { porch_pilot_interface: 'number pad', porch_pilot_ipad: 'yes' },
   });
 });
 
@@ -70,7 +70,7 @@ test('waiting for Android still needs a real email, and nothing else', async () 
 });
 
 test('a sign-up missing an answer or the agreement is refused before MailerLite', async () => {
-  const complete = { email: 'ann@example.com', interface: 'touch', ipad: true, agreed: true };
+  const complete = { email: 'ann@example.com', interface: 'keypad', ipad: true, agreed: true };
   for (const body of [
     { ...complete, email: 'not an email' },
     { ...complete, interface: 'keyboard' },
@@ -85,7 +85,7 @@ test('a sign-up missing an answer or the agreement is refused before MailerLite'
 
 test('a MailerLite failure tells the family to try again', async () => {
   globalThis.fetch = async () => new Response('nope', { status: 500 });
-  const response = await signUp({ email: 'ann@example.com', interface: 'touch', ipad: true, agreed: true });
+  const response = await signUp({ email: 'ann@example.com', interface: 'keypad', ipad: true, agreed: true });
   assert.equal(response.status, 502);
   assert.match((await response.json()).error, /try again/);
 });

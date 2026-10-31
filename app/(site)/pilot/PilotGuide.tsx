@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { accessories, ipadNeeds, phoneCost, phoneParts, priceLabel, type Part } from "./parts";
+import { ipadNeeds, keypadParts, phoneCost, phoneParts, priceLabel, type Part } from "./parts";
 import styles from "./pilot.module.css";
 
-type Choice = "touch" | "phone";
+type Choice = "keypad" | "phone";
 type IosAnswers = { platform: "ios"; email: string; choice: Choice; hasIpad: boolean };
 type AndroidAnswers = { platform: "android"; email: string };
 type Answers = IosAnswers | AndroidAnswers;
@@ -24,8 +24,8 @@ async function signUp(body: Record<string, unknown>) {
 // The pilot sign-up form, then a plan for the way their family member will call. Email comes first, then
 // whether iOS works for them: HelloPorch is only on iPhone and iPad right now, and someone waiting for
 // Android is saved with just their email. How they'll call comes before the iPad, because the big-button
-// phone needs a newer iPad. The touchscreen and number pads ship through TestFlight today; the big-button
-// phone needs Apple's DriverKit approval for the Cell2Jack driver.
+// phone needs a newer iPad. Number pads ship through TestFlight today; the big-button phone needs Apple's
+// DriverKit approval for the Cell2Jack driver.
 export default function PilotGuide() {
   const [email, setEmail] = useState("");
   const [platform, setPlatform] = useState<"ios" | "android" | null>(null);
@@ -159,12 +159,12 @@ export default function PilotGuide() {
             </button>
           </div>
         </section>
-        {joined.choice === "touch" ? (
-          <TouchPlan email={joined.email} hasIpad={joined.hasIpad} />
+        {joined.choice === "keypad" ? (
+          <KeypadPlan email={joined.email} hasIpad={joined.hasIpad} />
         ) : (
           <PhonePlan
             email={joined.email}
-            onStartNow={() => joinIos({ email: joined.email, choice: "touch", hasIpad: joined.hasIpad })}
+            onStartNow={() => joinIos({ email: joined.email, choice: "keypad", hasIpad: joined.hasIpad })}
             pending={pending}
             error={error}
           />
@@ -228,15 +228,15 @@ export default function PilotGuide() {
           <>
           <li className={styles.step}>
             <h3 id="call-question">How do you want your loved one to make & receive calls?</h3>
-            <p>Only the touchscreen or number pad option is available now. But you can start with that option and change to the big-button phone option later.</p>
+            <p>Only the number pad option is available now. But you can start with that option and change to the big-button phone option later.</p>
             <div ref={callGroup} className={styles.choices} role="group" aria-labelledby="call-question">
-              <button type="button" aria-pressed={choice === "touch"} onClick={() => pick("touch")}>
-                <ChoicePhotos photos={[{ src: "/pilot/ipad.jpg" }, { src: "/pilot/number-pad.jpg" }]} />
+              <button type="button" aria-pressed={choice === "keypad"} onClick={() => pick("keypad")}>
+                <ChoicePhotos photos={[{ src: "/pilot/number-pad.jpg" }, { src: "/pilot/ipad.jpg" }]} />
                 <span className={styles.choiceBody}>
                   <span className={`${styles.status} ${styles.ready}`}>Ready now</span>
-                  <span className={styles.choiceTitle}>The touchscreen or a number pad</span>
+                  <span className={styles.choiceTitle}>A number pad</span>
                   <span className={styles.choiceText}>
-                    They tap the iPad’s screen to call someone, or press a key on a USB or Bluetooth number pad.
+                    They press a key on a USB or Bluetooth number pad to call someone, and talk on the iPad.
                   </span>
                 </span>
               </button>
@@ -330,7 +330,7 @@ export default function PilotGuide() {
   );
 }
 
-function TouchPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
+function KeypadPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
   return (
     <>
       <section className={styles.planCard} aria-labelledby="plan-title">
@@ -348,8 +348,8 @@ function TouchPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
           <h2 id="plan-title">You can start right away.</h2>
           <p className={styles.planIntro}>
             {hasIpad
-              ? "All you need is your iPad."
-              : "All you need is an iPad from 2015 or later, and a refurbished or hand-me-down one is fine."}{" "}
+              ? "All you need is your iPad and a number pad."
+              : "All you need is a number pad and an iPad from 2015 or later. A refurbished or hand-me-down iPad is fine."}{" "}
             Porch isn’t on the App Store yet, so it comes through{" "}
             <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a>, Apple’s free app for
             trying apps before they’re released.
@@ -360,27 +360,30 @@ function TouchPlan({ email, hasIpad }: { email: string; hasIpad: boolean }) {
               <p>It stays on screen until someone calls, or until they want to call someone.</p>
             </li>
             <li>
-              <h3>They tap to call.</h3>
+              <h3>They press a key to call.</h3>
               <p>
-                They tap <strong>Call someone</strong>, then the person they want. Family with the Porch app
-                get a video call, and anyone else gets a voice call on their regular phone.
+                Each key can call someone you choose. Family with the Porch app get a video call, and anyone
+                else gets a voice call on their regular phone.
               </p>
             </li>
             <li>
-              <h3>Or they press a key.</h3>
-              <p>With a number pad, each key can call someone you choose.</p>
+              <h3>They talk on the iPad.</h3>
+              <p>They see and hear you on its screen and speaker. Another key answers or hangs up.</p>
             </li>
           </ol>
         </div>
       </section>
 
-      <section className={styles.section} aria-labelledby="extras-title">
+      <section className={styles.section} aria-labelledby="keypad-kit-title">
         <div className={styles.sectionIntro}>
-          <h3 id="extras-title">Extras you might want</h3>
-          <p>None of these are required. Below is what I use, but you’re free to shop around.</p>
+          <h3 id="keypad-kit-title">What you’ll need</h3>
+          <p>
+            A number pad is the one thing to get. A stand is a good idea, and the hub is only for a USB number pad.
+            Below is what I use, but you’re free to shop around.
+          </p>
         </div>
         <div className={styles.parts}>
-          {accessories.map((part) => (
+          {keypadParts.map((part) => (
             <PartCard key={part.id} part={part} />
           ))}
         </div>
@@ -480,11 +483,11 @@ function PhonePlan({
           </ol>
           <div className={styles.startNow}>
             <p>
-              <strong>Want to start sooner?</strong> Start with the touchscreen now, and add the phone once
+              <strong>Want to start sooner?</strong> Start with a number pad now, and add the phone once
               Apple approves it.
             </p>
             <button type="button" onClick={onStartNow} disabled={pending}>
-              {pending ? "Switching…" : "Start with the touchscreen"}
+              {pending ? "Switching…" : "Start with a number pad"}
             </button>
             {error && (
               <p className="form-error" role="alert">

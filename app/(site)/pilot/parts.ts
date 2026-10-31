@@ -12,12 +12,12 @@ export type Part = {
   photo: { src: string; alt: string };
 };
 
-// Which iPad each way of calling needs, as the pilot form asks it. The touchscreen and number pads need
-// only iPadOS 15, which every iPad from 2015 on can run, but the Cell2Jack driver needs an M-series chip.
+// Which iPad each way of calling needs, as the pilot form asks it. A number pad needs only iPadOS 15, which
+// every iPad from 2015 on can run, but the Cell2Jack driver needs an M-series chip.
 export const ipadNeeds = {
-  touch: {
+  keypad: {
     question: "Do you have an iPad from 2015 or later?",
-    label: "For the touchscreen or a number pad",
+    label: "For a number pad",
     text: "Almost any iPad works. It just needs to be from 2015 or later.",
   },
   phone: {
@@ -33,7 +33,7 @@ const stand: Part = {
   cost: 30,
   rule: {
     label: "Any brand",
-    text: "Look for one that holds the iPad steady at eye level and won’t tip when someone taps the screen.",
+    text: "Look for one that holds the iPad steady at eye level and won’t tip over.",
   },
   description: "Mine has a weighted base, a folding aluminum arm and a clamp that fits any iPad.",
   href: "https://www.amazon.com/dp/B0H3N2YPKJ",
@@ -54,9 +54,9 @@ const hub = {
   },
 };
 
-// For a touchscreen or number pad Porch. None of these are required.
-export const accessories: Part[] = [
-  stand,
+// For a number pad Porch. The number pad is the one part they need; the stand is recommended, and the hub is
+// only for a USB number pad.
+export const keypadParts: Part[] = [
   {
     id: "number-pad",
     name: "Number pad",
@@ -66,13 +66,14 @@ export const accessories: Part[] = [
       text: "Any USB or Bluetooth number pad works. A Bluetooth one leaves the iPad’s charging port free.",
     },
     description:
-      "For anyone who finds buttons easier than the screen. You choose what each key does, such as calling someone or answering.",
+      "Each key does what you choose, such as calling someone, answering or hanging up. You see and hear each other on the iPad.",
     href: "https://www.amazon.com/dp/B0BXT6Q3BZ",
     photo: {
       src: "/pilot/number-pad.jpg",
       alt: "A silver Macally number pad with black keys for 0 to 9, arrows and enter, on a wooden table.",
     },
   },
+  stand,
   {
     ...hub,
     rule: {
