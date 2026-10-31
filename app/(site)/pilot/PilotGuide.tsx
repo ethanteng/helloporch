@@ -416,9 +416,9 @@ function PhonePlan({
           <p className={styles.status}>Waiting on Apple</p>
           <h2 id="plan-title">We're still waiting on Apple’s approval.</h2>
           <p className={styles.planIntro}>
-            The big-button phone connects to the iPad through a small adapter called a Cell2Jack. Porch needs
-            Apple’s approval to use it, and I’m still waiting for that to come through. I’ll email you at{" "}
-            <strong>{email}</strong> as soon as it does.
+            The big-button phone connects to the iPad through a small adapter called a Cell2Jack, and Porch
+            needs Apple’s approval to use it. I’ll email you at <strong>{email}</strong> as soon as it comes
+            through.
           </p>
           <ol className={styles.howSteps}>
             <li>

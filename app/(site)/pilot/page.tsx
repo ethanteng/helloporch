@@ -27,7 +27,7 @@ export default function PilotPage() {
           </p>
         </header>
 
-        <section className={`${styles.section} ${styles.first}`} aria-labelledby="involves-title">
+        <section className={`${styles.section} ${styles.first}`} aria-label="What the pilot asks of you">
           <ul className={styles.involves}>
             <li>
               <h3>Respond to my emails and surveys.</h3>
