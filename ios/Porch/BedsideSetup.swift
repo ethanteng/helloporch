@@ -553,7 +553,11 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
                 guard let code = response.code, let id = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
                 FamilyCoordinator.shared.update(response)
                 self.showCode(id: id, link: FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin), expiresAt: response.expiresAt ?? 0)
-            } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
+            } catch {
+                if Task.isCancelled { return }
+                if let shown = self.invitation, shown.expiresAt <= Date().timeIntervalSince1970 { self.codeExpired() }
+                showPorchError(error, on: self)
+            }
         }
     }
     private func showCode(id: String, link: URL, expiresAt: TimeInterval) {
@@ -573,13 +577,22 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
         status.text = "Your phone joined \(lovedOne)'s Porch."
         UIAccessibility.post(notification: .announcement, argument: status.text)
     }
-    /// An invitation lasts a day. One that ran out while Porch was away is replaced, for the same name.
+    /// An invitation lasts a day. One that ran out while Porch was away is replaced, for the same name. It stays until
+    /// the new one is ready, so a phone that joins meanwhile still counts.
     @objc private func returnedToForeground() {
         guard let invitation, invitation.expiresAt <= Date().timeIntervalSince1970 else { return }
-        self.invitation = nil; createInvitation()
+        createInvitation()
+    }
+    /// The code ran out and a new one couldn't be made, such as while the iPad is offline: Show QR code tries again.
+    private func codeExpired() {
+        invitation = nil; code.image = nil
+        for view in [codeFrame, caption, send] { view?.isHidden = true }
+        show.isHidden = false
+        status.text = "That code ran out. Tap Show QR code for a new one."
     }
     private func share() {
-        guard let invitation else { return }
+        // An expired code is being replaced; its link would only say it ran out.
+        guard let invitation, invitation.expiresAt > Date().timeIntervalSince1970 else { return }
         let share = UIActivityViewController(activityItems: FamilyInviteViewController.shareItems(invitation.link), applicationActivities: nil)
         share.popoverPresentationController?.sourceView = send
         share.popoverPresentationController?.sourceRect = send?.bounds ?? .zero
