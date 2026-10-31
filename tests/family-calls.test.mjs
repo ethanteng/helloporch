@@ -314,7 +314,7 @@ test('review activations last 90 days, remain operator-only, and enroll isolated
  const owner=await f.json('enrollBedside',registration);
  assert.notEqual(owner.state.householdID,bedside.state.householdID);
  assert.deepEqual(owner.state.people,[]);
- assert.equal(owner.state.dropInEnabled,false);
+ assert.equal(owner.state.dropInEnabled,true,'a bedside set up from the app starts with drop-in on');
  assert.equal((await f.json('enrollBedside',registration)).credential,owner.credential);
  assert.equal((await f.send('enrollBedside',{...registration,deviceID:randomUUID()})).status,410);
  await f.json('verifyPIN',{},owner.credential,'098765');

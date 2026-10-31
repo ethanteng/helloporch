@@ -85,7 +85,8 @@ final class SetupViewController: CaregiverFormViewController, CNContactPickerDel
         phoneField.text = initialContact?.phoneNumber ?? (initialContact?.nativeCall == nil ? initialContact.flatMap { try? PhoneNumberNormalization.e164($0.address) } : nil)
         phoneField.keyboardType = .phonePad
         phoneField.textContentType = .telephoneNumber
-        modeControl.selectedSegmentIndex = initialContact?.nativeCall?.mode == .video ? 1 : 0
+        // A new person's calls start as video, unless the caregiver chooses voice.
+        modeControl.selectedSegmentIndex = initialContact.map { $0.nativeCall?.mode == .video ? 1 : 0 } ?? 1
         modeControl.accessibilityLabel = "Calls start as"
         nameGroup = field(nameField, title: "Name", placeholder: "For example, David")
         // `field` resets capitalization; a person's name is capitalized word by word.

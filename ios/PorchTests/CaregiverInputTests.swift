@@ -1027,9 +1027,9 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(buttons(in: privacy.view).contains { $0.configuration?.title == "Privacy policy" })
     }
 
-    @MainActor func testCaregiverPINScreenLinksPrivacyPolicy() {
-        let setup = CaregiverPINViewController(profile: nil)
-        setup.loadViewIfNeeded()
+    @MainActor func testSetupsFirstScreenLinksPrivacyPolicy() {
+        let navigation = BedsideSetup.start { _ in }
+        let setup = try! XCTUnwrap(navigation.topViewController); setup.loadViewIfNeeded()
         func find(_ view: UIView) -> UIButton? {
             if view.accessibilityIdentifier == "caregiver.privacy" { return view as? UIButton }
             return view.subviews.compactMap(find).first
@@ -1037,8 +1037,8 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(find(setup.view)?.configuration?.title, "Privacy policy")
     }
 
-    @MainActor func testFirstCaregiverEntryAsksForChosenPINAndConfirmation() {
-        let setup = CaregiverPINViewController(profile: nil)
+    @MainActor func testSetupAsksForAChosenPINAndItsConfirmation() {
+        let setup = SetupPINViewController(BedsideSetup())
         setup.loadViewIfNeeded()
         func find(_ id: String, _ view: UIView) -> UITextField? {
             if view.accessibilityIdentifier == id { return view as? UITextField }
@@ -1063,7 +1063,7 @@ final class CaregiverInputTests: XCTestCase {
     }
 
     @MainActor func testUnenrolledBedsideSetupOffersTheWayBackToFamilyMode() {
-        let setup = CaregiverPINViewController(profile: nil); setup.loadViewIfNeeded()
+        let setup = try! XCTUnwrap(BedsideSetup.start { _ in }.topViewController); setup.loadViewIfNeeded()
         XCTAssertTrue(buttons(in: setup.view).contains { $0.configuration?.title == "Use this device as a family member" })
     }
 
@@ -1199,7 +1199,8 @@ final class CaregiverInputTests: XCTestCase {
         defer { window.isHidden = true; original.makeKeyAndVisible() }
         let gear = buttons(in: clock.view).first { $0.accessibilityIdentifier == "clock.caregiver" }!
         gear.sendActions(for: .touchUpInside)
-        XCTAssertTrue((clock.presentedViewController as? UINavigationController)?.topViewController is CaregiverPINViewController)
+        // This iPad isn't set up, so the button starts setup rather than asking for a PIN.
+        XCTAssertTrue((clock.presentedViewController as? UINavigationController)?.topViewController is BedsideSetupStep)
         await withCheckedContinuation { continuation in clock.dismiss(animated: false) { continuation.resume() } }
     }
 
@@ -1681,5 +1682,53 @@ final class CallScreenLayoutTests: XCTestCase {
             screen.view.layoutIfNeeded()
             XCTAssertGreaterThan(buttons[0].bounds.width, 100)
         }
+    }
+
+}
+
+/// The welcome screen and setting up a new bedside one screen at a time.
+final class BedsideSetupTests: XCTestCase {
+    @MainActor private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
+    @MainActor private func buttons(in view: UIView) -> [UIButton] { descendants(view).compactMap { $0 as? UIButton } }
+    @MainActor private func labels(in view: UIView) -> [UILabel] { descendants(view).compactMap { $0 as? UILabel } }
+
+    @MainActor func testWelcomeOffersSettingUpThisIPadOrJoiningAFamily() throws {
+        var chosen: [PorchExperience] = []
+        let welcome = WelcomeViewController { chosen.append($0) }
+        let navigation = UINavigationController(rootViewController: welcome); welcome.loadViewIfNeeded()
+        try XCTUnwrap(buttons(in: welcome.view).first { $0.accessibilityIdentifier == "welcome.setUp" }).sendActions(for: .touchUpInside)
+        try XCTUnwrap(buttons(in: welcome.view).first { $0.accessibilityIdentifier == "welcome.join" }).sendActions(for: .touchUpInside)
+        // On an iPad, Set up makes this iPad the bedside. A phone explains that the bedside is the iPad instead.
+        XCTAssertEqual(chosen, UIDevice.current.userInterfaceIdiom == .pad ? [.bedside, .family] : [.family])
+        if UIDevice.current.userInterfaceIdiom == .phone { XCTAssertTrue(navigation.viewControllers.last is BedsideOnIPadViewController) }
+        XCTAssertTrue(buttons(in: welcome.view).contains { $0.accessibilityIdentifier == "caregiver.privacy" })
+    }
+
+    @MainActor func testADeviceThatChoseItsModeNeverSeesTheWelcomeAgain() {
+        let key = "porch.experience", saved = UserDefaults.standard.string(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        for experience in [PorchExperience.bedside, .family] {
+            UserDefaults.standard.set(experience.rawValue, forKey: key)
+            XCTAssertFalse(PorchDevice.needsWelcome)
+        }
+    }
+
+    @MainActor func testTheNumberStepAsksForAnAreaCodeAndContinuesOnlyAfterATry() throws {
+        let number = SetupNumberViewController(BedsideSetup()); number.loadViewIfNeeded()
+        let all = descendants(number.view)
+        let areaCode = try XCTUnwrap(all.compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "setup.areaCode" })
+        XCTAssertEqual(areaCode.keyboardType, .numberPad)
+        XCTAssertTrue(buttons(in: number.view).contains { $0.configuration?.title == "Get number" && !$0.isHidden })
+        XCTAssertTrue(try XCTUnwrap(buttons(in: number.view).first { $0.configuration?.title == "Continue" }).isHidden, "The number can't be skipped")
+    }
+
+    @MainActor func testDoneExplainsWhoCanCallAndGoesOnToTheKeypad() {
+        let setup = BedsideSetup(); setup.name = "Mom"
+        let done = SetupDoneViewController(setup); done.loadViewIfNeeded()
+        let text = labels(in: done.view).compactMap(\.text)
+        XCTAssertTrue(text.contains("Mom's Porch is ready"))
+        XCTAssertTrue(text.contains { $0.hasPrefix("Only people on the keypad and numbers you allow can call this number.") })
+        XCTAssertTrue(buttons(in: done.view).contains { $0.configuration?.title == "Put people on the keypad" })
+        XCTAssertTrue(done.navigationItem.hidesBackButton)
     }
 }

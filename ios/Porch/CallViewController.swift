@@ -272,7 +272,7 @@ final class CallViewController: UIViewController {
             present(IncomingFamilyCallViewController(call: call, credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "preview", role: .bedside)), animated: false)
         } else if args.contains("--preview-caregiver") { showUnlockedSetup() }
         else if args.contains("--preview-family-settings") { present(PorchStyle.navigation(FamilyAdminViewController()), animated: false) }
-        else if args.contains("--preview-pin-setup") { present(PorchStyle.navigation(CaregiverPINViewController(profile: nil)), animated: false) }
+        else if args.contains("--preview-pin-setup") { present(BedsideSetup.start { _ in }, animated: false) }
         else if args.contains("--preview-setup") { showSetup() }
         else if args.contains("--preview-people") { showPeople() }
         else if args.contains("--preview-display-settings") { present(PorchStyle.navigation(BedsideDisplaySettingsViewController()), animated: false) }
@@ -732,8 +732,16 @@ final class CallViewController: UIViewController {
     func showSetup() {
         guard !presenceSuppressed, presentedViewController == nil else { return }
         trigger.resetKeys(); resignFirstResponder()
-        let gate = CaregiverPINViewController()
-        gate.onUnlock = { [weak self] in self?.showUnlockedSetup() }
+        // Until this iPad is set up, the caregiver button sets it up, ending at the keypad if they choose.
+        guard let profile = PorchDevice.credential(for: .bedside) else {
+            present(BedsideSetup.start { [weak self] keypad in if keypad { self?.showUnlockedSetup() } }, animated: true); return
+        }
+        let gate = CaregiverPINViewController(profile: profile)
+        gate.onUnlock = { [weak self] in
+            // A setup that stopped after its PIN goes on from its number.
+            guard BedsideSetup.unfinished else { self?.showUnlockedSetup(); return }
+            self?.present(BedsideSetup.resume { [weak self] keypad in if keypad { self?.showUnlockedSetup() } }, animated: true)
+        }
         present(PorchStyle.navigation(gate), animated: true)
     }
 

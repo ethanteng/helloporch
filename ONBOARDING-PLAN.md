@@ -29,6 +29,7 @@ Settled on 2026-10-24.
 | Area code | Suggested from the iPad's location, and can be changed |
 | QR code to add the caregiver's phone | Yes |
 | Countries | US only at launch |
+| Choices during setup | As few as possible, with defaults (2026-10-30). The number is one tap in the area code Porch suggests. One **Continue** asks for the microphone and camera. A bedside set up from the app starts with drop-in on, invitations start with audio and video drop-in approved, and a new keypad contact's calls start as video. Each can be changed later. The bedside isn't asked for notifications: it doesn't use them, since calls reach it by VoIP push |
 | Hainie's phone routing | Stays on its own trunk |
 | Mom's current number | Hainie keeps it for good. The app can never buy Hainie a new number, and Porch never releases a number it didn't buy itself |
 
@@ -71,7 +72,7 @@ Problems that appear as soon as there's a second real family:
    1. **Who is this Porch for?** A name, such as "Mom".
    2. **Choose a caregiver PIN**, entered twice.
    3. **Mom's Porch phone number.** "People can call Mom's Porch from any phone." The area code is suggested from where the iPad is and can be changed. **Get number** shows the number.
-   4. **Allow the microphone, camera and notifications**, each with a sentence on why.
+   4. **Allow the microphone and camera**, with one Continue.
    5. **Connect the phone**, or **Do this later**.
       - Plug the phone into the Cell2Jack and the Cell2Jack into the iPad.
       - Turn on Porch's driver in Settings.
@@ -321,6 +322,8 @@ Both read the fragment in a client component, clear it with `history.replaceStat
 
 Size: large. Depends on phases 1, 2 and 4.
 
+**Status:** split in two. PR 6a, on the branch `claude/porch-app-setup`, built 5.1, 5.2 and 5.6 in [BedsideSetup.swift](ios/Porch/BedsideSetup.swift), with the setup defaults from the decisions above. PR 6b has 5.3, 5.4 and 5.5.
+
 - **5.1 Welcome screen** on a device with no pairing in either mode: **Set up Porch for someone** or **I'm joining my family**.
   - **Set up** asks for the setup link from the invitation, unless Porch was opened by it. Without one it says "Ask whoever invited you for your setup link."
   - On an iPhone, it explains that the bedside runs on the iPad that stays with them.
@@ -433,7 +436,8 @@ Size: small.
 | 3 | Universal links, `https` invites, `/setup`, `/join`; the number message fix. **Built** | – |
 | 4 | Keypad and settings backup | – |
 | 5 | Private invitations and the admin page: password sign-in, sessions, household list, invitations, and the Porches, System and Activity pages. **Built** | 3 |
-| 6 | Welcome screen, setup flow, number step, Connect the phone, QR code, checklist, number display | 1, 3, 5 |
+| 6a | Welcome screen, setup flow, number step, number display with Add to Contacts, setup defaults. **Built** | 1, 3, 5 |
+| 6b | Connect the phone, QR code for your phone, checklist | 6a |
 | 7 | Delete this Porch, by a caregiver or on the admin page | 1, 4, 5 |
 | 8 | Replace the bedside with restore from backup, including the `/bedside` link and page; forgotten PIN | 3, 4, 5 |
 | 9 | Daily check for offline and unfinished Porches | 5 |

@@ -29,6 +29,10 @@ public struct CallSlots: Equatable {
     /// those two keys can still read the keypad.
     private static let digitSlots = 10
     private static let symbolsStorageKey = "porch.slots.v2.symbols"
+    /// Whether this device has kept a keypad, in this format or an older one: a sign it has been a bedside.
+    public static func isSaved(in defaults: UserDefaults = .standard) -> Bool {
+        [storageKey, "porch.slots.v1", "porch.contact.v1"].contains { defaults.object(forKey: $0) != nil }
+    }
     /// A key with no action is saved as a person key with no one on it, the way builds from before
     /// No action saved an empty key, so they can still read the keypad.
     private struct Slot: Codable, Equatable { var action: KeypadAction; var contact: CallContact? }

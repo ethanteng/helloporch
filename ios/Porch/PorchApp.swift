@@ -66,7 +66,8 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
-        UIApplication.shared.isIdleTimerDisabled = PorchDevice.experience == .bedside
+        // Welcome isn't the bedside clock, even on an iPad whose mode hasn't been chosen yet.
+        UIApplication.shared.isIdleTimerDisabled = !PorchDevice.needsWelcome && PorchDevice.experience == .bedside
         SystemIncomingCalls.shared.resumeCamera()
         Cell2JackKeypad.shared.activate()
     }

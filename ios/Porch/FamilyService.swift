@@ -15,6 +15,20 @@ enum PorchDevice {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "porch.experience"); NotificationCenter.default.post(name: .porchExperienceChanged, object: nil) }
     }
     static var defaultOrigin: URL { URL(string: Bundle.main.object(forInfoDictionaryKey: "PorchServerURL") as? String ?? "https://porch-calling-prototype.vercel.app")! }
+    /// A device that has never been set up either way, and hasn't been told which it is: Porch asks first. Anything
+    /// that says otherwise, such as a pairing or a keypad, counts. Before the first unlock the keychain can't be read, so
+    /// a set-up bedside could look new; Porch doesn't ask then.
+    static var needsWelcome: Bool {
+        guard UIApplication.shared.isProtectedDataAvailable, UserDefaults.standard.string(forKey: "porch.experience") == nil else { return false }
+        return credential(for: .bedside) == nil && families.isEmpty && NativeCallSettings.caregiverCode.isEmpty && !CallSlots.isSaved()
+            && bedsideActivation == nil
+    }
+    /// Writes down the mode a set-up device has been using all along, which older versions worked out from the device,
+    /// so it never looks new to `needsWelcome`.
+    static func rememberExperience() {
+        guard UserDefaults.standard.string(forKey: "porch.experience") == nil, credential(for: .bedside) != nil || !families.isEmpty else { return }
+        UserDefaults.standard.set(experience.rawValue, forKey: "porch.experience")
+    }
     /// The bedside's pairing, or on a family phone the family its screens are showing (see `families`).
     static func credential(for role: PorchExperience) -> FamilyCredential? {
         role == .family ? currentFamily : stored("porch.family.bedside")
@@ -171,6 +185,12 @@ struct FamilyResponse: Decodable {
     let porchGuest: FamilyPorchGuest?
     /// Calls to and from the bedside, newest first (`callHistory`).
     let calls: [CallHistoryEntry]?
+    /// The household's number once it's set up (`assignPhoneNumber`), or `pending` while Porch keeps trying.
+    let porchNumber: String?
+    let pending: Bool?
+    /// The area code suggested from where the iPad is, and others near it (`phoneNumberOptions`). None outside the US.
+    let areaCode: String?
+    let nearby: [String]?
 }
 /// A short-lived link to an announcement clip, and the voice that read it.
 struct SpeechClip: Decodable { let voiceID: String; let url: String; let expiresAt: TimeInterval }
