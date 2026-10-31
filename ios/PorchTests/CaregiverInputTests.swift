@@ -1788,7 +1788,8 @@ final class BedsideSetupTests: XCTestCase {
             window.rootViewController = UINavigationController(rootViewController: screen); window.makeKeyAndVisible()
             screen.view.layoutIfNeeded()
             let card = try XCTUnwrap(labels(in: screen.view).first { $0.text == "Connect the phone" || $0.text == "Add your phone" }?.superview?.superview)
-            XCTAssertGreaterThan(card.bounds.width, 600, "\(type(of: screen)) squeezed its card")
+            // The form is the screen's width less its margins, up to 760 points: on an iPhone as on an iPad.
+            XCTAssertEqual(card.bounds.width, min(760, screen.view.bounds.width - 48), accuracy: 1, "\(type(of: screen)) squeezed its card")
             window.isHidden = true
         }
     }
