@@ -16,13 +16,13 @@ export default function Home() {
 
         <header className="hero">
           <div className="hero__badge">
-            One-button video calling for loved ones with Parkinson&rsquo;s, dementia, or shaky hands.
+            One-step video calling for your loved ones with Parkinson&rsquo;s, dementia, or unsteady hands.
           </div>
           <h1 className="hero__title">
-            Video calling as simple as <em>speed dial</em>
+            Speed dial, <em>with video.</em>
           </h1>
           <p className="hero__lede">
-            Porch is a tablet and a large-button keypad. Each button is someone they love.{" "}
+            Porch is a tablet and a large-button keypad with familiar faces. No apps, no passwords.{" "}
             <strong>One press starts a video call.</strong>
           </p>
           <HeroWaitlist />
@@ -97,7 +97,7 @@ export default function Home() {
                 </div>
               </div>
               <StepText n={2} title="They press a face.">
-                Each button has a photo and a name in large print. One press starts a video call.
+                Each button has a photo and a name in large print. Start a video call with one press.
               </StepText>
             </article>
             <article className="step">
@@ -131,7 +131,7 @@ export default function Home() {
                 </div>
               </div>
               <h3 className="feature__title">Call in anytime.</h3>
-              <p className="feature__body">Porch picks up for them, so they don&rsquo;t have to touch anything to see you.</p>
+              <p className="feature__body">Porch picks up for them, so they can see you without tapping anything.</p>
             </article>
             <article className="feature">
               <div className="feature__art">
@@ -145,7 +145,7 @@ export default function Home() {
                 <KeysCloseUp />
               </div>
               <h3 className="feature__title">Made for unsteady hands.</h3>
-              <p className="feature__body">Buttons are large, firm, and forgiving. A light tap and a heavy press both work.</p>
+              <p className="feature__body">Large, firm buttons work with a light tap or a heavy press.</p>
             </article>
           </div>
         </section>
