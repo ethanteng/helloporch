@@ -1,6 +1,6 @@
 # Bedside and family beta
 
-One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. A device that isn't set up either way opens to a welcome screen: **Set up Porch for someone** makes an iPad the bedside (an iPhone explains that setup happens on the iPad that stays with them), and **I'm joining my family** opens the invitation screen. Change modes later from caregiver settings, the family screen's **photo → Use this iPhone as the bedside Porch**, or (on a device that isn't set up as a bedside yet) **Use this device as a family member** on the first setup screen. Each mode keeps its own device pairing, so switching never removes your family pairing.
+One universal Porch app supports iPad bedside mode and iPhone/iPad family mode. A device that isn't set up either way opens to a welcome screen: **Set up Porch for someone** makes an iPad the bedside, and **I'm joining my family** opens the invitation screen. An iPhone is always a family device: **Set up Porch for someone**, or a setup link opened on it, explains that setup happens on the iPad that stays with them. Change an iPad's mode later from caregiver settings, the family screen's **photo → Use this iPad as the bedside Porch**, or (on a device that isn't set up as a bedside yet) **Use this device as a family member** on the first setup screen. Each mode keeps its own device pairing, so switching never removes your family pairing.
 
 ## Pair your family
 

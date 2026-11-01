@@ -14,6 +14,8 @@ enum PorchDevice {
         get { PorchExperience(rawValue: UserDefaults.standard.string(forKey: "porch.experience") ?? "") ?? (UIDevice.current.userInterfaceIdiom == .phone ? .family : .bedside) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "porch.experience"); NotificationCenter.default.post(name: .porchExperienceChanged, object: nil) }
     }
+    /// Only an iPad becomes the bedside: it stays with them, and only an iPad can use the Cell2Jack. An iPhone is family.
+    static var canBeBedside: Bool { UIDevice.current.userInterfaceIdiom != .phone }
     static var defaultOrigin: URL { URL(string: Bundle.main.object(forInfoDictionaryKey: "PorchServerURL") as? String ?? "https://porch-calling-prototype.vercel.app")! }
     /// A device that has never been set up either way, and hasn't been told which it is: Porch asks first. Anything
     /// that says otherwise, such as a pairing or a keypad, counts. Before the first unlock the keychain can't be read, so
