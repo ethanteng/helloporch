@@ -234,16 +234,16 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
                 let add = PorchStyle.button("Add to Contacts", symbol: "person.crop.circle.badge.plus", filled: false)
                 add.accessibilityIdentifier = "family.addPorchNumber"
                 add.addAction(UIAction { [weak self] _ in self?.addToContacts(number, name: from) }, for: .touchUpInside)
-                let send = PorchStyle.button("Send by text", symbol: "message", filled: false)
-                send.accessibilityIdentifier = "family.textPorchNumber"
-                send.addAction(UIAction { [weak self, weak send] _ in self?.sendByText(number, name: from, from: send) }, for: .touchUpInside)
-                block.addArrangedSubview(section("\(from)'s Porch number", detail: "Be sure to add this to your Contacts and share it with friends & loved ones.", views: [shown, add, send]))
+                let share = PorchStyle.button("Share this number", symbol: "message", filled: false)
+                share.accessibilityIdentifier = "family.sharePorchNumber"
+                share.addAction(UIAction { [weak self, weak share] _ in self?.shareNumber(number, name: from, from: share) }, for: .touchUpInside)
+                block.addArrangedSubview(section("\(from)'s Porch number", detail: "Be sure to add this to your Contacts and share it with friends & loved ones.", views: [shown, add, share]))
             }
         }
     }
     /// A text with the bedside's Porch number, to whoever they choose, with a contact card so they can save it in one
     /// tap. A device that can't text, such as an iPad without Messages, gets the share sheet instead.
-    private func sendByText(_ number: String, name: String, from source: UIView?) {
+    private func shareNumber(_ number: String, name: String, from source: UIView?) {
         let note = "Here's \(name)'s Porch number: \(PorchNumber.display(number)). Call it from any phone to talk with \(name)."
         // Without the card the text still carries the number, so a card that can't be made is left out.
         let card = try? CNContactVCardSerialization.data(with: [Self.porchContact(number, name: name)])
