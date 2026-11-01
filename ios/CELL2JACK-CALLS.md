@@ -49,10 +49,12 @@ communication is an iPadOS facility.
 - Turn off the driver in **Porch Preview** settings to avoid matching two copies
   of the same driver. Enable the driver in the real **Porch** app's settings,
   disconnect Cell2Jack for ten seconds, then reconnect it.
-- In Porch caregiver mode → **Advanced**, turn on **Use Cell2Jack phone keypad**.
-  This takes effect immediately, separately from the existing Save button for
-  silence settings. It is off by default. No launch argument automatically enables the normal app.
-  To use it, explicitly turn on this switch; it persists until turned off again.
+- Setup's **Connect the phone** step, or **Connect the phone** in Porch caregiver
+  mode → **This iPad**, turns on **Use Cell2Jack phone keypad** once the Cell2Jack
+  answers, then checks a key and the receiver going back. The switch is also on
+  **This iPad**. It takes effect immediately, separately from the existing Save
+  button for silence settings. It is off by default. No launch argument automatically enables the normal app.
+  Once on, it persists until turned off again.
 - Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
   disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.
@@ -65,7 +67,7 @@ communication is an iPadOS facility.
   cancellation and ends a returned session before presenting it.
 - Putting the receiver back on the phone also ends the call, as the
   call-control key does, unless **Hang up when the receiver is put back** is off
-  in Advanced. See [Hanging up the receiver](#hanging-up-the-receiver-2026-10-23).
+  in This iPad. See [Hanging up the receiver](#hanging-up-the-receiver-2026-10-23).
 - The saved camera key works in an applicable video call. Incoming call-control
   input is treated as a tap to answer; during an automatic drop-in countdown it
   cancels the drop-in. Message/call-control keys can stop message playback.
@@ -73,7 +75,7 @@ communication is an iPadOS facility.
   client, invalidates pending callbacks, and cancels a pending outgoing request.
   Returning reconnects when enabled. Unexpected USB failures automatically retry
   after 1, 2, 4, 8, then 15 seconds while Porch is active in bedside mode.
-  **Retry phone connection** in Advanced can retry immediately. Touch call
+  **Retry phone connection** in This iPad can retry immediately. Touch call
   controls remain available when USB is disconnected.
 
 Picking up the receiver is never routed to an app action; putting it back is
@@ -379,7 +381,7 @@ like a regular phone.
 
 Someone who sets the receiver down right after pressing a person's key, because
 the sound comes from the iPad, would end every call at once. **Caregiver mode →
-Advanced → Hang up when the receiver is put back** turns this off. It starts on,
+This iPad → Hang up when the receiver is put back** turns this off. It starts on,
 takes effect immediately, is stored as `porch.cell2jack.receiverHangUp`, and
 leaves keys working. With it off, hang-ups are still recorded, with the outcome
 `receiver hang-up off`.
