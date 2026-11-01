@@ -182,7 +182,13 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
                 block.addArrangedSubview(review)
             }
             // Left by the bedside when its call to this phone wasn't answered.
-            let from = state.people.first { $0.role == .bedside }?.name ?? state.householdName
+            let bedside = state.people.first { $0.role == .bedside }
+            let from = bedside?.name ?? state.householdName
+            // Both ways in one thread, like a text conversation. It sits with the bedside's other actions, under
+            // Send a message, and stays even while sending is off so earlier messages can still be played.
+            let thread = PorchStyle.button("Messages with \(from)", symbol: "bubble.left.and.bubble.right", filled: false)
+            thread.accessibilityIdentifier = "family.messages"
+            thread.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openMessages() } }, for: .touchUpInside)
             if family.unheard > 0 {
                 let play = PorchStyle.button(family.unheard == 1 ? "New message from \(from)" : "\(family.unheard) new messages from \(from)", symbol: "envelope.badge.fill")
                 play.accessibilityIdentifier = "family.newMessages"
@@ -214,13 +220,11 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
                     }, for: .touchUpInside)
                     views.append(message)
                 }
+                if person.id == bedside?.id { views.append(thread) }
                 block.addArrangedSubview(section(person.name, views: views))
             }
-            // Both ways in one thread, like a text conversation.
-            let thread = PorchStyle.button("Messages with \(from)", symbol: "bubble.left.and.bubble.right", filled: false)
-            thread.accessibilityIdentifier = "family.messages"
-            thread.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openMessages() } }, for: .touchUpInside)
-            block.addArrangedSubview(thread)
+            // Without a bedside to show, the thread still has to be reachable.
+            if bedside == nil { block.addArrangedSubview(thread) }
             // Anyone can call the bedside on its own number, from any phone.
             if let number = family.number {
                 let shown = PorchStyle.label(PorchNumber.display(number), size: 28, color: PorchStyle.ink, weight: .bold)
