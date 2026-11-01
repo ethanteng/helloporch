@@ -88,7 +88,7 @@ Problems that appear as soon as there's a second real family:
 - With Porch installed, the link opens it and joins.
 - Without it, the page links to TestFlight, then shows **Open invitation in Porch** for after installing. TestFlight can't carry the link through an install, so this second tap is needed.
 
-Their Porch home screen shows **Mom's Porch number** with **Add to Contacts**.
+Their Porch home screen shows **Mom's Porch number** with **Add to Contacts** and **Send by text**, which opens Messages with the number filled in (or the share sheet on a device that can't text).
 
 TestFlight's public link appears on these pages, but on its own it gives an app that can't set anything up. A Porch invitation is what lets someone in.
 
