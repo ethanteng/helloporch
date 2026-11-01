@@ -1,7 +1,9 @@
 import UIKit
 import AVFoundation
 import ContactsUI
+import MessageUI
 import SafariServices
+import UniformTypeIdentifiers
 import PorchCore
 
 /// On the website, so the policy can change without an app update.
@@ -14,7 +16,7 @@ func showPorchError(_ error: Error, on controller: UIViewController) {
     alert.addAction(UIAlertAction(title: "OK", style: .default))
     controller.present(alert, animated: true)
 }
-final class FamilyHomeViewController: CaregiverFormViewController, CNContactViewControllerDelegate {
+final class FamilyHomeViewController: CaregiverFormViewController, CNContactViewControllerDelegate, MFMessageComposeViewControllerDelegate {
     private let status = PorchStyle.label("", size: 17)
     /// Under each bedside's name: someone is at the iPad, or how long ago someone was. It changes by the minute,
     /// so it's updated in place rather than rebuilding the screen. One for each family, by this phone's ID there.
@@ -232,16 +234,52 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
                 let add = PorchStyle.button("Add to Contacts", symbol: "person.crop.circle.badge.plus", filled: false)
                 add.accessibilityIdentifier = "family.addPorchNumber"
                 add.addAction(UIAction { [weak self] _ in self?.addToContacts(number, name: from) }, for: .touchUpInside)
-                block.addArrangedSubview(section("\(from)'s Porch number", detail: "Anyone can call \(from)'s Porch on it, from any phone.", views: [shown, add]))
+                let share = PorchStyle.button("Share this number", symbol: "message", filled: false)
+                share.accessibilityIdentifier = "family.sharePorchNumber"
+                share.addAction(UIAction { [weak self, weak share] _ in self?.shareNumber(number, name: from, from: share) }, for: .touchUpInside)
+                block.addArrangedSubview(section("\(from)'s Porch number", detail: "Be sure to add this to your Contacts and share it with friends & loved ones.", views: [shown, add, share]))
             }
         }
     }
-    /// A new contact for the bedside's Porch number, which they can change before saving. Porch never reads Contacts.
-    private func addToContacts(_ number: String, name: String) {
+    /// A text with the bedside's Porch number, to whoever they choose, with a contact card so they can save it in one
+    /// tap. A device that can't text, such as an iPad without Messages, gets the share sheet instead.
+    private func shareNumber(_ number: String, name: String, from source: UIView?) {
+        let note = "Here's \(name)'s Porch number: \(PorchNumber.display(number)). Call it from any phone to talk with \(name)."
+        // Without the card the text still carries the number, so a card that can't be made is left out.
+        let card = try? CNContactVCardSerialization.data(with: [Self.porchContact(number, name: name)])
+        let filename = "\(name)'s Porch.vcf"
+        guard MFMessageComposeViewController.canSendText() else {
+            var items: [Any] = [note]
+            if let card {
+                let file = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+                if (try? card.write(to: file, options: .atomic)) != nil { items.append(file) }
+            }
+            let share = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            share.popoverPresentationController?.sourceView = source
+            share.popoverPresentationController?.sourceRect = source?.bounds ?? .zero
+            present(share, animated: true); return
+        }
+        let compose = MFMessageComposeViewController()
+        compose.body = note
+        if let card, MFMessageComposeViewController.canSendAttachments(), MFMessageComposeViewController.isSupportedAttachmentUTI(UTType.vCard.identifier) {
+            compose.addAttachmentData(card, typeIdentifier: UTType.vCard.identifier, filename: filename)
+        }
+        compose.messageComposeDelegate = self
+        present(compose, animated: true)
+    }
+    func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
+        controller.dismiss(animated: true)
+    }
+    /// The bedside's Porch number as a contact, named so it's easy to find.
+    private static func porchContact(_ number: String, name: String) -> CNMutableContact {
         let contact = CNMutableContact()
         contact.givenName = "\(name)'s Porch"
         contact.phoneNumbers = [CNLabeledValue(label: CNLabelPhoneNumberMain, value: CNPhoneNumber(stringValue: number))]
-        let editor = CNContactViewController(forNewContact: contact)
+        return contact
+    }
+    /// A new contact for the bedside's Porch number, which they can change before saving. Porch never reads Contacts.
+    private func addToContacts(_ number: String, name: String) {
+        let editor = CNContactViewController(forNewContact: Self.porchContact(number, name: name))
         editor.delegate = self
         present(UINavigationController(rootViewController: editor), animated: true)
     }
