@@ -114,6 +114,7 @@ extension Notification.Name {
                 guard let received = try await FamilyService(credential).send("textMessage", ["textID": text.id], timeout: 40).text, received.id == text.id
                 else { throw FamilyServiceError(message: "Missing text.", status: 0) }
                 guard let self else { return }
+                guard Self.stillPaired(credential) else { self.fetchingTexts.remove(text.id); return }
                 // Fetched again in a new language. The clip's name includes that language, so the previous
                 // reading goes even when the words themselves are unchanged (a text shown as sent).
                 if let earlier = self.savedText(text.id) { Self.forgetReading(earlier) }
@@ -128,6 +129,11 @@ extension Notification.Name {
         }
     }
 
+    /// Whether this iPad is still the bedside a download or fetch started for. One replaced by another household's setup
+    /// meanwhile drops what arrives for the old one.
+    private static func stillPaired(_ credential: FamilyCredential) -> Bool {
+        PorchDevice.credential(for: .bedside)?.credential == credential.credential
+    }
     private func download(_ message: FamilyMessage, credential: FamilyCredential) {
         downloading.insert(message.id)
         Task { [weak self] in
@@ -139,6 +145,8 @@ extension Notification.Name {
                     throw FamilyServiceError(message: "Couldn't download the message.", status: (response as? HTTPURLResponse)?.statusCode ?? 0)
                 }
                 guard let self else { return }
+                // Not played, so not delivered: the iPad became another household's bedside meanwhile.
+                guard Self.stillPaired(credential) else { self.downloading.remove(message.id); return }
                 try FileManager.default.createDirectory(at: self.folder, withIntermediateDirectories: true)
                 let destination = self.file(for: message)
                 try? FileManager.default.removeItem(at: destination)

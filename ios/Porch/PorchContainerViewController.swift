@@ -181,9 +181,10 @@ final class PorchContainerViewController: UIViewController {
     private func confirmReplacingBedside(_ url: URL) {
         // Until Porch has checked in since it opened, it doesn't have their name.
         let name = FamilyCoordinator.shared.state.flatMap { $0.me.role == .bedside ? $0.householdName : nil }
-        let opening = name.map { "\($0)'s" } ?? "Its", within = name.map { "\($0)'s" } ?? "its"
+        let keypad = name.map { "\($0)'s" } ?? "This iPad's", family = name.map { "\($0)'s family" } ?? "its family"
+        let number = name.map { "\($0)'s Porch number" } ?? "Its Porch number"
         let alert = UIAlertController(title: "Replace \(name.map { "\($0)'s Porch" } ?? "this iPad's Porch")?",
-            message: "This iPad will be set up as a new Porch. \(opening) keypad, messages and settings are removed from it, and it stops ringing for \(within) family. \(opening) Porch number and family stay. Nothing changes until you choose the new Porch's PIN.",
+            message: "This iPad will be set up as a new Porch. \(keypad) keypad, messages and settings are removed from it, and it stops ringing for \(family). \(number) and family stay. Nothing changes until you choose the new Porch's PIN.",
             preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Replace", style: .destructive) { [weak self] _ in self?.setUpBedside(url, replacing: true) })
