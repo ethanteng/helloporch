@@ -51,7 +51,7 @@ import PorchCore
 
         // Normally the overlays sit at opposite edges. If large text needs more
         // height, scroll the overlays together without shrinking the video.
-        let scroll = UIScrollView()
+        let scroll = CallOverlays()
         scroll.accessibilityIdentifier = "call.overlays"
         scroll.contentInsetAdjustmentBehavior = .never
         scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -114,16 +114,19 @@ import PorchCore
             controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
             controls.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 16),
         ])
+        // The person's photo and name sit in this space, above the self view when the screen is upright.
+        var identitySpace: UILayoutGuide?
         if let placeholder {
             let space = UILayoutGuide()
             scroll.addLayoutGuide(space)
+            identitySpace = space
             let identity = UIStackView(arrangedSubviews: (photo.map { [$0 as UIView] } ?? []) + [placeholder])
             identity.axis = .vertical; identity.alignment = .center; identity.spacing = 16
             identity.translatesAutoresizingMaskIntoConstraints = false
             scroll.addSubview(identity)
+            if preview == nil { space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12).isActive = true }
             NSLayoutConstraint.activate([
                 space.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 12),
-                space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
                 identity.centerXAnchor.constraint(equalTo: content.centerXAnchor),
                 identity.centerYAnchor.constraint(equalTo: space.centerYAnchor),
                 identity.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -48),
@@ -135,7 +138,8 @@ import PorchCore
                 let width = photo.widthAnchor.constraint(equalTo: identity.widthAnchor, multiplier: 0.85)
                 // Fit ordinary calls on screen before growing the scrollable
                 // overlays; the image's intrinsic size must not force overflow.
-                width.priority = UILayoutPriority(249)
+                // It also gives way to the self view.
+                width.priority = UILayoutPriority(248)
                 photo.setContentCompressionResistancePriority(.fittingSizeLevel, for: .horizontal)
                 photo.setContentCompressionResistancePriority(.fittingSizeLevel, for: .vertical)
                 NSLayoutConstraint.activate([
@@ -152,17 +156,45 @@ import PorchCore
             preview.accessibilityIdentifier = "call.localPreview"
             preview.translatesAutoresizingMaskIntoConstraints = false
             scroll.addSubview(preview)
-            let width = preview.widthAnchor.constraint(equalTo: frame.widthAnchor, multiplier: 0.12)
-            width.priority = .defaultHigh
+            // The overlays set its size and shape. Fit ordinary calls on screen before growing the scrollable overlays.
+            let width = preview.widthAnchor.constraint(equalToConstant: 64)
+            width.priority = UILayoutPriority(249)
+            scroll.selfView = .init(
+                width: width,
+                upright: [preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 4 / 3)]
+                    + (identitySpace.map { [$0.bottomAnchor.constraint(equalTo: preview.topAnchor, constant: -12)] } ?? []),
+                sideways: [preview.widthAnchor.constraint(equalTo: preview.heightAnchor, multiplier: 4 / 3)]
+                    + (identitySpace.map { [$0.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12)] } ?? []))
             NSLayoutConstraint.activate([
                 preview.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
                 preview.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
                 preview.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 12),
-                preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
-                preview.widthAnchor.constraint(lessThanOrEqualToConstant: 112), width,
-                preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 0.75),
+                preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 64), width,
             ])
         }
+    }
+}
+
+/// The overlays above a call's video. They size the self view as most calling apps do, about 30% of the screen's
+/// short side and at most 200 points on an iPad, and turn it with the screen, as the camera's picture turns. On an
+/// upright screen the self view sits under the person's photo; a sideways screen has room beside it.
+private final class CallOverlays: UIScrollView {
+    struct SelfView { let width: NSLayoutConstraint; let upright, sideways: [NSLayoutConstraint] }
+    var selfView: SelfView? { didSet { selfView.map { NSLayoutConstraint.activate($0.upright) } } }
+
+    override func layoutSubviews() {
+        if let selfView {
+            let isUpright = bounds.height >= bounds.width
+            let shortSide = min(min(bounds.width, bounds.height) * 0.3, 200)
+            let width = isUpright ? shortSide : shortSide * 4 / 3
+            if selfView.width.constant != width { selfView.width.constant = width }
+            if selfView.upright[0].isActive != isUpright {
+                // Deactivate first: both layouts can't hold at once.
+                NSLayoutConstraint.deactivate(isUpright ? selfView.sideways : selfView.upright)
+                NSLayoutConstraint.activate(isUpright ? selfView.upright : selfView.sideways)
+            }
+        }
+        super.layoutSubviews()
     }
 }
 
@@ -411,7 +443,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return .init(call: state?.call?.id == session.call.id ? state?.call : nil, canAddPhone: state?.canAddPhoneGuests == true, family: state?.family ?? [])
             }
         }
-        CallScreenLayout.install(in: view, video: stage, preview: localVideo,
+        CallScreenLayout.install(in: view, video: stage, preview: call.mode == .video ? localVideo : nil,
                                  placeholder: placeholder, title: title, status: statusLabel,
                                  hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
                                  buttons: [microphoneButton, cameraButton] + (guests.map { [$0.addButton] } ?? []) + [endButton])
