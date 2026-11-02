@@ -135,6 +135,9 @@ final class Cell2JackRoutingTests: XCTestCase {
     }
     @MainActor func testReadyConfirmationDisappearsAfterThreeSecondsWithoutReappearingOnDuplicate() async throws {
         let clock = CallViewController(); clock.loadViewIfNeeded()
+        // The test app's own keypad retries every few seconds on a simulator where it's turned on, and each
+        // status it posts would reach this clock while the test waits.
+        NotificationCenter.default.removeObserver(clock, name: .cell2JackKeypadChanged, object: nil)
         let label = try XCTUnwrap(clock.view.subviews.first { $0.accessibilityIdentifier == "clock.cell2jack" })
         clock.displayPhoneKeypadStatus("Phone keypad ready", enabled: true)
         XCTAssertFalse(label.isHidden)
