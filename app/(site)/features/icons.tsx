@@ -95,10 +95,20 @@ export function EndCallIcon({ className }: IconProps) {
   );
 }
 
-export function SendIcon({ className }: IconProps) {
+export function MicIcon({ className }: IconProps) {
   return (
     <Icon className={className}>
-      <path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z" />
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+    </Icon>
+  );
+}
+
+export function TextIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" />
+      <path d="M8 9.5h8M8 12.5h5" />
     </Icon>
   );
 }

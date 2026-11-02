@@ -249,7 +249,6 @@
 }
 
 .ipadScreen,
-.phoneScreen,
 .clock,
 .controls {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif;
@@ -257,7 +256,6 @@
 }
 
 .ipadScreen p,
-.phoneScreen p,
 .clock p {
   margin: 0;
 }
@@ -529,91 +527,83 @@
   color: var(--tomato-deep);
 }
 
-/* ---------- 3. Messages: recorded on a phone, playing on the iPad ---------- */
+/* ---------- 3. Messages: what's waiting for Mom, and the one playing now ---------- */
 
 .messages {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 22px;
 }
 
-.phone {
-  flex: none;
-  width: 150px;
-  padding: 6px;
-  border-radius: 28px;
-  background: oklch(0.22 0.01 60);
-  box-shadow: 0 28px 40px -26px oklch(0.25 0.05 45 / 0.65);
-}
-
-.phoneScreen {
+.waiting {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  width: 240px;
+}
+
+.waitingTitle {
+  padding-left: 4px;
+  font: 600 12px/1.2 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: oklch(0.32 0.05 150);
+}
+
+.waitingItem {
+  display: flex;
+  align-items: center;
   gap: 12px;
-  aspect-ratio: 9 / 19;
-  padding: 30px 10px 10px;
-  border-radius: 22px;
-  background: rgb(242 245 240);
-  color: rgb(31 48 43);
+  padding: 10px 14px 10px 10px;
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: 0 14px 28px -20px oklch(0.3 0.05 50 / 0.6);
 }
 
-.sendTitle {
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
+.waitingItem[data-playing] {
+  box-shadow: 0 0 0 2.5px var(--tomato-deep), 0 14px 28px -20px oklch(0.3 0.05 50 / 0.6);
 }
 
-.sendCard {
+.waitingFace {
+  flex: none;
+  align-self: flex-start;
+}
+
+.waitingName {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 10px 8px;
-  border-radius: 14px;
-  background: #fff;
-  font-size: 10px;
-  font-weight: 600;
+  font: 600 15px/1.2 var(--sans);
+  color: var(--ink);
 }
 
-.sendThumb {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  border-radius: 8px;
+.nowPlaying {
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--tomato-deep);
+  color: #fff;
+  font: 600 11px/1.4 var(--sans);
 }
 
-.sendButton {
+.waitingKind {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 5px;
-  width: 100%;
-  padding: 7px 0;
-  border-radius: 8px;
-  background: rgb(41 92 74);
-  color: #fff;
+  margin-top: 3px;
+  font: 400 13px/1.3 var(--sans);
+  color: var(--muted-2);
 }
 
-.sendButton svg {
-  width: 11px;
-  height: 11px;
-}
-
-.hop {
+.waitingKind svg {
   flex: none;
-  width: 64px;
-  height: 32px;
-  margin-top: 40px;
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 14px;
+  height: 14px;
 }
 
-.hop path:first-child {
-  stroke-dasharray: 1 7;
+.waitingQuote {
+  margin-top: 4px;
+  font: italic 400 16px/1.3 var(--serif);
+  color: var(--ink);
 }
 
 .messagesIpad {
@@ -894,13 +884,13 @@
 }
 
 .original {
-  margin-top: 8px;
+  margin-top: 6px;
   font: 400 14px/1.4 var(--sans);
   color: var(--muted);
 }
 
 .translated {
-  margin-top: 4px;
+  margin-top: 8px;
   font: 600 19px/1.35 var(--sans);
   color: var(--ink);
 }
@@ -1232,7 +1222,16 @@
   }
 
   .messages {
-    zoom: 0.72;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .waiting {
+    width: min(100%, 290px);
+  }
+
+  .messagesIpad .ipad {
+    width: 170px;
   }
 
   .langPicker {
@@ -1260,10 +1259,6 @@
 }
 
 @media (max-width: 420px) {
-  .messages {
-    zoom: 0.62;
-  }
-
   .together {
     zoom: 0.72;
   }

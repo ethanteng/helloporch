@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import PorchFace from "@/components/PorchFace";
+import PorchFace, { type Who } from "@/components/PorchFace";
 import { ScreenKey } from "@/components/PorchKeypad";
 import { clip } from "./clips";
 import {
@@ -7,11 +7,12 @@ import {
   BankIcon,
   EndCallIcon,
   EyeIcon,
+  MicIcon,
   MicOffIcon,
   PhoneIcon,
-  SendIcon,
   ShieldIcon,
   SpeakerIcon,
+  TextIcon,
   VideoIcon,
 } from "./icons";
 import LanguageDemo from "./LanguageDemo";
@@ -64,11 +65,11 @@ const CHAPTERS: Chapter[] = [
   {
     id: "messages",
     kicker: "Between calls",
-    title: "Messages that play themselves.",
+    title: "Messages and texts play themselves.",
     body: (
       <>
-        Record a video or voice message on your phone. When they’re in front of the iPad, it plays on its own: nothing to
-        open, nothing to miss.
+        Record a video or voice message in the Porch app, or just text their Porch number from any phone. When they sit
+        down in front of the iPad, Porch plays whatever’s waiting and reads texts aloud. Nothing to open, nothing to miss.
       </>
     ),
     watch: [
@@ -85,7 +86,7 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         Porch shows and speaks Mandarin, Cantonese, or Spanish as well as English, from the clock to its announcements.
-        Messages from family are translated into their language automatically.
+        Texts sent to their Porch number are translated into their language automatically.
       </>
     ),
     watch: [{ id: "multi-language", label: "Switching languages" }],
@@ -215,7 +216,7 @@ function PickupScene() {
             <VideoIcon /> Call in the Porch app
           </li>
           <li>
-            <PhoneIcon /> Or dial it from any phone
+            <PhoneIcon /> Or call or text it from any phone
           </li>
           <li>
             <ShieldIcon /> Unknown callers are blocked
@@ -226,32 +227,20 @@ function PickupScene() {
   );
 }
 
-/* ---------- 3. A message recorded on your phone plays itself on their iPad. ---------- */
+/* ---------- 3. Messages and texts wait for Mom, then play when she sits down. ---------- */
 
 function MessagesScene() {
   return (
     <div className={styles.messages} aria-hidden="true">
-      <div className={styles.phone}>
-        <div className={styles.phoneScreen}>
-          <p className={styles.sendTitle}>Send a message</p>
-          <div className={styles.sendCard}>
-            <p>Video message · 0:06</p>
-            <div className={styles.sendThumb}>
-              <PorchFace who="sarah" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
-            </div>
-            <span className={styles.sendButton}>
-              <SendIcon /> Send to Mom
-            </span>
-          </div>
-        </div>
+      <div className={styles.waiting}>
+        <p className={styles.waitingTitle}>Waiting for Mom</p>
+        <Waiting who="sarah" name="Sarah" kind="Video message · 0:06" icon={<VideoIcon />} playing />
+        <Waiting who="mike" name="Mike" kind="Voice message · 0:14" icon={<MicIcon />} />
+        <Waiting who="emma" name="Emma" kind="Text · read aloud" icon={<TextIcon />} quote="Can’t wait for Sunday!" />
       </div>
-      <svg className={styles.hop} viewBox="0 0 80 40">
-        <path d="M4 30 C 24 4, 52 4, 72 24" />
-        <path d="M62 22 l10 2 l-3 -10" />
-      </svg>
       <div className={styles.messagesIpad}>
         <span className={styles.here}>
-          <EyeIcon /> Mom’s here, so it plays
+          <EyeIcon /> Mom’s here, so they play
         </span>
         <div className={styles.ipad}>
           <div className={styles.ipadScreen}>
@@ -262,6 +251,38 @@ function MessagesScene() {
             </span>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function Waiting({
+  who,
+  name,
+  kind,
+  icon,
+  quote,
+  playing,
+}: {
+  who: Who;
+  name: string;
+  kind: string;
+  icon: ReactNode;
+  quote?: string;
+  playing?: boolean;
+}) {
+  return (
+    <div className={styles.waitingItem} data-playing={playing || undefined}>
+      <PorchFace who={who} size={44} className={styles.waitingFace} />
+      <div>
+        <p className={styles.waitingName}>
+          {name}
+          {playing ? <span className={styles.nowPlaying}>Playing</span> : null}
+        </p>
+        <p className={styles.waitingKind}>
+          {icon} {kind}
+        </p>
+        {quote ? <p className={styles.waitingQuote}>“{quote}”</p> : null}
       </div>
     </div>
   );

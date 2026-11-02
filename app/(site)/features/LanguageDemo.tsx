@@ -113,12 +113,13 @@ export default function LanguageDemo() {
               “{language.spoken}”
             </p>
           </div>
+          {/* A text to the Porch number, as the bedside shows it: the translation, then the original under it. */}
           <div className={styles.langNote}>
-            <p className={styles.tag}>Sarah’s message{language.id === "en" ? "" : ", translated"}</p>
-            {language.id === "en" ? null : <p className={styles.original}>“{SENT}”</p>}
+            <p className={styles.tag}>A text from Sarah</p>
             <p className={styles.translated} lang={language.id}>
               “{language.message}”
             </p>
+            {language.id === "en" ? null : <p className={styles.original}>Translated from English: “{SENT}”</p>}
           </div>
         </div>
       </div>
