@@ -73,17 +73,26 @@ async function updateRecord(store: FamilyStore, householdID: string, id: string,
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
 }
-/** The text's words and their readings are deleted, then it leaves the bedside's queue. In that order, a retry after
- * a failure finds the text still queued and finishes the job, and a repeated webhook can't queue it again. */
+/** The text's words are tombstoned, its readings are deleted, and then it leaves the bedside's queue. A retry after a
+ * failure finds the text still queued and finishes the job, and a repeated webhook can't queue it again. Readings are
+ * deleted again once the tombstone is in place: a clip stored after the first delete, while the record was still live,
+ * would otherwise stay until the record expired. */
 async function endText(store: FamilyStore, media: () => MediaStore, householdID: string, id: string, now: number) {
-  const record = await saved(store, householdID, id);
-  if (record?.clips?.length) await discardMedia(store, media, householdID, record.clips, now);
   const key = textKey(householdID, id), removed = JSON.stringify({ id, removed: true });
+  let clips: string[] = [];
   for (let attempt = 0; ; attempt++) {
     const raw = await store.get(key);
-    if (raw === null || raw === removed || await store.compareAndSet(key, raw, removed, 86400)) break;
+    if (raw === null || raw === removed) break;
+    const record = JSON.parse(raw) as TextRecord | Removed;
+    // Delete listed readings before the tombstone, so a failure here leaves the text queued with its clip list.
+    if (!("removed" in record)) {
+      clips = record.clips ?? [];
+      if (clips.length) await discardMedia(store, media, householdID, clips, now);
+    }
+    if (await store.compareAndSet(key, raw, removed, 86400)) break;
     if (attempt === 11) throw new FamilyError("Porch is busy. Please try again.", 409);
   }
+  if (clips.length) await discardMedia(store, media, householdID, clips, now);
   await mutate(store, householdID, house => { house.texts = (house.texts ?? []).filter(entry => entry.id !== id); });
 }
 /** Notes a natural-voice reading of a text's words before it's made, so it's deleted with the text. The bedside's purge
