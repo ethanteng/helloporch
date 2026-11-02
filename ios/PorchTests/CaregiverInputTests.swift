@@ -2045,3 +2045,74 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertTrue(done.navigationItem.hidesBackButton)
     }
 }
+
+final class ScreenAwakeTests: XCTestCase {
+    /// A family phone keeps its screen on only while a call screen is open. The bedside clock always does.
+    @MainActor func testCallScreensKeepAFamilyPhoneAwake() {
+        let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
+        let call = UIViewController()
+        defer { defaults.set(saved, forKey: "porch.experience"); ScreenAwake.callDisappeared(call); ScreenAwake.update(inFront: false) }
+        defaults.set("family", forKey: "porch.experience")
+        ScreenAwake.update(inFront: true)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+        ScreenAwake.callShown(call, voice: true); ScreenAwake.update(inFront: true)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        ScreenAwake.update(inFront: false)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "In the background iOS dims and locks as usual")
+        XCTAssertFalse(UIDevice.current.isProximityMonitoringEnabled)
+        ScreenAwake.callDisappeared(call); ScreenAwake.update(inFront: true)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "The call screen closed")
+        defaults.set("bedside", forKey: "porch.experience")
+        ScreenAwake.update(inFront: true)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "The bedside clock stays on")
+    }
+
+    /// Both call screens hold the screen on from appearing until they close, and doing so doesn't connect a call.
+    @MainActor func testCallScreensHoldTheScreenUntilTheyClose() throws {
+        let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
+        defer { defaults.set(saved, forKey: "porch.experience"); ScreenAwake.update(inFront: false) }
+        defaults.set("family", forKey: "porch.experience")
+        let call = try NativeCall(room: "awake-test", mode: .voice)
+        let contact = try CallContact(name: "Family", nativeCall: call, phoneNumber: "+14155550123")
+        let server = try NativeCallServer(url: "https://example.com", accessCode: "test-credential-no-network")
+        let placed = try NativeCallViewController.phoneFallback(contact, server: server)
+        placed.viewWillAppear(false)
+        XCTAssertFalse(placed.isViewLoaded, "The appearance hook must not connect a call")
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        placed.viewDidDisappear(false)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+        // Answered through CallKit. Loading this view would build the call's controls.
+        let answered = SystemCallViewController()
+        answered.viewWillAppear(false)
+        XCTAssertFalse(answered.isViewLoaded)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        answered.viewDidDisappear(false)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    /// A screen over the call, such as the phone keypad, keeps the screen on. Closing the call screen doesn't.
+    @MainActor func testOnlyClosingTheCallScreenLetsThePhoneSleep() async throws {
+        let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
+        let original = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow })
+        let window = UIWindow(windowScene: try XCTUnwrap(original.windowScene))
+        let root = UIViewController(); window.rootViewController = root; window.makeKeyAndVisible()
+        defer { defaults.set(saved, forKey: "porch.experience"); ScreenAwake.update(inFront: false); window.isHidden = true; original.makeKeyAndVisible() }
+        defaults.set("family", forKey: "porch.experience")
+        let call = CallScreenProbe(); call.modalPresentationStyle = .fullScreen
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in root.present(call, animated: false) { done.resume() } }
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        let cover = UIViewController(); cover.modalPresentationStyle = .fullScreen
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in call.present(cover, animated: false) { done.resume() } }
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "A screen over the call is still the call")
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in cover.dismiss(animated: false) { done.resume() } }
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in call.dismiss(animated: false) { done.resume() } }
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "The call screen closed")
+    }
+}
+
+/// The call screens' appear and disappear hooks, so a real present and dismiss can be checked without a call.
+private final class CallScreenProbe: UIViewController {
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); ScreenAwake.callShown(self, voice: true) }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callDisappeared(self) }
+}

@@ -66,8 +66,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
-        // Welcome isn't the bedside clock, even on an iPad whose mode hasn't been chosen yet.
-        UIApplication.shared.isIdleTimerDisabled = !PorchDevice.needsWelcome && PorchDevice.experience == .bedside
+        ScreenAwake.update(inFront: true)
         SystemIncomingCalls.shared.resumeCamera()
         Cell2JackKeypad.shared.activate()
     }
@@ -75,11 +74,39 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
     func sceneDidEnterBackground(_ scene: UIScene) {
         SystemIncomingCalls.shared.enterBackground()
         RemoteCaregiverSession.shared.end()
+        ScreenAwake.update(inFront: false)
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
         Cell2JackKeypad.shared.pause()
         (window?.rootViewController as? PorchContainerViewController)?.pause()
-        UIApplication.shared.isIdleTimerDisabled = false
+    }
+}
+
+/// Keeps the screen on for the bedside clock, and on any device while a call screen is open, the way FaceTime does.
+/// Otherwise a family phone dims and locks mid-call, and leaving the foreground hangs up a call it placed.
+/// Voice calls also turn on the proximity sensor, so an iPhone's screen goes dark against an ear instead of
+/// taking taps from a cheek. iPads have no sensor.
+@MainActor enum ScreenAwake {
+    private static let calls = NSHashTable<UIViewController>.weakObjects()
+    private static let voiceCalls = NSHashTable<UIViewController>.weakObjects()
+    static func callShown(_ screen: UIViewController, voice: Bool) {
+        calls.add(screen)
+        if voice { voiceCalls.add(screen) } else { voiceCalls.remove(screen) }
+        update()
+    }
+    /// A screen over the call, such as the phone keypad, leaves the call going. Anything else closed it.
+    static func callDisappeared(_ screen: UIViewController) {
+        guard screen.presentedViewController == nil || screen.isBeingDismissed else { return }
+        calls.remove(screen); voiceCalls.remove(screen)
+        update()
+    }
+    /// Only the background gives the screen back to iOS. Covering the proximity sensor can resign active too, and
+    /// turning the sensor or the idle timer off then would light the screen against an ear or let the phone lock.
+    static func update(inFront: Bool = UIApplication.shared.applicationState != .background) {
+        // Welcome isn't the bedside clock, even on an iPad whose mode hasn't been chosen yet.
+        let clock = !PorchDevice.needsWelcome && PorchDevice.experience == .bedside
+        UIApplication.shared.isIdleTimerDisabled = inFront && (clock || !calls.allObjects.isEmpty)
+        UIDevice.current.isProximityMonitoringEnabled = inFront && !voiceCalls.allObjects.isEmpty
     }
 }

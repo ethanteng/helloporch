@@ -47,7 +47,7 @@ final class PorchContainerViewController: UIViewController {
         addChild(child); child.view.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(child.view)
         NSLayoutConstraint.activate([child.view.leadingAnchor.constraint(equalTo: view.leadingAnchor), child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor), child.view.topAnchor.constraint(equalTo: view.topAnchor), child.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
         child.didMove(toParent: self); content = child; setNeedsStatusBarAppearanceUpdate()
-        UIApplication.shared.isIdleTimerDisabled = !welcoming && PorchDevice.experience == .bedside && UIApplication.shared.applicationState == .active
+        ScreenAwake.update()
     }
     /// The welcome screen's choice: setting this iPad up for someone, or joining a family.
     private func choose(_ experience: PorchExperience) {
