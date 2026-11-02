@@ -212,9 +212,17 @@ final class SetupPINViewController: BedsideSetupStep {
                 if let previous { try await PorchDevice.leaveBedside(previous) }
                 let response = try await FamilyService(origin: origin).send("enrollBedside", registration, pin: operatorCode.isEmpty ? nil : operatorCode)
                 guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
+                // Store the new pairing and its PIN before forgetting the old keypad. A check-in reports whatever
+                // keypad is on the iPad, and the PIN write needs the device unlocked, so a lock during enrollment
+                // can store one and not the other. The old keypad stays until both are stored.
+                let enrolled = FamilyCredential(origin: origin, credential: token, role: .bedside)
+                try PorchDevice.save(enrolled)
+                do { try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code") }
+                catch {
+                    if let previous { try? PorchDevice.save(previous) }
+                    throw error
+                }
                 if previous != nil { PorchDevice.forgetBedsideHousehold(); self.setup.replacing = false }
-                try PorchDevice.save(FamilyCredential(origin: origin, credential: token, role: .bedside))
-                try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code")
                 FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)
                 try PorchDevice.saveActivation(nil)
                 self.navigationController?.setViewControllers([SetupNumberViewController(self.setup)], animated: true)
