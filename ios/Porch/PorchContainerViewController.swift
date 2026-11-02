@@ -182,7 +182,7 @@ final class PorchContainerViewController: UIViewController {
         // Until Porch has checked in since it opened, it doesn't have their name.
         let name = FamilyCoordinator.shared.state.flatMap { $0.me.role == .bedside ? $0.householdName : nil }
         let keypad = name.map { "\($0)'s" } ?? "This iPad's", family = name.map { "\($0)'s family" } ?? "its family"
-        let number = name.map { "\($0)'s Porch number" } ?? "Its Porch number"
+        let number = name.map { "\($0)'s Porch number" } ?? "This iPad's Porch number"
         let alert = UIAlertController(title: "Replace \(name.map { "\($0)'s Porch" } ?? "this iPad's Porch")?",
             message: "This iPad will be set up as a new Porch. \(keypad) keypad, messages and settings are removed from it, and it stops ringing for \(family). \(number) and family stay. Nothing changes until you choose the new Porch's PIN.",
             preferredStyle: .alert)
