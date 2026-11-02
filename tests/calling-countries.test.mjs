@@ -60,6 +60,10 @@ test('a keypad number is turned away only when Twilio says its country is off', 
   assert.equal(await uncallable('+85221234567', permissions(async () => countries)), undefined);
   assert.equal(await uncallable('+18765550123', permissions(async () => countries)), "Porch can't call phone numbers in Jamaica yet.");
   assert.equal(await uncallable('+74951234567', permissions(async () => countries)), "Porch can't call this number.");
+  // Premium-rate and special US numbers are refused as for three-way calls; toll-free ones are fine.
+  for (const number of ['+19005550123', '+12129765555', '+14115550123'])
+    assert.equal(await uncallable(number, permissions(async () => countries)), "Porch can't call premium-rate or special-service numbers.", number);
+  assert.equal(await uncallable('+18885550199', permissions(async () => countries)), undefined);
   // Twilio checks again when the call is dialed, so not knowing isn't a reason to refuse.
   for (const list of [async () => { throw new Error('down'); }, async () => []]) assert.equal(await uncallable('+74951234567', permissions(list)), undefined);
   assert.equal(await uncallable('+74951234567', undefined), undefined);

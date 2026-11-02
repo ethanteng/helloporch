@@ -1,3 +1,5 @@
+import { dialableNumber } from "../family/phone-guests.ts";
+
 // Which countries Porch can ring regular phones in. Twilio's Voice Geo Permissions are the only list: the admin page
 // switches them, and Twilio refuses to dial a country they leave off (error 32205 on the trunk). Porch reads them only
 // to turn away a keypad contact it couldn't call, rather than let the call fail when it's dialed. Three-way calls are
@@ -72,4 +74,6 @@ export async function uncallable(number: string, permissions: DialingPermissions
   const country = countryOf(number, countries);
   if (!country) return "Porch can't call this number.";
   if (!country.enabled) return `Porch can't call phone numbers in ${country.name} yet.`;
+  // Twilio refuses premium-rate numbers everywhere. Porch knows the US and Canadian ones, as for three-way calls.
+  if (country.iso === homeCountry && !dialableNumber(number)) return "Porch can't call premium-rate or special-service numbers.";
 }

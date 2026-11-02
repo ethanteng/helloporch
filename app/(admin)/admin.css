@@ -130,6 +130,7 @@ td.actions { text-align: right; }
 /* Few short columns: fits a phone without scrolling sideways. */
 table.narrow { min-width: 0; }
 table.narrow td.actions { width: 1%; white-space: nowrap; }
+table.narrow td.actions .error { white-space: normal; min-width: 10rem; text-align: left; }
 table.narrow td:first-child { overflow-wrap: anywhere; }
 @media (max-width: 640px) { table.narrow th, table.narrow td { padding: 10px; } }
 .sub { display: block; color: var(--muted); font-size: 0.9rem; }

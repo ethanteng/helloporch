@@ -7,7 +7,7 @@ import { AllowCountry, TurnOffCountry } from "../../_ui/CountryActions";
 
 export const metadata: Metadata = { title: "Countries" };
 
-const lead = "Where every Porch's keypad can call regular phones. These are Twilio's Voice Geo Permissions, so a change here changes Twilio. Premium-rate numbers stay off everywhere, and three-way calls stay in the US and Canada.";
+const lead = "Where every Porch's keypad can call regular phones. These are Twilio's Voice Geo Permissions, so a change here changes Twilio. Premium-rate numbers stay off everywhere, and three-way calls stay in the US and Canada. The US and Canada always stay on, but places that share their +1, such as Puerto Rico and Jamaica, are separate countries here.";
 
 export default async function CountriesPage() {
   const session = await requireAdmin();
