@@ -49,7 +49,8 @@ export async function claudeTranslate(message: string, target: BedsideLanguage, 
     fallbacks: "default",
     output_config: { effort: "low", format: { type: "json_schema", schema } },
     system: instructions,
-    messages: [{ role: "user", content: `The device reads in ${targets[target]}.\n\n<message>\n${message}\n</message>` }],
+    // The fence is ours. A text that contains the closing tag must not be able to end it.
+    messages: [{ role: "user", content: `The device reads in ${targets[target]}.\n\n<message>\n${message.split("</message>").join("</ message>")}\n</message>` }],
   });
   // The texts are personal, so neither they nor the response are logged.
   if (response.stop_reason !== "end_turn") throw new Error(`Translation stopped (${response.stop_reason}).`);
