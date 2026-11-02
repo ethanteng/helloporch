@@ -71,7 +71,7 @@ try {
   console.log(moving
     ? `Reassign: calls to this number will ring the bedside ${bedsideName} instead of ${movingFrom}. Messages already left stay where they are.`
     : `Calls to this number will ring the bedside ${bedsideName}.`);
-  console.log(`Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; ringing for the caregiver's chosen time (at most ${inboundRingLimitSeconds} seconds); 30-minute call limit.`);
+  console.log(`Plan: one number → this household; isolated two-person audio rooms; manual answer except approved drop-ins; ringing for the caregiver's chosen time (at most ${inboundRingLimitSeconds} seconds); no call-length limit.`);
   console.log('Carrier caller-ID verification is passed to Porch, so caregiver-approved numbers can drop in with audio while drop-in is on.');
   console.log(voicemail
     ? 'Voicemail routing: inbound SIP requires the Porch digest login, which only the calling server sends from its Twilio voice webhook.'
@@ -83,15 +83,15 @@ try {
   const claim = moving ? JSON.stringify({ householdID: house.id, bedsideID: bedsides[0].id, trunkID: route.trunkID }) : undefined;
   if (claim && !await store.compareAndSet(routeKey, previous, claim)) throw new SetupError('Number assignment changed concurrently; refusing to overwrite it.');
   if (!trunk) trunk = await sip.createSipInboundTrunk(name, [number], { allowedAddresses: twilioGateways, ringingTimeout: inboundRingLimitSeconds });
-  // The current SDK exposes maxCallDuration on the protobuf but not its create
-  // options. Update the full returned trunk, retaining its other fields.
+  // Update the full returned trunk, retaining its other fields.
   if (voicemail) {
     // Twilio doesn't publish the voice webhook's SIP source addresses; the login protects the trunk instead.
     const login = sipInboundCredentials(secret);
     trunk.authUsername = login.username; trunk.authPassword = login.password; trunk.allowedAddresses = [];
   } else trunk.allowedAddresses = twilioGateways;
   trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingLimitSeconds) } }).ringingTimeout;
-  trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
+  // Calls have no time limit. This also lifts the 30 minutes earlier runs of this script set.
+  trunk.maxCallDuration = undefined;
   // Twilio's STIR/SHAKEN result; phone drop-in requires it. Keep other mappings.
   // Voicemail routing reads the result from the server's forwarded header, never a header a SIP source chose.
   const { [callerVerificationHeader]: _twilio, [forwardedVerificationHeader]: _forwarded, ...otherHeaders } = trunk.headersToAttributes ?? {};

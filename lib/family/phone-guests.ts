@@ -8,8 +8,8 @@ import type { FamilyStore } from "./store.ts";
 // that needs Mom on the line, into the same LiveKit room. The telephone leg belongs to whoever added it. It hangs up
 // when they leave, and the bedside is never left alone with it.
 export const phoneGuestActions = new Set(["addPhoneGuest", "removePhoneGuest"]);
-/** Bank hold times run long, so a call with a phone guest lasts up to an hour from when the number was added. */
-export const phoneGuestLimits = { perCall: 5, label: 40, ringSeconds: 60, callSeconds: 3600 };
+/** A number rings for up to a minute. Once answered it stays as long as the call does, however long a bank's hold runs. */
+export const phoneGuestLimits = { perCall: 5, label: 40, ringSeconds: 60 };
 export type PhoneGuestServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "removeParticipant">;
   sip: Pick<SipClient, "createSipParticipant">;
@@ -69,21 +69,30 @@ export async function endPhoneGuests(store: FamilyStore, householdID: string, ca
 }
 /** A dial that already failed can still create its leg until ringing gives up, plus a little slack. */
 export const phoneGuestReapSeconds = phoneGuestLimits.ringSeconds + 30;
-/** Drop a leg that connects after its guest was already ended, so it can't sit on the call untracked.
- * A missing participant is the usual case. Anything else is left for the next poll. */
-export async function reapEndedPhoneGuests(rooms: PhoneGuestServices["rooms"], call: Call, now: number) {
+/** An ended guest whose leg could still be in the room: it may connect late until ringing gives up, and a removal
+ * LiveKit failed leaves it there. Calls have no time limit to end such a leg, so it's tried until LiveKit says it's gone. */
+export function needsReaping(guest: PhoneGuest, now: number) {
+  return guest.endedAt !== undefined && (now - guest.endedAt <= phoneGuestReapSeconds || !guest.gone);
+}
+/** Drop a leg that connects after its guest was already ended, or that LiveKit failed to remove, so it can't sit on
+ * the call untracked. A missing participant is the usual case; once one can't connect late any more, it's `gone`.
+ * Anything else is left for the next poll. */
+export async function reapEndedPhoneGuests(store: FamilyStore, householdID: string, rooms: PhoneGuestServices["rooms"], call: Call, now: number) {
   if (call.state === "ended") return;
-  const room = callRoom(call);
+  const room = callRoom(call), gone: string[] = [];
   for (const guest of call.guests ?? []) {
-    if (guest.endedAt === undefined || now - guest.endedAt > phoneGuestReapSeconds) continue;
+    if (!needsReaping(guest, now)) continue;
     try { await rooms.removeParticipant(room, phoneGuestIdentity(guest)); }
-    catch (error) { if (!notFound(error)) return; }
+    catch (error) { if (!notFound(error)) break; if (now - guest.endedAt! > phoneGuestReapSeconds) gone.push(guest.id); }
   }
+  if (gone.length) await mutate(store, householdID, house => {
+    if (house.call?.id === call.id) for (const guest of house.call.guests ?? []) if (gone.includes(guest.id)) guest.gone = true;
+  });
 }
 async function reapStoredPhoneGuests(context: PhoneGuestContext) {
   const raw = await context.store.get(`house:${context.house.id}`);
   const live = raw ? (JSON.parse(raw) as Household).call : undefined;
-  if (live) await reapEndedPhoneGuests(context.services.rooms, live, context.now);
+  if (live) await reapEndedPhoneGuests(context.store, context.house.id, context.services.rooms, live, context.now);
 }
 
 export async function handlePhoneGuestAction(action: string, context: PhoneGuestContext) {
@@ -106,7 +115,7 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   requireValue(me.role === "family" && me.caregiver === true, "Only a caregiver can add a phone number to a call.", 403);
   const trunk = process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID;
   requireValue(trunk, "Adding a phone number isn't set up on this server yet.", 503);
-  requireValue(call.state === "accepted" && call.expiresAt > now && call.left?.[me.id] === undefined, "Add a phone number once you're both on the call.", 409);
+  requireValue(call.state === "accepted" && call.left?.[me.id] === undefined, "Add a phone number once you're both on the call.", 409);
   requireValue(dialableNumber(input.phoneNumber), "Enter a US or Canadian phone number with its area code.");
   const label = typeof input.label === "string" ? input.label.trim() : "";
   requireValue(label.length > 0 && label.length <= phoneGuestLimits.label, `Name who you're calling in up to ${phoneGuestLimits.label} characters, such as "Bank".`);
@@ -149,7 +158,7 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
       ...(house.porchNumber ? { fromNumber: house.porchNumber.number } : {}),
       // Everyone on the call hears it ring, as on a regular three-way call.
       hidePhoneNumber: true, playDialtone: true, waitUntilAnswered: false,
-      ringingTimeout: phoneGuestLimits.ringSeconds, maxCallDuration: phoneGuestLimits.callSeconds, timeout: 10,
+      ringingTimeout: phoneGuestLimits.ringSeconds, timeout: 10,
     });
   } catch (error) {
     // A refused request created no leg. Any other failure, such as a timeout, may still create one after
@@ -174,18 +183,11 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
     throw new FamilyError("The call ended before the phone could be added.", 409);
   }
   if (live.guests?.find(g => g.id === guest.id)?.endedAt) {
-    try { await services.rooms.removeParticipant(room, identity); } catch { /* the room's call limit ends it */ }
+    try { await services.rooms.removeParticipant(room, identity); } catch { /* reaped next, or on a later poll */ }
     try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
     throw new FamilyError("That phone number was hung up.", 409);
   }
   // The number this one replaced may have connected while it was dialing.
   try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
-  // Only a number that actually dialed lengthens the call.
-  await mutate(store, house.id, current => {
-    const dialed = current.call;
-    if (dialed?.id === call.id && dialed.state === "accepted" && activePhoneGuest(dialed)?.id === guest.id) {
-      dialed.expiresAt = Math.max(dialed.expiresAt, now + phoneGuestLimits.callSeconds);
-    }
-  });
   return { phoneGuest: { id: guest.id, label, addedBy: me.id, number: guest.number } };
 }

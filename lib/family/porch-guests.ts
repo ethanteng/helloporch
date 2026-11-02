@@ -46,7 +46,7 @@ export async function handlePorchGuestAction(_action: string, context: PorchGues
   const call = house.call;
   requireValue(call && call.id === input.callID && [call.from, call.to].includes(me.id) && !call.phone, "This call is no longer available.", 404);
   requireValue(me.role === "family", "Only a family member on the call can add someone.", 403);
-  requireValue(call.state === "accepted" && call.expiresAt > now && call.left?.[me.id] === undefined, "Add someone once you're both on the call.", 409);
+  requireValue(call.state === "accepted" && call.left?.[me.id] === undefined, "Add someone once you're both on the call.", 409);
   const bedside = bedsideOf(house, call);
   requireValue(bedside, "This call is no longer available.", 404);
   requireValue(call.left?.[bedside.id] === undefined, `${displayName(bedside)} has left this call.`, 409);

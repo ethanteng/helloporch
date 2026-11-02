@@ -158,7 +158,7 @@ Tried for real on 2026-10-28:
 
 ### 1.2 One shared inbound trunk
 
-- New numbers go on one shared trunk, **Porch inbound (shared)**, which Porch makes with the first number it buys, under a lock. It uses the same settings as `configure-inbound.mjs --voicemail`: the digest login ([inbound.ts](lib/family/inbound.ts) `sipInboundCredentials`), the forwarded caller-verification header, a 120-second ringing cap and a 30-minute limit. It also gets one individual dispatch rule with the `porch-inbound-` room prefix.
+- New numbers go on one shared trunk, **Porch inbound (shared)**, which Porch makes with the first number it buys, under a lock. It uses the same settings as `configure-inbound.mjs --voicemail`: the digest login ([inbound.ts](lib/family/inbound.ts) `sipInboundCredentials`), the forwarded caller-verification header, a 120-second ringing cap and no call-length limit. It also gets one individual dispatch rule with the `porch-inbound-` room prefix.
 - It's never empty, since an inbound trunk without numbers takes calls to any number. Porch refuses to make it while a dispatch rule without trunks exists.
 - Routing already works by the number dialed (`phone-number:<E.164>` in Redis), and [inbound.ts:126](lib/family/inbound.ts:126) checks the route's `trunkID`, which is the shared trunk's ID.
 - Hainie keeps its own trunk and routing, untouched.

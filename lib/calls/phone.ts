@@ -42,7 +42,8 @@ function encodeTicket(ticket: Ticket, secret: string) {
   return `${body}.${signature(body, secret).toString("base64url")}`;
 }
 
-function decodeTicket(value: unknown, secret: string, now: number): Ticket | undefined {
+/** `now` undefined accepts an expired ticket, to hang up a call that went on longer than the ticket lasts. */
+function decodeTicket(value: unknown, secret: string, now?: number): Ticket | undefined {
   if (typeof value !== "string" || value.length > 1800) return;
   const [body, supplied, extra] = value.split(".");
   if (!body || !supplied || extra !== undefined) return;
@@ -54,7 +55,7 @@ function decodeTicket(value: unknown, secret: string, now: number): Ticket | und
     if (typeof ticket.id !== "string" || !idPattern.test(ticket.id) ||
         typeof ticket.phoneNumber !== "string" || !numberPattern.test(ticket.phoneNumber) ||
         typeof ticket.name !== "string" || !ticket.name.trim() || ticket.name.length > 80 ||
-        !Number.isInteger(ticket.startBy) || !Number.isInteger(ticket.exp) || ticket.exp <= now) return;
+        !Number.isInteger(ticket.startBy) || !Number.isInteger(ticket.exp) || (now !== undefined && ticket.exp <= now)) return;
     return ticket;
   } catch { return; }
 }
@@ -108,7 +109,9 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
     return callJSON({ token: await token.toJwt(), serverUrl: config.serverUrl, room, controlToken: encodeTicket(ticket, config.apiSecret) });
   }
 
-  const ticket = decodeTicket(input.controlToken, config.apiSecret, now);
+  // A call has no time limit, so hanging up works with a ticket that has since expired. It still has to be genuine,
+  // and only ends that ticket's own room.
+  const ticket = decodeTicket(input.controlToken, config.apiSecret, action === "end" ? undefined : now);
   if (!ticket) return callJSON({ error: "This phone call session is invalid or expired." }, 401);
   const room = `porch-phone-${ticket.id}`;
   const identity = `porch-${ticket.id}`;
@@ -138,7 +141,7 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
       ...(config.fromNumber ? { fromNumber: config.fromNumber } : {}),
       // Updated iPads play local ringback immediately; older builds retain SIP ringback.
       hidePhoneNumber: true, playDialtone: ticket.localRingback !== true, waitUntilAnswered: false,
-      ringingTimeout: 45, maxCallDuration: 900, timeout: 10,
+      ringingTimeout: 45, timeout: 10,
     });
     // End/cancel can race with dialing. Remove a late SIP leg if the iPad left.
     try { await client.rooms.getParticipant(room, identity); }

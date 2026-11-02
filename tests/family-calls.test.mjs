@@ -184,6 +184,25 @@ test('expired invitations and calls do not connect, and accepted calls expire on
  await f.json('acceptCall',{callID:second.state.call.id,available:true},bedside.credential); f.advance(36);
  assert.equal((await f.send('joinCall',{callID:second.state.call.id},family.credential)).status,410);
 });
+test('an answered call has no time limit while both devices check in, and a lost device still ends it',async()=>{
+ const f=fixture(),{bedside,family}=await f.setup();
+ const callID=(await f.json('startCall',{targetID:bedside.state.me.id,mode:'video',kind:'call'},family.credential)).state.call.id;
+ const accepted=await f.json('acceptCall',{callID,available:true},bedside.credential);
+ // Porch apps end a call once its expiresAt passes, so an answered call's never does. Households are saved as JSON.
+ assert.equal(accepted.state.call.expiresAt,Number.MAX_SAFE_INTEGER);
+ assert.equal(JSON.parse(f.store.values.get(`house:${bedside.state.householdID}`)).call.expiresAt,Number.MAX_SAFE_INTEGER);
+ // Three hours: well past the 30 minutes calls used to be cut off at.
+ for(let n=0;n<360;n++){
+  f.advance(30); assert.equal((await f.json('poll',{available:true},bedside.credential)).state.call.state,'accepted');
+  assert.equal((await f.json('poll',{available:true},family.credential)).state.call.state,'accepted');
+ }
+ await f.json('joinCall',{callID},family.credential); assert.deepEqual(f.ended,[]);
+ // Ethan's phone stops checking in. The call ends as of when it was last heard from.
+ const heard=f.advance(0); f.advance(36);
+ const call=(await f.json('poll',{available:true},bedside.credential)).state.call;
+ assert.equal(call.state,'ended'); assert.equal(call.endedAt,heard); assert.equal(call.reason,'The call timed out or a device went offline.');
+ assert.equal((await f.send('joinCall',{callID},family.credential)).status,410);
+});
 
 test('pairing retries recover after a lost response without consuming a second invitation',async()=>{
  const f=fixture(); const deviceID=randomUUID(),deviceSecret=randomBytes(32).toString('hex');

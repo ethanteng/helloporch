@@ -26,7 +26,7 @@ function liveKit() {
   const services = {
     rooms: {
       async getParticipant(room, identity) { const attributes = rooms.get(room)?.get(identity); if (!attributes) throw missing(); return { identity, attributes }; },
-      async removeParticipant(room, identity) { removed.push(identity); if (!leave(room,identity)) throw missing(); },
+      async removeParticipant(room, identity) { removed.push(identity); if (state.removeError) throw state.removeError; if (!leave(room,identity)) throw missing(); },
     },
     sip: {
       async createSipParticipant(trunk, number, room, options) {
@@ -77,7 +77,6 @@ test('a caregiver on an answered call adds a number; the bedside sees its name, 
   assert.equal(family.state.canAddPhoneGuests,undefined,'not a caregiver yet when paired');
   assert.equal((await f.json('poll',{available:true},family.credential)).state.canAddPhoneGuests,true);
   assert.equal((await f.json('poll',{available:true},bedside.credential)).state.canAddPhoneGuests,undefined);
-  const before=(await f.json('poll',{available:true},family.credential)).state.call.expiresAt;
   const added=await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:' Bank '},family.credential);
   assert.deepEqual(added.phoneGuest,{id:added.phoneGuest.id,label:'Bank',addedBy:family.state.me.id,number:bank});
   assert.equal(f.livekit.dialed.length,1);
@@ -86,14 +85,25 @@ test('a caregiver on an answered call adds a number; the bedside sees its name, 
   assert.equal(dial.options.participantIdentity,`phone-guest-${added.phoneGuest.id}`);
   assert.equal(dial.options.participantName,'Bank');
   assert.equal(dial.options.hidePhoneNumber,true); assert.equal(dial.options.playDialtone,true); assert.equal(dial.options.waitUntilAnswered,false);
-  assert.equal(dial.options.maxCallDuration,phoneGuestLimits.callSeconds);
+  assert.equal(dial.options.maxCallDuration,undefined,'a bank hold can run as long as it needs');
   assert.equal(dial.options.fromNumber,undefined,"a household without its own number calls out from the trunk's");
   assert.equal(added.state.call.phoneGuest.number,bank);
-  assert.ok(added.state.call.expiresAt>=f.now()+phoneGuestLimits.callSeconds && added.state.call.expiresAt>before,'a bank hold can outlast the usual call limit');
   const mom=await f.json('poll',{available:true},bedside.credential);
   assert.deepEqual(mom.state.call.phoneGuest,{id:added.phoneGuest.id,label:'Bank',addedBy:family.state.me.id});
   assert.ok(!JSON.stringify(mom).includes(bank.slice(2)),'the bedside never receives the number');
   assert.ok(!JSON.stringify(mom).includes('guests'));
+});
+
+test('a phone added to the call stays as long as the call does, with no time limit',async()=>{
+  const f=fixture(),{bedside,family,callID}=await f.connected();
+  const added=await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+  // Two hours on hold: past the hour a call with a phone used to be cut off at, with both devices checking in.
+  for (let n=0;n<240;n++) {
+    f.advance(30); await f.json('poll',{available:true},bedside.credential);
+    const call=(await f.json('poll',{available:true},family.credential)).state.call;
+    assert.equal(call.state,'accepted'); assert.equal(call.phoneGuest?.id,added.phoneGuest.id);
+  }
+  assert.deepEqual(f.livekit.deleted,[]); assert.deepEqual(f.livekit.removed,[]);
 });
 
 test("a phone added to the call sees the household's own Porch number, so calling back rings Mom",async()=>{
@@ -255,12 +265,10 @@ test('a call that expires with a phone guest has its room deleted, retried until
 
 test('a refused dial frees the call for another try',async()=>{
   const f=fixture(),{family,callID}=await f.connected();
-  const before=(await f.json('poll',{available:true},family.credential)).state.call.expiresAt;
   f.livekit.state.dialError=Object.assign(new Error('bad number'),{code:'invalid_argument'});
   assert.equal((await f.send('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential)).status,502);
   const after=(await f.json('poll',{available:true},family.credential)).state.call;
   assert.equal(after.phoneGuest,undefined);
-  assert.equal(after.expiresAt,before,'a number that never dialed does not lengthen the call');
   delete f.livekit.state.dialError;
   await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
 });
@@ -308,6 +316,30 @@ test('a leg that connects after its dial timed out is removed, including once an
   await g.json('poll',{available:true},other.family.credential);
   assert.equal(g.livekit.rooms.get(other.room)?.has(`phone-guest-${late}`),false);
   assert.equal(g.livekit.rooms.get(other.room)?.has(`phone-guest-${pharmacy.id}`),true);
+});
+
+test('a phone LiveKit failed to hang up is removed on later check-ins until it is gone, then left alone',async()=>{
+  const f=fixture(),{bedside,family,callID,room}=await f.connected();
+  const {phoneGuest}=await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+  const identity=`phone-guest-${phoneGuest.id}`, key=`house:${bedside.state.householdID}`;
+  // Its guest ended, but LiveKit failed to take the leg out of the room. No call limit will end it now.
+  const house=JSON.parse(f.store.values.get(key));
+  house.call.guests[0].endedAt=f.now();
+  f.store.values.set(key,JSON.stringify(house));
+  f.livekit.state.removeError=Object.assign(new Error('unavailable'),{code:'unavailable'});
+  for (let n=0;n<10;n++) { f.advance(30); await f.json('poll',{available:true},bedside.credential); await f.json('poll',{available:true},family.credential); }
+  assert.equal(f.livekit.rooms.get(room).has(identity),true);
+  const late=f.livekit.removed.length;
+  await f.json('poll',{available:true},family.credential);
+  assert.ok(f.livekit.removed.length>late,'still tried five minutes after it ended, long past ringing');
+  delete f.livekit.state.removeError;
+  await f.json('poll',{available:true},family.credential);
+  assert.equal(f.livekit.rooms.get(room).has(identity),false);
+  await f.json('poll',{available:true},family.credential);
+  assert.equal(JSON.parse(f.store.values.get(key)).call.guests[0].gone,true);
+  const removals=f.livekit.removed.length;
+  await f.json('poll',{available:true},bedside.credential); await f.json('poll',{available:true},family.credential);
+  assert.equal(f.livekit.removed.length,removals,'once LiveKit says it is gone, check-ins stop asking');
 });
 
 test('a call that ends while the number is dialing does not keep its telephone leg',async()=>{
