@@ -89,7 +89,7 @@ async function greet(house: Household | undefined, sentences: Greeting[], { afte
   return fallback;
 }
 
-function settings() {
+export function settings() {
   const { TWILIO_ACCOUNT_SID: accountSID, TWILIO_AUTH_TOKEN: authToken, LIVEKIT_SIP_URI: sipURI, LIVEKIT_API_SECRET: apiSecret } = process.env;
   if (!accountSID || !/^AC[0-9a-f]{32}$/.test(accountSID) || !authToken) return undefined;
   const sipHost = sipURI?.trim().replace(/^sip:/, "").replace(/;.*$/, "");
@@ -97,7 +97,7 @@ function settings() {
 }
 
 // https://www.twilio.com/docs/usage/security#validating-requests
-function signed(url: string, params: URLSearchParams, token: string, supplied: string | null) {
+export function signed(url: string, params: URLSearchParams, token: string, supplied: string | null) {
   if (!supplied) return false;
   const actual = Buffer.from(supplied, "base64");
   const payload = [...params.entries()].sort(([a, x], [b, y]) => a < b ? -1 : a > b ? 1 : x < y ? -1 : x > y ? 1 : 0).map(([k, v]) => k + v).join("");
@@ -133,7 +133,7 @@ export function voicemailMessageID(recordingSID: string) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${"89ab"[parseInt(h[16], 16) & 3]}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
-async function household(store: FamilyStore, calledNumber: string | null): Promise<Household | undefined> {
+export async function household(store: FamilyStore, calledNumber: string | null): Promise<Household | undefined> {
   if (!calledNumber || !numberPattern.test(calledNumber)) return undefined;
   const route = await store.get(`phone-number:${calledNumber}`);
   if (!route) return undefined;

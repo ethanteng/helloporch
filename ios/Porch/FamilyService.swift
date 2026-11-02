@@ -181,6 +181,10 @@ struct FamilyResponse: Decodable {
     let photo: ProfilePhotoURL?
     /// A sentence read in the household's natural voice (`speech`).
     let clip: SpeechClip?
+    /// A text to show and read on the bedside (`textMessage`).
+    let text: ReceivedText?
+    /// Waiting texts with their words, for caregiver review (`caregiverTexts`).
+    let texts: [FamilyText]?
     /// The phone this caregiver just added to their call (`addPhoneGuest`).
     let phoneGuest: FamilyPhoneGuest?
     /// The family member just rung into the call (`addPorchGuest`).
