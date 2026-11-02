@@ -165,29 +165,42 @@ import PorchCore
             width.priority = UILayoutPriority(249)
             var upright = [preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 4 / 3)]
             var sideways = [preview.widthAnchor.constraint(equalTo: preview.heightAnchor, multiplier: 4 / 3)]
+            var columnConstraints: [NSLayoutConstraint] = []
+            // Used once the camera will not appear, so the photo can use the corner a voice call already gives it.
+            var absent: [NSLayoutConstraint] = []
             if let (space, stack, label) = identityLayout {
                 // Upright, the photo and name sit above the self view. Sideways, they sit in a centered column that
                 // ends before it, which narrows them only when the screen is close to square.
                 let column = UILayoutGuide()
                 scroll.addLayoutGuide(column)
-                NSLayoutConstraint.activate([
+                columnConstraints = [
                     column.centerXAnchor.constraint(equalTo: content.centerXAnchor),
                     column.trailingAnchor.constraint(equalTo: preview.leadingAnchor, constant: -12),
-                ])
+                ]
                 upright += [space.bottomAnchor.constraint(equalTo: preview.topAnchor, constant: -12),
                             label.widthAnchor.constraint(equalTo: stack.widthAnchor)]
                 sideways += [space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
                              label.widthAnchor.constraint(lessThanOrEqualTo: column.widthAnchor)]
                     + (photo.map { [$0.widthAnchor.constraint(lessThanOrEqualTo: column.widthAnchor)] } ?? [])
+                absent = [
+                    space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
+                    label.widthAnchor.constraint(equalTo: stack.widthAnchor),
+                ]
             }
-            scroll.selfView = .init(width: width, upright: upright, sideways: sideways)
-            NSLayoutConstraint.activate([
+            let holding = [
                 preview.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
                 preview.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
                 preview.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 12),
                 preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 64), width,
-            ])
+            ]
+            scroll.adopt(.init(preview: preview, width: width, upright: upright, sideways: sideways, holding: holding, column: columnConstraints, absent: absent))
         }
+    }
+
+    /// The camera will not appear (the call became a phone call, or it never connected). Give the photo the room a
+    /// voice call already has. Hiding the preview is not enough: its constraints would keep the hole.
+    static func releaseSelfView(in view: UIView) {
+        (view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? CallOverlays)?.releaseSelfView()
     }
 }
 
@@ -195,8 +208,26 @@ import PorchCore
 /// short side and at most 200 points on an iPad, and turn it with the screen, as the camera's picture turns. The
 /// person's photo and name move with it to stay uncovered.
 private final class CallOverlays: UIScrollView {
-    struct SelfView { let width: NSLayoutConstraint; let upright, sideways: [NSLayoutConstraint] }
-    var selfView: SelfView? { didSet { selfView.map { NSLayoutConstraint.activate($0.upright) } } }
+    struct SelfView {
+        let preview: UIView
+        let width: NSLayoutConstraint
+        let upright, sideways, holding, column, absent: [NSLayoutConstraint]
+    }
+    private var selfView: SelfView?
+
+    func adopt(_ layout: SelfView) {
+        selfView = layout
+        NSLayoutConstraint.activate(layout.upright + layout.holding + layout.column)
+    }
+
+    func releaseSelfView() {
+        guard let selfView else { return }
+        // Clear this before changing constraints so a nested layout cannot put the self view back.
+        self.selfView = nil
+        NSLayoutConstraint.deactivate(selfView.upright + selfView.sideways + selfView.holding + selfView.column)
+        NSLayoutConstraint.activate(selfView.absent)
+        selfView.preview.removeFromSuperview()
+    }
 
     override func layoutSubviews() {
         if let selfView {
@@ -459,7 +490,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return .init(call: state?.call?.id == session.call.id ? state?.call : nil, canAddPhone: state?.canAddPhoneGuests == true, family: state?.family ?? [])
             }
         }
-        CallScreenLayout.install(in: view, video: stage, preview: call.mode == .video ? localVideo : nil,
+        CallScreenLayout.install(in: view, video: stage, preview: call.mode == .video && !isPhoneCall ? localVideo : nil,
                                  placeholder: placeholder, title: title, status: statusLabel,
                                  hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
                                  buttons: [microphoneButton, cameraButton] + (guests.map { [$0.addButton] } ?? []) + [endButton])
@@ -583,6 +614,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             stage.show([])
             localVideo.track = nil
             localVideo.isHidden = true
+            CallScreenLayout.releaseSelfView(in: view)
             statusLabel.text = BedsideText.string("Couldn't start the call.")
             placeholder.isHidden = false
             personPhoto.isHidden = false
@@ -941,6 +973,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             statusLabel.text = BedsideText.string("Microphone access is required.")
             placeholder.text = BedsideText.string("Allow Porch's microphone in Settings to make a phone call.")
             endButton.configuration?.title = BedsideText.string("Back to clock")
+            localVideo.track = nil
+            localVideo.isHidden = true
+            CallScreenLayout.releaseSelfView(in: view)
             return
         }
         await controlTask?.value
@@ -970,6 +1005,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                     statusLabel.text = BedsideText.string("Couldn't switch to their phone.")
                     placeholder.text = BedsideText.error(error.localizedDescription)
                     endButton.configuration?.title = BedsideText.string("Back to clock")
+                    localVideo.track = nil
+                    localVideo.isHidden = true
+                    CallScreenLayout.releaseSelfView(in: view)
                 }
                 return
             }
@@ -995,6 +1033,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         stage.show([])
         localVideo.track = nil
         localVideo.isHidden = true
+        CallScreenLayout.releaseSelfView(in: view)
         placeholder.isHidden = false
         personPhoto.isHidden = false
         placeholder.text = BedsideText.string("Phone call\nCamera is off")

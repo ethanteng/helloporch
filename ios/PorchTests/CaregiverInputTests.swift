@@ -1775,6 +1775,69 @@ final class CallScreenLayoutTests: XCTestCase {
         }
     }
 
+    @MainActor func testSelfViewStepsAsideWhenTheCallBecomesAPhoneCall() throws {
+        // A video contact can end on the phone. The self view is gone for good then, so its hole has to go too.
+        for size in [CGSize(width: 393, height: 852), CGSize(width: 800, height: 790)] {
+            let screen = UIViewController(), remote = VideoView(), preview = VideoView()
+            remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
+            preview.backgroundColor = UIColor(white: 0.55, alpha: 1)
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).image { context in
+                UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+            }
+            let photo = RecipientAppearance.photoView(image.jpegData(compressionQuality: 0.8))
+            let placeholder = PorchStyle.label("Phone call\nCamera is off", size: 28, color: .white)
+            let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
+            for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video.slash", "phone.down.fill"]) {
+                CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
+            }
+            CallScreenLayout.install(in: screen.view, video: remote, preview: preview, placeholder: placeholder,
+                                     title: PorchStyle.label("David", size: 40, color: .white),
+                                     status: PorchStyle.label("Trying David's phone…", size: 17, color: .white),
+                                     photo: photo, buttons: buttons)
+            let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
+            screen.view.frame = CGRect(origin: .zero, size: size)
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            let photoBefore = photo.convert(photo.bounds, to: screen.view)
+            XCTAssertNotNil(preview.superview)
+            CallScreenLayout.releaseSelfView(in: screen.view)
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            XCTAssertNil(preview.superview, "\(size)")
+            let photoAfter = photo.convert(photo.bounds, to: screen.view)
+            if size.width > size.height {
+                // Sideways, the photo was narrowed to the column beside the self view.
+                XCTAssertGreaterThan(photoAfter.width, photoBefore.width + 40, "\(size)")
+            } else {
+                // Upright, the photo sat above the self view and moves down into that room.
+                XCTAssertGreaterThan(photoAfter.maxY, photoBefore.maxY + 30, "\(size)")
+            }
+            XCTAssertGreaterThan(photoAfter.height, 20, "\(size)")
+            XCTAssertFalse(photo.hasAmbiguousLayout)
+            XCTAssertFalse(placeholder.hasAmbiguousLayout)
+            XCTAssertLessThanOrEqual(scroll.contentSize.height, scroll.bounds.height + 1, "\(size)")
+            let turned = CGSize(width: size.height, height: size.width)
+            screen.view.frame = CGRect(origin: .zero, size: turned)
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            XCTAssertNil(preview.superview, "turned \(turned)")
+            XCTAssertFalse(photo.hasAmbiguousLayout)
+            XCTAssertLessThanOrEqual(scroll.contentSize.height, scroll.bounds.height + 1, "turned \(turned)")
+        }
+        // A voice call never installed a self view. Releasing one must leave that layout alone.
+        let voice = UIViewController()
+        let photo = RecipientAppearance.photoView(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40)).image { context in
+            UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+        }.jpegData(compressionQuality: 0.8))
+        let placeholder = PorchStyle.label("Voice call", size: 28, color: .white)
+        CallScreenLayout.install(in: voice.view, video: VideoView(), placeholder: placeholder,
+                                 title: PorchStyle.label("David", size: 40, color: .white),
+                                 status: PorchStyle.label("Voice call connected", size: 17, color: .white),
+                                 photo: photo, buttons: [PorchStyle.button("End call")])
+        voice.view.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
+        CallScreenLayout.releaseSelfView(in: voice.view)
+        voice.view.layoutIfNeeded()
+        XCTAssertGreaterThan(photo.convert(photo.bounds, to: voice.view).height, 20)
+        XCTAssertFalse(photo.hasAmbiguousLayout)
+    }
+
 }
 
 /// The welcome screen and setting up a new bedside one screen at a time.
