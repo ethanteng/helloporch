@@ -509,8 +509,12 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         proceed.isHidden = !checked; later?.isHidden = checked
         // Help waits until about 30 seconds go by with nothing happening.
         help.isHidden = true; helpTimer?.invalidate()
-        if !checked { helpTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in self?.help.isHidden = false } }
+        if !checked { scheduleHelp() }
         if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
+    }
+    /// Tips after about 30 seconds with the phone still unchecked.
+    private func scheduleHelp() {
+        helpTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in self?.help.isHidden = false }
     }
     private func finish() {
         // Do this later is the way out before the check finishes, and it leaves the keypad off.
@@ -542,6 +546,8 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
             case .waiting, .done: break
             }
         }
+        // Leaving invalidates the tips, including a back swipe that is then cancelled. The screen is still here.
+        if !checked, help.isHidden, helpTimer?.isValid != true { scheduleHelp() }
     }
     /// Stops the trial. `turnOff` undoes an enable this screen just did, which Do this later asks for.
     private func leaveTrial(turnOff: Bool) {
@@ -601,7 +607,11 @@ final class SetupUSBKeypadViewController: BedsideSetupStep {
     }
     // Keys come here while the screen is open, so pressing one never calls anyone.
     override var canBecomeFirstResponder: Bool { true }
-    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); keys.resetKeys(); becomeFirstResponder() }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated); keys.resetKeys(); becomeFirstResponder()
+        // Leaving invalidates the tips, including a back swipe that is then cancelled. The screen is still here.
+        if !checked, help.isHidden, helpTimer?.isValid != true { scheduleHelp() }
+    }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); helpTimer?.invalidate() }
     @objc private func keyboardChanged() {
         // A key heard is the check; plugging and unplugging after it doesn't undo that.
@@ -639,8 +649,12 @@ final class SetupUSBKeypadViewController: BedsideSetupStep {
         proceed.isHidden = !checked; later?.isHidden = checked
         // Help waits until about 30 seconds go by with nothing happening.
         help.isHidden = true; helpTimer?.invalidate()
-        if !checked { helpTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in self?.help.isHidden = false } }
+        if !checked { scheduleHelp() }
         if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
+    }
+    /// Tips after about 30 seconds with the keypad still unchecked.
+    private func scheduleHelp() {
+        helpTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in self?.help.isHidden = false }
     }
     private func finish() {
         helpTimer?.invalidate()
