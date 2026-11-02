@@ -1,0 +1,1276 @@
+/* ---------- Hero: the headline beside a real Porch, with notes on it ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 72px);
+  padding: clamp(24px, 4vw, 48px) 64px 0;
+}
+
+.heroCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.title {
+  font: 400 clamp(56px, 7.4vw, 100px) / 0.98 var(--serif);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.title em {
+  display: block;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--tomato);
+}
+
+.lede {
+  max-width: 540px;
+  font: 400 clamp(18px, 1.9vw, 21px) / 1.55 var(--sans);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* The home page's "See Porch in action" link, as a button that opens a clip. */
+.heroCopy .heroWatch {
+  margin: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.heroWatch:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 4px;
+  border-radius: 99px;
+}
+
+.heroWatch .playGlyph {
+  width: 16px;
+  height: 16px;
+}
+
+.heroPhoto {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: 40px;
+  background: oklch(0.78 0.05 60);
+  box-shadow: 0 30px 50px -30px oklch(0.3 0.05 50 / 0.6);
+}
+
+/* The photo is 3:4; the frame keeps its top and trims the coiled cord at the bottom. */
+.heroPhoto img {
+  object-fit: cover;
+  object-position: 50% 0;
+}
+
+.callouts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.callout {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 48%;
+  padding: 8px 14px 8px 10px;
+  border-radius: 99px;
+  background: oklch(0.99 0.008 85 / 0.95);
+  color: var(--ink);
+  font: 600 14px/1.25 var(--sans);
+  box-shadow: 0 8px 20px -10px oklch(0.2 0.03 50 / 0.6);
+}
+
+.callout::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tomato);
+  box-shadow: 0 0 0 4px oklch(0.64 0.17 35 / 0.25);
+}
+
+/* ---------- Chapters: copy beside a scene, alternating sides ---------- */
+
+.chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: clamp(56px, 7vw, 96px) 40px 0;
+}
+
+.chapter {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 48px;
+  background: var(--paper);
+  scroll-margin-top: 24px;
+}
+
+.chapter[data-flip] {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+}
+
+.chapter[data-flip] .copy {
+  order: 2;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  padding: clamp(20px, 3.5vw, 44px);
+}
+
+.marker {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font: 600 14px/1.2 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tomato-deep);
+}
+
+.num {
+  font: italic 400 44px/1 var(--serif);
+  letter-spacing: 0;
+  color: var(--tomato);
+}
+
+.copy h2 {
+  font: 400 clamp(36px, 3.6vw, 50px) / 1.04 var(--serif);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.body {
+  max-width: 520px;
+  font: 400 18px/1.6 var(--sans);
+  color: var(--muted-2);
+  text-wrap: pretty;
+}
+
+.watchRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 18px 6px 6px;
+  border: 1.5px solid oklch(0.86 0.03 70);
+  border-radius: 99px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 15px/1.2 var(--sans);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.watch:hover {
+  border-color: var(--tomato-deep);
+  color: var(--tomato-deep);
+}
+
+.watch:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 2px;
+}
+
+.watchIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding-left: 2px;
+  border-radius: 50%;
+  background: var(--tomato-deep);
+  color: #fff;
+}
+
+.playGlyph {
+  width: 13px;
+  height: 13px;
+}
+
+.watchTime {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 470px;
+  padding: 40px 24px;
+  overflow: hidden;
+  border-radius: 36px;
+  background: var(--tint);
+}
+
+/* Shared pieces: an iPad, a card, and the iOS system font inside screens. */
+.ipad {
+  padding: 9px;
+  border-radius: 26px;
+  background: oklch(0.22 0.01 60);
+  box-shadow: 0 28px 40px -26px oklch(0.25 0.05 45 / 0.65);
+}
+
+.ipadScreen {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 17px;
+  background: #000;
+}
+
+.ipadScreen,
+.phoneScreen,
+.clock,
+.controls {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ipadScreen p,
+.phoneScreen p,
+.clock p {
+  margin: 0;
+}
+
+/* ---------- 1. Press: a key under a fingertip, then where the call goes ---------- */
+
+.press {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The home page's key close-up: a tilted white plate with Sarah's key pressed. */
+.plateWrap {
+  position: relative;
+  flex: none;
+  width: 280px;
+  height: 200px;
+  perspective: 900px;
+  zoom: 1.15;
+}
+
+.plate {
+  position: absolute;
+  left: 10px;
+  top: 24px;
+  width: 260px;
+  height: 160px;
+  border-radius: 28px;
+  background: linear-gradient(165deg, oklch(0.995 0.003 85), oklch(0.93 0.006 80));
+  box-shadow: inset 0 2px 0 #fff, 0 10px 0 oklch(0.84 0.008 75), 0 24px 30px -14px oklch(0.3 0.05 50 / 0.45);
+  transform: rotateX(30deg) rotateY(-12deg);
+  transform-style: preserve-3d;
+}
+
+.plateKey {
+  position: absolute;
+  top: 30px;
+  transform-style: preserve-3d;
+}
+
+.tapRing,
+.fingertip {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.tapRing {
+  left: 26px;
+  top: 32px;
+  width: 96px;
+  height: 96px;
+  border: 3px solid oklch(0.64 0.17 35 / 0.6);
+  transform: translateZ(34px);
+  animation: tap 2.2s ease-out infinite;
+}
+
+.fingertip {
+  left: 40px;
+  top: 46px;
+  width: 68px;
+  height: 68px;
+  border: 2px solid oklch(0.97 0.02 60 / 0.9);
+  background: oklch(0.82 0.06 55 / 0.6);
+  transform: translateZ(36px);
+}
+
+@keyframes tap {
+  0% {
+    transform: translateZ(34px) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateZ(34px) scale(1.55);
+    opacity: 0;
+  }
+}
+
+.route {
+  display: flex;
+  flex-direction: column;
+  width: 264px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.routeStep {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px 14px 14px;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: 0 14px 28px -20px oklch(0.3 0.05 50 / 0.6);
+}
+
+.routeStep strong {
+  display: block;
+  font: 600 17px/1.25 var(--sans);
+  color: var(--ink);
+}
+
+.routeNote {
+  display: block;
+  margin-top: 3px;
+  font: 400 14px/1.35 var(--sans);
+  color: var(--muted-2);
+}
+
+.routeIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  color: #fff;
+}
+
+.routeIcon[data-tone="video"] {
+  background: var(--tomato-deep);
+}
+
+.routeIcon[data-tone="phone"] {
+  background: var(--ink);
+}
+
+.routeIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.routeFork {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font: italic 400 19px/1.2 var(--serif);
+  color: var(--ink);
+}
+
+.routeFork::before,
+.routeFork::after {
+  content: "";
+  height: 14px;
+  border-left: 2px dashed oklch(0.4 0.05 55 / 0.5);
+}
+
+/* ---------- 2. Pick up: the spoken announcement, the drop-in screen, and the Porch number ---------- */
+
+.pickup {
+  display: grid;
+  grid-template-columns: 210px 250px;
+  grid-template-areas:
+    "say say"
+    "ipad card";
+  align-items: center;
+  row-gap: 20px;
+}
+
+.announce {
+  grid-area: say;
+  justify-self: center;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 420px;
+  padding: 14px 20px 14px 16px;
+  border-radius: 22px 22px 22px 6px;
+  background: var(--paper);
+  box-shadow: 0 14px 28px -20px oklch(0.3 0.05 50 / 0.6);
+}
+
+.announce p {
+  font: italic 400 19px/1.35 var(--serif);
+  color: var(--ink);
+}
+
+.announceIcon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  color: var(--tomato-deep);
+}
+
+.pickup .ipad {
+  grid-area: ipad;
+  width: 210px;
+}
+
+.dropIn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #0b0b0b;
+  color: #fff;
+  text-align: center;
+}
+
+.dropFace {
+  position: relative;
+  width: 64%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.dropName {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.dropStatus {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.numberCard {
+  grid-area: card;
+  position: relative;
+  margin-left: -28px;
+  padding: 20px 20px 18px;
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 18px 34px -20px oklch(0.3 0.05 50 / 0.65);
+}
+
+.numberLabel {
+  font: 600 13px/1.2 var(--sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tomato-deep);
+}
+
+.number {
+  margin-top: 6px;
+  font: 600 26px/1.1 var(--sans);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.numberWays {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 500 15px/1.3 var(--sans);
+  color: var(--muted-2);
+}
+
+.numberWays li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.numberWays svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--tomato-deep);
+}
+
+/* ---------- 3. Messages: recorded on a phone, playing on the iPad ---------- */
+
+.messages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phone {
+  flex: none;
+  width: 150px;
+  padding: 6px;
+  border-radius: 28px;
+  background: oklch(0.22 0.01 60);
+  box-shadow: 0 28px 40px -26px oklch(0.25 0.05 45 / 0.65);
+}
+
+.phoneScreen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  aspect-ratio: 9 / 19;
+  padding: 30px 10px 10px;
+  border-radius: 22px;
+  background: rgb(242 245 240);
+  color: rgb(31 48 43);
+}
+
+.sendTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.sendCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sendThumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.sendButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  padding: 7px 0;
+  border-radius: 8px;
+  background: rgb(41 92 74);
+  color: #fff;
+}
+
+.sendButton svg {
+  width: 11px;
+  height: 11px;
+}
+
+.hop {
+  flex: none;
+  width: 64px;
+  height: 32px;
+  margin-top: 40px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hop path:first-child {
+  stroke-dasharray: 1 7;
+}
+
+.messagesIpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.messagesIpad .ipad {
+  width: 230px;
+}
+
+.here {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font: 600 14px/1.2 var(--sans);
+}
+
+.here svg {
+  width: 18px;
+  height: 18px;
+  color: oklch(0.85 0.1 80);
+}
+
+.banner {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.stop {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 9px;
+  background: #f0652b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  transform: translateX(-50%);
+}
+
+.stopSquare {
+  width: 9px;
+  height: 9px;
+  border-radius: 1.5px;
+  background: #fff;
+}
+
+/* ---------- 4. Language: pick one, and the clock, the voice and a message follow ---------- */
+
+.lang {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.langPicker {
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 99px;
+  background: var(--paper);
+  box-shadow: 0 10px 24px -18px oklch(0.3 0.05 50 / 0.5);
+}
+
+.langOption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  min-height: 52px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--ink);
+  font: 600 16px/1.15 var(--sans);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.langOption small {
+  font: 500 11px/1.2 var(--sans);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.langOption:hover {
+  color: var(--tomato-deep);
+}
+
+.langOption[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.langOption[aria-pressed="true"] small {
+  color: oklch(0.86 0.02 70);
+}
+
+.langOption:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 2px;
+}
+
+.langBody {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.clockIpad {
+  flex: none;
+  width: 200px;
+  padding: 9px;
+  border-radius: 26px;
+  background: oklch(0.22 0.01 60);
+  box-shadow: 0 28px 40px -26px oklch(0.25 0.05 45 / 0.65);
+}
+
+/* The bedside clock at night in the fall, as in the photos of Porch. */
+.clock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  padding-top: 20px;
+  border-radius: 17px;
+  background: linear-gradient(180deg, #1c2a6e, #2b4192 70%);
+  color: #fff;
+}
+
+.stars {
+  position: absolute;
+  inset: 0 0 50%;
+  background-image:
+    radial-gradient(1.2px 1.2px at 14% 18%, #fff 60%, transparent 70%),
+    radial-gradient(1px 1px at 30% 8%, #fff 60%, transparent 70%),
+    radial-gradient(1.2px 1.2px at 72% 14%, #fff 60%, transparent 70%),
+    radial-gradient(1px 1px at 86% 30%, #fff 60%, transparent 70%),
+    radial-gradient(1px 1px at 8% 44%, #fff 60%, transparent 70%),
+    radial-gradient(1px 1px at 60% 6%, #fff 60%, transparent 70%);
+  opacity: 0.8;
+}
+
+.moon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 6px -3px 0 0 #f6e2a8;
+  transform: rotate(-20deg);
+}
+
+.clockScene {
+  position: relative;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.clockDay {
+  position: relative;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.clockTime {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 16px;
+  font-size: 46px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgb(255 255 255 / 0.35);
+}
+
+.clockPeriod {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.hills {
+  position: absolute;
+  inset: auto -10% 0;
+  height: 26%;
+  border-radius: 50% 50% 0 0 / 40% 40% 0 0;
+  background: linear-gradient(180deg, #3aa096, #2a7d86);
+}
+
+.clockCall {
+  position: absolute;
+  right: 10px;
+  bottom: 14px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 6px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.18);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.clockCall svg {
+  width: 14px;
+  height: 14px;
+}
+
+.langNotes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 290px;
+}
+
+.langNote {
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: 0 14px 28px -20px oklch(0.3 0.05 50 / 0.6);
+}
+
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 12px/1.2 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tomato-deep);
+}
+
+.tag svg {
+  width: 16px;
+  height: 16px;
+}
+
+.spoken {
+  margin-top: 8px;
+  font: 400 17px/1.4 var(--serif);
+  color: var(--ink);
+}
+
+.original {
+  margin-top: 8px;
+  font: 400 14px/1.4 var(--sans);
+  color: var(--muted);
+}
+
+.translated {
+  margin-top: 4px;
+  font: 600 19px/1.35 var(--sans);
+  color: var(--ink);
+}
+
+/* ---------- 5. Together: Mom in the middle, with everyone added around her ---------- */
+
+.together {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.hub {
+  position: relative;
+  width: 400px;
+  height: 330px;
+}
+
+.hubLines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: oklch(0.35 0.05 250 / 0.35);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.hubLines path[data-new] {
+  stroke-dasharray: 1 8;
+}
+
+.hubCenter {
+  position: absolute;
+  top: 155px;
+  left: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform: translate(-50%, -64px);
+}
+
+.hubCenter > svg {
+  border-radius: 50%;
+  box-shadow: 0 0 0 6px var(--paper), 0 18px 30px -16px oklch(0.25 0.05 45 / 0.6);
+}
+
+.hubCenter > span {
+  padding: 4px 16px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font: 600 16px/1.3 var(--sans);
+}
+
+/* A guest's face is centered on its point, with the name under it. */
+.guest {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 130px;
+  text-align: center;
+  transform: translate(-50%, -38px);
+}
+
+.guestFace {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 5px var(--paper);
+}
+
+.guest[data-dashed] .guestFace {
+  outline: 2.5px dashed oklch(0.35 0.05 250 / 0.7);
+  outline-offset: 8px;
+}
+
+.guestName {
+  font: 600 15px/1.2 var(--sans);
+  color: var(--ink);
+}
+
+.guestNote {
+  font: 400 13px/1.2 var(--sans);
+  color: var(--muted-2);
+}
+
+.bank {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: oklch(0.42 0.07 250);
+  color: #fff;
+}
+
+.bank svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* The family app's call controls, with Add someone lit. */
+.controls {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgb(20 24 22 / 0.92);
+}
+
+.controls span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 92px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgb(36 44 40);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.controls svg {
+  width: 18px;
+  height: 18px;
+}
+
+.controls [data-active] {
+  background: var(--tomato-deep);
+  box-shadow: 0 0 0 3px oklch(0.85 0.1 50 / 0.55);
+}
+
+.controls [data-end] {
+  background: rgb(173 48 48);
+}
+
+/* ---------- The clip dialog ---------- */
+
+.lightbox {
+  width: min(92vw, calc((90vh - 64px) * 9 / 16));
+  width: min(92vw, calc((90dvh - 64px) * 9 / 16));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 28px;
+  background: oklch(0.2 0.02 50);
+  color: #fff;
+}
+
+.lightbox::backdrop {
+  background: oklch(0.18 0.02 50 / 0.8);
+}
+
+.lightboxBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.lightboxBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 64px;
+  padding: 10px 10px 10px 20px;
+}
+
+.lightboxBar p {
+  overflow: hidden;
+  font: 500 16px/1.3 var(--sans);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lightboxClose {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: oklch(1 0 0 / 0.14);
+  color: #fff;
+  cursor: pointer;
+}
+
+.lightboxClose:hover {
+  background: oklch(1 0 0 / 0.24);
+}
+
+.lightboxClose:focus-visible {
+  outline: 2px solid oklch(0.85 0.1 80);
+  outline-offset: 2px;
+}
+
+.lightboxClose svg {
+  width: 22px;
+  height: 22px;
+}
+
+.lightboxVideo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 9 / 16;
+  background: #000;
+}
+
+/* ---------- Narrower screens ---------- */
+
+@media (max-width: 1080px) {
+  .chapter,
+  .chapter[data-flip] {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 680px;
+    width: 100%;
+    margin-inline: auto;
+  }
+
+  .chapter[data-flip] .copy {
+    order: 0;
+  }
+
+  .copy {
+    padding: 28px 24px 8px;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 32px 16px 0;
+    text-align: center;
+  }
+
+  .heroCopy {
+    align-items: center;
+  }
+
+  .heroPhoto {
+    width: 100%;
+    max-width: 480px;
+    border-radius: 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  .chapters {
+    padding: 48px 16px 0;
+  }
+
+  .chapter {
+    padding: 10px;
+    border-radius: 32px;
+  }
+
+  .copy {
+    gap: 14px;
+    padding: 22px 12px 6px;
+  }
+
+  .num {
+    font-size: 38px;
+  }
+
+  .body {
+    font-size: 17px;
+  }
+
+  .stage {
+    min-height: 0;
+    padding: 32px 12px;
+    border-radius: 24px;
+  }
+
+  .callout {
+    max-width: 54%;
+    padding: 6px 10px 6px 8px;
+    font-size: 12.5px;
+  }
+
+  .press {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .route {
+    width: 100%;
+    max-width: 290px;
+  }
+
+  .pickup {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "say"
+      "ipad"
+      "card";
+    justify-items: center;
+  }
+
+  .announce p {
+    font-size: 17px;
+  }
+
+  .pickup .ipad {
+    width: 180px;
+  }
+
+  .numberCard {
+    width: min(100%, 280px);
+    margin: -20px 0 0;
+  }
+
+  .messages {
+    zoom: 0.72;
+  }
+
+  .langPicker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: 28px;
+  }
+
+  .langOption {
+    border-radius: 22px;
+  }
+
+  .langBody {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .langNotes {
+    width: 100%;
+  }
+
+  .together {
+    zoom: 0.8;
+  }
+}
+
+@media (max-width: 420px) {
+  .messages {
+    zoom: 0.62;
+  }
+
+  .together {
+    zoom: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tapRing {
+    animation: none;
+  }
+}

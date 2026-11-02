@@ -6,20 +6,41 @@ import styles from "./features.module.css";
 type Tab = { id: string; label: string; content: ReactNode };
 
 // Tabs follow the WAI-ARIA pattern: arrow keys, Home and End move between them.
-// The open tab is kept in the URL hash, so /features#safety links straight to it.
+// The open tab is kept in the URL hash, so /features#safety links straight to it, and a clip's own id, such as
+// /features#phone-fallback, opens the tab it's in. Either way the page scrolls down to it, below the story.
 export default function FeatureTabs({ tabs }: { tabs: Tab[] }) {
   const [active, setActive] = useState(tabs[0].id);
+  // What to scroll to once its tab is showing: an element's id, or null for the tabs themselves.
+  const [scrollTarget, setScrollTarget] = useState<{ id: string | null } | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fromHash = () => {
       const id = window.location.hash.slice(1);
-      if (tabs.some((tab) => tab.id === id)) setActive(id);
+      if (!id) return;
+      if (tabs.some((tab) => tab.id === id)) {
+        setActive(id);
+        setScrollTarget({ id: null });
+        return;
+      }
+      const panel = document.getElementById(id)?.closest<HTMLElement>("[role=tabpanel]");
+      const tab = tabs.find((t) => panel?.id === `panel-${t.id}`);
+      if (tab) {
+        setActive(tab.id);
+        setScrollTarget({ id });
+      }
     };
     fromHash();
     window.addEventListener("hashchange", fromHash);
     return () => window.removeEventListener("hashchange", fromHash);
   }, [tabs]);
+
+  // A hidden panel can't be scrolled to, so this waits for the render that shows it.
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const target = scrollTarget.id ? document.getElementById(scrollTarget.id) : root.current;
+    target?.scrollIntoView({ block: "start" });
+  }, [scrollTarget]);
 
   // Stop a clip that's still playing in a tab that's been closed.
   useEffect(() => {

@@ -1,19 +1,25 @@
-.hero {
+/* The clips, under the story: a heading, then the tabs. */
+.library {
+  padding-top: clamp(72px, 9vw, 120px);
+  scroll-margin-top: 24px;
+}
+
+.libraryHead {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  padding: clamp(32px, 5vw, 56px) clamp(16px, 5vw, 64px) 0;
+  gap: 20px;
+  padding: 0 clamp(16px, 5vw, 64px);
   text-align: center;
 }
 
-.title {
-  font: 400 clamp(52px, 8vw, 96px) / 1 var(--serif);
-  letter-spacing: -0.035em;
+.libraryTitle {
+  font: 400 clamp(44px, 6vw, 72px) / 1.02 var(--serif);
+  letter-spacing: -0.03em;
   text-wrap: balance;
 }
 
-.title em {
+.libraryTitle em {
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--tomato);
@@ -31,7 +37,8 @@
   flex-direction: column;
   align-items: center;
   gap: clamp(28px, 4vw, 44px);
-  padding: clamp(40px, 5vw, 56px) clamp(16px, 3vw, 40px) clamp(64px, 8vw, 96px);
+  padding: clamp(32px, 4vw, 44px) clamp(16px, 3vw, 40px) clamp(64px, 8vw, 96px);
+  scroll-margin-top: 24px;
 }
 
 .tablist {

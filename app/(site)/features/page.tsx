@@ -6,14 +6,17 @@ import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
 import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
 import FeatureTabs from "./FeatureTabs";
-import { accessibility, calling, safety, type Clip, type Screenshot } from "./clips";
+import { accessibility, calling, clip, safety, type Clip, type Screenshot } from "./clips";
 import styles from "./features.module.css";
+import Story from "./Story";
+import story from "./story.module.css";
 import ThreeWayCalling from "./ThreeWayCalling";
+import WatchClip from "./WatchClip";
 
 export const metadata: Metadata = {
   title: "See Porch in Action | HelloPorch",
   description:
-    "Short clips of the Porch prototype: one press starts a video call, calls fall back to your phone, family can drop in, messages play on their own, it speaks their language, and unknown callers are blocked.",
+    "Nothing to unlock: they press a face to call, Porch answers your calls for them, messages play on their own, it speaks Mandarin, Cantonese and Spanish, and you can bring the whole family onto a call. Watch short clips of each.",
 };
 
 export default function FeaturesPage() {
@@ -23,30 +26,65 @@ export default function FeaturesPage() {
         <SiteNav current="features" />
 
         <main>
-          <header className={styles.hero}>
-            <h1 className={styles.title}>
-              See Porch <em>in action.</em>
-            </h1>
-            <p className={styles.lede}>
-              Short clips of real calls on the Porch prototype, from the button they press to the phone in your hand.
-            </p>
+          <header className={story.hero}>
+            <div className={story.heroCopy}>
+              <div className="hero__badge">See Porch in action</div>
+              <h1 className={story.title}>
+                Nothing to unlock. <em>Just press.</em>
+              </h1>
+              <p className={story.lede}>
+                No apps to open, and no tiny buttons to find on a touchscreen. Porch is an iPad that’s always ready and a
+                phone with real buttons, each one labeled with the face and name of someone they love.
+              </p>
+              <WatchClip clip={clip("first-real-call")} label="Watch Mom’s first real call" hero />
+            </div>
+            <figure className={story.heroPhoto}>
+              <Image
+                src="/pilot/setup.jpg"
+                alt="Porch on a wooden table: an iPad on a stand showing a large clock and a Call someone button, beside a white corded phone whose big buttons each carry a family photo."
+                fill
+                preload
+                sizes="(max-width: 900px) min(100vw, 480px), 520px"
+              />
+              <figcaption className={story.callouts}>
+                <span className={story.callout} style={{ left: "47%", top: "16%" }}>
+                  Always on. No passcode, no apps.
+                </span>
+                <span className={story.callout} style={{ left: "6%", top: "86%" }}>
+                  Real buttons with faces and names
+                </span>
+              </figcaption>
+            </figure>
           </header>
 
-          <FeatureTabs
-            tabs={[
-              {
-                id: "calling",
-                label: "Calling",
-                content: (
-                  <Clips clips={calling}>
-                    <ThreeWayCalling />
-                  </Clips>
-                ),
-              },
-              { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
-              { id: "safety", label: "Safety", content: <Screenshots shots={safety} /> },
-            ]}
-          />
+          <Story />
+
+          <section id="clips" className={styles.library} aria-labelledby="clips-title">
+            <div className={styles.libraryHead}>
+              <h2 id="clips-title" className={styles.libraryTitle}>
+                Watch it <em>all.</em>
+              </h2>
+              <p className={styles.lede}>
+                Short clips of real calls on the Porch prototype, from the button they press to the phone in your hand.
+              </p>
+            </div>
+
+            <FeatureTabs
+              tabs={[
+                {
+                  id: "calling",
+                  label: "Calling",
+                  content: (
+                    <Clips clips={calling}>
+                      <ThreeWayCalling />
+                    </Clips>
+                  ),
+                },
+                { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
+                { id: "safety", label: "Safety", content: <Screenshots shots={safety} /> },
+              ]}
+            />
+          </section>
 
           <section id="join" className={styles.join} aria-labelledby="join-title">
             <h2 id="join-title">
