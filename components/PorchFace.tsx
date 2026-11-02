@@ -84,12 +84,14 @@ export default function PorchFace({ who, shape = "circle", size = 120, width, he
   const w = width ?? size;
   const h = height ?? size;
 
+  // Rounded, so the server's first frame matches the browser's: their Math.sin can differ in the last digits.
+  const round = (n: number) => Math.round(n * 100) / 100;
   const o = p.off;
   const period = 3.6 + o * 0.4;
   const blink = (t + o) % period < 0.13 ? 0.1 : 1;
-  const bob = Math.sin(t * 1.3 + o) * (talking ? 2.6 : 1.4);
-  const tilt = Math.sin(t * 0.7 + o) * (talking ? 3 : 1.6);
-  const open = talking ? 1.5 + 8 * Math.abs(Math.sin(t * 10.5 + o) * Math.sin(t * 3.1 + o * 2)) : 0;
+  const bob = round(Math.sin(t * 1.3 + o) * (talking ? 2.6 : 1.4));
+  const tilt = round(Math.sin(t * 0.7 + o) * (talking ? 3 : 1.6));
+  const open = talking ? round(1.5 + 8 * Math.abs(Math.sin(t * 10.5 + o) * Math.sin(t * 3.1 + o * 2))) : 0;
   const [ba, by] = [-4, -2]; // happy brows
 
   const mouth = talking ? (

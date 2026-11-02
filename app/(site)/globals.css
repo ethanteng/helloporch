@@ -1044,3 +1044,8 @@ input::placeholder {
     scroll-behavior: auto;
   }
 }
+
+/* The page behind an open clip dialog stays put. */
+html:has(dialog[open]) {
+  overflow: hidden;
+}

@@ -97,6 +97,18 @@ export const accessibility: Clip[] = [
   },
 ];
 
+// A film of the app's own 3-way calling screens, rendered by scripts/render-three-way-film.mjs. It closes the Calling tab
+// as a full row (ThreeWayCalling.tsx) rather than a clip card.
+export const threeWayFilm: Clip = {
+  id: "three-way-calling",
+  title: "When the bank needs them on the line, too.",
+  description:
+    "You’re sorting out their account, and the bank won’t go on until they say it’s OK themselves. Call them on Porch, tap Add someone, and bring the bank into the same call. They hear everything and answer in their own voice, while you work the phone menu and sit through the hold music. When you hang up, the bank hangs up too, so they’re never left alone with a caller they didn’t choose. Family can join the same way, with video.",
+  duration: "22 sec",
+  src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20v2%20compressed.mp4",
+  poster: "/features/three-way-calling.jpg",
+};
+
 export const safety: Screenshot[] = [
   {
     id: "block-unknown-callers",
@@ -108,3 +120,12 @@ export const safety: Screenshot[] = [
     alt: "Porch’s Calls settings in caregiver mode on an iPhone. Under “Calls to Mom,” Block unknown callers is switched on, with the note “Only keypad contacts and numbers you allow can ring.” Below it, Blocked numbers shows 4, with 1 allowed.",
   },
 ];
+
+const allClips = [...calling, ...accessibility, threeWayFilm];
+
+/** A clip by its id, for the story at the top of the page to play. */
+export function clip(id: string): Clip {
+  const found = allClips.find((c) => c.id === id);
+  if (!found) throw new Error(`No clip with id "${id}"`);
+  return found;
+}
