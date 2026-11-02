@@ -525,7 +525,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
     }
-    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callEnded(self) }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callDisappeared(self) }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         let slots = (try? CallSlots.load()) ?? CallSlots()

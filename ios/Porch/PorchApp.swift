@@ -66,7 +66,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
-        ScreenAwake.update(active: true)
+        ScreenAwake.update(inFront: true)
         SystemIncomingCalls.shared.resumeCamera()
         Cell2JackKeypad.shared.activate()
     }
@@ -74,15 +74,12 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
     func sceneDidEnterBackground(_ scene: UIScene) {
         SystemIncomingCalls.shared.enterBackground()
         RemoteCaregiverSession.shared.end()
-        // Resigning active is also how the proximity sensor blanks the screen. Only a real
-        // background should give the idle timer and the sensor back to iOS.
-        ScreenAwake.enteredBackground()
+        ScreenAwake.update(inFront: false)
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
         Cell2JackKeypad.shared.pause()
         (window?.rootViewController as? PorchContainerViewController)?.pause()
-        ScreenAwake.update(active: false)
     }
 }
 
@@ -91,84 +88,25 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
 /// Voice calls also turn on the proximity sensor, so an iPhone's screen goes dark against an ear instead of
 /// taking taps from a cheek. iPads have no sensor.
 @MainActor enum ScreenAwake {
-    struct Decision: Equatable {
-        var idleTimerDisabled: Bool
-        var proximityMonitoring: Bool
-    }
-
     private static let calls = NSHashTable<UIViewController>.weakObjects()
     private static let voiceCalls = NSHashTable<UIViewController>.weakObjects()
-    private static var watchingProximity = false
-
     static func callShown(_ screen: UIViewController, voice: Bool) {
         calls.add(screen)
         if voice { voiceCalls.add(screen) } else { voiceCalls.remove(screen) }
         update()
     }
-    /// The call screen itself went away. A sheet on top of it (add a phone, the keypad) makes this
-    /// screen disappear on an iPhone too, and that call is still going, so that does not release it.
-    static func callEnded(_ screen: UIViewController) {
-        guard screen.isBeingDismissed || screen.isMovingFromParent else { return }
-        callHidden(screen)
-    }
-    static func callHidden(_ screen: UIViewController) {
+    /// A screen over the call, such as the phone keypad, leaves the call going. Anything else closed it.
+    static func callDisappeared(_ screen: UIViewController) {
+        guard screen.presentedViewController == nil || screen.isBeingDismissed else { return }
         calls.remove(screen); voiceCalls.remove(screen)
         update()
     }
-    /// Home screen or the app switcher. Covering the proximity sensor resigns active without this.
-    static func enteredBackground() { update(active: false, background: true) }
-
-    static func update(active: Bool = UIApplication.shared.applicationState == .active,
-                       background: Bool = UIApplication.shared.applicationState == .background) {
+    /// Only the background gives the screen back to iOS. Covering the proximity sensor can resign active too, and
+    /// turning the sensor or the idle timer off then would light the screen against an ear or let the phone lock.
+    static func update(inFront: Bool = UIApplication.shared.applicationState != .background) {
         // Welcome isn't the bedside clock, even on an iPad whose mode hasn't been chosen yet.
         let clock = !PorchDevice.needsWelcome && PorchDevice.experience == .bedside
-        let inCall = !calls.allObjects.isEmpty
-        let voice = !voiceCalls.allObjects.isEmpty
-        let decision = policy(active: active, background: background, bedsideClock: clock, inCall: inCall, voice: voice,
-                              nearEar: UIDevice.current.proximityState)
-        UIApplication.shared.isIdleTimerDisabled = decision.idleTimerDisabled
-        UIDevice.current.isProximityMonitoringEnabled = decision.proximityMonitoring
-        watchProximity(voice && !background)
-    }
-
-    /// Covering the sensor resigns active and blacks the screen. That is still this call: turning the
-    /// sensor off there lights the screen against an ear, and the idle timer can then lock the phone
-    /// and hang up. A real background still sleeps.
-    static func policy(active: Bool, background: Bool, bedsideClock: Bool, inCall: Bool, voice: Bool, nearEar: Bool) -> Decision {
-        let blankedByEar = inCall && nearEar && !background
-        let foreground = (active && !background) || blankedByEar
-        return Decision(
-            idleTimerDisabled: foreground && (bedsideClock || inCall),
-            proximityMonitoring: voice && !background)
-    }
-
-    /// `willResignActive` can run before `proximityState` flips. When the sensor then reports near,
-    /// put the idle timer back. A "not near" notice is the screen coming on, which also becomes active.
-    private static func watchProximity(_ on: Bool) {
-        guard on != watchingProximity else { return }
-        watchingProximity = on
-        if on {
-            NotificationCenter.default.addObserver(
-                ScreenAwakeProximity.shared, selector: #selector(ScreenAwakeProximity.near),
-                name: UIDevice.proximityStateDidChangeNotification, object: nil)
-        } else {
-            ScreenAwakeProximity.shared.generation += 1
-            NotificationCenter.default.removeObserver(ScreenAwakeProximity.shared)
-        }
-    }
-}
-
-/// Posted on the main thread by UIKit. A notice already queued must not turn the sensor back on
-/// after the call ends or Porch backgrounds.
-private final class ScreenAwakeProximity: NSObject {
-    static let shared = ScreenAwakeProximity()
-    var generation = 0
-    @objc func near() {
-        let generation = generation
-        guard UIDevice.current.proximityState else { return }
-        Task { @MainActor in
-            guard generation == ScreenAwakeProximity.shared.generation else { return }
-            ScreenAwake.update()
-        }
+        UIApplication.shared.isIdleTimerDisabled = inFront && (clock || !calls.allObjects.isEmpty)
+        UIDevice.current.isProximityMonitoringEnabled = inFront && !voiceCalls.allObjects.isEmpty
     }
 }
