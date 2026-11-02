@@ -14,7 +14,7 @@ import ThreeWayCalling from "./ThreeWayCalling";
 import WatchClip from "./WatchClip";
 
 export const metadata: Metadata = {
-  title: "See Porch in Action | HelloPorch",
+  title: "See How It Works | HelloPorch",
   description:
     "Nothing to unlock: they press a face to call, Porch answers your calls for them, messages play on their own, it speaks Mandarin, Cantonese and Spanish, and you can bring the whole family onto a call. Watch short clips of each.",
 };
@@ -28,7 +28,7 @@ export default function FeaturesPage() {
         <main>
           <header className={story.hero}>
             <div className={story.heroCopy}>
-              <div className="hero__badge">See Porch in action</div>
+              <div className="hero__badge">See how it works</div>
               <h1 className={story.title}>
                 Nothing to unlock. <em>Just press.</em>
               </h1>

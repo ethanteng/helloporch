@@ -32,7 +32,7 @@ export default function Home() {
                 <path d="M3 1.5v9l7.5-4.5z" fill="currentColor" />
               </svg>
             </span>
-            See Porch in action
+            See how it works
           </Link>
         </header>
 
