@@ -177,7 +177,9 @@ export async function handleTextAction(action: string, { store, now, house, me, 
   }
   requireValue(me.role === "bedside", "Only the bedside device shows texts.", 403);
   if (action === "textRead") {
-    // Already read or removed: nothing left to do.
+    // Already read or removed: nothing left to do. A held text stays until a caregiver releases or removes it.
+    // Its id is on the bedside snapshot, and reading it deletes the words the caregiver reviews.
+    if (entry && held(house, entry)) throw new FamilyError("A caregiver needs to review this text first.", 403);
     if (entry) await endText(store, house.id, id);
     return { ok: true };
   }

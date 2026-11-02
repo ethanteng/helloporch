@@ -110,6 +110,8 @@ test('texts from numbers the household doesn\'t know wait for a caregiver', asyn
   const { id } = await f.text('Your package is delayed', stranger);
   assert.deepEqual((await f.queue()).map(t => [t.id, t.held]), [[id, true]]);
   assert.equal((await f.fetch(id)).status, 403, 'the bedside can\'t show it yet');
+  assert.equal((await f.send('textRead', { textID: id }, f.bedside.credential)).status, 403, 'the bedside can\'t delete it before review');
+  assert.equal((await f.queue()).length, 1);
   assert.deepEqual(f.translations, []);
   // Approved caregivers see that something is waiting; other family members don't.
   assert.equal((await f.json('poll', { available: true }, f.sam.credential)).state.heldTexts, 1);
