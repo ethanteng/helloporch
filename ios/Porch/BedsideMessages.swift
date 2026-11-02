@@ -112,8 +112,9 @@ extension Notification.Name {
                 guard let received = try await FamilyService(credential).send("textMessage", ["textID": text.id], timeout: 40).text, received.id == text.id
                 else { throw FamilyServiceError(message: "Missing text.", status: 0) }
                 guard let self else { return }
-                // Fetched again in a new language: the old wording's reading goes.
-                if let earlier = self.savedText(text.id), earlier.text != received.text { Self.forgetReading(earlier) }
+                // Fetched again in a new language. The clip's name includes that language, so the previous
+                // reading goes even when the words themselves are unchanged (a text shown as sent).
+                if let earlier = self.savedText(text.id) { Self.forgetReading(earlier) }
                 try FileManager.default.createDirectory(at: self.textFolder, withIntermediateDirectories: true)
                 try JSONEncoder().encode(received).write(to: self.textFile(for: text.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 self.fetchingTexts.remove(text.id)
