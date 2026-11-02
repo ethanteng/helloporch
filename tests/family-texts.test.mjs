@@ -170,12 +170,16 @@ test('only signed webhooks for a Porch number add texts, once each, and opt-out 
   await f.json('textRead', { textID: yes.id }, f.bedside.credential);
   await f.twilio({ MessageSid: yes.messageSid, From: daughter, Body: 'Yes' });
   assert.deepEqual(await f.queue(), []);
-  // A picture alone still arrives; the bedside says it came with one.
-  await f.text('', daughter, { NumMedia: '2', MessageSid: 'MM' + '1'.repeat(32) });
+  // A picture alone still arrives; the bedside says what came with it, and only images count as pictures.
+  await f.text('', daughter, { NumMedia: '3', MediaContentType0: 'image/jpeg', MediaContentType1: 'text/vcard', MediaContentType2: 'image/png', MessageSid: 'MM' + '1'.repeat(32) });
   const [entry] = await f.queue();
-  assert.deepEqual([entry.id, entry.pictures], [textMessageID('MM' + '1'.repeat(32)), 2]);
+  assert.deepEqual([entry.id, entry.pictures, entry.attachments], [textMessageID('MM' + '1'.repeat(32)), 2, 1]);
   const shown = (await (await f.fetch(entry.id)).json()).text;
-  assert.deepEqual([shown.body, shown.text, shown.pictures, shown.translated], ['', '', 2, false]);
+  assert.deepEqual([shown.body, shown.text, shown.pictures, shown.attachments, shown.translated], ['', '', 2, 1, false]);
+  // A voice clip alone has no pictures.
+  await f.json('textRead', { textID: entry.id }, f.bedside.credential);
+  await f.text('', daughter, { NumMedia: '1', MediaContentType0: 'audio/amr', MessageSid: 'MM' + '2'.repeat(32) });
+  assert.deepEqual((await f.queue()).map(t => [t.pictures, t.attachments]), [[undefined, 1]]);
   // Without the account's token, nothing is accepted.
   delete process.env.TWILIO_AUTH_TOKEN;
   assert.equal((await f.twilio({ MessageSid: sid(93), From: daughter, Body: 'hi' })).status, 503);
@@ -199,11 +203,15 @@ test('unknown numbers can\'t fill the queue, texts stop while messages are off, 
   await g.text('hi');
   assert.deepEqual(await g.queue(), []);
   await g.json('setMessages', { enabled: true }, g.bedside.credential, '123456');
-  await g.text('hi again');
+  const late = await g.text('hi again');
   assert.equal((await g.queue()).length, 1);
   g.advance(7 * day + 1);
   assert.deepEqual(await g.queue(), []);
   assert.deepEqual((await g.house()).texts, [], 'the poll removed it');
+  // Its words go too, so a repeated webhook can't queue it again.
+  assert.deepEqual(JSON.parse(await g.store.get(`text:${g.bedside.state.householdID}:${late.id}`)), { id: late.id, removed: true });
+  await g.twilio({ MessageSid: late.messageSid, From: daughter, Body: 'hi again' });
+  assert.deepEqual(await g.queue(), []);
 });
 
 test('a translation that fails is tried again for a while, then the text shows as sent', async () => {

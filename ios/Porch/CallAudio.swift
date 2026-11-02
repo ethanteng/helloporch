@@ -212,7 +212,7 @@ import PorchCore
             for text in waitingTexts { texts.append(MessagePlayerViewController.announcement(forTextFrom: text.from, sentAt: text.sentAt, slots: slots)) }
             // The server reads up to 600 characters of a text's words in a natural voice (`textLimits.spokenCharacters`).
             for text in BedsideMessages.shared.readyTexts {
-                if let note = MessagePlayerViewController.pictureNote(text.pictures ?? 0) { texts.append(note) }
+                if let note = MessagePlayerViewController.attachmentSentence(text) { texts.append(note) }
                 if !text.text.isEmpty, text.text.utf16.count <= 600, MessagePlayerViewController.otherLanguage(of: text) == nil { words.append((text.text, text.id)) }
             }
         }

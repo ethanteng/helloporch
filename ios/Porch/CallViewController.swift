@@ -279,13 +279,16 @@ final class CallViewController: UIViewController {
         else if args.contains("--preview-voicemail"), let person = slots.contact(for: 1) {
             present(BedsideVoicemailViewController(contact: person, memberID: UUID().uuidString, mode: args.contains("--preview-video") ? .video : .voice, reason: .unanswered, staticPreview: true), animated: false)
         } else if args.contains("--preview-text") {
-            // An English text from the first keypad contact, as the bedside's language shows it.
-            let body = "Hi Mom! I'll come by on Sunday at 2 with the kids. Love you."
+            // An English text from the first keypad contact, as the bedside's language shows it. --preview-long sends one
+            // that needs to scroll, as written.
+            let long = args.contains("--preview-long")
+            let body = long ? String(repeating: "Hi Mom! The doctor moved your appointment to Tuesday at 10, so I'll pick you up at 9:15. ", count: 12)
+                : "Hi Mom! I'll come by on Sunday at 2 with the kids. Love you."
             let translations: [BedsideLanguage: String] = [.traditionalChinese: "媽，妳好！我星期天下午兩點會帶孩子們過去看妳。愛妳。", .simplifiedChinese: "妈，你好！我星期天下午两点会带孩子们过去看你。爱你。",
                 .cantonese: "媽，你好！我星期日下晝兩點會帶埋啲細路過嚟探你。愛你。", .spanish: "¡Hola, mamá! Paso el domingo a las 2 con los niños. Te quiero."]
-            let language = BedsideText.language, translation = translations[language]
+            let language = BedsideText.language, translation = long ? nil : translations[language]
             let text = ReceivedText(id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", from: slots.contact(for: 1)?.phoneNumbers.first ?? "+14155550123", sentAt: Date().timeIntervalSince1970 - 600, body: body,
-                                    pictures: args.contains("--preview-picture") ? 1 : nil, language: language.rawValue, text: translation ?? body, translated: translation != nil, sourceLanguage: "en")
+                                    pictures: args.contains("--preview-picture") ? 1 : nil, attachments: args.contains("--preview-attachment") ? 1 : nil, language: language.rawValue, text: translation ?? body, translated: translation != nil, sourceLanguage: "en")
             present(MessagePlayerViewController(messages: [], texts: [text], slots: slots), animated: false)
         }
         #endif

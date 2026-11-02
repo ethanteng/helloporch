@@ -754,6 +754,7 @@ final class MessageQueueViewController: CaregiverFormViewController {
             views.append(PorchStyle.label("The words for this text aren't available.", size: 15))
         } else { views.append(PorchStyle.label("Loading the text…", size: 15)) }
         if let pictures = text.pictures, pictures > 0 { views.append(PorchStyle.label(pictures == 1 ? "It came with a picture, which Porch doesn't show yet." : "It came with \(pictures) pictures, which Porch doesn't show yet.", size: 15)) }
+        if let others = text.attachments, others > 0 { views.append(PorchStyle.label(others == 1 ? "It came with an attachment, such as a contact card or voice clip, which Porch doesn't show yet." : "It came with \(others) attachments, such as contact cards or voice clips, which Porch doesn't show yet.", size: 15)) }
         // Not until the words are here: otherwise Let it show approves a text the caregiver hasn't read.
         if text.held, words[text.id] != nil {
             let release = PorchStyle.button("Let it show on Porch", symbol: "checkmark.circle.fill")

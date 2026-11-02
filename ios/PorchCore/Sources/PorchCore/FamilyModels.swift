@@ -147,8 +147,9 @@ public struct FamilyText: Codable, Equatable, Identifiable {
     /// The sender's phone number in E.164, or a short code. Texts carry no carrier check, so it can be faked.
     public let from: String
     public let sentAt: TimeInterval
-    /// Pictures that came with it, which Porch doesn't show yet.
+    /// Pictures that came with it, and anything else, such as a contact card or a voice clip. Porch doesn't show them yet.
     public let pictures: Int?
+    public let attachments: Int?
     /// From a number the household doesn't know: it waits for a caregiver before the bedside shows it.
     public let held: Bool
     public let delivered: Bool
@@ -165,6 +166,7 @@ public struct ReceivedText: Codable, Equatable, Identifiable {
     /// The words as sent. Empty for a text that was only pictures.
     public let body: String
     public let pictures: Int?
+    public let attachments: Int?
     /// The bedside language it was prepared in. One kept from before a language change is fetched again.
     public let language: String
     /// What the bedside shows and reads: `body`, or `body` translated into `language`.
@@ -172,8 +174,8 @@ public struct ReceivedText: Codable, Equatable, Identifiable {
     public let translated: Bool
     /// The language it was written in, as a BCP 47 tag, when Porch could tell.
     public let sourceLanguage: String?
-    public init(id: String, from: String, sentAt: TimeInterval, body: String, pictures: Int? = nil, language: String, text: String, translated: Bool, sourceLanguage: String? = nil) {
-        self.id = id; self.from = from; self.sentAt = sentAt; self.body = body; self.pictures = pictures
+    public init(id: String, from: String, sentAt: TimeInterval, body: String, pictures: Int? = nil, attachments: Int? = nil, language: String, text: String, translated: Bool, sourceLanguage: String? = nil) {
+        self.id = id; self.from = from; self.sentAt = sentAt; self.body = body; self.pictures = pictures; self.attachments = attachments
         self.language = language; self.text = text; self.translated = translated; self.sourceLanguage = sourceLanguage
     }
 }

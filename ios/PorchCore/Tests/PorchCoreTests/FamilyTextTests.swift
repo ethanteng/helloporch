@@ -15,11 +15,13 @@ final class FamilyTextTests: XCTestCase {
     func testTheBedsideSeesWaitingAndHeldTextsAndOlderServersSendNone() throws {
         let state = try snapshot(["texts": [
             ["id": "t1", "from": "+14155550123", "sentAt": 100, "held": false, "delivered": true],
-            ["id": "t2", "from": "72975", "sentAt": 200, "pictures": 2, "held": true, "delivered": false],
+            ["id": "t2", "from": "72975", "sentAt": 200, "pictures": 2, "attachments": 1, "held": true, "delivered": false],
         ]])
         XCTAssertEqual(state.texts?.map(\.id), ["t1", "t2"])
         XCTAssertEqual(state.texts?.map(\.held), [false, true])
         XCTAssertEqual(state.texts?.last?.pictures, 2)
+        XCTAssertEqual(state.texts?.last?.attachments, 1)
+        XCTAssertNil(state.texts?.first?.attachments)
         XCTAssertNil(state.texts?.first?.body, "the words aren't in the snapshot")
         XCTAssertNil(try snapshot([:]).texts)
         XCTAssertEqual(try snapshot(["heldTexts": 3]).heldTexts, 3)

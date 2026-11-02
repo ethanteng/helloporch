@@ -45,8 +45,9 @@ export type InboxEntry = { id: string; from: string; fromName: string; kind: Mes
 export type OutboxEntry = { id: string; to: string; sentAt: number };
 /** A text message to the household's Porch number, waiting to be shown and read on the bedside (see texts.ts). `from` is
  * the sender's number or short code. The words are kept apart from the household, so its every poll stays small.
- * Texts from numbers the household doesn't know are held until a caregiver releases them. */
-export type TextEntry = { id: string; from: string; sentAt: number; pictures?: number; held?: boolean; deliveredAt?: number };
+ * Texts from numbers the household doesn't know are held until a caregiver releases them. `pictures` and `attachments`
+ * (anything else, such as a contact card or a voice clip) count what came with it, which the bedside doesn't show yet. */
+export type TextEntry = { id: string; from: string; sentAt: number; pictures?: number; attachments?: number; held?: boolean; deliveredAt?: number };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
 /** A caller ID that tried to ring the bedside while unknown callers were blocked, until a caregiver allows or clears it. */
