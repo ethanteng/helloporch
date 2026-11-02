@@ -1,7 +1,7 @@
 import UIKit
 import PorchCore
 
-/// Settings for the bedside device itself: a desk phone as its keypad, and what the device is used as.
+/// Settings for the bedside device itself: a desk phone or USB keypad as its keypad, and what the device is used as.
 final class DeviceSettingsViewController: CaregiverFormViewController {
     private let phoneSwitch = UISwitch()
     private let receiverSwitch = UISwitch()
@@ -40,6 +40,10 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
             form.addArrangedSubview(unsupported)
         }
         #endif
+        // A USB keypad needs no setting, so this is setup's check of it.
+        let keypad = actionRow("Connect the USB keypad", symbol: "keyboard") { [weak self] in self?.connectKeypad() }
+        keypad.accessibilityIdentifier = "device.connectKeypad"
+        form.addArrangedSubview(group("USB keypad", detail: "A number keypad plugged into this iPad works as Porch's keypad.", rows: [keypad]))
         let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
         form.addArrangedSubview(group(rows: [actionRow("Use this \(device) as a family device", symbol: "iphone") { [weak self] in self?.confirmFamilyDevice(device) }]))
         form.addArrangedSubview(textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } })
@@ -51,6 +55,12 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
     }
     private func connectPhone() {
         let screen = SetupPhoneViewController(BedsideSetup(), keypad: phoneKeypad)
+        let navigation = PorchStyle.navigation(screen)
+        screen.onContinue = { [weak navigation] in navigation?.dismiss(animated: true) }
+        present(navigation, animated: true)
+    }
+    private func connectKeypad() {
+        let screen = SetupUSBKeypadViewController(BedsideSetup())
         let navigation = PorchStyle.navigation(screen)
         screen.onContinue = { [weak navigation] in navigation?.dismiss(animated: true) }
         present(navigation, animated: true)

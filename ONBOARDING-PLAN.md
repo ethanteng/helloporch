@@ -73,12 +73,14 @@ Problems that appear as soon as there's a second real family:
    2. **Choose a caregiver PIN**, entered twice.
    3. **Mom's Porch phone number.** "People can call Mom's Porch from any phone." The area code is suggested from where the iPad is and can be changed. **Get number** shows the number.
    4. **Allow the microphone and camera**, with one Continue.
-   5. **Connect the phone**, or **Do this later**.
-      - Plug the phone into the Cell2Jack and the Cell2Jack into the iPad.
-      - Turn on Porch's driver in Settings.
-      - Unplug the Cell2Jack for ten seconds and plug it back in.
-      - Lift the receiver and press a key: "Porch heard 3."
-      - Put the receiver back: "Porch heard you hang up."
+   5. **How will Mom call?** **Corded phone** (the Cell2Jack works only with an iPad with an M chip), **USB keypad**, or **Just the touchscreen**. The first two each open a screen with **Do this later**:
+      - **Connect the phone:**
+        - Plug the phone into the Cell2Jack and the Cell2Jack into the iPad.
+        - Turn on Porch's driver in Settings.
+        - Unplug the Cell2Jack for ten seconds and plug it back in.
+        - Lift the receiver and press a key: "Porch heard 3."
+        - Put the receiver back: "Porch heard you hang up."
+      - **Connect the USB keypad:** plug it in and press a number key: "Porch heard 3. The keypad is ready."
    6. **Add your phone.** A QR code to scan with their iPhone camera, or **Send an invite instead**. This first invite has caregiver access on.
    7. **Done**, showing the number and how calls to it work: "Only people on the keypad and numbers you allow can call this number. Anyone else is turned away and listed under Blocked numbers, where you can allow them." Then **Put people on the keypad**.
 3. A checklist stays at the top of caregiver mode until finished: number, phone keypad, your phone, people on the keypad, drop-in (optional), language and display, **Test ringing**.
@@ -330,8 +332,9 @@ Size: large. Depends on phases 1, 2 and 4.
 - **5.2 Bedside setup.** The steps above replace the creation form in `CaregiverPINViewController` ([PorchContainerViewController.swift:182](ios/Porch/PorchContainerViewController.swift:182)).
   - The number step can't be skipped. Call `assignPhoneNumber` with a longer timeout than the usual 12 seconds, such as 45, since the first number also makes the shared trunk. If buying is still pending because Twilio failed, **Continue** is allowed with "Porch will keep trying and let you know", so pairing family isn't blocked. The checklist shows the pending number.
   - The **Done** screen explains that unknown callers are blocked (1.6).
-- **5.3 Connect the phone** (Cell2Jack):
-  - **Model check:** check the iPad's model identifier (`hw.machine`) against known M-series iPads. On a known non-M iPad, such as an iPad mini or the base iPad, say the phone keypad needs an M-series iPad and continue with touch. An unknown model gets a try.
+- **5.3 How Mom calls.** As changed after 6b, setup asks rather than guessing from the iPad's model: **Corded phone**, **USB keypad**, or, as the fallback, **Just the touchscreen**, which goes straight on. The corded phone says the Cell2Jack works only with an iPad with an M chip, and so does its first tip. Builds without the Cell2Jack leave it out. Each of the first two opens a screen that can go back to choose again, which leaves the phone keypad off.
+  - **Connect the USB keypad:** a USB keypad is a keyboard to the iPad and needs no setting. The screen shows "A keypad or keyboard is connected. Press a number key." when the iPad sees any keyboard (`GCKeyboard`, which a keyboard case also counts as), so the key is the check: it shows the key Porch heard without acting on it. Tips after about 30 seconds: replug it, and press Num Lock if it has one. **This iPad → Connect the USB keypad** opens it again.
+- **5.3a Connect the phone** (Cell2Jack):
   - **Turn on the driver:** a button opens Porch's page in Settings (`UIApplication.openSettingsURLString`) to turn on the driver, then "Unplug the Cell2Jack for ten seconds, then plug it back in." Confirm the exact Settings wording on a device with the distribution build.
   - **Turned on for them:** when the Cell2Jack reports ready, Porch turns on **Use Cell2Jack phone keypad** itself. It stays off by default for existing installs and for anyone who chooses **Do this later**.
   - **Key test:** "Lift the receiver and press a key" shows the digit Porch heard, without acting on it. "Put the receiver back" confirms hang-up. To keep setup free of choices, it doesn't offer **Hang up when the receiver is put back**: that stays on by default, and is in **This iPad**. With it turned off, a key is enough.
@@ -464,9 +467,10 @@ PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; t
 - **A fresh M-series iPad from a `/setup` link through TestFlight:**
   - setup, number and permissions
   - Connect the phone: driver, replug, key test, hang-up
+  - Connect the USB keypad: a real number keypad, with and without Num Lock
   - QR pairing of an iPhone that doesn't have Porch yet
 - **The same setup choosing Do this later,** then connecting the phone from the checklist.
-- **The same setup on a non-M iPad:** the phone step explains and touch works.
+- **The same setup on a non-M iPad:** choosing the corded phone waits and its first tip says the Cell2Jack needs an M chip; going back to the USB keypad or the touchscreen works.
 - **Calling the new number from a regular phone:** an unknown number is blocked and listed; after **Allow** it rings and can leave voicemail.
 - **Outgoing caller ID:** phone fallback and **Add someone → A phone number** show the new household's own number, and a callback rings the new bedside, not Mom's.
 - **A relative's invite** opened in Messages, with and without Porch installed.
