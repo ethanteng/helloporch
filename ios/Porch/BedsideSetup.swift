@@ -50,13 +50,17 @@ final class BedsideOnIPadViewController: CaregiverFormViewController {
 @MainActor final class BedsideSetup {
     /// Who this Porch is for, such as "Mom", once it's chosen.
     var name = ""
+    /// Setting up a new Porch in place of the one this iPad already is, until the PIN step swaps them. Until then the old
+    /// one stays as it was, and Cancel keeps it.
+    var replacing = false
     /// Runs after Done: true goes on to put people on the keypad in caregiver mode.
     let onFinish: (Bool) -> Void
     init(onFinish: @escaping (Bool) -> Void = { _ in }) { self.onFinish = onFinish }
 
-    static func start(onFinish: @escaping (Bool) -> Void) -> UINavigationController {
+    static func start(replacing: Bool = false, onFinish: @escaping (Bool) -> Void) -> UINavigationController {
         SystemIncomingCalls.shared.holdsMicrophonePrompt = true
         let setup = BedsideSetup(onFinish: { keypad in releaseMicrophonePrompt(); onFinish(keypad) })
+        setup.replacing = replacing
         return PorchStyle.navigation(needsLink ? SetupLinkViewController(setup) : SetupNameViewController(setup))
     }
     /// A setup that stopped after its PIN, such as when Porch was closed: no Porch number yet, and the microphone or camera
@@ -105,18 +109,21 @@ class BedsideSetupStep: CaregiverFormViewController {
     }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Set up Porch"
-        if navigationController?.viewControllers.first === self, PorchDevice.credential(for: .bedside) == nil {
+        if navigationController?.viewControllers.first === self, PorchDevice.credential(for: .bedside) == nil || setup.replacing {
             navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
         }
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
     @objc private func cancel() { task?.cancel(); try? PorchDevice.saveActivation(nil); BedsideSetup.releaseMicrophonePrompt(); dismiss(animated: true) }
-    /// For the first screen: this device can be a family member's instead, and anyone can read the privacy policy.
+    /// For the first screen: this device can be a family member's instead, and anyone can read the privacy policy. An
+    /// iPad being replaced is already a bedside, and This iPad in caregiver mode is where it becomes a family device.
     func addWayOut() {
-        form.addArrangedSubview(textLink("Use this device as a family member") { [weak self] in
-            self?.task?.cancel(); try? PorchDevice.saveActivation(nil); BedsideSetup.releaseMicrophonePrompt()
-            self?.dismiss(animated: true) { PorchDevice.experience = .family }
-        })
+        if !setup.replacing {
+            form.addArrangedSubview(textLink("Use this device as a family member") { [weak self] in
+                self?.task?.cancel(); try? PorchDevice.saveActivation(nil); BedsideSetup.releaseMicrophonePrompt()
+                self?.dismiss(animated: true) { PorchDevice.experience = .family }
+            })
+        }
         let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
         privacy.accessibilityIdentifier = "caregiver.privacy"
         form.addArrangedSubview(privacy)
@@ -198,9 +205,14 @@ final class SetupPINViewController: BedsideSetupStep {
                 var registration = PorchDevice.registration(pending)
                 registration["name"] = self.setup.name; registration["pin"] = value
                 if let invitation { registration["activation"] = invitation.code }
-                let operatorCode = NativeCallSettings.caregiverCode
+                // Only the operator's setup code: an iPad being replaced keeps its old household's PIN there.
+                let operatorCode = NativeCallSettings.caregiverCode.count < 16 ? "" : NativeCallSettings.caregiverCode
+                // Replacing: the old household stops ringing this iPad first, so its calls can't reach the new one.
+                let previous = self.setup.replacing ? PorchDevice.credential(for: .bedside) : nil
+                if let previous { try await PorchDevice.leaveBedside(previous) }
                 let response = try await FamilyService(origin: origin).send("enrollBedside", registration, pin: operatorCode.isEmpty ? nil : operatorCode)
                 guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
+                if previous != nil { PorchDevice.forgetBedsideHousehold(); self.setup.replacing = false }
                 try PorchDevice.save(FamilyCredential(origin: origin, credential: token, role: .bedside))
                 try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code")
                 FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)

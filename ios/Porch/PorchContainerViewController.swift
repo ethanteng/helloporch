@@ -160,17 +160,34 @@ final class PorchContainerViewController: UIViewController {
         }
         if bedside {
             guard PorchDevice.canBeBedside else { explainBedsideIsTheIPad(); return }
-            guard PorchDevice.credential(for: .bedside) == nil else { showPorchError(FamilyServiceError(message: "This iPad is already set up. Open the activation link on the new iPad instead.", status: 409), on: self); return }
-            do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
-            // The clock presents setup once its camera has stopped, on the next turn so a link that launched Porch
-            // finds the clock in its window.
-            showExperience(.bedside) { DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup() } }
+            guard PorchDevice.credential(for: .bedside) == nil else { confirmReplacingBedside(url); return }
+            setUpBedside(url, replacing: false)
             return
         }
         showExperience(.family) { [weak self] in
             guard let nav = self?.content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
             nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
         }
+    }
+    private func setUpBedside(_ url: URL, replacing: Bool) {
+        do { try PorchDevice.saveActivation(url) } catch { showPorchError(error, on: self); return }
+        // The clock presents setup once its camera has stopped, on the next turn so a link that launched Porch
+        // finds the clock in its window.
+        showExperience(.bedside) { DispatchQueue.main.async { [weak self] in (self?.content as? CallViewController)?.showSetup(replacing: replacing) } }
+    }
+    /// A setup link on an iPad that's already a bedside, such as one handed on to someone else, sets up a new Porch in
+    /// place of this one once it's confirmed. Nothing changes until the new Porch's PIN step: cancelling setup before
+    /// then keeps this one as it is.
+    private func confirmReplacingBedside(_ url: URL) {
+        // Until Porch has checked in since it opened, it doesn't have their name.
+        let name = FamilyCoordinator.shared.state.flatMap { $0.me.role == .bedside ? $0.householdName : nil }
+        let opening = name.map { "\($0)'s" } ?? "Its", within = name.map { "\($0)'s" } ?? "its"
+        let alert = UIAlertController(title: "Replace \(name.map { "\($0)'s Porch" } ?? "this iPad's Porch")?",
+            message: "This iPad will be set up as a new Porch. \(opening) keypad, messages and settings are removed from it, and it stops ringing for \(within) family. \(opening) Porch number and family stay. Nothing changes until you choose the new Porch's PIN.",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Replace", style: .destructive) { [weak self] _ in self?.setUpBedside(url, replacing: true) })
+        present(alert, animated: true)
     }
     /// A setup link opened on an iPhone, such as from the invitation email. A phone that isn't set up yet shows the
     /// same explanation as Set up on the welcome screen; one that's in a family is told where to open it.

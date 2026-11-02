@@ -1761,6 +1761,86 @@ final class BedsideSetupTests: XCTestCase {
         }
     }
 
+    /// Runs `body` with an old household's bedside pairing on this iPad, then puts back what was there.
+    @MainActor private func withOldBedside(_ body: () throws -> Void) throws {
+        let accounts = ["porch.family.bedside", "porch.bedside.activation"]
+        let saved = accounts.map { NativeCallSettings.readSecret($0) ?? Data() }
+        defer {
+            for (account, data) in zip(accounts, saved) {
+                try? NativeCallSettings.writeSecret(data, account: account, accessibleAfterFirstUnlock: account == "porch.family.bedside")
+            }
+        }
+        try PorchDevice.save(FamilyCredential(origin: try XCTUnwrap(URL(string: "https://example.invalid")), credential: "old-bedside.old-secret", role: .bedside))
+        try body()
+    }
+
+    /// An iPad handed on to someone else: a setup link asks before replacing the Porch it already is, and keeps nothing
+    /// until Replace.
+    @MainActor func testASetupLinkOnABedsideAsksToReplaceIt() throws {
+        guard PorchDevice.canBeBedside else { return }
+        let key = "porch.experience", saved = UserDefaults.standard.string(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        // As a family device, so the clock doesn't start: the link checks the bedside pairing either way.
+        UserDefaults.standard.set("family", forKey: key)
+        try withOldBedside {
+            let activation = PorchDevice.bedsideActivation
+            let link = try XCTUnwrap(URL(string: "https://helloporch.store/setup#code=\(String(repeating: "b", count: 64))"))
+            let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+            let container = PorchContainerViewController()
+            let window = UIWindow(windowScene: scene)
+            window.rootViewController = container; window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            container.openInvitation(link)
+            let alert = try XCTUnwrap(container.presentedViewController as? UIAlertController)
+            XCTAssertEqual(alert.title?.hasPrefix("Replace "), true, alert.title ?? "")
+            XCTAssertEqual(alert.actions.map(\.title), ["Cancel", "Replace"])
+            XCTAssertEqual(alert.actions.last?.style, .destructive)
+            XCTAssertEqual(PorchDevice.bedsideActivation, activation, "Nothing is saved until Replace")
+            XCTAssertEqual(PorchDevice.credential(for: .bedside)?.credential, "old-bedside.old-secret")
+        }
+    }
+
+    @MainActor func testReplacingKeepsCancelForTheOldPorchUntilThePIN() throws {
+        try withOldBedside {
+            for replacing in [false, true] {
+                let setup = BedsideSetup(); setup.replacing = replacing
+                let name = SetupNameViewController(setup)
+                let navigation = UINavigationController(rootViewController: name); name.loadViewIfNeeded()
+                // A set-up iPad's first setup screen has no Cancel, except when it's being replaced: Cancel keeps the old Porch.
+                XCTAssertEqual(name.navigationItem.leftBarButtonItem != nil, replacing)
+                // It's a bedside already, so it doesn't offer to become a family device here.
+                XCTAssertEqual(buttons(in: name.view).contains { $0.configuration?.title == "Use this device as a family member" }, !replacing)
+                withExtendedLifetime(navigation) {}
+            }
+        }
+    }
+
+    @MainActor func testReplacingForgetsTheOldHouseholdButNotTheIPadsOwnSettings() throws {
+        let suite = "replace.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        let photos = ContactPhotoStore(directoryURL: directory)
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "david", mode: .video), photoData: Data([1, 2, 3, 4])), for: 1)
+        try slots.save(to: defaults, photoStore: photos)
+        var preferences = BedsidePreferences(); preferences.language = .traditionalChinese; preferences.save(to: defaults)
+        var autoplay = MessageAutoplay(); autoplay.enabled = true; autoplay.save(to: defaults)
+        BedsideAttendance.setCameraEnabled(true, in: defaults)
+        CallPreferences.saveStartVideoWithCamera(false, in: defaults)
+        defaults.set(true, forKey: "porch.cell2jack.enabled"); defaults.set("family-pairing", forKey: "porch.family.current")
+
+        PorchDevice.forgetBedsideHousehold(defaults: defaults, photoStore: photos)
+        XCTAssertFalse(CallSlots.isSaved(in: defaults))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+        XCTAssertEqual(BedsidePreferences.load(from: defaults), BedsidePreferences())
+        XCTAssertEqual(MessageAutoplay.load(from: defaults), MessageAutoplay())
+        XCTAssertFalse(BedsideAttendance.cameraEnabled(in: defaults))
+        XCTAssertTrue(CallPreferences.startVideoWithCamera(in: defaults))
+        XCTAssertTrue(defaults.bool(forKey: "porch.cell2jack.enabled"), "The desk phone stays with the iPad")
+        XCTAssertEqual(defaults.string(forKey: "porch.family.current"), "family-pairing", "So do families it's in as a family device")
+    }
+
     @MainActor func testADeviceThatChoseItsModeNeverSeesTheWelcomeAgain() {
         let key = "porch.experience", saved = UserDefaults.standard.string(forKey: key)
         defer { UserDefaults.standard.set(saved, forKey: key) }

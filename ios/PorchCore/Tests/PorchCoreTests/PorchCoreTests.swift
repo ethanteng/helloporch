@@ -688,6 +688,29 @@ final class RecipientAppearancePersistenceTests: XCTestCase {
         }
     }
 
+    func testForgettingTheKeypadAndCallSettingsLeavesWhatANewBedsideStartsWith() throws {
+        let suite = "forget.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        let photoStore = ContactPhotoStore(directoryURL: directory)
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+        let fresh = (fallback: CallPreferences.fallbackSeconds(in: defaults), leaveMessage: CallPreferences.leaveMessageWhenUnanswered(in: defaults))
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "david", mode: .video), photoData: Data([1, 2, 3, 4])), for: CallSlots.star)
+        try slots.save(to: defaults, photoStore: photoStore)
+        CallPreferences.saveFallbackSeconds(fresh.fallback + 30, in: defaults); CallPreferences.saveLeaveMessageWhenUnanswered(!fresh.leaveMessage, in: defaults)
+        defaults.set(true, forKey: "porch.cell2jack.enabled")
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+
+        CallSlots.forget(in: defaults, photoStore: photoStore); CallPreferences.forget(in: defaults)
+        XCTAssertFalse(CallSlots.isSaved(in: defaults))
+        XCTAssertNil(try CallSlots.load(from: defaults, photoStore: photoStore).contact(for: CallSlots.star))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty, "Its photos go too, however new")
+        XCTAssertEqual(CallPreferences.fallbackSeconds(in: defaults), fresh.fallback)
+        XCTAssertEqual(CallPreferences.leaveMessageWhenUnanswered(in: defaults), fresh.leaveMessage)
+        XCTAssertTrue(defaults.bool(forKey: "porch.cell2jack.enabled"), "Not a keypad or call setting")
+    }
+
     func testOldContactsRemainReadableAndAppearanceValidationIsBounded() throws {
         let legacy = Data(#"{"name":"David","address":"david@example.com"}"#.utf8)
         let contact = try JSONDecoder().decode(CallContact.self, from: legacy)

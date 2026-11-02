@@ -851,6 +851,12 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
         items.append(Item(id: id, file: name, to: memberID, mode: recording.mode, contentType: recording.contentType, duration: recording.duration, createdAt: Date()))
         save(); send()
     }
+    /// Drops every message still waiting to be sent, when this iPad stops being their bedside: they're for a household
+    /// it's no longer in. An upload already under way finds its message gone.
+    func discardAll() {
+        items = []; uploaders = [:]
+        try? FileManager.default.removeItem(at: folder)
+    }
     private func file(for item: Item) -> URL { folder.appendingPathComponent(item.file) }
     private func save() { try? JSONEncoder().encode(items).write(to: manifest, options: .atomic) }
 
