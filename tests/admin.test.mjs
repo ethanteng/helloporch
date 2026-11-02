@@ -352,7 +352,7 @@ test('bedsides set up by the operator script are listed too', async () => {
   assert.deepEqual(await listInvitations(session, f.store, f.now()), []);
 });
 
-test("Countries switches Twilio's Geo Permissions, never for the US and Canada, and logs each change", async () => {
+test("Countries switches Twilio's Geo Permissions, never turns the US and Canada off, and logs each change", async () => {
   const f = await fixture();
   const { session } = await f.session();
   const twilio = fakeCountries();
@@ -361,12 +361,17 @@ test("Countries switches Twilio's Geo Permissions, never for the US and Canada, 
   await setCountry(session, f.store, f.now(), twilio.permissions, 'HK', true);
   await setCountry(session, f.store, f.now(), twilio.permissions, 'HK', true);
   await setCountry(session, f.store, f.now(), twilio.permissions, 'GB', false);
+  await setCountry(session, f.store, f.now(), twilio.permissions, 'US', true);
   assert.deepEqual(twilio.calls, [['HK', true], ['GB', false]], 'a country already on is left alone');
   for (const iso of ['US', 'XX', undefined]) await refused(() => setCountry(session, f.store, f.now(), twilio.permissions, iso, iso !== 'US'), 400);
+  const restored = fakeCountries(['GB']);
+  await setCountry(session, f.store, f.now(), restored.permissions, 'US', true);
+  assert.deepEqual(restored.calls, [['US', true]], 'the US and Canada can be turned back on');
+  await refused(() => setCountry(session, f.store, f.now(), restored.permissions, 'US', false), 400);
   await refused(() => listCountries(session, undefined), 503);
   await refused(() => setCountry(session, f.store, f.now(), { ...twilio.permissions, async list() { throw new Error('down'); } }, 'JM', true), 502);
   await refused(() => setCountry(session, f.store, f.now(), { ...twilio.permissions, async set() { throw new Error('refused'); } }, 'JM', true), 502);
   assert.equal(twilio.calls.length, 2);
   const log = await readActivity(session, f.store);
-  assert.deepEqual(log.slice(0, 2).map(e => [e.action, e.detail]), [['Stopped calls to a country', 'United Kingdom'], ['Allowed calls to a country', 'Hong Kong']]);
+  assert.deepEqual(log.slice(0, 3).map(e => [e.action, e.detail]), [['Allowed calls to a country', 'United States/Canada'], ['Stopped calls to a country', 'United Kingdom'], ['Allowed calls to a country', 'Hong Kong']]);
 });

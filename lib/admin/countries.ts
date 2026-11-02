@@ -17,8 +17,10 @@ export async function listCountries(session: AdminSession, permissions: DialingP
 export async function setCountry(session: AdminSession, store: FamilyStore, now: number, permissions: DialingPermissions | undefined, iso: unknown, enabled: boolean) {
   const country = (await listCountries(session, permissions)).find(c => c.iso === iso);
   if (!country) throw new AdminError("Choose a country.");
-  if (country.iso === homeCountry) throw new AdminError("Calls to the US and Canada always stay on.");
+  // Already in this state: nothing to send, including a repeat Allow for the US and Canada.
   if (country.enabled === enabled) return;
+  // Porch numbers and three-way calls need them. Turning them off is refused; turning them back on is allowed.
+  if (country.iso === homeCountry && !enabled) throw new AdminError("Calls to the US and Canada always stay on.");
   try { await permissions!.set(country.iso, enabled); } catch { throw new AdminError("Twilio didn't make the change. Try again in a minute.", 502); }
   await logActivity(store, now, enabled ? "Allowed calls to a country" : "Stopped calls to a country", country.name);
 }
