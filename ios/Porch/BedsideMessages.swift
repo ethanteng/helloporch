@@ -77,6 +77,7 @@ extension Notification.Name {
         let textQueue = allTexts.filter { !$0.held && !readTexts.contains($0.id) }.sorted { $0.sentAt < $1.sentAt }
         let keepTexts = Set(textQueue.map { textFile(for: $0.id).lastPathComponent })
         for file in (try? FileManager.default.contentsOfDirectory(at: textFolder, includingPropertiesForKeys: nil)) ?? [] where !keepTexts.contains(file.lastPathComponent) {
+            if let gone = savedText(file.deletingPathExtension().lastPathComponent) { Self.forgetReading(gone) }
             try? FileManager.default.removeItem(at: file)
         }
         // Each is prepared in the bedside language. One kept from before a language change is fetched again.
@@ -111,6 +112,8 @@ extension Notification.Name {
                 guard let received = try await FamilyService(credential).send("textMessage", ["textID": text.id], timeout: 40).text, received.id == text.id
                 else { throw FamilyServiceError(message: "Missing text.", status: 0) }
                 guard let self else { return }
+                // Fetched again in a new language: the old wording's reading goes.
+                if let earlier = self.savedText(text.id), earlier.text != received.text { Self.forgetReading(earlier) }
                 try FileManager.default.createDirectory(at: self.textFolder, withIntermediateDirectories: true)
                 try JSONEncoder().encode(received).write(to: self.textFile(for: text.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 self.fetchingTexts.remove(text.id)
@@ -176,6 +179,9 @@ extension Notification.Name {
         return (from.hasPrefix("+") ? PhoneNumberNormalization.display(from) : from, nil)
     }
 
+    private static func forgetReading(_ text: ReceivedText) {
+        if !text.text.isEmpty, let language = BedsideLanguage(rawValue: text.language) { PorchNaturalVoice.forget(text.text, language: language) }
+    }
     /// Read to the end: the text leaves the queue for good and its words are deleted.
     func markRead(_ text: ReceivedText) {
         readTexts.insert(text.id)

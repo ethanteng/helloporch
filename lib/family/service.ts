@@ -310,7 +310,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const raw = await store.get(`house:${auth.householdID}`);
       requireValue(raw, "This household was not found.", 404);
       const house: Household = JSON.parse(raw);
-      const result = await handleTextAction(String(action), { store, now, house, me: memberFor(house, auth), input, translate: dependencies.translate });
+      const result = await handleTextAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, translate: dependencies.translate });
       if (!caregiverAction) return callJSON(result);
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });

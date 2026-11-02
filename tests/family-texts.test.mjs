@@ -8,9 +8,14 @@ import { claudeTranslate, translationModel } from '../lib/family/translate.ts';
 
 class MemoryStore {
   values = new Map(); ttl = new Map();
+  /** Keys whose next write fails, as if storage couldn't be reached. */
+  failing = new Set();
   async get(key) { return this.values.get(key) ?? null; }
   async create(key, value, seconds) { if (this.values.has(key)) return false; this.values.set(key,value); if (seconds) this.ttl.set(key, seconds); return true; }
-  async compareAndSet(key, before, after, seconds) { if (this.values.get(key) !== before) return false; this.values.set(key,after); if (seconds) this.ttl.set(key, seconds); return true; }
+  async compareAndSet(key, before, after, seconds) {
+    if (this.failing.delete(key)) throw new Error('Storage unavailable');
+    if (this.values.get(key) !== before) return false; this.values.set(key,after); if (seconds) this.ttl.set(key, seconds); return true;
+  }
 }
 class FakeMedia {
   blobs = new Map();
@@ -66,7 +71,7 @@ async function fixture({ translate } = {}) {
   const queue = async () => (await json('poll',{available:true},bedside.credential)).state.texts;
   const fetch = id => send('textMessage', { textID: id }, bedside.credential);
   const house = async () => JSON.parse(await store.get(`house:${bedside.state.householdID}`));
-  return { store, translations, spoken, send, json, bedside, ethan, sam, twilio, text, queue, fetch, house, advance: s => now += s };
+  return { store, media, translations, spoken, send, json, bedside, ethan, sam, twilio, text, queue, fetch, house, advance: s => now += s };
 }
 
 test('a text from a number on the keypad goes straight to the bedside, translated once into its language', async () => {
@@ -235,6 +240,54 @@ test('a text\'s words can be read in a natural voice up to their own limit', asy
   assert.deepEqual(f.spoken, [shown.text]);
   const held = await f.text(long, stranger);
   assert.equal((await speak(long, held.id)).status, 400, 'not before a caregiver releases it');
+});
+
+test('a reading of a text\'s words is kept apart, and deleted with the text or by the time it would expire', async () => {
+  process.env.ELEVENLABS_API_KEY = 'test-speech-key';
+  const f = await fixture();
+  const household = f.bedside.state.householdID;
+  const clips = () => [...f.media.blobs.keys()].filter(p => p.startsWith(`speech/${household}/texts/`));
+  const speak = (text, textID) => f.json('speech', { language: 'en', text, textID }, f.bedside.credential);
+  const read = await f.text('See you Sunday');
+  await f.fetch(read.id);
+  await speak('See you Sunday', read.id);
+  assert.equal(clips().length, 1);
+  assert.ok(clips()[0].startsWith(`speech/${household}/texts/${read.id}/`));
+  // Announcements stay where they were; only a text's words are kept with it.
+  await f.json('speech', { language: 'en', text: 'You have 1 new message.' }, f.bedside.credential);
+  assert.equal([...f.media.blobs.keys()].filter(p => !p.includes('/texts/')).length, 1);
+  await f.json('textRead', { textID: read.id }, f.bedside.credential);
+  assert.deepEqual(clips(), [], 'read: the reading is deleted with the words');
+
+  // One never read is deleted by the bedside's purge pass once the text's record would expire.
+  const unread = await f.text('Call me back');
+  await f.fetch(unread.id);
+  await speak('Call me back', unread.id);
+  assert.equal(clips().length, 1);
+  f.advance(textLimits.keepSeconds);
+  await f.queue();
+  assert.deepEqual(clips(), []);
+});
+
+test('a read or removed text whose words couldn\'t be deleted stays queued until a retry finishes', async () => {
+  const f = await fixture();
+  const household = f.bedside.state.householdID;
+  const { id, messageSid } = await f.text('Pick up milk');
+  await f.fetch(id);
+  f.store.failing.add(`text:${household}:${id}`);
+  assert.notEqual((await f.send('textRead', { textID: id }, f.bedside.credential)).status, 200);
+  assert.deepEqual((await f.queue()).map(t => t.id), [id], 'still queued, so the report is tried again');
+  await f.json('textRead', { textID: id }, f.bedside.credential);
+  assert.deepEqual(await f.queue(), []);
+  assert.deepEqual(JSON.parse(await f.store.get(`text:${household}:${id}`)), { id, removed: true });
+  await f.twilio({ MessageSid: messageSid, From: daughter, Body: 'Pick up milk' });
+  assert.deepEqual(await f.queue(), [], 'a repeated webhook can\'t queue it again');
+
+  const spam = await f.text('Claim your prize', stranger);
+  f.store.failing.add(`text:${household}:${spam.id}`);
+  assert.notEqual((await f.send('removeText', { textID: spam.id }, f.sam.credential, '123456')).status, 200);
+  assert.equal((await f.json('removeText', { textID: spam.id }, f.sam.credential, '123456')).removed, true);
+  assert.ok(!(await f.store.get(`text:${household}:${spam.id}`)).includes('prize'));
 });
 
 test('Claude is asked for structured output with a server-side fallback, and a text in the bedside language comes back as sent', async () => {

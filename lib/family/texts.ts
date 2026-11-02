@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { bedsideLanguage, FamilyError, mutate, requireValue, type BedsideLanguage, type Household, type Member, type TextEntry } from "./household.ts";
+import { blobMediaStore, type MediaStore } from "./media.ts";
+import { discardMedia, purgeLater } from "./messages.ts";
 import { knownCaller } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { claudeTranslate, translationConfigured, type Translate, type Translation } from "./translate.ts";
@@ -13,12 +15,13 @@ import { household, settings, signed } from "./voicemail.ts";
 export const textLimits = { characters: 1600, waiting: 20, held: 10, perSender: 10, heldPerSender: 3, pictures: 10,
   unreadSeconds: 7 * 86400, keepSeconds: 8 * 86400, spokenCharacters: 600, translatedCharacters: 4000, retrySeconds: 600 };
 export const textActions = new Set(["textMessage", "textRead", "releaseText", "removeText", "caregiverTexts"]);
-export type TextDependencies = { store?: FamilyStore; now?: () => number };
-export type TextContext = { store: FamilyStore; now: number; house: Household; me: Member; input: Record<string, unknown>; translate?: Translate };
+export type TextDependencies = { store?: FamilyStore; media?: MediaStore; now?: () => number };
+export type TextContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; me: Member; input: Record<string, unknown>; translate?: Translate };
 /** The words of one text, kept apart from the household until the text is read or removed. `translations`: what the
- * bedside showed and read, per bedside language, so a text is translated once. A removed text keeps only its ID for a
- * day, so Twilio repeating the webhook can't bring it back. */
-type TextRecord = { id: string; from: string; body: string; pictures: number; receivedAt: number; translations?: Partial<Record<BedsideLanguage, Translation>> };
+ * bedside showed and read, per bedside language, so a text is translated once. `clips`: natural-voice readings of the
+ * words in the media store, deleted with the text. A removed text keeps only its ID for a day, so Twilio repeating the
+ * webhook can't bring it back. */
+type TextRecord = { id: string; from: string; body: string; pictures: number; receivedAt: number; translations?: Partial<Record<BedsideLanguage, Translation>>; clips?: string[] };
 type Removed = { id: string; removed: true };
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -53,27 +56,42 @@ async function saved(store: FamilyStore, householdID: string, id: string): Promi
   const record: TextRecord | Removed | undefined = raw ? JSON.parse(raw) : undefined;
   return record && !("removed" in record) ? record : undefined;
 }
-/** Changes a saved text's record. It keeps its original expiry, and a removed one stays removed. */
+/** Changes a saved text's record. It keeps its original expiry, and a removed one stays removed. False when there's no record to change. */
 async function updateRecord(store: FamilyStore, householdID: string, id: string, now: number, change: (record: TextRecord) => void) {
   const key = textKey(householdID, id);
   for (let attempt = 0; attempt < 12; attempt++) {
     const raw = await store.get(key);
     const record: TextRecord | Removed | undefined = raw ? JSON.parse(raw) : undefined;
-    if (!raw || !record || "removed" in record) return;
+    if (!raw || !record || "removed" in record) return false;
     change(record);
-    if (await store.compareAndSet(key, raw, JSON.stringify(record), Math.max(60, record.receivedAt + textLimits.keepSeconds - now))) return;
+    const next = JSON.stringify(record);
+    if (next === raw || await store.compareAndSet(key, raw, next, Math.max(60, record.receivedAt + textLimits.keepSeconds - now))) return true;
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
 }
-/** The text leaves the bedside's queue and its words are deleted. */
-async function endText(store: FamilyStore, householdID: string, id: string) {
-  await mutate(store, householdID, house => { house.texts = (house.texts ?? []).filter(entry => entry.id !== id); });
+/** The text's words and their readings are deleted, then it leaves the bedside's queue. In that order, a retry after
+ * a failure finds the text still queued and finishes the job, and a repeated webhook can't queue it again. */
+async function endText(store: FamilyStore, media: () => MediaStore, householdID: string, id: string, now: number) {
+  const record = await saved(store, householdID, id);
+  if (record?.clips?.length) await discardMedia(store, media, householdID, record.clips, now);
   const key = textKey(householdID, id), removed = JSON.stringify({ id, removed: true });
-  for (let attempt = 0; attempt < 12; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     const raw = await store.get(key);
-    if (raw === null || raw === removed) return;
-    if (await store.compareAndSet(key, raw, removed, 86400)) return;
+    if (raw === null || raw === removed || await store.compareAndSet(key, raw, removed, 86400)) break;
+    if (attempt === 11) throw new FamilyError("Porch is busy. Please try again.", 409);
   }
+  await mutate(store, householdID, house => { house.texts = (house.texts ?? []).filter(entry => entry.id !== id); });
+}
+/** Notes a natural-voice reading of a text's words before it's made, so it's deleted with the text. The bedside's purge
+ * pass deletes it by the time the text's record expires in any case. False when the text is gone. */
+export async function keepTextClip(store: FamilyStore, householdID: string, id: string, pathname: string, now: number) {
+  let receivedAt: number | undefined, added = false;
+  const kept = await updateRecord(store, householdID, id, now, record => {
+    receivedAt = record.receivedAt;
+    if (!(record.clips ??= []).includes(pathname)) { record.clips.push(pathname); added = true; }
+  });
+  if (kept && added && receivedAt !== undefined) await purgeLater(store, householdID, [pathname], receivedAt + textLimits.keepSeconds);
+  return kept;
 }
 
 /** Whether a text from this number can join the queue now. Unknown numbers can't fill it. */
@@ -85,7 +103,7 @@ function textsOpen(house: Household, from: string, holding: boolean, now: number
 }
 
 /** Saves a text and queues it for the bedside, or holds it for a caregiver. Safe to repeat for the same message. */
-export async function receiveText(store: FamilyStore, householdID: string, text: { messageSID: string; from: string; body: string; pictures: number }, now: number) {
+export async function receiveText(store: FamilyStore, media: () => MediaStore, householdID: string, text: { messageSID: string; from: string; body: string; pictures: number }, now: number) {
   const id = textMessageID(text.messageSID);
   const record: TextRecord = { id, from: text.from, body: text.body, pictures: text.pictures, receivedAt: now };
   // The words first, so the bedside never sees a text it can't fetch.
@@ -98,7 +116,7 @@ export async function receiveText(store: FamilyStore, householdID: string, text:
     house.texts.push({ id, from: text.from, sentAt: now, ...(text.pictures ? { pictures: text.pictures } : {}), ...(holding ? { held: true } : {}) });
     return true;
   });
-  if (!queued) await endText(store, householdID, id);
+  if (!queued) await endText(store, media, householdID, id, now);
   return queued;
 }
 
@@ -150,7 +168,7 @@ function textID(input: Record<string, unknown>) {
   return input.textID;
 }
 
-export async function handleTextAction(action: string, { store, now, house, me, input, translate }: TextContext): Promise<object> {
+export async function handleTextAction(action: string, { store, media, now, house, me, input, translate }: TextContext): Promise<object> {
   if (action === "caregiverTexts") {
     // Caregiver review, PIN-checked before this point: each text's words, with what the bedside showed if it was translated.
     const entries = (house.texts ?? []).filter(entry => live(entry, now));
@@ -172,15 +190,16 @@ export async function handleTextAction(action: string, { store, now, house, me, 
   }
   if (action === "removeText") {
     requireValue(entry, "This text was already read or removed.", 404);
-    await endText(store, house.id, id);
+    await endText(store, media, house.id, id, now);
     return { removed: true };
   }
   requireValue(me.role === "bedside", "Only the bedside device shows texts.", 403);
   if (action === "textRead") {
-    // Already read or removed: nothing left to do. A held text stays until a caregiver releases or removes it.
-    // Its id is on the bedside snapshot, and reading it deletes the words the caregiver reviews.
+    // A held text stays until a caregiver releases or removes it. Its id is on the bedside snapshot, and reading it
+    // deletes the words the caregiver reviews.
     if (entry && held(house, entry)) throw new FamilyError("A caregiver needs to review this text first.", 403);
-    if (entry) await endText(store, house.id, id);
+    // Reporting again is harmless, and finishes deleting whatever an earlier report left.
+    await endText(store, media, house.id, id, now);
     return { ok: true };
   }
   // textMessage: the bedside fetches a text to show and read.
@@ -209,13 +228,15 @@ export async function handleTwilioText(request: Request, dependencies: TextDepen
   try {
     const store = dependencies.store ?? familyStore();
     const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
+    let mediaStore = dependencies.media;
+    const media = () => mediaStore ??= blobMediaStore();
     const messageSID = params.get("MessageSid") ?? "", from = params.get("From") ?? "";
     const text = [...(params.get("Body") ?? "").trim()].slice(0, textLimits.characters).join("");
     const pictures = Math.min(textLimits.pictures, Math.max(0, Math.floor(Number(params.get("NumMedia")) || 0)));
     // An empty reply, so nothing is texted back. Twilio already answered STOP, START and HELP, which aren't for Mom.
     if (!messageSIDPattern.test(messageSID) || !senderPattern.test(from) || params.get("OptOutType") || keywords.has(text.toUpperCase()) || (!text && !pictures)) return reply();
     const house = await household(store, params.get("To"));
-    if (house) await receiveText(store, house.id, { messageSID, from, body: text, pictures }, now);
+    if (house) await receiveText(store, media, house.id, { messageSID, from, body: text, pictures }, now);
     return reply();
   } catch {
     // No numbers or words in logs; Twilio's console shows the failed request.

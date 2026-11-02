@@ -95,6 +95,13 @@ import PorchCore
     }
     /// A clip that wouldn't play is fetched again next time.
     static func discard(_ url: URL) { try? FileManager.default.removeItem(at: url) }
+    /// A text's words are private: once the text is read, removed or expired, its readings in any of the language's
+    /// voices leave this iPad too. The server deletes its own copy with the text.
+    static func forget(_ text: String, language: BedsideLanguage) {
+        for voice in FamilyCoordinator.shared.state?.speech?.choices(for: language)?.voices ?? [] {
+            try? FileManager.default.removeItem(at: file(text, language: language, voiceID: voice.id))
+        }
+    }
     private static var loading: [URL: Task<URL?, Never>] = [:]
     /// The clip for a sentence, asking the server to read it if this iPad doesn't have it yet. nil when it isn't available.
     /// `textID` names the text whose words these are, which the server reads although they're longer than an announcement.
