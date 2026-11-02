@@ -194,9 +194,23 @@ final class SetupPINViewController: BedsideSetupStep {
             showPorchError(FamilyServiceError(message: "Enter the same six digits in both PIN fields.", status: 400), on: self); return
         }
         proceed.isEnabled = false; view.endEditing(true)
+        // Going back cancels this task. Once a replacement has stopped the old Porch ringing, that cancel has to put
+        // its calls back, so its back button is off until this attempt finishes.
+        let replacing = setup.replacing
+        let allowSwipeBack = navigationController?.interactivePopGestureRecognizer?.isEnabled ?? true
+        if replacing {
+            navigationItem.hidesBackButton = true
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = false
+        }
         task = Task { [weak self] in
             guard let self else { return }
-            defer { self.task = nil; self.proceed.isEnabled = true }
+            defer {
+                self.task = nil; self.proceed.isEnabled = true
+                if replacing {
+                    self.navigationItem.hidesBackButton = false
+                    self.navigationController?.interactivePopGestureRecognizer?.isEnabled = allowSwipeBack
+                }
+            }
             do {
                 let invitation = try PorchDevice.bedsideActivation.map { try BedsideInvitation(url: $0, defaultOrigin: PorchDevice.defaultOrigin) }
                 let origin = invitation?.origin ?? URL(string: NativeCallSettings.savedURL) ?? PorchDevice.defaultOrigin
@@ -209,23 +223,34 @@ final class SetupPINViewController: BedsideSetupStep {
                 let operatorCode = NativeCallSettings.caregiverCode.count < 16 ? "" : NativeCallSettings.caregiverCode
                 // Replacing: the old household stops ringing this iPad first, so its calls can't reach the new one.
                 let previous = self.setup.replacing ? PorchDevice.credential(for: .bedside) : nil
-                if let previous { try await PorchDevice.leaveBedside(previous) }
-                let response = try await FamilyService(origin: origin).send("enrollBedside", registration, pin: operatorCode.isEmpty ? nil : operatorCode)
-                guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
-                // Store the new pairing and its PIN before forgetting the old keypad. A check-in reports whatever
-                // keypad is on the iPad, and the PIN write needs the device unlocked, so a lock during enrollment
-                // can store one and not the other. The old keypad stays until both are stored.
-                let enrolled = FamilyCredential(origin: origin, credential: token, role: .bedside)
-                try PorchDevice.save(enrolled)
-                do { try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code") }
-                catch {
-                    if let previous { try? PorchDevice.save(previous) }
+                var stoppedRinging = false
+                do {
+                    if let previous { stoppedRinging = true; try await PorchDevice.leaveBedside(previous) }
+                    let response = try await FamilyService(origin: origin).send("enrollBedside", registration, pin: operatorCode.isEmpty ? nil : operatorCode)
+                    guard let token = response.credential else { throw FamilyInvitation.InvitationError.invalid }
+                    // Store the new pairing and its PIN before forgetting the old keypad. A check-in reports whatever
+                    // keypad is on the iPad, and the PIN write needs the device unlocked, so a lock during enrollment
+                    // can store one and not the other. The old keypad stays until both are stored.
+                    let enrolled = FamilyCredential(origin: origin, credential: token, role: .bedside)
+                    try PorchDevice.save(enrolled)
+                    do { try NativeCallSettings.writeSecret(Data(value.utf8), account: "porch.contact-setup-code") }
+                    catch {
+                        if let previous { try? PorchDevice.save(previous) }
+                        throw error
+                    }
+                    if previous != nil { PorchDevice.forgetBedsideHousehold(); self.setup.replacing = false }
+                    FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)
+                    try PorchDevice.saveActivation(nil)
+                    self.navigationController?.setViewControllers([SetupNumberViewController(self.setup)], animated: true)
+                } catch {
+                    // The attempt didn't finish, and this iPad is still the old bedside. Its calls were cleared
+                    // first; register them again before Continue can try once more.
+                    if stoppedRinging, let previous, PorchDevice.credential(for: .bedside)?.credential == previous.credential {
+                        SystemIncomingCalls.shared.registerDevice()
+                        if !Task.isCancelled { await SystemIncomingCalls.shared.waitForRegistration() }
+                    }
                     throw error
                 }
-                if previous != nil { PorchDevice.forgetBedsideHousehold(); self.setup.replacing = false }
-                FamilyCoordinator.shared.start(); FamilyCoordinator.shared.update(response)
-                try PorchDevice.saveActivation(nil)
-                self.navigationController?.setViewControllers([SetupNumberViewController(self.setup)], animated: true)
             } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
         }
     }
