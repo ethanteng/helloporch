@@ -1759,7 +1759,7 @@ final class BedsideSetupTests: XCTestCase {
         func start() { starts += 1 }
         func stop() { stops += 1 }
     }
-    @MainActor private func phoneStep(model: String = "iPad14,8") throws -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad, connections: () -> [Connection], done: () -> Int) {
+    @MainActor private func phoneStep() throws -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad, connections: () -> [Connection], done: () -> Int) {
         let name = "setup-phone-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         addTeardownBlock { defaults.removePersistentDomain(forName: name) }
@@ -1769,7 +1769,7 @@ final class BedsideSetupTests: XCTestCase {
         }
         keypad.activate()
         let setup = BedsideSetup(); setup.name = "Mom"
-        let screen = SetupPhoneViewController(setup, keypad: keypad, model: model)
+        let screen = SetupPhoneViewController(setup, keypad: keypad)
         screen.onContinue = { finished += 1 }
         screen.loadViewIfNeeded(); screen.viewDidAppear(false)
         return (screen, keypad, { connections }, { finished })
@@ -1780,9 +1780,7 @@ final class BedsideSetupTests: XCTestCase {
 
     @MainActor func testSetupGoesOnToEachScreenThatHasSomethingToDo() {
         let setup = BedsideSetup()
-        // Builds without the Cell2Jack go straight from the microphone and camera to the caregiver's phone.
-        let phone = setup.screen(from: .phone)
-        XCTAssertTrue(SetupPhoneViewController.offered ? phone is SetupPhoneViewController : phone is SetupYourPhoneViewController)
+        XCTAssertTrue(setup.screen(from: .phone) is SetupCallingViewController, "Every build asks how they'll call")
         XCTAssertTrue(setup.screen(from: .yourPhone) is SetupYourPhoneViewController, "No caregiver's phone has joined")
         XCTAssertTrue(setup.screen(from: .done) is SetupDoneViewController)
     }
@@ -1812,11 +1810,12 @@ final class BedsideSetupTests: XCTestCase {
 
     @MainActor func testTheNewScreensUseTheWholeWidth() throws {
         let setup = BedsideSetup(); setup.name = "Mom"
-        for screen in [try phoneStep().screen, SetupYourPhoneViewController(setup)] as [UIViewController] {
+        let titles: Set<String> = ["How will Mom call?", "Connect the phone", "Connect the USB keypad", "Add your phone"]
+        for screen in [SetupCallingViewController(setup), try phoneStep().screen, SetupUSBKeypadViewController(setup), SetupYourPhoneViewController(setup)] as [UIViewController] {
             let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 834, height: 1194))
             window.rootViewController = UINavigationController(rootViewController: screen); window.makeKeyAndVisible()
             screen.view.layoutIfNeeded()
-            let card = try XCTUnwrap(labels(in: screen.view).first { $0.text == "Connect the phone" || $0.text == "Add your phone" }?.superview?.superview)
+            let card = try XCTUnwrap(labels(in: screen.view).first { titles.contains($0.text ?? "") }?.superview?.superview)
             // The form is the screen's width less its margins, up to 760 points: on an iPhone as on an iPad.
             XCTAssertEqual(card.bounds.width, min(760, screen.view.bounds.width - 48), accuracy: 1, "\(type(of: screen)) squeezed its card")
             window.isHidden = true
@@ -1899,14 +1898,96 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(step.connections()[0].stops, 0)
     }
 
-    @MainActor func testAnIPadWithoutAnMChipCallsFromTheTouchscreen() throws {
-        let step = try phoneStep(model: "iPad15,7")
-        XCTAssertTrue(step.connections().isEmpty, "It never tries the Cell2Jack")
-        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text?.hasPrefix("A desk phone works with Porch only on an iPad with an M chip.") == true })
-        let proceed = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" })
-        XCTAssertFalse(proceed.isHidden)
+    @MainActor func testSetupAsksHowTheyCallWithTheTouchscreenToFallBackOn() throws {
+        let setup = BedsideSetup(); setup.name = "Mom"
+        let choice = SetupCallingViewController(setup)
+        let navigation = UINavigationController(rootViewController: choice); choice.loadViewIfNeeded()
+        XCTAssertTrue(labels(in: choice.view).contains { $0.text == "How will Mom call?" })
+        // The corded phone says what it needs rather than guessing from the iPad's model. Builds without the Cell2Jack leave it out.
+        let corded = buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.cordedPhone" }
+        XCTAssertEqual(corded != nil, SetupPhoneViewController.offered)
+        if let corded {
+            XCTAssertEqual(corded.configuration?.subtitle?.contains("works only with an iPad with an M chip"), true)
+            corded.sendActions(for: .touchUpInside)
+            XCTAssertTrue(navigation.viewControllers.last is SetupPhoneViewController)
+            navigation.popViewController(animated: false)
+        }
+        try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.usbKeypad" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue(navigation.viewControllers.last is SetupUSBKeypadViewController)
+
+        let again = SetupCallingViewController(setup)
+        let shown = UINavigationController(rootViewController: again)
+        let window = try showing(shown)
+        defer { window.isHidden = true }
+        try XCTUnwrap(buttons(in: again.view).first { $0.accessibilityIdentifier == "setup.touchscreen" }).sendActions(for: .touchUpInside)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+        XCTAssertEqual(shown.viewControllers.count, 1)
+        XCTAssertFalse(shown.viewControllers[0] is SetupCallingViewController, "The touchscreen needs nothing, so setup goes on")
+    }
+
+    /// In a window on the app's scene, so the screen appears and disappears as it does in the app.
+    @MainActor private func showing(_ root: UIViewController) throws -> UIWindow {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = root; window.makeKeyAndVisible()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        return window
+    }
+
+    @MainActor func testGoingBackFromThePhoneToChooseAgainTurnsTheKeypadBackOff() throws {
+        let step = try phoneStep()
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        let window = try showing(navigation)
+        defer { window.isHidden = true }
+        navigation.pushViewController(step.screen, animated: false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        try XCTUnwrap(step.connections().last).update(.ready)
+        XCTAssertTrue(step.keypad.enabled)
+        navigation.popViewController(animated: false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertFalse(step.keypad.enabled, "Going back to choose another way is like Do this later")
+        XCTAssertFalse(step.keypad.trying)
+    }
+
+    @MainActor func testTheUSBKeypadScreenWaitsForAKeyThenSaysItsReady() throws {
+        let setup = BedsideSetup(); setup.name = "Mom"
+        var connected = false, finished = 0
+        let screen = SetupUSBKeypadViewController(setup) { connected }
+        screen.onContinue = { finished += 1 }
+        screen.loadViewIfNeeded()
+        let status = { self.labels(in: screen.view).first { $0.accessibilityIdentifier == "setup.keypadStatus" }?.text }
+        let proceed = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.keypadDone" })
+        let later = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.keypadLater" })
+        XCTAssertEqual(status(), "Waiting for the keypad…")
+        XCTAssertTrue(proceed.isHidden); XCTAssertFalse(later.isHidden)
+        connected = true
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertEqual(status(), "The keypad is connected. Press a number key.")
+        screen.receiveKey(7)
+        XCTAssertEqual(status(), "Porch heard 7. The keypad is ready.")
+        XCTAssertFalse(proceed.isHidden); XCTAssertTrue(later.isHidden)
+        screen.receiveKey(CallSlots.pound)
+        XCTAssertEqual(status(), "Porch heard #. The keypad is ready.", "Each key shows, to try them all")
+        connected = false
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertEqual(status(), "Porch heard #. The keypad is ready.", "Unplugging after a key doesn't undo the check")
         proceed.sendActions(for: .touchUpInside)
-        XCTAssertEqual(step.done(), 1)
+        XCTAssertEqual(finished, 1)
+
+        let skipped = SetupUSBKeypadViewController(setup) { false }
+        var skips = 0
+        skipped.onContinue = { skips += 1 }; skipped.loadViewIfNeeded()
+        try XCTUnwrap(buttons(in: skipped.view).first { $0.accessibilityIdentifier == "setup.keypadLater" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(skips, 1)
+    }
+
+    @MainActor func testThisIPadOpensTheUSBKeypadCheck() throws {
+        let device = DeviceSettingsViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 820, height: 1180))
+        window.rootViewController = device; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectKeypad" }).sendActions(for: .touchUpInside)
+        XCTAssertTrue((device.presentedViewController as? UINavigationController)?.viewControllers.first is SetupUSBKeypadViewController)
     }
 
     @MainActor func testAddYourPhoneAsksForTheirNameAndItsCodeReadsAsTheInvitation() throws {
