@@ -17,6 +17,8 @@ export type VoicemailDependencies = { store?: FamilyStore; media?: MediaStore; n
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const callSIDPattern = /^CA[0-9a-f]{32}$/;
+/** The longest call Twilio allows, 24 hours. */
+export const twilioCallLimitSeconds = 86400;
 const recordingSIDPattern = /^RE[0-9a-f]{32}$/;
 const sessionKey = (callSID: string) => `voicemail-call:${callSID}`;
 const verifiedKey = (callSID: string) => `voicemail-verified:${callSID}`;
@@ -180,7 +182,9 @@ export async function handleTwilioVoice(request: Request, step: VoicemailStep, d
       // Remembered for voicemail: only a verified caller on the keypad skips caregiver review.
       if (verification === verifiedCaller && callSIDPattern.test(callSID)) await store.create(verifiedKey(callSID), "1", 3600);
       const headers = verification && /^[A-Za-z0-9-]{1,64}$/.test(verification) ? `?${forwardedVerificationHeader}=${verification}` : "";
-      return twiml(`<Dial answerOnBridge="true" timeout="${Math.max(ringSeconds(house), ringSeconds(house, "dropIn")) + 10}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
+      // Porch has no call limit. Twilio's <Dial> stops at 4 hours unless asked for more; 24 hours is the most it allows,
+      // and only with the account's 24-Hour Maximum Call Duration setting on.
+      return twiml(`<Dial answerOnBridge="true" timeout="${Math.max(ringSeconds(house), ringSeconds(house, "dropIn")) + 10}" timeLimit="${twilioCallLimitSeconds}" action="${escape(`${origin}/api/calls/inbound/voice/dialed`)}" method="POST">` +
         `<Sip username="${escape(configured.sip.username)}" password="${escape(configured.sip.password)}">${escape(`sip:${calledNumber}@${configured.sipHost};transport=tcp${headers}`)}</Sip></Dial>`);
     }
     if (step === "dialed") {
