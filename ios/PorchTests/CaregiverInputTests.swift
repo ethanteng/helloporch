@@ -2050,20 +2050,106 @@ final class ScreenAwakeTests: XCTestCase {
     /// A family phone keeps its screen on only while a call screen is open. The bedside clock always does.
     @MainActor func testCallScreensKeepAFamilyPhoneAwake() {
         let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
-        defer { defaults.set(saved, forKey: "porch.experience"); ScreenAwake.update(active: false) }
-        defaults.set("family", forKey: "porch.experience")
         let call = UIViewController()
+        defer {
+            defaults.set(saved, forKey: "porch.experience")
+            ScreenAwake.callHidden(call)
+            ScreenAwake.enteredBackground()
+        }
+        defaults.set("family", forKey: "porch.experience")
         ScreenAwake.update(active: true)
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
         ScreenAwake.callShown(call, voice: true); ScreenAwake.update(active: true)
         XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
         ScreenAwake.update(active: false)
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "Porch isn't in front, so iOS dims and locks as usual")
-        XCTAssertFalse(UIDevice.current.isProximityMonitoringEnabled)
+        let resigned = ScreenAwake.policy(active: false, background: false, bedsideClock: false, inCall: true, voice: true, nearEar: false)
+        XCTAssertFalse(resigned.idleTimerDisabled)
+        XCTAssertTrue(resigned.proximityMonitoring, "Resigning active must not disarm the sensor; covering it is what resigns active")
+        let atEar = ScreenAwake.policy(active: false, background: false, bedsideClock: false, inCall: true, voice: true, nearEar: true)
+        XCTAssertTrue(atEar.idleTimerDisabled, "The screen is blanked by the ear, and the call is still in front")
+        XCTAssertTrue(atEar.proximityMonitoring)
+        let left = ScreenAwake.policy(active: false, background: true, bedsideClock: false, inCall: true, voice: true, nearEar: true)
+        XCTAssertFalse(left.idleTimerDisabled)
+        XCTAssertFalse(left.proximityMonitoring)
         ScreenAwake.callHidden(call); ScreenAwake.update(active: true)
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "The call screen closed")
+        XCTAssertFalse(UIDevice.current.isProximityMonitoringEnabled)
         defaults.set("bedside", forKey: "porch.experience")
         ScreenAwake.update(active: true)
         XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "The bedside clock stays on")
+    }
+
+    /// On an iPhone, a sheet over the call (add a phone, the keypad) disappears the call screen.
+    /// The call is still up, and locking would hang up a call this phone placed.
+    @MainActor func testASheetOverTheCallDoesNotLetThePhoneSleep() throws {
+        let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
+        defer { defaults.set(saved, forKey: "porch.experience"); ScreenAwake.enteredBackground() }
+        defaults.set("family", forKey: "porch.experience")
+        let call = try NativeCall(room: "awake-sheet", mode: .voice)
+        let contact = try CallContact(name: "Family", nativeCall: call, phoneNumber: "+14155550123")
+        let server = try NativeCallServer(url: "https://example.com", accessCode: "test-credential-no-network")
+        let screen = try NativeCallViewController.phoneFallback(contact, server: server)
+        XCTAssertFalse(screen.isViewLoaded)
+        screen.viewWillAppear(false)
+        XCTAssertFalse(screen.isViewLoaded, "The appearance hook must not connect a call")
+        ScreenAwake.update(active: true)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        screen.viewDidDisappear(false)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "The call screen disappeared under a sheet, and the call is still going")
+        ScreenAwake.callHidden(screen)
+        // Answered through CallKit. Same rule, and this must not load the view (that would build the call UI).
+        let system = SystemCallViewController()
+        XCTAssertFalse(system.isViewLoaded)
+        system.viewWillAppear(false)
+        XCTAssertFalse(system.isViewLoaded)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        system.viewDidDisappear(false)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "A sheet over a CallKit call is still that call")
+        ScreenAwake.callHidden(system)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    /// Dismissing the call screen does release the wake lock. Covering it does not.
+    @MainActor func testDismissingTheCallScreenLetsThePhoneSleep() async throws {
+        let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
+        let original = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow })
+        let window = UIWindow(windowScene: try XCTUnwrap(original.windowScene))
+        let root = UIViewController()
+        window.rootViewController = root
+        window.makeKeyAndVisible()
+        defer {
+            defaults.set(saved, forKey: "porch.experience")
+            ScreenAwake.enteredBackground()
+            window.isHidden = true
+            original.makeKeyAndVisible()
+        }
+        defaults.set("family", forKey: "porch.experience")
+        let call = CoverProbe()
+        call.modalPresentationStyle = .fullScreen
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in root.present(call, animated: false) { done.resume() } }
+        ScreenAwake.update(active: true)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        let cover = UIViewController()
+        cover.modalPresentationStyle = .fullScreen
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in call.present(cover, animated: false) { done.resume() } }
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "A screen over the call is still the call")
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in cover.dismiss(animated: false) { done.resume() } }
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in call.dismiss(animated: false) { done.resume() } }
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "The call screen closed")
+    }
+}
+
+/// Same appear and disappear hooks as the call screens, so a real present and dismiss can be checked
+/// without connecting a call.
+@MainActor private final class CoverProbe: UIViewController {
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        ScreenAwake.callShown(self, voice: true)
+    }
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        ScreenAwake.callEnded(self)
     }
 }

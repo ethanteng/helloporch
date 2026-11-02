@@ -306,7 +306,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         super.viewWillAppear(animated); ScreenAwake.callShown(self, voice: call.mode == .voice || isPhoneCall)
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); keypad.resetKeys(); resignFirstResponder() }
-    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callHidden(self) }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callEnded(self) }
     func performKeypadDigit(_ digit: Int) {
         guard UIApplication.shared.applicationState == .active, presentedViewController == nil,
               let action = (try? CallSlots.load())?.action(for: digit) else { return }
