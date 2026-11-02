@@ -91,7 +91,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     var myID: String? { credential?.credential.split(separator: ".").first.map { String($0) } }
     var current: FamilyAdminState? {
         if remote != nil { return remoteState }
-        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people.filter { $0.role == .family }, messagesEnabled: $0.messagesEnabled, messages: $0.messages, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations, callScreening: $0.callScreening, shareAttendance: $0.shareAttendance) }
+        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people.filter { $0.role == .family }, messagesEnabled: $0.messagesEnabled, messages: $0.messages, texts: $0.texts, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations, callScreening: $0.callScreening, shareAttendance: $0.shareAttendance) }
     }
     /// The bedside's name for headings, such as Calls to Mom.
     var lovedOne: String { current?.householdName ?? "your loved one" }
@@ -262,8 +262,9 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         case .people: return state.people.isEmpty ? nil : "\(state.people.count)"
         case .dropIn: return state.dropInEnabled ? "On" : "Off"
         case .messages:
-            let waiting = state.messages ?? [], held = waiting.filter { $0.held == true }.count
-            return held > 0 ? "\(held) need\(held == 1 ? "s" : "") OK" : !waiting.isEmpty ? "\(waiting.count) waiting" : state.messagesEnabled == false ? "Off" : nil
+            let texts = state.texts ?? [], waiting = (state.messages ?? []).count + texts.count
+            let held = (state.messages ?? []).filter { $0.held == true }.count + texts.filter(\.held).count
+            return held > 0 ? "\(held) need\(held == 1 ? "s" : "") OK" : waiting > 0 ? "\(waiting) waiting" : state.messagesEnabled == false ? "Off" : nil
         case .caregivers:
             let count = state.people.filter { $0.caregiver == true }.count
             return count == 0 ? nil : "\(count)"
@@ -738,22 +739,23 @@ final class MessageSettingsViewController: CaregiverPageViewController {
             guard let admin, let messagesOn else { return }
             Task { await admin.perform("setMessages", ["enabled": messagesOn.isOn]) }
         }, for: .valueChanged)
-        let waiting = state?.messages ?? []
-        let held = waiting.filter { $0.held == true }.count
-        let count = FamilyAdminViewController.singleLine(PorchStyle.label(waiting.isEmpty ? "None" : "\(waiting.count)", size: 18))
+        let waiting = state?.messages ?? [], texts = state?.texts ?? []
+        let total = waiting.count + texts.count
+        let held = waiting.filter { $0.held == true }.count + texts.filter(\.held).count
+        let count = FamilyAdminViewController.singleLine(PorchStyle.label(total == 0 ? "None" : "\(total)", size: 18))
         let reviewText = UIStackView(arrangedSubviews: [PorchStyle.label("Waiting messages", size: 18, color: PorchStyle.ink)])
         reviewText.axis = .vertical; reviewText.spacing = 2
-        // Phone voicemail from numbers that aren't on the keypad waits for a caregiver's OK.
+        // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver's OK.
         if held > 0 { reviewText.addArrangedSubview(PorchStyle.label("\(held) need\(held == 1 ? "s" : "") your OK", size: 15, color: PorchStyle.accent, weight: .semibold)) }
         let review = PorchListRow([reviewText, count],
-                                  label: waiting.isEmpty ? "No messages waiting" : held > 0 ? "Waiting messages, \(waiting.count), \(held) need\(held == 1 ? "s" : "") your OK" : "Waiting messages, \(waiting.count)") { [weak self, weak admin] in
+                                  label: total == 0 ? "No messages waiting" : held > 0 ? "Waiting messages, \(total), \(held) need\(held == 1 ? "s" : "") your OK" : "Waiting messages, \(total)") { [weak self, weak admin] in
             guard let self, let admin else { return }
-            let queue = MessageQueueViewController(remote: admin.remote, messages: waiting)
+            let queue = MessageQueueViewController(remote: admin.remote, messages: waiting, texts: texts)
             queue.onChange = { [weak admin] state in admin?.adopt(state) }
             self.push(queue)
         }
         review.accessibilityIdentifier = "messages.review"
-        review.isEnabled = !waiting.isEmpty
+        review.isEnabled = total > 0
         content.addArrangedSubview(group(rows: [toggleRow("Allow family messages", messagesOn), review]))
         // Starting messages when someone sits down uses this iPad's camera, so it's set on the iPad itself.
         guard admin.onBedside else { return }

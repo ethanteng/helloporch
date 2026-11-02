@@ -654,25 +654,39 @@ final class MessageThreadViewController: CaregiverFormViewController {
     }
 }
 
-/// Caregiver review of the waiting queue, on the bedside iPad or from an approved phone.
+/// Caregiver review of the waiting queue, on the bedside iPad or from an approved phone: messages, and texts to the
+/// Porch number with their words.
 final class MessageQueueViewController: CaregiverFormViewController {
     var onChange: ((FamilyAdminState) -> Void)?
     private let remote: FamilyCredential?
     private var messages: [FamilyMessage]
+    private var texts: [FamilyText]
+    /// Each waiting text's words, which only the PIN-checked review fetches.
+    private var words: [String: FamilyText] = [:]
     private let list = UIStackView()
     private var busy = false
     private var posterTask: Task<Void, Never>?
-    init(remote: FamilyCredential?, messages: [FamilyMessage]) {
-        self.remote = remote; self.messages = messages; super.init(nibName: nil, bundle: nil)
+    init(remote: FamilyCredential?, messages: [FamilyMessage], texts: [FamilyText] = []) {
+        self.remote = remote; self.messages = messages; self.texts = texts; super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(remote:messages:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(remote:messages:texts:)") }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Waiting messages"
         list.axis = .vertical; list.spacing = 20
         form.addArrangedSubview(list)
         hideKeyboardControl()
         render()
+        loadWords()
     }
+    private func loadWords() {
+        guard !texts.isEmpty else { return }
+        Task { [weak self] in
+            guard let self, let texts = try? await self.request("caregiverTexts", [:])?.texts else { return }
+            self.words = Dictionary(texts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            self.render()
+        }
+    }
+    static func senderName(_ text: FamilyText) -> String { text.from.hasPrefix("+") ? PhoneNumberNormalization.display(text.from) : text.from }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
     static func senderName(_ message: FamilyMessage) -> String {
         guard message.fromPhone else { return message.fromName }
@@ -680,9 +694,10 @@ final class MessageQueueViewController: CaregiverFormViewController {
     }
     private func render() {
         list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
-        guard !messages.isEmpty else { list.addArrangedSubview(PorchStyle.label("No messages are waiting.")); return }
+        guard !messages.isEmpty || !texts.isEmpty else { list.addArrangedSubview(PorchStyle.label("No messages are waiting.")); return }
         var missing: [(String, MessagePosterView)] = []
-        // Held phone voicemail first: it's what needs a decision.
+        // Held texts first, then held phone voicemail: they're what needs a decision.
+        for text in texts.sorted(by: { ($0.held ? 0 : 1, $0.sentAt) < ($1.held ? 0 : 1, $1.sentAt) }) where text.held { list.addArrangedSubview(section(for: text)) }
         for message in messages.sorted(by: { ($0.held == true ? 0 : 1, $0.sentAt) < ($1.held == true ? 0 : 1, $1.sentAt) }) {
             var views: [UIView] = []
             if message.mode == "video" {
@@ -710,7 +725,47 @@ final class MessageQueueViewController: CaregiverFormViewController {
                 : "Waiting for your OK: number couldn't be checked"
             list.addArrangedSubview(section("\(type) from \(Self.senderName(message))", detail: "\(MessageText.length(message.durationSeconds)) · Sent \(MessageText.when(message.sentAt)) · \(state)", views: views))
         }
+        for text in texts.sorted(by: { $0.sentAt < $1.sentAt }) where !text.held { list.addArrangedSubview(section(for: text)) }
         loadPosters(missing)
+    }
+    /// A text with its words, and what the bedside shows when it translated them.
+    private func section(for text: FamilyText) -> UIView {
+        var views: [UIView] = []
+        if let words = words[text.id] {
+            if let body = words.body, !body.isEmpty { views.append(PorchStyle.label("“\(body)”", size: 18, color: PorchStyle.ink)) }
+            if let translation = words.translation {
+                let language = words.sourceLanguage.flatMap { Locale(identifier: "en").localizedString(forLanguageCode: $0) }
+                views.append(PorchStyle.label(language.map { "Shown on Porch, translated from \($0): \(translation)" } ?? "Shown on Porch as: \(translation)", size: 15))
+            }
+        } else { views.append(PorchStyle.label("Loading the text…", size: 15)) }
+        if let pictures = text.pictures, pictures > 0 { views.append(PorchStyle.label(pictures == 1 ? "It came with a picture, which Porch doesn't show yet." : "It came with \(pictures) pictures, which Porch doesn't show yet.", size: 15)) }
+        if text.held {
+            let release = PorchStyle.button("Let it show on Porch", symbol: "checkmark.circle.fill")
+            release.addAction(UIAction { [weak self] _ in Task { await self?.changeText("releaseText", text) } }, for: .touchUpInside)
+            views.append(release)
+        }
+        let remove = PorchStyle.button("Remove", symbol: "trash", filled: false)
+        remove.configuration?.baseForegroundColor = .systemRed
+        remove.addAction(UIAction { [weak self] _ in self?.confirmRemove(text) }, for: .touchUpInside)
+        views.append(remove)
+        let state = text.held ? "Waiting for your OK: number isn't saved on the keypad" : text.delivered ? "Ready on the iPad" : "Not on the iPad yet"
+        return section("Text from \(Self.senderName(text))", detail: "Sent \(MessageText.when(text.sentAt)) · \(state)", views: views)
+    }
+    private func changeText(_ action: String, _ text: FamilyText) async {
+        guard !busy else { return }
+        busy = true; defer { busy = false }
+        do {
+            guard let admin = try await request(action, ["textID": text.id])?.admin else { return }
+            messages = admin.messages ?? []; texts = admin.texts ?? []; render(); onChange?(admin)
+        } catch { showPorchError(error, on: self) }
+    }
+    private func confirmRemove(_ text: FamilyText) {
+        let alert = UIAlertController(title: "Remove this text?", message: "It won't show on the bedside Porch, and its words are deleted.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+            Task { [weak self] in await self?.changeText("removeText", text) }
+        })
+        present(alert, animated: true)
     }
     private func loadPosters(_ missing: [(String, MessagePosterView)]) {
         posterTask?.cancel()
@@ -730,7 +785,7 @@ final class MessageQueueViewController: CaregiverFormViewController {
         busy = true; defer { busy = false }
         do {
             guard let admin = try await request(action, ["messageID": message.id])?.admin else { return }
-            messages = admin.messages ?? []; render(); onChange?(admin)
+            messages = admin.messages ?? []; texts = admin.texts ?? []; render(); onChange?(admin)
         } catch { showPorchError(error, on: self) }
     }
     private func request(_ action: String, _ values: [String: Any]) async throws -> FamilyResponse? {

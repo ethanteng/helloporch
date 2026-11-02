@@ -1431,6 +1431,30 @@ final class CaregiverInputTests: XCTestCase {
         let a = luminance(first), b = luminance(second)
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
+
+    @MainActor func testTextsAreReadInTheirOwnLanguageOnlyWhenPorchCouldntTranslateThem() {
+        let restore = localizedBedside(.cantonese); defer { restore() }
+        func text(_ words: String, translated: Bool = false, source: String? = nil) -> ReceivedText {
+            ReceivedText(id: "t", from: "+14155550123", sentAt: 1, body: words, language: "yue-Hant", text: words, translated: translated, sourceLanguage: source)
+        }
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text("媽，我晚上六點到", source: "zh-Hant")))
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text("媽，我晚上六點到，到時再打電話畀你。")), "any written Chinese is the Cantonese bedside's language")
+        XCTAssertEqual(MessagePlayerViewController.otherLanguage(of: text("Hi Mom, I land at six tonight and will call you then.")), "en")
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text("我六點到", translated: true, source: "en")))
+        XCTAssertEqual(MessagePlayerViewController.pictureNote(2), "呢個短訊附咗 2 張相，Porch 暫時未顯示到。")
+        XCTAssertEqual(MessagePlayerViewController.pictureNote(1), "呢個短訊附咗一張相，Porch 暫時未顯示到。")
+        XCTAssertNil(MessagePlayerViewController.pictureNote(0))
+        XCTAssertTrue(MessagePlayerViewController.translatedNote("en")?.hasPrefix("譯自") == true)
+        XCTAssertNil(MessagePlayerViewController.translatedNote(nil))
+        XCTAssertTrue(MessagePlayerViewController.announcement(forTextFrom: "72975", sentAt: 1, slots: CallSlots()).hasPrefix("72975嘅短訊"), "a short code is named as it is")
+    }
+
+    func testCaregiverPhonesSayWhatNeedsTheirReview() {
+        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 1, texts: 0), "1 phone voicemail needs your review")
+        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 0, texts: 1), "1 text needs your review")
+        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 0, texts: 2), "2 texts need your review")
+        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 1, texts: 2), "3 messages need your review")
+    }
 }
 
 @MainActor private final class TestIncomingAudio: IncomingCallAudioPlaying {

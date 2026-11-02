@@ -17,8 +17,10 @@ import { handleProfileAction, maintainProfiles, profileActions, profileMedia, pu
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
+import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
+import type { Translate } from "./translate.ts";
 
-export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize;
+export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize; translate?: Translate;
   phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -58,7 +60,7 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "releaseText", "removeText", "caregiverTexts", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
   // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
@@ -83,7 +85,7 @@ function pendingInvites(house: Household, now: number) {
 // Family devices only see the bedside in their snapshot, so caregiver screens get every
 // family device here. It is returned only after a PIN check.
 function adminState(house: Household, now: number, pushEnabled: boolean) {
-  return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], callScreening: publicCallScreening(house),
+  return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), texts: publicTexts(house, now), phoneDropIns: house.phoneDropIns ?? [], callScreening: publicCallScreening(house),
     shareAttendance: attendanceShared(house),
     people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled, true)), invitations: pendingInvites(house, now) };
 }
@@ -108,15 +110,15 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     // set up, the bedside and caregivers see how that's going.
     ...(house.porchNumber ? { porchNumber: house.porchNumber.number } : {}), ...(phoneSetup ? { phoneSetup } : {}),
     // The bedside language as the server knows it, so the iPad can tell when to report a change.
-    ...(me.role === "bedside" ? { messages: publicInbox(house, now), phoneDropIns: house.phoneDropIns ?? [], bedsideLanguage: bedsideLanguage(house) } : {}),
+    ...(me.role === "bedside" ? { messages: publicInbox(house, now), texts: publicTexts(house, now), phoneDropIns: house.phoneDropIns ?? [], bedsideLanguage: bedsideLanguage(house) } : {}),
     // Who can ring by phone, and the keypad numbers as the server knows them, so the iPad can tell when to report a change.
     ...(me.role === "bedside" ? { callScreening: publicCallScreening(house) } : {}),
     // Whether the iPad tells family when someone is there. While it's off, the iPad doesn't report it at all.
     ...(me.role === "bedside" ? { shareAttendance: attendanceShared(house) } : {}),
     // The bedside's natural announcement voices, when this server can make them.
     ...(me.role === "bedside" && speechConfigured() ? { speech: publicSpeech(house) } : {}),
-    // Approved caregivers learn that phone voicemail is waiting; the messages need the PIN.
-    ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now) } : {}),
+    // Approved caregivers learn that phone voicemail or texts are waiting; reading them needs the PIN.
+    ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now), heldTexts: heldTextCount(house, now) } : {}),
     // Messages the bedside left for this family member when they missed its call.
     ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
     // When someone was last noticed at the bedside iPad, so family can tell whether a call now is likely to be answered.
@@ -300,6 +302,15 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handleMessageAction(String(action), { store, media, now, house, me: memberFor(house, auth), input,
         alert: (recipientID, message) => alertRecipient(store, house.id, recipientID, message, now, dependencies) });
+      if (!caregiverAction) return callJSON(result);
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });
+    }
+    if (textActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handleTextAction(String(action), { store, now, house, me: memberFor(house, auth), input, translate: dependencies.translate });
       if (!caregiverAction) return callJSON(result);
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });
@@ -692,6 +703,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
+      try { await maintainTexts(store, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
       // A number that couldn't be set up yet. Twilio and LiveKit can take longer than the iPad waits for a poll, so
       // the try runs after this one is answered, and a later poll shows the number.

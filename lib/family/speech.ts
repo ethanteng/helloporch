@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { FamilyError, isCaregiver, mutate, requireValue, type Household, type Member } from "./household.ts";
+import { FamilyError, isCaregiver, mutate, requireValue, type BedsideLanguage, type Household, type Member } from "./household.ts";
 import type { MediaStore } from "./media.ts";
 import type { FamilyStore } from "./store.ts";
+import { readableText } from "./texts.ts";
 
 // Natural announcement voices. Each bedside language offers a few ElevenLabs voices the family listened to
 // (scripts/voice-samples.mjs); a caregiver picks one per language, or keeps the iPad's built-in voice.
@@ -93,7 +94,9 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   requireValue(me.role === "bedside", "Only the bedside speaks announcements.", 403);
   requireValue(synthesize || speechConfigured(), "Natural voices aren't set up on this server.", 503);
   const text = typeof input.text === "string" ? input.text.trim() : "";
-  requireValue(text.length > 0 && text.length <= speechLimits.textCharacters, `Announcements can have up to ${speechLimits.textCharacters} characters.`);
+  // A text message's words can be longer than an announcement, up to their own limit.
+  requireValue(text.length > 0 && (text.length <= speechLimits.textCharacters || await readableText(store, house, input.textID, language as BedsideLanguage, text, now)),
+    `Announcements can have up to ${speechLimits.textCharacters} characters.`);
   // Settings preview a listed voice before it's saved; otherwise it's the household's choice.
   const requested = input.voiceID;
   requireValue(requested === undefined || (typeof requested === "string" && speechCatalog[language].voices.some(v => v.id === requested)), "Choose one of the listed voices.");

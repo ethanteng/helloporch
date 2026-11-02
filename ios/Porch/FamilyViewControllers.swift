@@ -37,6 +37,7 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
         let removed: Bool
         let messages: Bool
         let held: Int
+        let heldTexts: Int
         let unheard: Int
         /// The bedside's own phone number, which anyone can call it on.
         let number: String?
@@ -123,7 +124,7 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
             let link = coordinator.link(for: credential), state = link?.state
             return Family(id: credential.deviceID, name: several ? PorchDevice.familyName(credential) ?? "Family" : nil, household: state?.householdID, people: state?.people ?? [],
                           permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: link?.error, removed: link?.accessRemoved == true,
-                          messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, unheard: state?.newMessages ?? 0, number: state?.porchNumber)
+                          messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, heldTexts: state?.heldTexts ?? 0, unheard: state?.newMessages ?? 0, number: state?.porchNumber)
         }
         let next = Presentation(families: families, starting: starting, photo: coordinator.state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
         for credential in credentials {
@@ -176,9 +177,9 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
                 }
                 continue
             }
-            // Phone voicemail from callers who aren't on the keypad waits for a caregiver.
-            if family.held > 0 {
-                let review = PorchStyle.button(family.held == 1 ? "1 phone voicemail needs your review" : "\(family.held) phone voicemails need your review", symbol: "exclamationmark.bubble.fill")
+            // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
+            if family.held + family.heldTexts > 0 {
+                let review = PorchStyle.button(Self.reviewTitle(voicemails: family.held, texts: family.heldTexts), symbol: "exclamationmark.bubble.fill")
                 review.accessibilityIdentifier = "family.heldVoicemail"
                 review.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openCaregiverMode() } }, for: .touchUpInside)
                 block.addArrangedSubview(review)
@@ -271,6 +272,12 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
         controller.dismiss(animated: true)
     }
     /// The bedside's Porch number as a contact, named so it's easy to find.
+    /// What's waiting for this caregiver's OK: phone voicemail, texts, or both.
+    static func reviewTitle(voicemails: Int, texts: Int) -> String {
+        if texts == 0 { return voicemails == 1 ? "1 phone voicemail needs your review" : "\(voicemails) phone voicemails need your review" }
+        if voicemails == 0 { return texts == 1 ? "1 text needs your review" : "\(texts) texts need your review" }
+        return "\(voicemails + texts) messages need your review"
+    }
     private static func porchContact(_ number: String, name: String) -> CNMutableContact {
         let contact = CNMutableContact()
         contact.givenName = "\(name)'s Porch"
