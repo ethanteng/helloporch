@@ -6,6 +6,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import { handleFamily } from '../lib/family/service.ts';
 import { readActivity } from '../lib/admin/activity.ts';
 import { currentSession, failureLimits, sessionSeconds, signIn, signOut, signOutEverywhere } from '../lib/admin/auth.ts';
+import { listCountries, setCountry } from '../lib/admin/countries.ts';
 import { cancelInvitation, createInvitation, invitationSeconds, listInvitations, sendAgain, settingUpSeconds } from '../lib/admin/invitations.ts';
 import { keptInvitations } from '../lib/family/activations.ts';
 import { checkPassword, hashPassword, validPasswordHash } from '../lib/admin/password.ts';
@@ -45,6 +46,14 @@ async function fixture() {
   return { store, settings, session, enroll, now: () => now, advance: seconds => { now += seconds; } };
 }
 const codeOf = link => new URL(link).hash.replace('#code=', '');
+// Twilio's Geo Permissions, faked: the tests never change the real account.
+function fakeCountries(enabled = ['US', 'GB']) {
+  const calls = [], on = new Set(enabled);
+  const all = [{ iso: 'US', name: 'United States/Canada', codes: ['1'] }, { iso: 'JM', name: 'Jamaica', codes: ['1876', '1658'] },
+    { iso: 'GB', name: 'United Kingdom', codes: ['44'] }, { iso: 'HK', name: 'Hong Kong', codes: ['852'] }];
+  return { calls, permissions: { async list() { return all.map(c => ({ ...c, enabled: on.has(c.iso) })); },
+    async set(iso, value) { calls.push([iso, value]); if (value) on.add(iso); else on.delete(iso); } } };
+}
 const refused = async (work, status) => { await assert.rejects(work, error => error instanceof AdminError && (status === undefined || error.status === status)); };
 
 test('the password is kept only as a hash, and a malformed or oversized one never matches', async () => {
@@ -156,7 +165,8 @@ test('signed out, every admin read and change refuses', async () => {
   for (const work of [() => createInvitation(forged, f.store, f.now(), 'Lee family'), () => listInvitations(forged, f.store, f.now()),
     () => cancelInvitation(forged, f.store, f.now(), 'x'), () => sendAgain(forged, f.store, f.now(), 'x'), () => listPorches(forged, f.store),
     () => systemStatus(forged, f.store), () => readActivity(forged, f.store), () => signOut(forged, f.store, f.now()), () => signOutEverywhere(forged, f.store, f.now()),
-    () => listPorches({}, f.store)]) await refused(work, 401);
+    () => listPorches({}, f.store), () => listCountries(forged, fakeCountries().permissions),
+    () => setCountry(forged, f.store, f.now(), fakeCountries().permissions, 'HK', true)]) await refused(work, 401);
 });
 
 test('every admin page and Server Action checks the session itself, not just Proxy', () => {
@@ -340,4 +350,23 @@ test('bedsides set up by the operator script are listed too', async () => {
   assert.equal(row.setUpAt, f.now());
   assert.equal(row.invitationLabel, undefined);
   assert.deepEqual(await listInvitations(session, f.store, f.now()), []);
+});
+
+test("Countries switches Twilio's Geo Permissions, never for the US and Canada, and logs each change", async () => {
+  const f = await fixture();
+  const { session } = await f.session();
+  const twilio = fakeCountries();
+  assert.deepEqual((await listCountries(session, twilio.permissions)).map(c => [c.name, c.enabled]),
+    [['Hong Kong', false], ['Jamaica', false], ['United Kingdom', true], ['United States/Canada', true]]);
+  await setCountry(session, f.store, f.now(), twilio.permissions, 'HK', true);
+  await setCountry(session, f.store, f.now(), twilio.permissions, 'HK', true);
+  await setCountry(session, f.store, f.now(), twilio.permissions, 'GB', false);
+  assert.deepEqual(twilio.calls, [['HK', true], ['GB', false]], 'a country already on is left alone');
+  for (const iso of ['US', 'XX', undefined]) await refused(() => setCountry(session, f.store, f.now(), twilio.permissions, iso, iso !== 'US'), 400);
+  await refused(() => listCountries(session, undefined), 503);
+  await refused(() => setCountry(session, f.store, f.now(), { ...twilio.permissions, async list() { throw new Error('down'); } }, 'JM', true), 502);
+  await refused(() => setCountry(session, f.store, f.now(), { ...twilio.permissions, async set() { throw new Error('refused'); } }, 'JM', true), 502);
+  assert.equal(twilio.calls.length, 2);
+  const log = await readActivity(session, f.store);
+  assert.deepEqual(log.slice(0, 2).map(e => [e.action, e.detail]), [['Stopped calls to a country', 'United Kingdom'], ['Allowed calls to a country', 'Hong Kong']]);
 });

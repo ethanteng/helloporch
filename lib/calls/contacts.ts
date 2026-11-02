@@ -2,6 +2,7 @@ import { checkCaregiverCode, CaregiverAuthError } from "../family/caregiver.ts";
 import { authorizeNativeOrBedside } from "../family/auth-calls.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { callInput, callJSON, type CallServer } from "./server.ts";
+import { dialingPermissions, uncallable } from "./countries.ts";
 
 const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const lifetime = 30 * 24 * 60 * 60;
@@ -32,7 +33,7 @@ export function verifyContactApproval(value: unknown, phoneNumber: string, audie
   } catch { return false; }
 }
 
-export async function authorizeContact(request: Request, now = Math.floor(Date.now() / 1000)) {
+export async function authorizeContact(request: Request, now = Math.floor(Date.now() / 1000), permissions = dialingPermissions()) {
   const config = await authorizeNativeOrBedside(request);
   if (config instanceof Response) return config;
   const code = setupCode();
@@ -46,6 +47,9 @@ export async function authorizeContact(request: Request, now = Math.floor(Date.n
   if (typeof input.phoneNumber !== "string" || !numberPattern.test(input.phoneNumber)) {
     return callJSON({ error: "Enter a phone number with + and its country code." }, 400);
   }
+  // Twilio won't dial a country the admin page has left off, so the caregiver hears it now, not when the bedside calls.
+  const refusal = await uncallable(input.phoneNumber, permissions);
+  if (refusal) return callJSON({ error: refusal }, 400);
   const approval: Approval = { phoneNumber: input.phoneNumber, audience: new URL(request.url).origin, exp: now + lifetime };
   const body = Buffer.from(JSON.stringify(approval)).toString("base64url");
   // PIN verification uses managed storage; saving never dials or creates a media room.

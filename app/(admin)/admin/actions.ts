@@ -3,13 +3,16 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { signIn, signOut, signOutEverywhere } from "../../../lib/admin/auth.ts";
+import { setCountry } from "../../../lib/admin/countries.ts";
 import { cancelInvitation, createInvitation, sendAgain } from "../../../lib/admin/invitations.ts";
+import { dialingPermissions } from "../../../lib/calls/countries.ts";
 import { adminRequest, clientAddress, cookieOptions, requireAdmin, sessionCookie } from "../../../lib/admin/request.ts";
 import { AdminError } from "../../../lib/admin/session.ts";
 
 // Server Actions are reachable by anyone who can POST, so each one checks the host and the session itself.
 export type SignInState = { error?: string };
 export type LinkState = { error?: string; created?: { id: string; label: string; link: string; message: string; expiresAt: number } };
+export type CountryState = { error?: string };
 
 async function failed<T>(work: () => Promise<T>): Promise<T | { error: string }> {
   try { return await work(); } catch (error) { if (error instanceof AdminError) return { error: error.message }; throw error; }
@@ -57,6 +60,14 @@ export async function cancelInvitationAction(_: LinkState, form: FormData): Prom
   const session = await requireAdmin();
   const { store, now } = await adminRequest();
   const result = await failed(() => cancelInvitation(session, store, now, form.get("id")));
+  if (result && "error" in result) return result;
+  refresh();
+  return {};
+}
+export async function setCountryAction(_: CountryState, form: FormData): Promise<CountryState> {
+  const session = await requireAdmin();
+  const { store, now } = await adminRequest();
+  const result = await failed(() => setCountry(session, store, now, dialingPermissions(), form.get("iso"), form.get("enabled") === "true"));
   if (result && "error" in result) return result;
   refresh();
   return {};

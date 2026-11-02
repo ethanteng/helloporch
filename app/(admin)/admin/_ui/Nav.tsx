@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Paths as the browser sees them on the admin host, without the /admin the server adds.
-const pages = [{ href: "/", label: "Invitations" }, { href: "/porches", label: "Porches" }, { href: "/system", label: "System" }, { href: "/activity", label: "Activity" }];
+const pages = [{ href: "/", label: "Invitations" }, { href: "/porches", label: "Porches" }, { href: "/countries", label: "Countries" }, { href: "/system", label: "System" }, { href: "/activity", label: "Activity" }];
 
 export default function Nav() {
   const pathname = usePathname().replace(/^\/admin(?=\/|$)/, "") || "/";
