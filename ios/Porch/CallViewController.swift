@@ -743,12 +743,13 @@ final class CallViewController: UIViewController {
     @objc private func tappedSetup() { showSetup() }
     @objc private func accessibleSetup() -> Bool { showSetup(); return true }
 
-    func showSetup() {
+    /// `replacing` sets up a new Porch in place of this one, from a setup link opened here and confirmed.
+    func showSetup(replacing: Bool = false) {
         guard !presenceSuppressed, presentedViewController == nil else { return }
         trigger.resetKeys(); resignFirstResponder()
         // Until this iPad is set up, the caregiver button sets it up, ending at the keypad if they choose.
-        guard let profile = PorchDevice.credential(for: .bedside) else {
-            present(BedsideSetup.start { [weak self] keypad in if keypad { self?.showUnlockedSetup() } }, animated: true); return
+        guard let profile = PorchDevice.credential(for: .bedside), !replacing else {
+            present(BedsideSetup.start(replacing: replacing) { [weak self] keypad in if keypad { self?.showUnlockedSetup() } }, animated: true); return
         }
         let gate = CaregiverPINViewController(profile: profile)
         gate.onUnlock = { [weak self] in

@@ -74,6 +74,11 @@ public enum CallPreferences {
         defaults.set(enabled, forKey: leaveMessageKey)
     }
 
+    /// Puts every call setting back to its default, such as when this iPad becomes someone else's bedside.
+    public static func forget(in defaults: UserDefaults = .standard) {
+        for key in [silenceEnabledKey, silenceSecondsKey, fallbackKey, cameraKey, leaveMessageKey] { defaults.removeObject(forKey: key) }
+    }
+
     /// Bedside messages, like family ones, can be up to two minutes long.
     public static let messageSeconds: Double = 120
 }

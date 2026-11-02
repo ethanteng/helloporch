@@ -108,6 +108,30 @@ enum PorchDevice {
     static func saveActivation(_ url: URL?) throws {
         try NativeCallSettings.writeSecret(Data((url?.absoluteString ?? "").utf8), account: "porch.bedside.activation")
     }
+    /// Before this iPad becomes another household's bedside, its old household stops ringing it. The household itself,
+    /// with its number and family, stays. A pairing the server no longer accepts, such as for a deleted household, has
+    /// nothing left to stop; anything else, such as no connection, stops the replacement until it's tried again.
+    static func leaveBedside(_ credential: FamilyCredential) async throws {
+        for action in ["registerVoIP", "registerAlerts"] {
+            do { _ = try await FamilyService(credential).send(action, ["token": NSNull()]) }
+            catch let error as FamilyServiceError where [401, 403, 404, 410].contains(error.status) { return }
+        }
+    }
+    /// What this iPad kept for the household it was the bedside for: its keypad and photos, messages it hadn't sent yet,
+    /// and its call, message, camera and display settings. The Cell2Jack settings belong to the iPad and stay, as do any
+    /// families it's in as a family device. Waiting messages clear themselves once the new household checks in.
+    @MainActor static func forgetBedsideHousehold(defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) {
+        CallSlots.forget(in: defaults, photoStore: photoStore)
+        photoStore.familyMembers.prune(keeping: [], olderThan: .distantFuture)
+        CallPreferences.forget(in: defaults)
+        BedsidePreferences().save(to: defaults)
+        MessageAutoplay().save(to: defaults)
+        BedsideAttendance.setCameraEnabled(false, in: defaults)
+        BedsideOutbox.shared.discardAll()
+        for name in [Notification.Name.porchBedsideDisplayChanged, .porchMessageAutoplayChanged, .porchAttendanceCameraChanged] {
+            NotificationCenter.default.post(name: name, object: nil)
+        }
+    }
     private struct Pending: Codable { let profile: FamilyCredential; let scope: String }
     static func pending(role: PorchExperience, origin: URL, invitation: String = "") throws -> FamilyCredential {
         let account = "porch.family.pending.\(role.rawValue)"

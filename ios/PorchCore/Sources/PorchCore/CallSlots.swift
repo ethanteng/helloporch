@@ -33,6 +33,12 @@ public struct CallSlots: Equatable {
     public static func isSaved(in defaults: UserDefaults = .standard) -> Bool {
         [storageKey, "porch.slots.v1", "porch.contact.v1"].contains { defaults.object(forKey: $0) != nil }
     }
+    /// Removes the saved keypad, in every format, and every keypad photo, such as when this iPad becomes someone else's
+    /// bedside. Loading it again gives a new keypad.
+    public static func forget(in defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) {
+        for key in [storageKey, symbolsStorageKey, "porch.slots.v1", "porch.contact.v1"] { defaults.removeObject(forKey: key) }
+        photoStore.prune(keeping: [], olderThan: .distantFuture)
+    }
     /// A key with no action is saved as a person key with no one on it, the way builds from before
     /// No action saved an empty key, so they can still read the keypad.
     private struct Slot: Codable, Equatable { var action: KeypadAction; var contact: CallContact? }

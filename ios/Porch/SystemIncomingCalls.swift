@@ -138,6 +138,11 @@ extension Notification.Name {
         }
     }
 
+    /// Waits until the registration `registerDevice` just started has finished sending.
+    /// A replacement that cleared the old bedside and then didn't finish uses this to put that Porch's calls back
+    /// before Continue can try again.
+    func waitForRegistration() async { await registrationTask?.value }
+
     func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
         guard type == .voIP else { return }
         pushToken = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
