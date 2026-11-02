@@ -26,7 +26,7 @@ function liveKit() {
   const services = {
     rooms: {
       async getParticipant(room, identity) { const attributes = rooms.get(room)?.get(identity); if (!attributes) throw missing(); return { identity, attributes }; },
-      async removeParticipant(room, identity) { removed.push(identity); if (!leave(room,identity)) throw missing(); },
+      async removeParticipant(room, identity) { removed.push(identity); if (state.removeError) throw state.removeError; if (!leave(room,identity)) throw missing(); },
     },
     sip: {
       async createSipParticipant(trunk, number, room, options) {
@@ -316,6 +316,30 @@ test('a leg that connects after its dial timed out is removed, including once an
   await g.json('poll',{available:true},other.family.credential);
   assert.equal(g.livekit.rooms.get(other.room)?.has(`phone-guest-${late}`),false);
   assert.equal(g.livekit.rooms.get(other.room)?.has(`phone-guest-${pharmacy.id}`),true);
+});
+
+test('a phone LiveKit failed to hang up is removed on later check-ins until it is gone, then left alone',async()=>{
+  const f=fixture(),{bedside,family,callID,room}=await f.connected();
+  const {phoneGuest}=await f.json('addPhoneGuest',{callID,phoneNumber:bank,label:'Bank'},family.credential);
+  const identity=`phone-guest-${phoneGuest.id}`, key=`house:${bedside.state.householdID}`;
+  // Its guest ended, but LiveKit failed to take the leg out of the room. No call limit will end it now.
+  const house=JSON.parse(f.store.values.get(key));
+  house.call.guests[0].endedAt=f.now();
+  f.store.values.set(key,JSON.stringify(house));
+  f.livekit.state.removeError=Object.assign(new Error('unavailable'),{code:'unavailable'});
+  for (let n=0;n<10;n++) { f.advance(30); await f.json('poll',{available:true},bedside.credential); await f.json('poll',{available:true},family.credential); }
+  assert.equal(f.livekit.rooms.get(room).has(identity),true);
+  const late=f.livekit.removed.length;
+  await f.json('poll',{available:true},family.credential);
+  assert.ok(f.livekit.removed.length>late,'still tried five minutes after it ended, long past ringing');
+  delete f.livekit.state.removeError;
+  await f.json('poll',{available:true},family.credential);
+  assert.equal(f.livekit.rooms.get(room).has(identity),false);
+  await f.json('poll',{available:true},family.credential);
+  assert.equal(JSON.parse(f.store.values.get(key)).call.guests[0].gone,true);
+  const removals=f.livekit.removed.length;
+  await f.json('poll',{available:true},bedside.credential); await f.json('poll',{available:true},family.credential);
+  assert.equal(f.livekit.removed.length,removals,'once LiveKit says it is gone, check-ins stop asking');
 });
 
 test('a call that ends while the number is dialing does not keep its telephone leg',async()=>{

@@ -69,21 +69,30 @@ export async function endPhoneGuests(store: FamilyStore, householdID: string, ca
 }
 /** A dial that already failed can still create its leg until ringing gives up, plus a little slack. */
 export const phoneGuestReapSeconds = phoneGuestLimits.ringSeconds + 30;
-/** Drop a leg that connects after its guest was already ended, so it can't sit on the call untracked.
- * A missing participant is the usual case. Anything else is left for the next poll. */
-export async function reapEndedPhoneGuests(rooms: PhoneGuestServices["rooms"], call: Call, now: number) {
+/** An ended guest whose leg could still be in the room: it may connect late until ringing gives up, and a removal
+ * LiveKit failed leaves it there. Calls have no time limit to end such a leg, so it's tried until LiveKit says it's gone. */
+export function needsReaping(guest: PhoneGuest, now: number) {
+  return guest.endedAt !== undefined && (now - guest.endedAt <= phoneGuestReapSeconds || !guest.gone);
+}
+/** Drop a leg that connects after its guest was already ended, or that LiveKit failed to remove, so it can't sit on
+ * the call untracked. A missing participant is the usual case; once one can't connect late any more, it's `gone`.
+ * Anything else is left for the next poll. */
+export async function reapEndedPhoneGuests(store: FamilyStore, householdID: string, rooms: PhoneGuestServices["rooms"], call: Call, now: number) {
   if (call.state === "ended") return;
-  const room = callRoom(call);
+  const room = callRoom(call), gone: string[] = [];
   for (const guest of call.guests ?? []) {
-    if (guest.endedAt === undefined || now - guest.endedAt > phoneGuestReapSeconds) continue;
+    if (!needsReaping(guest, now)) continue;
     try { await rooms.removeParticipant(room, phoneGuestIdentity(guest)); }
-    catch (error) { if (!notFound(error)) return; }
+    catch (error) { if (!notFound(error)) break; if (now - guest.endedAt! > phoneGuestReapSeconds) gone.push(guest.id); }
   }
+  if (gone.length) await mutate(store, householdID, house => {
+    if (house.call?.id === call.id) for (const guest of house.call.guests ?? []) if (gone.includes(guest.id)) guest.gone = true;
+  });
 }
 async function reapStoredPhoneGuests(context: PhoneGuestContext) {
   const raw = await context.store.get(`house:${context.house.id}`);
   const live = raw ? (JSON.parse(raw) as Household).call : undefined;
-  if (live) await reapEndedPhoneGuests(context.services.rooms, live, context.now);
+  if (live) await reapEndedPhoneGuests(context.store, context.house.id, context.services.rooms, live, context.now);
 }
 
 export async function handlePhoneGuestAction(action: string, context: PhoneGuestContext) {

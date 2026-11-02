@@ -11,7 +11,7 @@ import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } fr
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
 import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, retryPorchNumber, type NumberServices, type NumberSettings } from "./numbers.ts";
-import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, phoneGuestActions, phoneGuestReapSeconds, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
+import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, needsReaping, phoneGuestActions, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
@@ -726,12 +726,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         try { await endPhoneGuests(store, house.id, ended.id, now); } catch { /* deleting the room again is harmless */ }
       }
     }
-    // A dial that timed out can connect after its guest was replaced or hung up. Drop that leg while the call is still up.
-    if (house.call?.state !== "ended" && house.call?.guests?.some(guest => guest.endedAt !== undefined && now - guest.endedAt <= phoneGuestReapSeconds)) {
+    // A dial that timed out can connect after its guest was replaced or hung up, and a hang-up LiveKit failed leaves
+    // the leg on. Drop it while the call is still up.
+    if (house.call?.state !== "ended" && house.call?.guests?.some(guest => needsReaping(guest, now))) {
       try {
         const raw = await store.get(`house:${house.id}`);
         const live = raw ? (JSON.parse(raw) as Household).call : undefined;
-        if (live) await reapEndedPhoneGuests((dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms, live, now);
+        if (live) await reapEndedPhoneGuests(store, house.id, (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms, live, now);
       } catch { /* the next poll tries again */ }
     }
     if (action === "joinCall") {

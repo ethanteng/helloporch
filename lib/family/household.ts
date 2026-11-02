@@ -34,8 +34,9 @@ export type PorchGuest = { id: string; memberID: string; addedBy: string; invite
   state: "ringing" | "joined" | "declined" | "missed" | "cancelled" | "left"; receivedAt?: number; joinedAt?: number; endedAt?: number };
 /** A regular phone a family caregiver added to their call with the bedside, such as a bank that needs Mom on the line.
  * It stays only while the person who added it does. `label` is what the bedside shows; the number never reaches it.
- * `endedAt` is set once its telephone leg is known to be gone. */
-export type PhoneGuest = { id: string; number: string; label: string; addedBy: string; addedAt: number; endedAt?: number };
+ * `endedAt` is set once its telephone leg is known to be gone. `gone`: LiveKit confirmed the leg isn't in the room
+ * after it could no longer connect late, so check-ins stop asking. */
+export type PhoneGuest = { id: string; number: string; label: string; addedBy: string; addedAt: number; endedAt?: number; gone?: true };
 export type MessageKind = "message" | "voicemail";
 export type MessageMode = "audio" | "video";
 /** A queued message. Kept in the household so the bedside's existing poll carries the queue.
