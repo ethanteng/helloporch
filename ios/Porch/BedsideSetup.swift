@@ -519,10 +519,15 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         navigationController?.setViewControllers([setup.screen(from: .yourPhone)], animated: true)
     }
     /// The screen is going away. A trial that is still running would keep the desk phone live with the keypad off.
-    /// Going back to choose another way is like Do this later.
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        leaveTrial(turnOff: isMovingFromParent && enabledHere && !checked)
+        leaveTrial(turnOff: false)
+    }
+    /// Going back to choose another way is like Do this later. Only now has it happened: a back swipe can still be
+    /// cancelled until it's over, and the keypad stays on for when the screen comes back.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isMovingFromParent, enabledHere, !checked { keypad.setEnabled(false); enabledHere = false }
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -542,7 +547,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private func leaveTrial(turnOff: Bool) {
         leaving = true
         helpTimer?.invalidate()
-        if turnOff { keypad.setEnabled(false) }
+        if turnOff { keypad.setEnabled(false); enabledHere = false }
         if keypad.trying { keypad.endTrial() }
     }
 }
@@ -627,7 +632,8 @@ final class SetupUSBKeypadViewController: BedsideSetupStep {
     private func render(announce: Bool = true) {
         switch progress {
         case .waiting: status.text = "Waiting for the keypad…"
-        case .connected: status.text = "The keypad is connected. Press a number key."
+        // Any keyboard counts, such as a keyboard case, so the key is the check.
+        case .connected: status.text = "A keypad or keyboard is connected. Press a number key."
         case .heard(let symbol): status.text = "Porch heard \(symbol). The keypad is ready."
         }
         proceed.isHidden = !checked; later?.isHidden = checked

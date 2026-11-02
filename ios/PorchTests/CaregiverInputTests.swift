@@ -1965,7 +1965,7 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertTrue(proceed.isHidden); XCTAssertFalse(later.isHidden)
         connected = true
         NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
-        XCTAssertEqual(status(), "The keypad is connected. Press a number key.")
+        XCTAssertEqual(status(), "A keypad or keyboard is connected. Press a number key.")
         screen.receiveKey(7)
         XCTAssertEqual(status(), "Porch heard 7. The keypad is ready.")
         XCTAssertFalse(proceed.isHidden); XCTAssertTrue(later.isHidden)
