@@ -46,7 +46,7 @@ Settled on 2026-10-24.
 Problems that appear as soon as there's a second real family:
 
 - **Every household calls out from Hainie's number.** Phone fallback and phone guests dial through the one outbound trunk without a `fromNumber` ([phone.ts:131](lib/calls/phone.ts:131), [phone-guests.ts:146](lib/family/phone-guests.ts:146)), so the trunk's number, Hainie's, is the caller ID for everyone. A callback rings Mom's iPad.
-- **Phone fallback dials anywhere.** It approves any E.164 number worldwide ([contacts.ts:46](lib/calls/contacts.ts:46)); only Twilio's geographic permissions stop it. The ElevenLabs allowance is per household, with no overall ceiling. Invited families are trusted, but a mistake still costs money.
+- ~~**Phone fallback dials anywhere.**~~ Saving a keypad contact now checks Twilio's Voice Geo Permissions, which the admin page's **Countries** switches ([countries.ts](lib/calls/countries.ts)). The ElevenLabs allowance is per household, with no overall ceiling. Invited families are trusted, but a mistake still costs money.
 - **No deletion.** A family that stops using Porch can't remove its data or release its number. App Store guideline 5.1.1(v) will also require in-app deletion, because a household counts as an account.
 
 ## What everyone experiences
@@ -56,6 +56,7 @@ Problems that appear as soon as there's a second real family:
 - **Invite a new family:** type who it's for, such as "Lee family". The page shows the link with **Copy link** and **Copy message**: "Here's your private link to set up Porch. Open it on the iPad that will stay with your loved one: https://helloporch.store/setup#…". Send it by text or email.
 - **Invitations:** each shows as waiting, set up, expired or cancelled.
 - **Porches:** every household, ours included. Each shows its bedside name, Porch number, when it was set up, when the bedside was last seen, and "Setup not finished" or "Offline for 20 days" when that applies. Each has **Delete this Porch**, **New bedside link** and **Allow a PIN reset**.
+- **Countries:** where keypads can call regular phones. Each **Turn off** or **Allow calls** changes Twilio's Voice Geo Permissions, so it's the same list as Twilio's. The US and Canada always stay on; three-way calls stay there.
 - **System:** how many numbers are in use against the limit, natural-voice use this month, and the health check.
 - **Activity:** everything done on the admin page, and when.
 
@@ -105,7 +106,7 @@ None of this repeats per family.
 
 **Twilio**
 - Confirm the account is upgraded. Trial accounts can own only one number.
-- Voice geographic permissions: US and Canada only, since phone guests can already call Canadian numbers.
+- Voice geographic permissions: set from the admin page's **Countries**, not Twilio's console. High-risk and premium-rate numbers stay off everywhere.
 - Usage triggers that email on number count and monthly spend.
 - Trust Hub business profile for SHAKEN/STIR, so outgoing calls from new numbers aren't labeled "Spam Likely". New numbers are then added to it by the server.
 
@@ -253,6 +254,7 @@ Size: medium to large. This replaces the recovery-secret script for new families
   - The link appears only once, since Porch keeps only a hash of it. If it's lost, **Cancel** it and make a new one.
   - The list shows each invitation's label, state, expiry and household once set up. Waiting ones have **Cancel**; expired ones have **Send again**, which makes a new link.
 - **Porches:** a table of every household. A page for each, with **Delete this Porch** (6.1), **New bedside link** (6.2) and **Allow a PIN reset** (6.3), comes with those PRs.
+- **Countries:** Twilio's Voice Geo Permissions, with **Turn off** for each country that's on and **Allow calls** for another. Added after PR 5.
 - **System:** numbers in use against `PORCH_MAX_PHONE_NUMBERS`, and the result of the health check. Natural-voice characters this month against the ceiling comes with PR 2, which starts counting them.
 - **Activity,** with **Sign out everywhere.**
 

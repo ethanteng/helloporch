@@ -143,3 +143,15 @@ test("old iPad builds retain the explicit legacy destination list during migrati
   delete process.env.PORCH_PHONE_NUMBERS;
   assert.equal((await handlePhoneCall(request({ phoneNumber: number, name: "Mom" }), "prepare", f.dependencies)).status, 503);
 });
+
+test("a number in a country Twilio can't call is turned away when it's saved", async () => {
+  const countries = [{ iso: "US", name: "United States/Canada", codes: ["1"], enabled: true }, { iso: "HK", name: "Hong Kong", codes: ["852"], enabled: true },
+    { iso: "MO", name: "Macau", codes: ["853"], enabled: false }];
+  const twilio = list => ({ list, async set() { throw new Error("saving a contact never changes Twilio"); } });
+  assert.equal((await authorizeContact(request({ phoneNumber: "+85221234567" }), now, twilio(async () => countries))).status, 200);
+  const refused = await authorizeContact(request({ phoneNumber: "+85328123456" }), now, twilio(async () => countries));
+  assert.equal(refused.status, 400);
+  assert.deepEqual(await refused.json(), { error: "Porch can't call phone numbers in Macau yet." });
+  // Twilio checks again when the call is dialed, so saving goes ahead when Twilio can't be asked.
+  assert.equal((await authorizeContact(request({ phoneNumber: "+85328123456" }), now, twilio(async () => { throw new Error("down"); }))).status, 200);
+});

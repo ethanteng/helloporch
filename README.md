@@ -12,7 +12,7 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 |---|---|
 | `app/`, `components/`, `public/` | The Next.js 16 website (`app/(site)/`), the admin page (`app/(admin)/`), and the calling server's API routes under `app/api/` |
 | `lib/calls/`, `lib/family/` | Server logic: households, pairing, calls, messages, phone numbers, push and speech |
-| `lib/admin/` | The admin page: password sign-in, sessions, invitations and the Porches list |
+| `lib/admin/` | The admin page: password sign-in, sessions, invitations, the Porches list and the countries Porch can call |
 | `ios/` | The universal iOS and iPadOS app, the `PorchCore` Swift package and the Cell2Jack USB driver ([ios/README.md](ios/README.md)) |
 | `scripts/` | Operator scripts for setup, number provisioning and checks |
 | `tests/` | Node tests for the server |
