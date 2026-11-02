@@ -278,6 +278,15 @@ final class CallViewController: UIViewController {
         else if args.contains("--preview-display-settings") { present(PorchStyle.navigation(BedsideDisplaySettingsViewController()), animated: false) }
         else if args.contains("--preview-voicemail"), let person = slots.contact(for: 1) {
             present(BedsideVoicemailViewController(contact: person, memberID: UUID().uuidString, mode: args.contains("--preview-video") ? .video : .voice, reason: .unanswered, staticPreview: true), animated: false)
+        } else if args.contains("--preview-text") {
+            // An English text from the first keypad contact, as the bedside's language shows it.
+            let body = "Hi Mom! I'll come by on Sunday at 2 with the kids. Love you."
+            let translations: [BedsideLanguage: String] = [.traditionalChinese: "媽，妳好！我星期天下午兩點會帶孩子們過去看妳。愛妳。", .simplifiedChinese: "妈，你好！我星期天下午两点会带孩子们过去看你。爱你。",
+                .cantonese: "媽，你好！我星期日下晝兩點會帶埋啲細路過嚟探你。愛你。", .spanish: "¡Hola, mamá! Paso el domingo a las 2 con los niños. Te quiero."]
+            let language = BedsideText.language, translation = translations[language]
+            let text = ReceivedText(id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", from: slots.contact(for: 1)?.phoneNumbers.first ?? "+14155550123", sentAt: Date().timeIntervalSince1970 - 600, body: body,
+                                    pictures: args.contains("--preview-picture") ? 1 : nil, language: language.rawValue, text: translation ?? body, translated: translation != nil, sourceLanguage: "en")
+            present(MessagePlayerViewController(messages: [], texts: [text], slots: slots), animated: false)
         }
         #endif
     }
@@ -471,7 +480,8 @@ final class CallViewController: UIViewController {
     @objc private func updateMessages() {
         guard isViewLoaded else { return }
         defer { refreshPresence() }
-        let count = BedsideMessages.shared.ready.count
+        // Texts count as messages here; they show after the recordings.
+        let count = BedsideMessages.shared.waitingCount
         messagesButton.configuration?.title = count == 1 ? BedsideText.string("Play 1 message") : BedsideText.string("Play %d messages", count)
         messagesButton.accessibilityLanguage = BedsideText.language.speechLanguage
         guard messagesButton.isHidden != (count == 0) else { return }
@@ -482,15 +492,16 @@ final class CallViewController: UIViewController {
     }
     @objc private func playMessages() {
         guard !presenceSuppressed, presentedViewController == nil, !opening, view.window?.windowScene?.activationState == .foregroundActive else { return }
-        let ready = BedsideMessages.shared.ready
-        guard !ready.isEmpty else { displayStatus(BedsideText.string("No new messages."), temporary: true); return }
+        let ready = BedsideMessages.shared.ready, texts = BedsideMessages.shared.readyTexts
+        guard !ready.isEmpty || !texts.isEmpty else { displayStatus(BedsideText.string("No new messages."), temporary: true); return }
         displayStatus(nil)
-        let player = MessagePlayerViewController(messages: ready, slots: slots)
+        let player = MessagePlayerViewController(messages: ready, texts: texts, slots: slots)
+        let started = BedsideMessages.shared.waitingIDs
         player.onFinish = { [weak self, weak player] in
             // Stop leaves what was already waiting. A message that arrived during playback still
             // starts on its own, and a call that takes over is not Stop.
             if player?.interrupted != true {
-                let deferred = MessageAutoplay.deferredMessageIDs(startedWith: ready.map(\.id), stillReady: BedsideMessages.shared.ready.map(\.id))
+                let deferred = MessageAutoplay.deferredMessageIDs(startedWith: started, stillReady: BedsideMessages.shared.waitingIDs)
                 if !deferred.isEmpty { self?.snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), deferred) }
             }
             self?.resume()
@@ -509,9 +520,9 @@ final class CallViewController: UIViewController {
     /// It watches for messages only while it could start them right away: downloaded messages are waiting,
     /// it's within the caregiver's hours, and Mom hasn't just said not now.
     private var presenceAllowed: Bool {
-        let ready = BedsideMessages.shared.ready
+        let ready = BedsideMessages.shared.waitingIDs
         guard cameraAvailable, !ready.isEmpty, MessageAutoplay.load().allows(Date()) else { return false }
-        if let snooze, Date() < snooze.until, ready.allSatisfy({ snooze.ids.contains($0.id) }) { return false }
+        if let snooze, Date() < snooze.until, ready.allSatisfy({ snooze.ids.contains($0) }) { return false }
         return true
     }
     @objc private func refreshPresence() {
@@ -574,7 +585,7 @@ final class CallViewController: UIViewController {
     private func presenceDetected() {
         presence.stop()
         guard presenceAllowed else { return }
-        let notice = MessageNoticeView(count: BedsideMessages.shared.ready.count)
+        let notice = MessageNoticeView(count: BedsideMessages.shared.waitingCount)
         notice.onNotNow = { [weak self] in self?.declineNotice() }
         notice.onFinished = { [weak self] in self?.notice = nil; self?.playMessages() }
         notice.translatesAutoresizingMaskIntoConstraints = false
@@ -586,7 +597,7 @@ final class CallViewController: UIViewController {
     }
     private func declineNotice() {
         notice?.end(); notice = nil
-        snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), Set(BedsideMessages.shared.ready.map(\.id)))
+        snooze = (Date().addingTimeInterval(MessageAutoplay.snoozeSeconds), Set(BedsideMessages.shared.waitingIDs))
         refreshPresence()
     }
     @objc private func restyleDisplay() { appliedDisplayStyle = nil; updateClock() }

@@ -43,6 +43,10 @@ export type MessageMode = "audio" | "video";
 export type InboxEntry = { id: string; from: string; fromName: string; kind: MessageKind; mode: MessageMode; contentType: string; pathname: string; durationSeconds: number; sentAt: number; deliveredAt?: number; callerNumber?: string; callerVerified?: boolean; held?: boolean };
 /** A message the bedside left for a family member who missed its call, until they play it. */
 export type OutboxEntry = { id: string; to: string; sentAt: number };
+/** A text message to the household's Porch number, waiting to be shown and read on the bedside (see texts.ts). `from` is
+ * the sender's number or short code. The words are kept apart from the household, so its every poll stays small.
+ * Texts from numbers the household doesn't know are held until a caregiver releases them. */
+export type TextEntry = { id: string; from: string; sentAt: number; pictures?: number; held?: boolean; deliveredAt?: number };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
 /** A caller ID that tried to ring the bedside while unknown callers were blocked, until a caregiver allows or clears it. */
@@ -70,7 +74,7 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
  * `numberFromSetup`: made by the app's setup, which gets the household its number. A household set up by hand, like the
  * first one, already has a number outside these records; the app never buys it another (see numbers.ts). */
 /** `createdAt`: when the bedside set it up; households from before it was kept have none. */
-export type Household = { id: string; name: string; createdAt?: number; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
+export type Household = { id: string; name: string; createdAt?: number; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; texts?: TextEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
   blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };

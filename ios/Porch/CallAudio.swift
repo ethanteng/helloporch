@@ -95,9 +95,17 @@ import PorchCore
     }
     /// A clip that wouldn't play is fetched again next time.
     static func discard(_ url: URL) { try? FileManager.default.removeItem(at: url) }
+    /// A text's words are private: once the text is read, removed or expired, its readings in any of the language's
+    /// voices leave this iPad too. The server deletes its own copy with the text.
+    static func forget(_ text: String, language: BedsideLanguage) {
+        for voice in FamilyCoordinator.shared.state?.speech?.choices(for: language)?.voices ?? [] {
+            try? FileManager.default.removeItem(at: file(text, language: language, voiceID: voice.id))
+        }
+    }
     private static var loading: [URL: Task<URL?, Never>] = [:]
     /// The clip for a sentence, asking the server to read it if this iPad doesn't have it yet. nil when it isn't available.
-    static func load(_ text: String, language: BedsideLanguage, voiceID: String) async -> URL? {
+    /// `textID` names the text whose words these are, which the server reads although they're longer than an announcement.
+    static func load(_ text: String, language: BedsideLanguage, voiceID: String, textID: String? = nil) async -> URL? {
         let destination = file(text, language: language, voiceID: voiceID)
         if FileManager.default.fileExists(atPath: destination.path) { return destination }
         if let task = loading[destination] { return await task.value }
@@ -106,7 +114,9 @@ import PorchCore
             do {
                 // The server waits up to 15s for ElevenLabs, then stores the clip. The shared 12s limit
                 // would drop that response, and prefetch would not try the sentence again for ten minutes.
-                let response = try await FamilyService(credential).send("speech", ["language": language.rawValue, "text": text, "voiceID": voiceID], timeout: 30)
+                var values: [String: Any] = ["language": language.rawValue, "text": text, "voiceID": voiceID]
+                if let textID { values["textID"] = textID }
+                let response = try await FamilyService(credential).send("speech", values, timeout: 30)
                 guard let clip = response.clip, clip.voiceID == voiceID, let url = URL(string: clip.url), url.scheme == "https" else { return nil }
                 let session = URLSession(configuration: .ephemeral)
                 defer { session.invalidateAndCancel() }
@@ -124,9 +134,9 @@ import PorchCore
         return result
     }
     /// The clip if it's here within `seconds`. One that arrives later is kept for next time.
-    static func clip(_ text: String, language: BedsideLanguage, voiceID: String, within seconds: TimeInterval) async -> URL? {
+    static func clip(_ text: String, language: BedsideLanguage, voiceID: String, within seconds: TimeInterval, textID: String? = nil) async -> URL? {
         if let cached = cached(text, language: language, voiceID: voiceID) { return cached }
-        let pending = Task { await load(text, language: language, voiceID: voiceID) }
+        let pending = Task { await load(text, language: language, voiceID: voiceID, textID: textID) }
         guard seconds > 0 else { return nil }
         return await first(of: pending, within: seconds)
     }
@@ -168,6 +178,8 @@ import PorchCore
         if prefetching != nil { prefetchAgain = true; return }
         let contacts = slots.contacts.compactMap { $0 }
         var texts: [String] = []
+        /// A text's words, read with its ID: they can be longer than an announcement.
+        var words: [(String, String)] = []
         if state.dropInEnabled {
             for person in state.people where person.role == .family {
                 let name = contacts.first { $0.familyMemberID == person.id }?.name ?? person.name
@@ -186,25 +198,34 @@ import PorchCore
                 texts.append(BedsideVoicemailViewController.sentConfirmation(to: contact.name))
             }
             let waiting = (state.messages ?? []).filter { $0.held != true }
-            // The notice speaks `ready` (downloaded and unplayed), which is below the inbox count while a
+            // Texts count with the messages in the notice.
+            let waitingTexts = (state.texts ?? []).filter { !$0.held }
+            let total = waiting.count + waitingTexts.count
+            // The notice speaks what's ready (downloaded and unplayed), which is below the inbox count while a
             // message is still downloading or was played here before the server drops it. That count goes first.
             var noticeCounts: [Int] = []
-            let readyCount = BedsideMessages.shared.ready.count
-            if waiting.count > 1, (1..<waiting.count).contains(readyCount) { noticeCounts.append(readyCount) }
-            if !waiting.isEmpty { noticeCounts.append(waiting.count) }
+            let readyCount = BedsideMessages.shared.waitingCount
+            if total > 1, (1..<total).contains(readyCount) { noticeCounts.append(readyCount) }
+            if total > 0 { noticeCounts.append(total) }
             for count in noticeCounts { texts.append(MessageNoticeView.text(count: count)) }
             for message in waiting { texts.append(MessagePlayerViewController.announcement(for: message, slots: slots)) }
+            for text in waitingTexts { texts.append(MessagePlayerViewController.announcement(forTextFrom: text.from, sentAt: text.sentAt, slots: slots)) }
+            // The server reads up to 600 characters of a text's words in a natural voice (`textLimits.spokenCharacters`).
+            for text in BedsideMessages.shared.readyTexts {
+                if let note = MessagePlayerViewController.pictureNote(text.pictures ?? 0) { texts.append(note) }
+                if !text.text.isEmpty, text.text.utf16.count <= 600, MessagePlayerViewController.otherLanguage(of: text) == nil { words.append((text.text, text.id)) }
+            }
         }
         let now = Date()
         var seen = Set<String>()
-        let pending = texts.filter { seen.insert($0).inserted }.filter { text in
+        let pending = (texts.map { ($0, nil as String?) } + words.map { ($0.0, $0.1 as String?) }).filter { seen.insert($0.0).inserted }.filter { text, _ in
             let url = file(text, language: language, voiceID: voiceID)
             return !FileManager.default.fileExists(atPath: url.path) && attempted[url].map { now.timeIntervalSince($0) > 600 } ?? true
         }
         guard !pending.isEmpty else { return }
-        for text in pending { attempted[file(text, language: language, voiceID: voiceID)] = now }
+        for (text, _) in pending { attempted[file(text, language: language, voiceID: voiceID)] = now }
         prefetching = Task {
-            for text in pending { _ = await load(text, language: language, voiceID: voiceID) }
+            for (text, textID) in pending { _ = await load(text, language: language, voiceID: voiceID, textID: textID) }
             prefetching = nil
             guard prefetchAgain, let latest = FamilyCoordinator.shared.state else { prefetchAgain = false; return }
             prefetchAgain = false

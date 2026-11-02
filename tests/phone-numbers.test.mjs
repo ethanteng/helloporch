@@ -95,8 +95,8 @@ test('a bedside gets a local number that rings it and is its caller ID', async (
   assert.equal(assigned.porchNumber, '+14155550101');
   assert.equal(assigned.state.porchNumber, '+14155550101');
   assert.equal(assigned.state.phoneSetup, undefined);
-  assert.deepEqual(f.numbers.state.buys.map(({ number, voiceURL, label }) => ({ number, voiceURL, label })),
-    [{ number: '+14155550101', voiceURL: 'https://porch.example/api/calls/inbound/voice', label: `Porch ${mom.id}` }]);
+  assert.deepEqual(f.numbers.state.buys.map(({ number, voiceURL, smsURL, label }) => ({ number, voiceURL, smsURL, label })),
+    [{ number: '+14155550101', voiceURL: 'https://porch.example/api/calls/inbound/voice', smsURL: 'https://porch.example/api/calls/inbound/text', label: `Porch ${mom.id}` }]);
   // The first number makes the shared trunk: Porch's voicemail login only, its forwarded caller verification, and limits.
   const [trunk] = f.numbers.state.trunks;
   assert.equal(f.numbers.state.trunks.length, 1);
@@ -142,7 +142,7 @@ test('a shared trunk made by a try that stopped is used again, and a catch-all L
   assert.equal(f.numbers.state.buys.length, 1);
 });
 
-test("Twilio requests search US local numbers, buy with Porch's voice webhook, and keep numbers out of errors", async () => {
+test("Twilio requests search US local numbers, buy with Porch's voice and messaging webhooks, and keep numbers out of errors", async () => {
   const requests = [];
   const respond = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   let next = [];
@@ -160,10 +160,10 @@ test("Twilio requests search US local numbers, buy with Porch's voice webhook, a
 
   const sid = `PN${'a'.repeat(32)}`;
   next = [respond(201, { sid, phone_number: '+14155550101' })];
-  assert.deepEqual(await twilio.buy('+14155550101', { voiceURL: 'https://porch.example/api/calls/inbound/voice', label: 'Porch house' }), { sid, number: '+14155550101' });
+  assert.deepEqual(await twilio.buy('+14155550101', { voiceURL: 'https://porch.example/api/calls/inbound/voice', smsURL: 'https://porch.example/api/calls/inbound/text', label: 'Porch house' }), { sid, number: '+14155550101' });
   assert.equal(requests[2].init.method, 'POST');
   assert.ok(requests[2].url.endsWith('/IncomingPhoneNumbers.json'));
-  assert.deepEqual(Object.fromEntries(requests[2].init.body), { PhoneNumber: '+14155550101', VoiceUrl: 'https://porch.example/api/calls/inbound/voice', VoiceMethod: 'POST', FriendlyName: 'Porch house' });
+  assert.deepEqual(Object.fromEntries(requests[2].init.body), { PhoneNumber: '+14155550101', VoiceUrl: 'https://porch.example/api/calls/inbound/voice', VoiceMethod: 'POST', SmsUrl: 'https://porch.example/api/calls/inbound/text', SmsMethod: 'POST', FriendlyName: 'Porch house' });
 
   next = [respond(200, { incoming_phone_numbers: [{ sid: `PN${'b'.repeat(32)}`, phone_number: '+14155550199', friendly_name: 'Porch other' }, { sid, phone_number: '+14155550101', friendly_name: 'Porch house' }] })];
   assert.deepEqual(await twilio.find('Porch house'), { sid, number: '+14155550101' });
@@ -171,7 +171,7 @@ test("Twilio requests search US local numbers, buy with Porch's voice webhook, a
   assert.equal(await twilio.find('Porch nobody'), undefined);
 
   // A refusal sold nothing. A server error or a timeout may have, so it isn't one.
-  const options = { voiceURL: 'https://porch.example/api/calls/inbound/voice', label: 'Porch house' };
+  const options = { voiceURL: 'https://porch.example/api/calls/inbound/voice', smsURL: 'https://porch.example/api/calls/inbound/text', label: 'Porch house' };
   next = [respond(400, { code: 21422, message: 'Phone number +14155550101 is not available.' })];
   await assert.rejects(twilio.buy('+14155550101', options), error => error instanceof PurchaseRefused && !error.message.includes('555') && error.message.includes('400'));
   next = [respond(503, { message: 'Service unavailable' })];

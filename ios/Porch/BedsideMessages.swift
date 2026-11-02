@@ -1,6 +1,7 @@
 import UIKit
 import AVFoundation
 import LiveKit
+import NaturalLanguage
 import PorchCore
 import Vision
 
@@ -11,11 +12,21 @@ extension Notification.Name {
 }
 
 /// Keeps waiting family messages downloaded on the bedside iPad, so they play instantly and
-/// without a connection, and reports delivery and playback to the sender.
+/// without a connection, and reports delivery and playback to the sender. Text messages to the
+/// Porch number are kept the same way, ready in the bedside language, and show after the messages.
 @MainActor final class BedsideMessages: NSObject {
     static let shared = BedsideMessages()
     /// Downloaded messages that haven't been played, oldest first.
     private(set) var ready: [FamilyMessage] = []
+    /// Texts prepared in the bedside language that haven't been read, oldest first.
+    private(set) var readyTexts: [ReceivedText] = []
+    /// What's ready to play, messages and texts together.
+    var waitingCount: Int { ready.count + readyTexts.count }
+    var waitingIDs: [String] { ready.map(\.id) + readyTexts.map(\.id) }
+    private var fetchingTexts = Set<String>()
+    /// Read here; hidden at once even before the server confirms.
+    private var readTexts = Set<String>()
+    private var unreportedTexts = Set<String>()
     private var downloading = Set<String>()
     private var retryAfter: [String: Date] = [:]
     /// Played here; hidden at once even before the server confirms.
@@ -25,6 +36,8 @@ extension Notification.Name {
     private var started = false
     private let folder = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
         .appendingPathComponent("PorchMessages", isDirectory: true)
+    private let textFolder = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
+        .appendingPathComponent("PorchTexts", isDirectory: true)
 
     func start() {
         guard !started else { return }
@@ -33,6 +46,10 @@ extension Notification.Name {
         sync()
     }
     func file(for message: FamilyMessage) -> URL { folder.appendingPathComponent("\(message.id).\(message.fileExtension)") }
+    private func textFile(for id: String) -> URL { textFolder.appendingPathComponent("\(id).json") }
+    private func savedText(_ id: String) -> ReceivedText? {
+        (try? Data(contentsOf: textFile(for: id))).flatMap { try? JSONDecoder().decode(ReceivedText.self, from: $0) }
+    }
 
     @objc func sync() {
         guard PorchDevice.experience == .bedside, let credential = PorchDevice.credential(for: .bedside),
@@ -54,8 +71,20 @@ extension Notification.Name {
             try? FileManager.default.removeItem(at: file)
         }
         let nowReady = queue.filter { FileManager.default.fileExists(atPath: file(for: $0).path) }
-        if nowReady != ready {
-            ready = nowReady
+        // Texts from numbers the household doesn't know wait for a caregiver, like phone voicemail.
+        let allTexts = state.texts ?? []
+        readTexts.formIntersection(Set(allTexts.map(\.id))); unreportedTexts.formIntersection(Set(allTexts.map(\.id)))
+        let textQueue = allTexts.filter { !$0.held && !readTexts.contains($0.id) }.sorted { $0.sentAt < $1.sentAt }
+        let keepTexts = Set(textQueue.map { textFile(for: $0.id).lastPathComponent })
+        for file in (try? FileManager.default.contentsOfDirectory(at: textFolder, includingPropertiesForKeys: nil)) ?? [] where !keepTexts.contains(file.lastPathComponent) {
+            if let gone = savedText(file.deletingPathExtension().lastPathComponent) { Self.forgetReading(gone) }
+            try? FileManager.default.removeItem(at: file)
+        }
+        // Each is prepared in the bedside language. One kept from before a language change is fetched again.
+        let language = BedsideText.language.rawValue
+        let nowReadyTexts = textQueue.compactMap { savedText($0.id) }.filter { $0.language == language }
+        if nowReady != ready || nowReadyTexts != readyTexts {
+            ready = nowReady; readyTexts = nowReadyTexts
             // Prepare "You have N new messages" for this count before presence can speak it.
             if let state = FamilyCoordinator.shared.state, let slots = try? CallSlots.load() {
                 PorchNaturalVoice.prefetch(state, slots: slots)
@@ -63,11 +92,36 @@ extension Notification.Name {
             NotificationCenter.default.post(name: .porchMessagesReady, object: self)
         }
         for id in unreported { report(id, credential: credential) }
+        for id in unreportedTexts { reportRead(id, credential: credential) }
         // Don't compete with a call for bandwidth.
         guard !state.busy else { return }
         for message in queue where !downloading.contains(message.id) && !FileManager.default.fileExists(atPath: file(for: message).path)
             && (retryAfter[message.id] ?? .distantPast) < Date() {
             download(message, credential: credential)
+        }
+        for text in textQueue where !fetchingTexts.contains(text.id) && savedText(text.id)?.language != language && (retryAfter[text.id] ?? .distantPast) < Date() {
+            fetch(text, credential: credential)
+        }
+    }
+
+    /// The server translates a text the first time it's fetched in a language, which can take a while for a long one.
+    private func fetch(_ text: FamilyText, credential: FamilyCredential) {
+        fetchingTexts.insert(text.id)
+        Task { [weak self] in
+            do {
+                guard let received = try await FamilyService(credential).send("textMessage", ["textID": text.id], timeout: 40).text, received.id == text.id
+                else { throw FamilyServiceError(message: "Missing text.", status: 0) }
+                guard let self else { return }
+                // Fetched again in a new language: the old wording's reading goes.
+                if let earlier = self.savedText(text.id), earlier.text != received.text { Self.forgetReading(earlier) }
+                try FileManager.default.createDirectory(at: self.textFolder, withIntermediateDirectories: true)
+                try JSONEncoder().encode(received).write(to: self.textFile(for: text.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                self.fetchingTexts.remove(text.id)
+                self.sync()
+            } catch {
+                self?.fetchingTexts.remove(text.id)
+                self?.retryAfter[text.id] = Date().addingTimeInterval(60)
+            }
         }
     }
 
@@ -116,6 +170,33 @@ extension Notification.Name {
         return (message.callerNumber.map { PhoneNumberNormalization.display($0) } ?? BedsideText.string("Unknown caller"), nil)
     }
 
+    /// Who a text is from, as the bedside shows and speaks it: the keypad contact saved with that number, then the name a
+    /// caregiver gave it for phone drop-in, or the number itself. Texts are read automatically only from numbers the
+    /// household knows, so they borrow its names as caller ID would.
+    static func sender(ofText from: String, slots: CallSlots) -> (name: String, contact: CallContact?) {
+        if let contact = slots.contact(forPhoneNumber: from) { return (contact.name, contact) }
+        if let approval = FamilyCoordinator.shared.state?.phoneDropIns?.first(where: { $0.number == from }) { return (approval.name, nil) }
+        return (from.hasPrefix("+") ? PhoneNumberNormalization.display(from) : from, nil)
+    }
+
+    private static func forgetReading(_ text: ReceivedText) {
+        if !text.text.isEmpty, let language = BedsideLanguage(rawValue: text.language) { PorchNaturalVoice.forget(text.text, language: language) }
+    }
+    /// Read to the end: the text leaves the queue for good and its words are deleted.
+    func markRead(_ text: ReceivedText) {
+        readTexts.insert(text.id)
+        guard let credential = PorchDevice.credential(for: .bedside) else { return }
+        reportRead(text.id, credential: credential)
+        sync()
+    }
+    private func reportRead(_ id: String, credential: FamilyCredential) {
+        unreportedTexts.remove(id)
+        Task { [weak self] in
+            do { _ = try await FamilyService(credential).send("textRead", ["textID": id]) }
+            catch { self?.unreportedTexts.insert(id) }
+        }
+    }
+
     /// Played to the end: the message leaves the queue for good (the sender sees it was played).
     func markPlayed(_ message: FamilyMessage) {
         played.insert(message.id)
@@ -134,6 +215,7 @@ extension Notification.Name {
 
 /// A chime, then who the message is from and when, in the bedside language and voice. A natural clip
 /// gets a few seconds to arrive, since nothing is counting down; otherwise the built-in voice speaks.
+/// It also reads a text's words, without the chime.
 @MainActor final class MessageAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
     private let tone = PorchTonePlayer()
     private let clip = PorchClipPlayer()
@@ -143,16 +225,22 @@ extension Notification.Name {
     private var completion: (() -> Void)?
     private var timers: [Timer] = []
     private var watchdog: Timer?
+    private var limit: TimeInterval = 15
 
     override init() { super.init(); speech.delegate = self; speech.usesApplicationAudioSession = true }
-    func announce(_ text: String, completion: @escaping () -> Void) {
+    /// `chime` false goes on from something already said. `textID` lets the server read a text's words, which can be longer
+    /// than an announcement. `voiceLanguage` (BCP 47) reads words Porch couldn't translate in that language's built-in voice.
+    func announce(_ text: String, chime: Bool = true, textID: String? = nil, voiceLanguage: String? = nil, patience: TimeInterval = 3, completion: @escaping () -> Void) {
         stop()
         self.completion = completion
         if PorchTonePlayer.isSilentPreview { finish(); return }
-        tone.play(.announcement)
+        if chime { tone.play(.announcement) }
+        // A text's words take longer to say than an announcement.
+        limit = chime ? 15 : 15 + Double(text.count) * 0.35
         let language = BedsideText.language
-        let naturalVoice = PorchNaturalVoice.selected(for: language)
-        let voice = PorchAnnouncementVoice.resolve(for: language, identifier: BedsidePreferences.load().announcementVoiceIdentifier(for: language))
+        let naturalVoice = voiceLanguage == nil ? PorchNaturalVoice.selected(for: language) : nil
+        let voice = voiceLanguage.flatMap { AVSpeechSynthesisVoice(language: $0) }
+            ?? PorchAnnouncementVoice.resolve(for: language, identifier: BedsidePreferences.load().announcementVoiceIdentifier(for: language))
         guard voice != nil || naturalVoice != nil else {
             // No voice for this language: the screen still shows who it's from.
             timers.append(Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } })
@@ -164,10 +252,10 @@ extension Notification.Name {
             return utterance
         }
         let announcement = UUID(); self.announcement = announcement
-        timers.append(Timer.scheduledTimer(withTimeInterval: CallTone.announcement.duration, repeats: false) { [weak self] _ in
+        timers.append(Timer.scheduledTimer(withTimeInterval: chime ? CallTone.announcement.duration : 0, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 var ready: URL?
-                if let naturalVoice { ready = await PorchNaturalVoice.clip(text, language: language, voiceID: naturalVoice, within: 3) }
+                if let naturalVoice { ready = await PorchNaturalVoice.clip(text, language: language, voiceID: naturalVoice, within: patience, textID: textID) }
                 guard let self, self.announcement == announcement else { return }
                 if let ready, self.clip.play(ready, completion: { [weak self] success in
                     guard let self, self.announcement == announcement else { return }
@@ -181,10 +269,10 @@ extension Notification.Name {
         // service must not hold up the message.
         armWatchdog()
     }
-    /// 15 seconds from when speech starts, or from the announcement if it never does.
+    /// 15 seconds from when speech starts, or from the announcement if it never does; longer for a text's words.
     private func armWatchdog() {
         watchdog?.invalidate()
-        watchdog = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } }
+        watchdog = Timer.scheduledTimer(withTimeInterval: limit, repeats: false) { [weak self] _ in Task { @MainActor [weak self] in self?.finish() } }
     }
     private func speakBuiltIn() {
         guard let utterance else { finish(); return }
@@ -206,13 +294,31 @@ extension Notification.Name {
     }
 }
 
-/// Plays waiting messages one after another until none are left or someone stops it.
-/// A message stopped partway stays in the queue; only one played to the end is removed.
+/// Plays waiting messages one after another until none are left or someone stops it, then shows
+/// and reads waiting texts the same way. A message or text stopped partway stays in the queue;
+/// only one played or read to the end is removed.
 final class MessagePlayerViewController: UIViewController {
     var onFinish: (() -> Void)?
     private var queue: [FamilyMessage]
+    private var texts: [ReceivedText]
     private let slots: CallSlots
     private var current: FamilyMessage?
+    private var currentText: ReceivedText?
+    /// A text's words, which can be longer than the screen.
+    private let textScroll = UIScrollView()
+    private let textColumn = UIView()
+    private let textStack = UIStackView()
+    private var textPhoto = UIImageView()
+    private let textTitle = UILabel()
+    private let textDetail = UILabel()
+    private let textBody = UILabel()
+    /// That it was translated, and from what, or that pictures came with it.
+    private let textNote = UILabel()
+    /// The words as sent, under a translation.
+    private let textOriginal = UILabel()
+    private var hold: Timer?
+    /// A text stays on screen this long after it's read, for anyone still reading it, before the next one.
+    static let textHoldSeconds: TimeInterval = 8
     private var player: AVPlayer?
     private let playerLayer = AVPlayerLayer()
     private let videoView = UIView()
@@ -235,8 +341,8 @@ final class MessagePlayerViewController: UIViewController {
     override var canBecomeFirstResponder: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
 
-    init(messages: [FamilyMessage], slots: CallSlots) {
-        queue = messages; self.slots = slots
+    init(messages: [FamilyMessage], texts: [ReceivedText] = [], slots: CallSlots) {
+        queue = messages; self.texts = texts; self.slots = slots
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
     }
@@ -264,6 +370,18 @@ final class MessagePlayerViewController: UIViewController {
         banner.translatesAutoresizingMaskIntoConstraints = false
         bannerView.addSubview(banner)
         view.addSubview(bannerView)
+        textTitle.font = PorchStyle.font(40, weight: .semibold); textTitle.textColor = PorchStyle.nightText
+        textDetail.font = PorchStyle.font(26); textDetail.textColor = PorchStyle.nightSecondary
+        textBody.textColor = PorchStyle.nightText; textBody.accessibilityIdentifier = "messages.text"
+        textNote.font = PorchStyle.font(22); textNote.textColor = PorchStyle.nightSecondary
+        textOriginal.font = PorchStyle.font(26); textOriginal.textColor = PorchStyle.nightSecondary
+        for label in [textTitle, textDetail, textBody, textNote, textOriginal] { label.textAlignment = .center; label.numberOfLines = 0 }
+        // Labels take the stack's width so a long text wraps instead of staying one clipped line.
+        textStack.axis = .vertical; textStack.spacing = 16; textStack.alignment = .fill
+        for view in [textScroll, textColumn, textStack] { view.translatesAutoresizingMaskIntoConstraints = false }
+        textScroll.isHidden = true; textScroll.indicatorStyle = .white
+        textColumn.addSubview(textStack); textScroll.addSubview(textColumn)
+        view.addSubview(textScroll)
         var config = stopButton.configuration!
         config.title = BedsideText.string("Stop")
         config.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
@@ -294,17 +412,43 @@ final class MessagePlayerViewController: UIViewController {
             banner.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor, constant: -28),
             stopButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             stopButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -36),
-            stopButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 96)
+            stopButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 96),
+            // A short text sits in the middle of the space above Stop; a long one scrolls.
+            textScroll.topAnchor.constraint(equalTo: guide.topAnchor, constant: 24),
+            textScroll.bottomAnchor.constraint(equalTo: stopButton.topAnchor, constant: -24),
+            textScroll.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 48),
+            textScroll.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -48),
+            textColumn.topAnchor.constraint(equalTo: textScroll.contentLayoutGuide.topAnchor),
+            textColumn.bottomAnchor.constraint(equalTo: textScroll.contentLayoutGuide.bottomAnchor),
+            textColumn.leadingAnchor.constraint(equalTo: textScroll.contentLayoutGuide.leadingAnchor),
+            textColumn.trailingAnchor.constraint(equalTo: textScroll.contentLayoutGuide.trailingAnchor),
+            textColumn.widthAnchor.constraint(equalTo: textScroll.frameLayoutGuide.widthAnchor),
+            textColumn.heightAnchor.constraint(greaterThanOrEqualTo: textScroll.frameLayoutGuide.heightAnchor),
+            { let fit = textColumn.heightAnchor.constraint(equalTo: textScroll.frameLayoutGuide.heightAnchor); fit.priority = .defaultLow; return fit }(),
+            textStack.centerYAnchor.constraint(equalTo: textColumn.centerYAnchor),
+            textStack.topAnchor.constraint(greaterThanOrEqualTo: textColumn.topAnchor),
+            textStack.bottomAnchor.constraint(lessThanOrEqualTo: textColumn.bottomAnchor),
+            textStack.leadingAnchor.constraint(equalTo: textColumn.leadingAnchor),
+            textStack.trailingAnchor.constraint(equalTo: textColumn.trailingAnchor)
         ])
         observers.append(NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in self?.stop() }
         })
     }
-    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); playerLayer.frame = videoView.bounds }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        playerLayer.frame = videoView.bounds
+        // The labels only learn their width here. Wrapping at that width lets a long text scroll on the next pass.
+        let width = textScroll.bounds.width
+        guard width > 0 else { return }
+        for label in [textTitle, textDetail, textBody, textNote, textOriginal] where label.preferredMaxLayoutWidth != width {
+            label.preferredMaxLayoutWidth = width
+        }
+    }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         keypad.resetKeys(); becomeFirstResponder()
-        guard current == nil, !ended else { return }
+        guard current == nil, currentText == nil, !ended else { return }
         // Share the audio session with calls; releasing it never interrupts one.
         session = try? AudioManager.shared.audioSession.acquire(requirement: .playbackOnly)
         playNext()
@@ -313,7 +457,10 @@ final class MessagePlayerViewController: UIViewController {
 
     private func playNext() {
         guard !ended else { return }
-        guard !queue.isEmpty else { close(); return }
+        hold?.invalidate(); hold = nil; currentText = nil
+        // Texts follow the messages.
+        guard !queue.isEmpty else { if texts.isEmpty { close() } else { show(texts.removeFirst()) }; return }
+        textScroll.isHidden = true
         let message = queue.removeFirst()
         let file = BedsideMessages.shared.file(for: message)
         guard FileManager.default.fileExists(atPath: file.path) else { playNext(); return }
@@ -361,6 +508,90 @@ final class MessagePlayerViewController: UIViewController {
         BedsideMessages.shared.markPlayed(message)
         playNext()
     }
+    /// A text: who it's from and when, then its words in the bedside language, read aloud.
+    private func show(_ text: ReceivedText) {
+        currentText = text
+        let (name, contact) = BedsideMessages.sender(ofText: text.from, slots: slots)
+        textTitle.text = BedsideText.string("Text from %@", name)
+        textDetail.text = BedsideText.string("Sent %@", Self.sentText(text.sentAt))
+        textBody.text = text.text; textBody.isHidden = text.text.isEmpty
+        // As large as fits: most texts are a line or two.
+        let length = text.text.count
+        textBody.font = PorchStyle.font(length <= 80 ? 52 : length <= 200 ? 44 : length <= 500 ? 36 : 30, weight: .medium)
+        textBody.textAlignment = length <= 200 ? .center : .natural
+        textNote.text = [text.translated ? Self.translatedNote(text.sourceLanguage) : nil, Self.pictureNote(text.pictures ?? 0)].compactMap { $0 }.joined(separator: "\n")
+        textNote.isHidden = textNote.text?.isEmpty != false
+        textOriginal.text = text.body; textOriginal.isHidden = !text.translated || text.body.isEmpty
+        textStack.arrangedSubviews.forEach { textStack.removeArrangedSubview($0); $0.removeFromSuperview() }
+        if RecipientAppearance.photo(contact?.photoData) != nil {
+            textPhoto = RecipientAppearance.photoView(contact?.photoData)
+            textPhoto.translatesAutoresizingMaskIntoConstraints = false
+            // The stack fills its width. A row keeps the photo at 140 instead of stretching it.
+            let row = UIView()
+            row.addSubview(textPhoto)
+            NSLayoutConstraint.activate([
+                textPhoto.centerXAnchor.constraint(equalTo: row.centerXAnchor),
+                textPhoto.topAnchor.constraint(equalTo: row.topAnchor),
+                textPhoto.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+                textPhoto.widthAnchor.constraint(equalToConstant: 140),
+                textPhoto.heightAnchor.constraint(equalToConstant: 140),
+            ])
+            textStack.addArrangedSubview(row)
+        }
+        for label in [textTitle, textDetail, textBody, textNote, textOriginal] { textStack.addArrangedSubview(label) }
+        // Set after the labels are arranged; earlier, the stack ignores it.
+        textStack.setCustomSpacing(36, after: textDetail)
+        textStack.setCustomSpacing(28, after: textBody)
+        identity.isHidden = true; videoView.isHidden = true; bannerView.isHidden = true
+        textScroll.isHidden = false; textScroll.contentOffset = .zero
+        BedsideText.applyAccessibilityLanguage(to: view)
+        if text.translated { textOriginal.accessibilityLanguage = text.sourceLanguage }
+        announcer.announce(Self.announcement(forTextFrom: text.from, sentAt: text.sentAt, slots: slots)) { [weak self] in self?.read(text) }
+    }
+    private func read(_ text: ReceivedText) {
+        guard !ended, currentText?.id == text.id else { return }
+        guard !text.text.isEmpty else { readPictures(text); return }
+        // A long text's natural reading gets longer to arrive than an announcement.
+        announcer.announce(text.text, chime: false, textID: text.id, voiceLanguage: Self.otherLanguage(of: text), patience: 8) { [weak self] in self?.readPictures(text) }
+    }
+    private func readPictures(_ text: ReceivedText) {
+        guard !ended, currentText?.id == text.id else { return }
+        guard let note = Self.pictureNote(text.pictures ?? 0) else { finishText(text); return }
+        announcer.announce(note, chime: false) { [weak self] in self?.finishText(text) }
+    }
+    /// Read to the end, so it won't show again. It stays on screen a moment before the next one.
+    private func finishText(_ text: ReceivedText) {
+        guard !ended, currentText?.id == text.id else { return }
+        BedsideMessages.shared.markRead(text)
+        hold = Timer.scheduledTimer(withTimeInterval: Self.textHoldSeconds, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, !self.ended, self.currentText?.id == text.id else { return }
+                self.playNext()
+            }
+        }
+    }
+    /// What the bedside says before reading a text.
+    static func announcement(forTextFrom from: String, sentAt: TimeInterval, slots: CallSlots) -> String {
+        BedsideText.string("Text from %@. Sent %@.", BedsideMessages.sender(ofText: from, slots: slots).name, sentText(sentAt))
+    }
+    /// Said and shown when pictures came with a text, which Porch doesn't show yet.
+    static func pictureNote(_ count: Int) -> String? {
+        count < 1 ? nil : count == 1 ? BedsideText.string("It came with a picture, which Porch can't show yet.") : BedsideText.string("It came with %d pictures, which Porch can't show yet.", count)
+    }
+    static func translatedNote(_ sourceLanguage: String?) -> String? {
+        guard let sourceLanguage, let name = BedsideText.language.locale.localizedString(forLanguageCode: sourceLanguage) else { return nil }
+        return BedsideText.string("Translated from %@", name)
+    }
+    /// Words Porch couldn't translate, written in a language other than the bedside's: read in that language's
+    /// built-in voice rather than with the bedside voice's accent. Every written Chinese counts as the Chinese choices' language.
+    static func otherLanguage(of text: ReceivedText) -> String? {
+        guard !text.translated, let tag = text.sourceLanguage ?? NLLanguageRecognizer.dominantLanguage(for: text.text)?.rawValue else { return nil }
+        func family(_ tag: String) -> String {
+            let base = tag.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+            return ["zh", "yue", "cmn"].contains(base) ? "zh" : base
+        }
+        return family(tag) == family(BedsideText.language.rawValue) ? nil : tag
+    }
     /// What the bedside says before playing a message.
     static func announcement(for message: FamilyMessage, slots: CallSlots) -> String {
         BedsideText.string(message.kind == "voicemail" ? "Voicemail from %@. Sent %@." : "Message from %@. Sent %@.", BedsideMessages.sender(of: message, slots: slots).name, sentText(message.sentAt))
@@ -374,6 +605,7 @@ final class MessagePlayerViewController: UIViewController {
 
     private func tearDown() {
         announcer.stop()
+        hold?.invalidate(); hold = nil
         player?.pause(); player = nil; playerLayer.player = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }; observers = []
         try? session?.release(); session = nil

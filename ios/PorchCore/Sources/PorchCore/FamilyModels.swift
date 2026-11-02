@@ -141,6 +141,42 @@ public struct FamilyMessage: Codable, Equatable, Identifiable {
         switch contentType { case "video/quicktime": return "mov"; case "video/mp4": return "mp4"; case "audio/mpeg": return "mp3"; default: return "m4a" }
     }
 }
+/// A text message to the household's Porch number. The bedside shows and reads it after the waiting messages.
+public struct FamilyText: Codable, Equatable, Identifiable {
+    public let id: String
+    /// The sender's phone number in E.164, or a short code. Texts carry no carrier check, so it can be faked.
+    public let from: String
+    public let sentAt: TimeInterval
+    /// Pictures that came with it, which Porch doesn't show yet.
+    public let pictures: Int?
+    /// From a number the household doesn't know: it waits for a caregiver before the bedside shows it.
+    public let held: Bool
+    public let delivered: Bool
+    /// Caregiver review only (`caregiverTexts`): the words as sent, and what the bedside shows when it translated them.
+    public let body: String?
+    public let translation: String?
+    public let sourceLanguage: String?
+}
+/// A text as the bedside shows and reads it (`textMessage`).
+public struct ReceivedText: Codable, Equatable, Identifiable {
+    public let id: String
+    public let from: String
+    public let sentAt: TimeInterval
+    /// The words as sent. Empty for a text that was only pictures.
+    public let body: String
+    public let pictures: Int?
+    /// The bedside language it was prepared in. One kept from before a language change is fetched again.
+    public let language: String
+    /// What the bedside shows and reads: `body`, or `body` translated into `language`.
+    public let text: String
+    public let translated: Bool
+    /// The language it was written in, as a BCP 47 tag, when Porch could tell.
+    public let sourceLanguage: String?
+    public init(id: String, from: String, sentAt: TimeInterval, body: String, pictures: Int? = nil, language: String, text: String, translated: Bool, sourceLanguage: String? = nil) {
+        self.id = id; self.from = from; self.sentAt = sentAt; self.body = body; self.pictures = pictures
+        self.language = language; self.text = text; self.translated = translated; self.sourceLanguage = sourceLanguage
+    }
+}
 /// A message this device sent. States: uploading, queued, played, expired, removed, unsent, failed.
 public struct SentMessage: Codable, Equatable, Identifiable {
     public let id: String
@@ -195,6 +231,10 @@ public struct FamilySnapshot: Codable, Equatable {
     public let messages: [FamilyMessage]?
     /// For approved caregivers: phone voicemails waiting for review.
     public let heldMessages: Int?
+    /// Bedside only: text messages on their way to the bedside, and held ones. Older servers don't send them.
+    public let texts: [FamilyText]?
+    /// For approved caregivers: texts from unknown numbers waiting for review. Older servers don't send it.
+    public let heldTexts: Int?
     /// Bedside only: numbers approved for telephone drop-in.
     public let phoneDropIns: [PhoneDropInApproval]?
     /// How long calls to the bedside ring before the caller is offered voicemail. Older servers don't send it.
@@ -263,6 +303,8 @@ public struct FamilyAdminState: Codable, Equatable {
     public let messagesEnabled: Bool?
     /// Messages waiting on the bedside device, for caregiver review.
     public let messages: [FamilyMessage]?
+    /// Texts waiting for the bedside, without their words. Older servers don't send them.
+    public let texts: [FamilyText]?
     public let phoneDropIns: [PhoneDropInApproval]?
     /// Unclaimed invitations, so a caregiver can see who hasn't joined yet and cancel one.
     public let invitations: [PendingFamilyInvitation]?
@@ -270,9 +312,9 @@ public struct FamilyAdminState: Codable, Equatable {
     public let callScreening: CallScreening?
     /// Family see when someone is at the bedside iPad. Older servers don't send it.
     public let shareAttendance: Bool?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil) {
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, texts: [FamilyText]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
-        self.messagesEnabled = messagesEnabled; self.messages = messages; self.phoneDropIns = phoneDropIns; self.invitations = invitations
+        self.messagesEnabled = messagesEnabled; self.messages = messages; self.texts = texts; self.phoneDropIns = phoneDropIns; self.invitations = invitations
         self.callScreening = callScreening; self.shareAttendance = shareAttendance
     }
 }
