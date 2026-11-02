@@ -97,14 +97,14 @@ test('a bedside gets a local number that rings it and is its caller ID', async (
   assert.equal(assigned.state.phoneSetup, undefined);
   assert.deepEqual(f.numbers.state.buys.map(({ number, voiceURL, label }) => ({ number, voiceURL, label })),
     [{ number: '+14155550101', voiceURL: 'https://porch.example/api/calls/inbound/voice', label: `Porch ${mom.id}` }]);
-  // The first number makes the shared trunk: Porch's voicemail login only, its forwarded caller verification, and limits.
+  // The first number makes the shared trunk: Porch's voicemail login only, its forwarded caller verification, and a ring limit but no call limit.
   const [trunk] = f.numbers.state.trunks;
   assert.equal(f.numbers.state.trunks.length, 1);
   assert.equal(trunk.name, 'Porch inbound (shared)');
   assert.deepEqual(trunk.numbers, ['+14155550101']);
   assert.equal(trunk.authUsername, 'porch'); assert.ok(trunk.authPassword.length > 20);
   assert.deepEqual(trunk.headersToAttributes, { 'X-Porch-VerStat': 'porch.callerVerification' });
-  assert.equal(trunk.ringingTimeout.seconds, 120n); assert.equal(trunk.maxCallDuration.seconds, 1800n);
+  assert.equal(trunk.ringingTimeout.seconds, 120n); assert.equal(trunk.maxCallDuration, undefined);
   assert.deepEqual(trunk.allowedAddresses, []);
   assert.equal(f.numbers.state.rules.length, 1);
   assert.deepEqual(f.numbers.state.rules[0].trunkIds, [trunk.sipTrunkId]);
@@ -134,10 +134,11 @@ test('a shared trunk made by a try that stopped is used again, and a catch-all L
   f.numbers.state.failTrunkUpdate = true;
   f.advance(60); await f.poll(mom.bedside.credential);
   assert.equal(f.numbers.state.trunks.length, 1);
+  f.numbers.state.trunks[0].maxCallDuration = { seconds: 1800n }; // The call limit an earlier Porch saved, which this try lifts.
   f.advance(120);
   assert.equal((await f.poll(mom.bedside.credential)).state.porchNumber, '+14155550101');
   assert.equal(f.numbers.state.trunks.length, 1);
-  assert.equal(f.numbers.state.trunks[0].maxCallDuration.seconds, 1800n);
+  assert.equal(f.numbers.state.trunks[0].maxCallDuration, undefined);
   assert.equal(f.numbers.state.rules.length, 1);
   assert.equal(f.numbers.state.buys.length, 1);
 });

@@ -99,6 +99,22 @@ test('telephone calls require manual acceptance and issue microphone-only tokens
   for (let i = 0; i < 8; i++) { f.advance(10); assert.equal((await f.poll(bedside)).state.call.state, 'accepted'); }
 });
 
+test('an answered telephone call has no time limit, and ends when the bedside is lost', async () => {
+  const f = fixture(), { bedside, family } = await f.setup(), event = f.call();
+  await f.webhook(event);
+  const callID = (await f.poll(bedside)).state.call.id;
+  await f.json('acceptCall', { callID, available: true }, bedside.credential);
+  // Three hours with the caller still on the line: well past the 30 minutes calls used to be cut off at.
+  for (let i = 0; i < 360; i++) { f.advance(30); assert.equal((await f.poll(bedside)).state.call.state, 'accepted'); }
+  assert.deepEqual(f.ended, []);
+  // The bedside iPad stops checking in: the call ends as of when it was last heard from, and the caller is hung up.
+  const heard = f.advance(0); f.advance(36);
+  await f.json('poll', { available: true }, family.credential);
+  const call = f.house(bedside).call;
+  assert.equal(call.state, 'ended'); assert.equal(call.endedAt, heard);
+  assert.deepEqual(f.ended, [event.room.name]);
+});
+
 test('duplicate join events never create a second call or extend the ringing deadline', async () => {
   const f = fixture(), { bedside } = await f.setup(), event = f.call();
   await Promise.all([f.webhook(event), f.webhook(event)]);

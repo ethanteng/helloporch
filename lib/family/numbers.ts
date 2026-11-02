@@ -169,12 +169,13 @@ async function sharedInboundTrunk(store: FamilyStore, sip: NumberServices["sip"]
     let trunk = halfMade ?? await sip.createSipInboundTrunk(sharedTrunkName, [number], { authUsername: login.username, authPassword: login.password,
       ringingTimeout: inboundRingLimitSeconds, headersToAttributes: { [forwardedVerificationHeader]: callerVerificationAttribute } });
     // Replace clears any field left out, and listing a trunk can come back without its password. Set the voicemail
-    // login again, as the setup script does. Create can't set a call limit. It's not in use until saved below.
+    // login again, as the setup script does. It's not in use until saved below.
     trunk.numbers = [...new Set([...trunk.numbers, number])];
     trunk.authUsername = login.username; trunk.authPassword = login.password; trunk.allowedAddresses = [];
     trunk.headersToAttributes = { [forwardedVerificationHeader]: callerVerificationAttribute };
     trunk.ringingTimeout = new SIPInboundTrunkInfo({ ringingTimeout: { seconds: BigInt(inboundRingLimitSeconds) } }).ringingTimeout;
-    trunk.maxCallDuration = new SIPInboundTrunkInfo({ maxCallDuration: { seconds: 1800n } }).maxCallDuration;
+    // Calls have no time limit, even on a trunk a try that stopped had saved with the 30 minutes Porch used to set.
+    trunk.maxCallDuration = undefined;
     trunk = await sip.updateSipInboundTrunk(trunk.sipTrunkId, trunk);
     if (!rules.some(rule => rule.trunkIds.includes(trunk.sipTrunkId))) {
       await sip.createSipDispatchRule({ type: "individual", roomPrefix: inboundRoomPrefix }, { name: sharedTrunkName, trunkIds: [trunk.sipTrunkId], hidePhoneNumber: false,

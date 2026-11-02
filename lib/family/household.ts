@@ -24,7 +24,8 @@ export type Invite = { id: string; secretHash: string; name: string; permissions
  * `endedAt`: when it ended. `endedBy`: who hung up before it was answered. The person called declining sets it;
  * a ring that runs out does not, so call history can tell declined from missed (see call-log.ts).
  * `peerName`: what Porch called the person on the other end from the bedside when the call started, their name or an
- * approved phone number's, so a later rename or removal doesn't change the call in history. */
+ * approved phone number's, so a later rename or removal doesn't change the call in history.
+ * `expiresAt`: when a call still ringing stops ringing. An answered call has no time limit: it's `noCallLimit`. */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
   guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string; peerName?: string };
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
@@ -104,6 +105,9 @@ export function finishCall(call: Call, reason: string, now: number, endedAt = no
 }
 /** Why a call ended when its push couldn't reach the person called. */
 export const deliveryUnavailable = "Incoming call delivery unavailable.";
+/** The `expiresAt` of an answered call, which goes on until someone hangs up or their device is lost. Households are
+ * stored as JSON, which has no Infinity, and Porch apps end a call once its `expiresAt` passes, so it's a number that never does. */
+export const noCallLimit = Number.MAX_SAFE_INTEGER;
 export function expire(house: Household, now: number) {
   const call = house.call;
   if (!call) return;
@@ -111,17 +115,15 @@ export function expire(house: Household, now: number) {
   // The call can end in the same update that is still ringing someone in. A later check-in must not leave that
   // invitation looking answerable: their phone treats it as an ordinary incoming call.
   if (call.state === "ended") { cancelRingingPorchGuests(call, now); return; }
-  // Ended when it ran out, or when the last lost device was last heard from, however much later that's noticed.
+  // Ended when it stopped ringing, or when the last lost device was last heard from, however much later that's noticed.
   const end = (at: number) => finishCall(call, "The call timed out or a device went offline.", now, at);
   const lost = (id: string) => {
     const member = house.members.find(m => m.id === id);
     return !member || member.revoked || member.seenAt < now - 35;
   };
   const seen = (id: string) => house.members.find(m => m.id === id)?.seenAt ?? now;
-  if (call.expiresAt <= now) {
-    const on = call.state !== "accepted" ? [] : call.phone ? [call.to] : presentMembers(call);
-    return end(on.length && on.every(lost) ? Math.min(call.expiresAt, Math.max(...on.map(seen))) : call.expiresAt);
-  }
+  // Only ringing runs out. An answered call never does, even one saved with the 30-minute limit Porch used to have.
+  if (call.state !== "accepted" && call.expiresAt <= now) return end(call.expiresAt);
   for (const guest of call.porchGuests ?? []) if (guest.state === "ringing" && guest.ringUntil <= now) { guest.state = "missed"; guest.endedAt = now; }
   if (call.state !== "accepted") return;
   if (call.phone) { if (lost(call.to)) end(seen(call.to)); return; }

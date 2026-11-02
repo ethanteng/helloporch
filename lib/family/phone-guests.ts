@@ -8,8 +8,8 @@ import type { FamilyStore } from "./store.ts";
 // that needs Mom on the line, into the same LiveKit room. The telephone leg belongs to whoever added it. It hangs up
 // when they leave, and the bedside is never left alone with it.
 export const phoneGuestActions = new Set(["addPhoneGuest", "removePhoneGuest"]);
-/** Bank hold times run long, so a call with a phone guest lasts up to an hour from when the number was added. */
-export const phoneGuestLimits = { perCall: 5, label: 40, ringSeconds: 60, callSeconds: 3600 };
+/** A number rings for up to a minute. Once answered it stays as long as the call does, however long a bank's hold runs. */
+export const phoneGuestLimits = { perCall: 5, label: 40, ringSeconds: 60 };
 export type PhoneGuestServices = {
   rooms: Pick<RoomServiceClient, "getParticipant" | "removeParticipant">;
   sip: Pick<SipClient, "createSipParticipant">;
@@ -106,7 +106,7 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
   requireValue(me.role === "family" && me.caregiver === true, "Only a caregiver can add a phone number to a call.", 403);
   const trunk = process.env.LIVEKIT_SIP_OUTBOUND_TRUNK_ID;
   requireValue(trunk, "Adding a phone number isn't set up on this server yet.", 503);
-  requireValue(call.state === "accepted" && call.expiresAt > now && call.left?.[me.id] === undefined, "Add a phone number once you're both on the call.", 409);
+  requireValue(call.state === "accepted" && call.left?.[me.id] === undefined, "Add a phone number once you're both on the call.", 409);
   requireValue(dialableNumber(input.phoneNumber), "Enter a US or Canadian phone number with its area code.");
   const label = typeof input.label === "string" ? input.label.trim() : "";
   requireValue(label.length > 0 && label.length <= phoneGuestLimits.label, `Name who you're calling in up to ${phoneGuestLimits.label} characters, such as "Bank".`);
@@ -149,7 +149,7 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
       ...(house.porchNumber ? { fromNumber: house.porchNumber.number } : {}),
       // Everyone on the call hears it ring, as on a regular three-way call.
       hidePhoneNumber: true, playDialtone: true, waitUntilAnswered: false,
-      ringingTimeout: phoneGuestLimits.ringSeconds, maxCallDuration: phoneGuestLimits.callSeconds, timeout: 10,
+      ringingTimeout: phoneGuestLimits.ringSeconds, timeout: 10,
     });
   } catch (error) {
     // A refused request created no leg. Any other failure, such as a timeout, may still create one after
@@ -174,18 +174,11 @@ export async function handlePhoneGuestAction(action: string, context: PhoneGuest
     throw new FamilyError("The call ended before the phone could be added.", 409);
   }
   if (live.guests?.find(g => g.id === guest.id)?.endedAt) {
-    try { await services.rooms.removeParticipant(room, identity); } catch { /* the room's call limit ends it */ }
+    try { await services.rooms.removeParticipant(room, identity); } catch { /* reaped next, or on a later poll */ }
     try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
     throw new FamilyError("That phone number was hung up.", 409);
   }
   // The number this one replaced may have connected while it was dialing.
   try { await reapStoredPhoneGuests(context); } catch { /* the next poll tries again */ }
-  // Only a number that actually dialed lengthens the call.
-  await mutate(store, house.id, current => {
-    const dialed = current.call;
-    if (dialed?.id === call.id && dialed.state === "accepted" && activePhoneGuest(dialed)?.id === guest.id) {
-      dialed.expiresAt = Math.max(dialed.expiresAt, now + phoneGuestLimits.callSeconds);
-    }
-  });
   return { phoneGuest: { id: guest.id, label, addedBy: me.id, number: guest.number } };
 }

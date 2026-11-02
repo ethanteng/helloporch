@@ -105,7 +105,7 @@ test("preparing creates isolated microphone-only credentials without placing a c
   assert.ok(!JSON.stringify(first).includes(configuration.LIVEKIT_API_SECRET));
 });
 
-test("a tampered, invented, or expired control token cannot dial or delete a room", async () => {
+test("a tampered or invented control token cannot dial or delete a room, and an expired one cannot dial", async () => {
   const f = fixture();
   const session = await f.prepare();
   const [encoded, signature] = session.controlToken.split(".");
@@ -115,8 +115,16 @@ test("a tampered, invented, or expired control token cannot dial or delete a roo
   for (const controlToken of [forged, "fake.token", "", "a".repeat(1801)]) {
     for (const action of ["start", "end"]) assert.equal((await f.send(action, { controlToken })).status, 401);
   }
-  assert.equal((await f.send("end", { controlToken: session.controlToken }, { now: () => now + 1201 })).status, 401);
+  assert.equal((await f.send("start", { controlToken: session.controlToken }, { now: () => now + 1201 })).status, 401);
   assert.equal(f.calls.services, 0);
+});
+
+test("hanging up works however long the phone call went on, after its control token expired", async () => {
+  const f = fixture();
+  const session = await f.prepare();
+  assert.equal((await f.send("start", { controlToken: session.controlToken })).status, 200);
+  assert.equal((await f.send("end", { controlToken: session.controlToken }, { now: () => now + 4 * 3600 })).status, 200);
+  assert.deepEqual(f.calls.deleted, [session.room]);
 });
 
 test("the iPad must be present and a destination must still be approved before dialing", async () => {
@@ -130,7 +138,7 @@ test("the iPad must be present and a destination must still be approved before d
   assert.equal(f.calls.dial.length, 0);
 });
 
-test("dialing uses the configured trunk, a fixed destination, and bounded duration; sequential replays do not redial", async () => {
+test("dialing uses the configured trunk, a fixed destination, and no time limit; sequential replays do not redial", async () => {
   const f = fixture();
   const session = await f.prepare();
   const body = { controlToken: session.controlToken, phoneNumber: "+14155559999", room: "someone-elses-room" };
@@ -141,7 +149,7 @@ test("dialing uses the configured trunk, a fixed destination, and bounded durati
   assert.equal(room, session.room);
   assert.equal(options.participantIdentity, "phone");
   assert.equal(options.ringingTimeout, 45);
-  assert.equal(options.maxCallDuration, 900);
+  assert.equal(options.maxCallDuration, undefined, "a phone call lasts until someone hangs up");
   assert.equal(options.waitUntilAnswered, false);
   assert.equal(options.playDialtone, true);
   assert.equal((await f.send("start", body)).status, 409);

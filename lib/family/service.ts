@@ -5,7 +5,7 @@ import { familyStore, type FamilyStore } from "./store.ts";
 import { activationKey, createActivation, markInvitationSetUp, rememberHousehold, type Activation } from "./activations.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noCallLimit, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -592,7 +592,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             }
             return undefined;
           }
-          requireValue(call.state === "accepted" && call.expiresAt > now && call.left?.[me.id] === undefined, "This call ended or expired.", 410);
+          requireValue(call.state === "accepted" && call.left?.[me.id] === undefined, "This call ended or expired.", 410);
           if (action === "acceptCall") {
             requireValue(input.available === true, "Open Porch to answer this call.", 409);
             requireValue(invite.state === "ringing" && invite.ringUntil > now, invite.state === "joined" ? "This call was already answered." : "This call ended or expired.", invite.state === "joined" ? 409 : 410);
@@ -619,13 +619,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           }
         } else {
           requireValue(call.left?.[me.id] === undefined, "You left this call.", 410);
-          requireValue(call.state !== "ended" && call.expiresAt > now, "This call ended or expired.", 410);
+          requireValue(call.state === "accepted" || (call.state === "pending" && call.expiresAt > now), "This call ended or expired.", 410);
           if (call.kind === "dropIn") requireValue(dropInAllowed(house, call), "Drop-in access was removed.", 403);
           if (action === "acceptCall") {
             requireValue(call.to === me.id && input.available === true, "Open Porch to answer this call.", 409);
             requireValue(call.state === "pending", "This call was already answered.", 409);
             if (call.kind === "dropIn") requireValue(call.announcedAt && now >= call.announcedAt + 5, "Wait for the drop-in announcement to finish.", 409);
-            call.state = "accepted"; call.acceptedAt = now; call.expiresAt = now + 1800;
+            call.state = "accepted"; call.acceptedAt = now; call.expiresAt = noCallLimit;
             me.available = false; me.seenAt = now;
           } else { requireValue(call.from === me.id || call.state === "accepted", "Answer this call before joining.", 403); me.seenAt = now; }
         }
