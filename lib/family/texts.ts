@@ -12,7 +12,7 @@ import { household, settings, signed } from "./voicemail.ts";
 // after its waiting messages and is read aloud, translated when it isn't written in the bedside's language. Texts from
 // other numbers wait for a caregiver, like phone voicemail. Texts carry no carrier check, so a faked number gets through.
 // Pictures aren't shown yet; the bedside says that a text came with some.
-export const textLimits = { characters: 1600, waiting: 20, held: 10, perSender: 10, heldPerSender: 3, pictures: 10,
+export const textLimits = { characters: 1600, waiting: 20, held: 10, perSender: 10, heldPerSender: 3, attachments: 10,
   unreadSeconds: 7 * 86400, keepSeconds: 8 * 86400, spokenCharacters: 600, translatedCharacters: 4000, retrySeconds: 600 };
 export const textActions = new Set(["textMessage", "textRead", "releaseText", "removeText", "caregiverTexts"]);
 export type TextDependencies = { store?: FamilyStore; media?: MediaStore; now?: () => number };
@@ -21,7 +21,7 @@ export type TextContext = { store: FamilyStore; media: () => MediaStore; now: nu
  * bedside showed and read, per bedside language, so a text is translated once. `clips`: natural-voice readings of the
  * words in the media store, deleted with the text. A removed text keeps only its ID for a day, so Twilio repeating the
  * webhook can't bring it back. */
-type TextRecord = { id: string; from: string; body: string; pictures: number; receivedAt: number; translations?: Partial<Record<BedsideLanguage, Translation>>; clips?: string[] };
+type TextRecord = { id: string; from: string; body: string; pictures: number; attachments?: number; receivedAt: number; translations?: Partial<Record<BedsideLanguage, Translation>>; clips?: string[] };
 type Removed = { id: string; removed: true };
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -107,9 +107,9 @@ function textsOpen(house: Household, from: string, holding: boolean, now: number
 }
 
 /** Saves a text and queues it for the bedside, or holds it for a caregiver. Safe to repeat for the same message. */
-export async function receiveText(store: FamilyStore, media: () => MediaStore, householdID: string, text: { messageSID: string; from: string; body: string; pictures: number }, now: number) {
+export async function receiveText(store: FamilyStore, media: () => MediaStore, householdID: string, text: { messageSID: string; from: string; body: string; pictures: number; attachments: number }, now: number) {
   const id = textMessageID(text.messageSID);
-  const record: TextRecord = { id, from: text.from, body: text.body, pictures: text.pictures, receivedAt: now };
+  const record: TextRecord = { id, from: text.from, body: text.body, pictures: text.pictures, ...(text.attachments ? { attachments: text.attachments } : {}), receivedAt: now };
   // The words first, so the bedside never sees a text it can't fetch.
   if (!await store.create(textKey(householdID, id), JSON.stringify(record), textLimits.keepSeconds) && !await saved(store, householdID, id)) return false;
   const { result: queued } = await mutate(store, householdID, house => {
@@ -117,22 +117,20 @@ export async function receiveText(store: FamilyStore, media: () => MediaStore, h
     if (house.texts.some(entry => entry.id === id)) return true;
     const holding = !knownCaller(house, text.from);
     if (!textsOpen(house, text.from, holding, now)) return false;
-    house.texts.push({ id, from: text.from, sentAt: now, ...(text.pictures ? { pictures: text.pictures } : {}), ...(holding ? { held: true } : {}) });
+    house.texts.push({ id, from: text.from, sentAt: now, ...(text.pictures ? { pictures: text.pictures } : {}), ...(text.attachments ? { attachments: text.attachments } : {}),
+      ...(holding ? { held: true } : {}) });
     return true;
   });
   if (!queued) await endText(store, media, householdID, id, now);
   return queued;
 }
 
-/** Expires week-old unread texts, and releases held ones from numbers the household has since saved or allowed. Runs on bedside polls. */
-export async function maintainTexts(store: FamilyStore, house: Household, now: number) {
-  const due = (entry: TextEntry) => !live(entry, now) || (entry.held === true && !held(house, entry));
-  if (!(house.texts ?? []).some(due)) return;
-  // The words of an expired text are already due to expire with it.
-  await mutate(store, house.id, current => {
-    current.texts = (current.texts ?? []).filter(entry => live(entry, now));
-    for (const entry of current.texts) if (entry.held && !held(current, entry)) delete entry.held;
-  });
+/** Expires week-old unread texts, deleting their words and readings as a read text's are, so a repeated webhook can't
+ * queue one again. Releases held ones from numbers the household has since saved or allowed. Runs on bedside polls. */
+export async function maintainTexts(store: FamilyStore, media: () => MediaStore, house: Household, now: number) {
+  for (const entry of (house.texts ?? []).filter(entry => !live(entry, now))) await endText(store, media, house.id, entry.id, now);
+  if (!(house.texts ?? []).some(entry => live(entry, now) && entry.held === true && !held(house, entry))) return;
+  await mutate(store, house.id, current => { for (const entry of current.texts ?? []) if (entry.held && !held(current, entry)) delete entry.held; });
 }
 
 /** What the bedside shows and reads for a text in its language. A text in that language already is read as it was sent. */
@@ -182,7 +180,8 @@ export async function handleTextAction(action: string, { store, media, now, hous
       if (!record) return [];
       const translation = record.translations?.[bedsideLanguage(house)];
       return [{ id: entry.id, from: entry.from, sentAt: entry.sentAt, held: held(house, entry), delivered: entry.deliveredAt !== undefined, body: record.body,
-        ...(record.pictures ? { pictures: record.pictures } : {}), ...(translation?.translated ? { translation: translation.text, sourceLanguage: translation.language } : {}) }];
+        ...(record.pictures ? { pictures: record.pictures } : {}), ...(record.attachments ? { attachments: record.attachments } : {}),
+        ...(translation?.translated ? { translation: translation.text, sourceLanguage: translation.language } : {}) }];
     }) };
   }
   const id = textID(input);
@@ -214,7 +213,8 @@ export async function handleTextAction(action: string, { store, media, now, hous
   const language = bedsideLanguage(house);
   const shown = await readable(store, house.id, record, language, now, translate);
   if (entry.deliveredAt === undefined) await mutate(store, house.id, current => { const e = current.texts?.find(e => e.id === id); if (e) e.deliveredAt ??= now; });
-  return { text: { id, from: record.from, sentAt: entry.sentAt, body: record.body, ...(record.pictures ? { pictures: record.pictures } : {}), language,
+  return { text: { id, from: record.from, sentAt: entry.sentAt, body: record.body, ...(record.pictures ? { pictures: record.pictures } : {}),
+    ...(record.attachments ? { attachments: record.attachments } : {}), language,
     text: shown.text, translated: shown.translated, ...(shown.language ? { sourceLanguage: shown.language } : {}) } };
 }
 
@@ -232,15 +232,17 @@ export async function handleTwilioText(request: Request, dependencies: TextDepen
   try {
     const store = dependencies.store ?? familyStore();
     const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
-    let mediaStore = dependencies.media;
-    const media = () => mediaStore ??= blobMediaStore();
+    let blobs = dependencies.media;
+    const mediaStore = () => blobs ??= blobMediaStore();
     const messageSID = params.get("MessageSid") ?? "", from = params.get("From") ?? "";
     const text = [...(params.get("Body") ?? "").trim()].slice(0, textLimits.characters).join("");
-    const pictures = Math.min(textLimits.pictures, Math.max(0, Math.floor(Number(params.get("NumMedia")) || 0)));
+    const media = Math.min(textLimits.attachments, Math.max(0, Math.floor(Number(params.get("NumMedia")) || 0)));
+    // Pictures are named as such; anything else, such as a contact card or a voice clip, as something Porch can't show.
+    const pictures = Array.from({ length: media }, (_, i) => params.get(`MediaContentType${i}`) ?? "").filter(type => type.startsWith("image/")).length;
     // An empty reply, so nothing is texted back. Twilio already answered STOP, START and HELP, which aren't for Mom.
-    if (!messageSIDPattern.test(messageSID) || !senderPattern.test(from) || params.get("OptOutType") || keywords.has(text.toUpperCase()) || (!text && !pictures)) return reply();
+    if (!messageSIDPattern.test(messageSID) || !senderPattern.test(from) || params.get("OptOutType") || keywords.has(text.toUpperCase()) || (!text && !media)) return reply();
     const house = await household(store, params.get("To"));
-    if (house) await receiveText(store, media, house.id, { messageSID, from, body: text, pictures }, now);
+    if (house) await receiveText(store, mediaStore, house.id, { messageSID, from, body: text, pictures, attachments: media - pictures }, now);
     return reply();
   } catch {
     // No numbers or words in logs; Twilio's console shows the failed request.

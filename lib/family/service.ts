@@ -703,7 +703,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
-      try { await maintainTexts(store, house, now); } catch { /* next poll */ }
+      try { await maintainTexts(store, media, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
       // A number that couldn't be set up yet. Twilio and LiveKit can take longer than the iPad waits for a poll, so
       // the try runs after this one is answered, and a later poll shows the number.

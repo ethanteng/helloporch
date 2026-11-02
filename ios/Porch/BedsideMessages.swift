@@ -315,7 +315,7 @@ final class MessagePlayerViewController: UIViewController {
     private let textTitle = UILabel()
     private let textDetail = UILabel()
     private let textBody = UILabel()
-    /// That it was translated, and from what, or that pictures came with it.
+    /// That it was translated, and from what, or that pictures or something else came with it.
     private let textNote = UILabel()
     /// The words as sent, under a translation.
     private let textOriginal = UILabel()
@@ -522,7 +522,7 @@ final class MessagePlayerViewController: UIViewController {
         let length = text.text.count
         textBody.font = PorchStyle.font(length <= 80 ? 52 : length <= 200 ? 44 : length <= 500 ? 36 : 30, weight: .medium)
         textBody.textAlignment = length <= 200 ? .center : .natural
-        textNote.text = [text.translated ? Self.translatedNote(text.sourceLanguage) : nil, Self.pictureNote(text.pictures ?? 0)].compactMap { $0 }.joined(separator: "\n")
+        textNote.text = ([text.translated ? Self.translatedNote(text.sourceLanguage) : nil].compactMap { $0 } + Self.attachmentNotes(text)).joined(separator: "\n")
         textNote.isHidden = textNote.text?.isEmpty != false
         textOriginal.text = text.body; textOriginal.isHidden = !text.translated || text.body.isEmpty
         textStack.arrangedSubviews.forEach { textStack.removeArrangedSubview($0); $0.removeFromSuperview() }
@@ -553,13 +553,13 @@ final class MessagePlayerViewController: UIViewController {
     }
     private func read(_ text: ReceivedText) {
         guard !ended, currentText?.id == text.id else { return }
-        guard !text.text.isEmpty else { readPictures(text); return }
+        guard !text.text.isEmpty else { readAttachments(text); return }
         // A long text's natural reading gets longer to arrive than an announcement.
-        announcer.announce(text.text, chime: false, textID: text.id, voiceLanguage: Self.otherLanguage(of: text), patience: 8) { [weak self] in self?.readPictures(text) }
+        announcer.announce(text.text, chime: false, textID: text.id, voiceLanguage: Self.otherLanguage(of: text), patience: 8) { [weak self] in self?.readAttachments(text) }
     }
-    private func readPictures(_ text: ReceivedText) {
+    private func readAttachments(_ text: ReceivedText) {
         guard !ended, currentText?.id == text.id else { return }
-        guard let note = Self.pictureNote(text.pictures ?? 0) else { finishText(text); return }
+        guard let note = Self.attachmentSentence(text) else { finishText(text); return }
         announcer.announce(note, chime: false) { [weak self] in self?.finishText(text) }
     }
     /// Read to the end, so it won't show again. It stays on screen a moment before the next one.
@@ -580,6 +580,15 @@ final class MessagePlayerViewController: UIViewController {
     /// Said and shown when pictures came with a text, which Porch doesn't show yet.
     static func pictureNote(_ count: Int) -> String? {
         count < 1 ? nil : count == 1 ? BedsideText.string("It came with a picture, which Porch can't show yet.") : BedsideText.string("It came with %d pictures, which Porch can't show yet.", count)
+    }
+    /// What came with a text, as the screen shows it: pictures, then anything else, such as a contact card or a voice clip.
+    static func attachmentNotes(_ text: ReceivedText) -> [String] {
+        [pictureNote(text.pictures ?? 0), (text.attachments ?? 0) > 0 ? BedsideText.string("It came with something Porch can't show yet.") : nil].compactMap { $0 }
+    }
+    /// The same, as the bedside says it after the words.
+    static func attachmentSentence(_ text: ReceivedText) -> String? {
+        let notes = attachmentNotes(text)
+        return notes.isEmpty ? nil : notes.joined(separator: " ")
     }
     static func translatedNote(_ sourceLanguage: String?) -> String? {
         guard let sourceLanguage, let name = BedsideText.language.locale.localizedString(forLanguageCode: sourceLanguage) else { return nil }
