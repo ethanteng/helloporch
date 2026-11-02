@@ -370,8 +370,8 @@ final class MessagePlayerViewController: UIViewController {
         textNote.font = PorchStyle.font(22); textNote.textColor = PorchStyle.nightSecondary
         textOriginal.font = PorchStyle.font(26); textOriginal.textColor = PorchStyle.nightSecondary
         for label in [textTitle, textDetail, textBody, textNote, textOriginal] { label.textAlignment = .center; label.numberOfLines = 0 }
-        textStack.axis = .vertical; textStack.spacing = 16; textStack.alignment = .center
-        textStack.setCustomSpacing(36, after: textDetail); textStack.setCustomSpacing(28, after: textBody)
+        // Labels take the stack's width so a long text wraps instead of staying one clipped line.
+        textStack.axis = .vertical; textStack.spacing = 16; textStack.alignment = .fill
         for view in [textScroll, textColumn, textStack] { view.translatesAutoresizingMaskIntoConstraints = false }
         textScroll.isHidden = true; textScroll.indicatorStyle = .white
         textColumn.addSubview(textStack); textScroll.addSubview(textColumn)
@@ -429,7 +429,16 @@ final class MessagePlayerViewController: UIViewController {
             Task { @MainActor [weak self] in self?.stop() }
         })
     }
-    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); playerLayer.frame = videoView.bounds }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        playerLayer.frame = videoView.bounds
+        // The labels only learn their width here. Wrapping at that width lets a long text scroll on the next pass.
+        let width = textScroll.bounds.width
+        guard width > 0 else { return }
+        for label in [textTitle, textDetail, textBody, textNote, textOriginal] where label.preferredMaxLayoutWidth != width {
+            label.preferredMaxLayoutWidth = width
+        }
+    }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         keypad.resetKeys(); becomeFirstResponder()
@@ -511,10 +520,22 @@ final class MessagePlayerViewController: UIViewController {
         if RecipientAppearance.photo(contact?.photoData) != nil {
             textPhoto = RecipientAppearance.photoView(contact?.photoData)
             textPhoto.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([textPhoto.widthAnchor.constraint(equalToConstant: 140), textPhoto.heightAnchor.constraint(equalToConstant: 140)])
-            textStack.addArrangedSubview(textPhoto)
+            // The stack fills its width. A row keeps the photo at 140 instead of stretching it.
+            let row = UIView()
+            row.addSubview(textPhoto)
+            NSLayoutConstraint.activate([
+                textPhoto.centerXAnchor.constraint(equalTo: row.centerXAnchor),
+                textPhoto.topAnchor.constraint(equalTo: row.topAnchor),
+                textPhoto.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+                textPhoto.widthAnchor.constraint(equalToConstant: 140),
+                textPhoto.heightAnchor.constraint(equalToConstant: 140),
+            ])
+            textStack.addArrangedSubview(row)
         }
         for label in [textTitle, textDetail, textBody, textNote, textOriginal] { textStack.addArrangedSubview(label) }
+        // Set after the labels are arranged; earlier, the stack ignores it.
+        textStack.setCustomSpacing(36, after: textDetail)
+        textStack.setCustomSpacing(28, after: textBody)
         identity.isHidden = true; videoView.isHidden = true; bannerView.isHidden = true
         textScroll.isHidden = false; textScroll.contentOffset = .zero
         BedsideText.applyAccessibilityLanguage(to: view)
