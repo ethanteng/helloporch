@@ -2045,3 +2045,25 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertTrue(done.navigationItem.hidesBackButton)
     }
 }
+
+final class ScreenAwakeTests: XCTestCase {
+    /// A family phone keeps its screen on only while a call screen is open. The bedside clock always does.
+    @MainActor func testCallScreensKeepAFamilyPhoneAwake() {
+        let defaults = UserDefaults.standard, saved = defaults.object(forKey: "porch.experience")
+        defer { defaults.set(saved, forKey: "porch.experience"); ScreenAwake.update(active: false) }
+        defaults.set("family", forKey: "porch.experience")
+        let call = UIViewController()
+        ScreenAwake.update(active: true)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+        ScreenAwake.callShown(call, voice: true); ScreenAwake.update(active: true)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        ScreenAwake.update(active: false)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "Porch isn't in front, so iOS dims and locks as usual")
+        XCTAssertFalse(UIDevice.current.isProximityMonitoringEnabled)
+        ScreenAwake.callHidden(call); ScreenAwake.update(active: true)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "The call screen closed")
+        defaults.set("bedside", forKey: "porch.experience")
+        ScreenAwake.update(active: true)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "The bedside clock stays on")
+    }
+}

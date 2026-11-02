@@ -66,8 +66,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         (window?.rootViewController as? PorchContainerViewController)?.resume()
-        // Welcome isn't the bedside clock, even on an iPad whose mode hasn't been chosen yet.
-        UIApplication.shared.isIdleTimerDisabled = !PorchDevice.needsWelcome && PorchDevice.experience == .bedside
+        ScreenAwake.update(active: true)
         SystemIncomingCalls.shared.resumeCamera()
         Cell2JackKeypad.shared.activate()
     }
@@ -80,6 +79,30 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
     func sceneWillResignActive(_ scene: UIScene) {
         Cell2JackKeypad.shared.pause()
         (window?.rootViewController as? PorchContainerViewController)?.pause()
-        UIApplication.shared.isIdleTimerDisabled = false
+        ScreenAwake.update(active: false)
+    }
+}
+
+/// Keeps the screen on for the bedside clock, and on any device while a call screen is open, the way FaceTime does.
+/// Otherwise a family phone dims and locks mid-call, and leaving the foreground hangs up a call it placed.
+/// Voice calls also turn on the proximity sensor, so an iPhone's screen goes dark against an ear instead of
+/// taking taps from a cheek. iPads have no sensor.
+@MainActor enum ScreenAwake {
+    private static let calls = NSHashTable<UIViewController>.weakObjects()
+    private static let voiceCalls = NSHashTable<UIViewController>.weakObjects()
+    static func callShown(_ screen: UIViewController, voice: Bool) {
+        calls.add(screen)
+        if voice { voiceCalls.add(screen) } else { voiceCalls.remove(screen) }
+        update()
+    }
+    static func callHidden(_ screen: UIViewController) {
+        calls.remove(screen); voiceCalls.remove(screen)
+        update()
+    }
+    static func update(active: Bool = UIApplication.shared.applicationState == .active) {
+        // Welcome isn't the bedside clock, even on an iPad whose mode hasn't been chosen yet.
+        let clock = !PorchDevice.needsWelcome && PorchDevice.experience == .bedside
+        UIApplication.shared.isIdleTimerDisabled = active && (clock || !calls.allObjects.isEmpty)
+        UIDevice.current.isProximityMonitoringEnabled = active && !voiceCalls.allObjects.isEmpty
     }
 }

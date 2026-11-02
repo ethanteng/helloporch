@@ -519,9 +519,13 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private var leftNotice: String?
     private var leftNoticeTask: Task<Void, Never>?
     override var canBecomeFirstResponder: Bool { true }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated); ScreenAwake.callShown(self, voice: !SystemIncomingCalls.shared.isVideo)
+    }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
     }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callHidden(self) }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         let slots = (try? CallSlots.load()) ?? CallSlots()

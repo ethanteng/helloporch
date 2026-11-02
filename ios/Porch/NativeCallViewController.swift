@@ -302,7 +302,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         #endif
         if !familyAccepted && !hasConnectedPeer && !isEnding && !hasFailed { ringback.start() }
     }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated); ScreenAwake.callShown(self, voice: call.mode == .voice || isPhoneCall)
+    }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); keypad.resetKeys(); resignFirstResponder() }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callHidden(self) }
     func performKeypadDigit(_ digit: Int) {
         guard UIApplication.shared.applicationState == .active, presentedViewController == nil,
               let action = (try? CallSlots.load())?.action(for: digit) else { return }
@@ -947,6 +951,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         personPhoto.isHidden = false
         placeholder.text = BedsideText.string("Phone call\nCamera is off")
         isPhoneCall = true
+        if viewIfLoaded?.window != nil { ScreenAwake.callShown(self, voice: true) }
         updateKeypadHint()
         do {
             try Task.checkCancellation()
