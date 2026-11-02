@@ -394,6 +394,10 @@ final class SetupCallingViewController: BedsideSetupStep {
         let button = PorchStyle.button(title, symbol: symbol)
         button.configuration?.subtitle = detail
         button.configuration?.titlePadding = 4
+        // The card is at most 760 points wide, so a one-line subtitle cuts off the end. The corded-phone
+        // note ends with the M-chip requirement, which is the part that has to stay visible.
+        button.configuration?.titleLineBreakMode = .byWordWrapping
+        button.configuration?.subtitleLineBreakMode = .byWordWrapping
         button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(15); return attributes
         }

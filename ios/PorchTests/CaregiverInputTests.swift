@@ -1908,11 +1908,14 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(corded != nil, SetupPhoneViewController.offered)
         if let corded {
             XCTAssertEqual(corded.configuration?.subtitle?.contains("works only with an iPad with an M chip"), true)
+            XCTAssertEqual(corded.configuration?.subtitleLineBreakMode, .byWordWrapping, "A one-line subtitle cuts off the M-chip note")
             corded.sendActions(for: .touchUpInside)
             XCTAssertTrue(navigation.viewControllers.last is SetupPhoneViewController)
             navigation.popViewController(animated: false)
         }
-        try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.usbKeypad" }).sendActions(for: .touchUpInside)
+        let usb = try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.usbKeypad" })
+        XCTAssertEqual(usb.configuration?.subtitleLineBreakMode, .byWordWrapping)
+        usb.sendActions(for: .touchUpInside)
         XCTAssertTrue(navigation.viewControllers.last is SetupUSBKeypadViewController)
 
         let again = SetupCallingViewController(setup)
