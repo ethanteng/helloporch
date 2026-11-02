@@ -56,6 +56,10 @@ async function saved(store: FamilyStore, householdID: string, id: string): Promi
   const record: TextRecord | Removed | undefined = raw ? JSON.parse(raw) : undefined;
   return record && !("removed" in record) ? record : undefined;
 }
+/** The text still has its words. False once it has been read or removed. */
+export async function textKept(store: FamilyStore, householdID: string, id: string) {
+  return !!(await saved(store, householdID, id));
+}
 /** Changes a saved text's record. It keeps its original expiry, and a removed one stays removed. False when there's no record to change. */
 async function updateRecord(store: FamilyStore, householdID: string, id: string, now: number, change: (record: TextRecord) => void) {
   const key = textKey(householdID, id);

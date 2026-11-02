@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { FamilyError, isCaregiver, mutate, requireValue, type BedsideLanguage, type Household, type Member } from "./household.ts";
 import type { MediaStore } from "./media.ts";
+import { discardMedia } from "./messages.ts";
 import type { FamilyStore } from "./store.ts";
-import { keepTextClip, readableText } from "./texts.ts";
+import { keepTextClip, readableText, textKept } from "./texts.ts";
 
 // Natural announcement voices. Each bedside language offers a few ElevenLabs voices the family listened to
 // (scripts/voice-samples.mjs); a caregiver picks one per language, or keeps the iPad's built-in voice.
@@ -105,8 +106,16 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   if (!textID) return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
   // A text's words are private: their reading is kept apart and deleted with the text.
   const folder = `texts/${textID}`;
-  requireValue(await keepTextClip(store, house.id, textID, clipPathname(house.id, voiceID, language, text, "bedside", folder), now), "This text is no longer available.", 404);
-  return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text, "bedside", folder) };
+  const pathname = clipPathname(house.id, voiceID, language, text, "bedside", folder);
+  requireValue(await keepTextClip(store, house.id, textID, pathname, now), "This text is no longer available.", 404);
+  const clip = await speechClip({ store, media, now, house, synthesize }, voiceID, language, text, "bedside", folder);
+  // Spoken after the clip is recorded. A text read or removed in that gap would otherwise keep the file
+  // until its record expired.
+  if (!await textKept(store, house.id, textID)) {
+    await discardMedia(store, media, house.id, [pathname], now);
+    throw new FamilyError("This text is no longer available.", 404);
+  }
+  return { clip };
 }
 
 /** Where a sentence's clip is kept. The same sentence in the same voice is the same clip; names stay out of the path. */

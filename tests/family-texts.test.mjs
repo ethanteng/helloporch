@@ -35,7 +35,7 @@ afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefin
 const day = 86400;
 const sid = n => 'SM' + n.toString(16).padStart(32, '0');
 
-async function fixture({ translate } = {}) {
+async function fixture({ translate, synthesize } = {}) {
   const store = new MemoryStore(), media = new FakeMedia(), translations = [], spoken = [];
   let now = 1_800_000_000;
   // English bedsides keep the words; others get them labeled with the language, unless they start with "same:".
@@ -43,7 +43,7 @@ async function fixture({ translate } = {}) {
     translations.push([message, target]);
     return target === 'en' || message.startsWith('same:') ? { language: target, translated: false, text: 'ignored' } : { language: 'en', translated: true, text: `[${target}] ${message}` };
   };
-  const synthesize = async (voiceID, code, text) => { spoken.push(text); return new Uint8Array(100); };
+  synthesize ??= async (voiceID, code, text) => { spoken.push(text); return new Uint8Array(100); };
   const send = (action, values={}, credential, pin) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(pin?{'X-Porch-Setup-Code':pin}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{},translate:translate || undefined,synthesize});
   const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
   const bedside = await json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
@@ -258,6 +258,15 @@ test('a reading of a text\'s words is kept apart, and deleted with the text or b
   assert.equal([...f.media.blobs.keys()].filter(p => !p.includes('/texts/')).length, 1);
   await f.json('textRead', { textID: read.id }, f.bedside.credential);
   assert.deepEqual(clips(), [], 'read: the reading is deleted with the words');
+
+  // Spoken while the text is being read: the file lands after the record is gone, and must not stay.
+  let drop;
+  const late = await fixture({ synthesize: async () => { if (drop) await drop(); return new Uint8Array(80); } });
+  const gone = await late.text('See you Sunday');
+  await late.fetch(gone.id);
+  drop = () => late.json('textRead', { textID: gone.id }, late.bedside.credential);
+  assert.equal((await late.send('speech', { language: 'en', text: 'See you Sunday', textID: gone.id }, late.bedside.credential)).status, 404);
+  assert.deepEqual([...late.media.blobs.keys()].filter(p => p.includes('/texts/')), []);
 
   // One never read is deleted by the bedside's purge pass once the text's record would expire.
   const unread = await f.text('Call me back');
