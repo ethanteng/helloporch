@@ -663,6 +663,9 @@ final class MessageQueueViewController: CaregiverFormViewController {
     private var texts: [FamilyText]
     /// Each waiting text's words, which only the PIN-checked review fetches.
     private var words: [String: FamilyText] = [:]
+    /// caregiverTexts has answered. A text missing from that answer has no words to show.
+    private var wordsReady = false
+    private var wordsFailed = false
     private let list = UIStackView()
     private var busy = false
     private var posterTask: Task<Void, Never>?
@@ -681,9 +684,17 @@ final class MessageQueueViewController: CaregiverFormViewController {
     private func loadWords() {
         guard !texts.isEmpty else { return }
         Task { [weak self] in
-            guard let self, let texts = try? await self.request("caregiverTexts", [:])?.texts else { return }
-            self.words = Dictionary(texts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            self.render()
+            guard let self else { return }
+            do {
+                guard let loaded = try await self.request("caregiverTexts", [:])?.texts else {
+                    self.wordsFailed = true; self.render(); return
+                }
+                self.words = Dictionary(loaded.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+                self.wordsFailed = false; self.wordsReady = true
+                self.render()
+            } catch {
+                self.wordsFailed = true; self.render()
+            }
         }
     }
     static func senderName(_ text: FamilyText) -> String { text.from.hasPrefix("+") ? PhoneNumberNormalization.display(text.from) : text.from }
@@ -737,9 +748,14 @@ final class MessageQueueViewController: CaregiverFormViewController {
                 let language = words.sourceLanguage.flatMap { Locale(identifier: "en").localizedString(forLanguageCode: $0) }
                 views.append(PorchStyle.label(language.map { "Shown on Porch, translated from \($0): \(translation)" } ?? "Shown on Porch as: \(translation)", size: 15))
             }
+        } else if wordsFailed {
+            views.append(PorchStyle.label("Couldn't load this text. Go back and try again.", size: 15))
+        } else if wordsReady {
+            views.append(PorchStyle.label("The words for this text aren't available.", size: 15))
         } else { views.append(PorchStyle.label("Loading the text…", size: 15)) }
         if let pictures = text.pictures, pictures > 0 { views.append(PorchStyle.label(pictures == 1 ? "It came with a picture, which Porch doesn't show yet." : "It came with \(pictures) pictures, which Porch doesn't show yet.", size: 15)) }
-        if text.held {
+        // Not until the words are here: otherwise Let it show approves a text the caregiver hasn't read.
+        if text.held, words[text.id] != nil {
             let release = PorchStyle.button("Let it show on Porch", symbol: "checkmark.circle.fill")
             release.addAction(UIAction { [weak self] _ in Task { await self?.changeText("releaseText", text) } }, for: .touchUpInside)
             views.append(release)
