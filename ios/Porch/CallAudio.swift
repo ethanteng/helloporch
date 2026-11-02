@@ -125,6 +125,15 @@ import PorchCore
                 guard (http as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty, data.count <= 2_000_000 else { return nil }
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                 try data.write(to: destination, options: .atomic)
+                // Read, removed, or fetched again while this download ran. The file is named for the words and
+                // the voice, so a text that left, or whose wording changed, must not keep this copy.
+                if let textID {
+                    let prepared = BedsideMessages.shared.preparedText(textID)
+                    guard prepared?.language == language.rawValue, prepared?.text == text else {
+                        try? FileManager.default.removeItem(at: destination)
+                        return nil
+                    }
+                }
                 return destination
             } catch { return nil }
         }

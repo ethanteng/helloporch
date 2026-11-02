@@ -20,6 +20,8 @@ extension Notification.Name {
     private(set) var ready: [FamilyMessage] = []
     /// Texts prepared in the bedside language that haven't been read, oldest first.
     private(set) var readyTexts: [ReceivedText] = []
+    /// The wording still waiting to be read, or nil once this text was read, removed, or is being fetched again.
+    func preparedText(_ id: String) -> ReceivedText? { readyTexts.first { $0.id == id } }
     /// What's ready to play, messages and texts together.
     var waitingCount: Int { ready.count + readyTexts.count }
     var waitingIDs: [String] { ready.map(\.id) + readyTexts.map(\.id) }
