@@ -114,17 +114,22 @@ import PorchCore
             controls.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
             controls.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 16),
         ])
-        // The person's photo and name sit in this space, above the self view when the screen is upright.
-        var identitySpace: UILayoutGuide?
+        // The person's photo and name sit in this space. With a self view, the overlays keep them clear of it.
+        var identityLayout: (space: UILayoutGuide, stack: UIStackView, label: UILabel)?
         if let placeholder {
             let space = UILayoutGuide()
             scroll.addLayoutGuide(space)
-            identitySpace = space
             let identity = UIStackView(arrangedSubviews: (photo.map { [$0 as UIView] } ?? []) + [placeholder])
             identity.axis = .vertical; identity.alignment = .center; identity.spacing = 16
             identity.translatesAutoresizingMaskIntoConstraints = false
             scroll.addSubview(identity)
-            if preview == nil { space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12).isActive = true }
+            identityLayout = (space, identity, placeholder)
+            if preview == nil {
+                NSLayoutConstraint.activate([
+                    space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
+                    placeholder.widthAnchor.constraint(equalTo: identity.widthAnchor),
+                ])
+            }
             NSLayoutConstraint.activate([
                 space.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 12),
                 identity.centerXAnchor.constraint(equalTo: content.centerXAnchor),
@@ -132,7 +137,6 @@ import PorchCore
                 identity.widthAnchor.constraint(equalTo: frame.widthAnchor, constant: -48),
                 identity.topAnchor.constraint(greaterThanOrEqualTo: space.topAnchor),
                 identity.bottomAnchor.constraint(lessThanOrEqualTo: space.bottomAnchor),
-                placeholder.widthAnchor.constraint(equalTo: identity.widthAnchor),
             ])
             if let photo {
                 let width = photo.widthAnchor.constraint(equalTo: identity.widthAnchor, multiplier: 0.85)
@@ -159,12 +163,24 @@ import PorchCore
             // The overlays set its size and shape. Fit ordinary calls on screen before growing the scrollable overlays.
             let width = preview.widthAnchor.constraint(equalToConstant: 64)
             width.priority = UILayoutPriority(249)
-            scroll.selfView = .init(
-                width: width,
-                upright: [preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 4 / 3)]
-                    + (identitySpace.map { [$0.bottomAnchor.constraint(equalTo: preview.topAnchor, constant: -12)] } ?? []),
-                sideways: [preview.widthAnchor.constraint(equalTo: preview.heightAnchor, multiplier: 4 / 3)]
-                    + (identitySpace.map { [$0.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12)] } ?? []))
+            var upright = [preview.heightAnchor.constraint(equalTo: preview.widthAnchor, multiplier: 4 / 3)]
+            var sideways = [preview.widthAnchor.constraint(equalTo: preview.heightAnchor, multiplier: 4 / 3)]
+            if let (space, stack, label) = identityLayout {
+                // Upright, the photo and name sit above the self view. Sideways, they sit in a centered column that
+                // ends before it, which narrows them only when the screen is close to square.
+                let column = UILayoutGuide()
+                scroll.addLayoutGuide(column)
+                NSLayoutConstraint.activate([
+                    column.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+                    column.trailingAnchor.constraint(equalTo: preview.leadingAnchor, constant: -12),
+                ])
+                upright += [space.bottomAnchor.constraint(equalTo: preview.topAnchor, constant: -12),
+                            label.widthAnchor.constraint(equalTo: stack.widthAnchor)]
+                sideways += [space.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
+                             label.widthAnchor.constraint(lessThanOrEqualTo: column.widthAnchor)]
+                    + (photo.map { [$0.widthAnchor.constraint(lessThanOrEqualTo: column.widthAnchor)] } ?? [])
+            }
+            scroll.selfView = .init(width: width, upright: upright, sideways: sideways)
             NSLayoutConstraint.activate([
                 preview.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
                 preview.bottomAnchor.constraint(equalTo: controls.topAnchor, constant: -12),
@@ -176,8 +192,8 @@ import PorchCore
 }
 
 /// The overlays above a call's video. They size the self view as most calling apps do, about 30% of the screen's
-/// short side and at most 200 points on an iPad, and turn it with the screen, as the camera's picture turns. On an
-/// upright screen the self view sits under the person's photo; a sideways screen has room beside it.
+/// short side and at most 200 points on an iPad, and turn it with the screen, as the camera's picture turns. The
+/// person's photo and name move with it to stay uncovered.
 private final class CallOverlays: UIScrollView {
     struct SelfView { let width: NSLayoutConstraint; let upright, sideways: [NSLayoutConstraint] }
     var selfView: SelfView? { didSet { selfView.map { NSLayoutConstraint.activate($0.upright) } } }

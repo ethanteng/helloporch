@@ -1733,30 +1733,37 @@ final class CallScreenLayoutTests: XCTestCase {
                                  hint: PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16, color: .white),
                                  photo: photo, buttons: buttons)
         let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
-        // The same screen turns between phone and iPad sizes, so the self view must follow each change.
+        // The same screen turns between phone and iPad sizes, so the self view must follow each change. A nearly
+        // square sideways window and the smallest phone sideways leave little room beside the photo; the smallest
+        // phone also shrinks the self view to fit.
         for (size, expected) in [(CGSize(width: 393, height: 852), CGSize(width: 117.9, height: 157.2)),
                                  (CGSize(width: 852, height: 393), CGSize(width: 157.2, height: 117.9)),
                                  (CGSize(width: 1024, height: 768), CGSize(width: 266.7, height: 200)),
                                  (CGSize(width: 768, height: 1024), CGSize(width: 200, height: 266.7)),
+                                 (CGSize(width: 800, height: 790), CGSize(width: 266.7, height: 200)),
                                  (CGSize(width: 375, height: 1024), CGSize(width: 112.5, height: 150)),
-                                 (CGSize(width: 393, height: 852), CGSize(width: 117.9, height: 157.2))] {
+                                 (CGSize(width: 568, height: 320), nil),
+                                 (CGSize(width: 393, height: 852), CGSize(width: 117.9, height: 157.2))] as [(CGSize, CGSize?)] {
             for waiting in [false, true] {
                 photo.isHidden = !waiting; placeholder.isHidden = !waiting
                 screen.view.frame = CGRect(origin: .zero, size: size)
                 screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
-                XCTAssertEqual(preview.bounds.width, expected.width, accuracy: 0.5, "\(size)")
-                XCTAssertEqual(preview.bounds.height, expected.height, accuracy: 0.5, "\(size)")
+                if let expected {
+                    XCTAssertEqual(preview.bounds.width, expected.width, accuracy: 0.5, "\(size)")
+                    XCTAssertEqual(preview.bounds.height, expected.height, accuracy: 0.5, "\(size)")
+                }
+                XCTAssertEqual(preview.bounds.width > preview.bounds.height, size.width > size.height, "\(size)")
                 XCTAssertTrue(scroll.bounds.contains(preview.frame), "\(size): \(preview.frame)")
-                XCTAssertLessThanOrEqual(scroll.contentSize.height, scroll.bounds.height + 1)
+                XCTAssertLessThanOrEqual(scroll.contentSize.height, scroll.bounds.height + 1, "\(size)")
                 XCTAssertFalse(preview.hasAmbiguousLayout)
                 if waiting {
                     // While the other person's video is missing, their photo and the words under it stay uncovered.
                     let selfView = preview.convert(preview.bounds, to: screen.view)
                     for view in [photo, placeholder] as [UIView] {
                         let rect = view.convert(view.bounds, to: screen.view)
-                        XCTAssertGreaterThan(rect.height, 20, "\(size)")
-                        let covered = view === placeholder
-                            ? rect.insetBy(dx: (rect.width - placeholder.intrinsicContentSize.width) / 2, dy: 0) : rect
+                        if expected != nil { XCTAssertGreaterThan(rect.height, 20, "\(size)") }
+                        let text = min(rect.width, placeholder.intrinsicContentSize.width)
+                        let covered = view === placeholder ? rect.insetBy(dx: (rect.width - text) / 2, dy: 0) : rect
                         XCTAssertFalse(covered.intersects(selfView), "\(size): \(covered) under \(selfView)")
                     }
                 }
