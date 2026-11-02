@@ -852,10 +852,12 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
         save(); send()
     }
     /// Drops every message still waiting to be sent, when this iPad stops being their bedside: they're for a household
-    /// it's no longer in. An upload already under way finds its message gone.
+    /// it's no longer in. An upload already under way finds its message gone. If the folder is still there, the empty
+    /// list is written down, so a later launch doesn't send those recordings on.
     func discardAll() {
         items = []; uploaders = [:]
         try? FileManager.default.removeItem(at: folder)
+        if FileManager.default.fileExists(atPath: folder.path) { save() }
     }
     private func file(for item: Item) -> URL { folder.appendingPathComponent(item.file) }
     private func save() { try? JSONEncoder().encode(items).write(to: manifest, options: .atomic) }
