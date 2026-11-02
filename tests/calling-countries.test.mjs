@@ -22,7 +22,8 @@ test("the list comes from every page of Twilio's Geo Permissions, and never from
   const t = twilio({
     [first]: { content: [row('US', 'United States/Canada', ['1'], true), row('JM', 'Jamaica', ['1876', '1658'], false), { iso_code: 'bad', name: 'Nowhere', country_codes: ['1'] }],
       meta: { next_page_url: second } },
-    [second]: { content: [row('GB', 'United Kingdom', ['44'], true)], meta: { next_page_url: 'https://elsewhere.example/countries' } },
+    // Twilio's docs write calling codes with a +, as "+44"; the live API sends "44".
+    [second]: { content: [row('GB', 'United Kingdom', ['+44'], true)], meta: { next_page_url: 'https://elsewhere.example/countries' } },
   });
   assert.deepEqual(await t.dialing.list(), [{ iso: 'US', name: 'United States/Canada', codes: ['1'], enabled: true },
     { iso: 'JM', name: 'Jamaica', codes: ['1876', '1658'], enabled: false }, { iso: 'GB', name: 'United Kingdom', codes: ['44'], enabled: true }]);

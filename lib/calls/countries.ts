@@ -31,7 +31,8 @@ export function twilioDialing(accountSID: string, authToken: string, fetcher: ty
       for (let url: unknown = `${base}/Countries?PageSize=1000`, pages = 0; typeof url === "string" && url.startsWith(`${base}/`) && pages < 5; pages++) {
         const body = await call(url);
         for (const c of Array.isArray(body.content) ? body.content as Record<string, unknown>[] : []) {
-          const codes = Array.isArray(c.country_codes) ? c.country_codes.filter((code): code is string => typeof code === "string" && /^[0-9]{1,6}$/.test(code)) : [];
+          // The API sends bare digits, such as "1876", but Twilio's docs show "+1". Porch keeps the digits either way.
+          const codes = Array.isArray(c.country_codes) ? c.country_codes.flatMap(code => typeof code === "string" && /^\+?[0-9]{1,6}$/.test(code) ? [code.replace("+", "")] : []) : [];
           if (typeof c.iso_code === "string" && /^[A-Z]{2}$/.test(c.iso_code) && typeof c.name === "string" && codes.length)
             countries.push({ iso: c.iso_code, name: c.name, codes, enabled: c.low_risk_numbers_enabled === true });
         }
