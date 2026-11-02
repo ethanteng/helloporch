@@ -86,6 +86,12 @@ async function schedulePurge(store: FamilyStore, householdID: string, pathnames:
   });
 }
 
+/** Has the bedside's purge pass delete media at `at`, unless something deletes it sooner. */
+export async function purgeLater(store: FamilyStore, householdID: string, pathnames: string[], at: number) {
+  await schedulePurge(store, householdID, pathnames, at);
+  await mutate(store, householdID, house => { house.purgeAt = Math.min(house.purgeAt ?? at, at); });
+}
+
 /** Deletes media no longer needed, or leaves it for the bedside's purge pass if storage can't be reached. */
 export async function discardMedia(store: FamilyStore, media: () => MediaStore, householdID: string, pathnames: string[], now: number) {
   if (!pathnames.length) return;

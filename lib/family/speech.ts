@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { FamilyError, isCaregiver, mutate, requireValue, type Household, type Member } from "./household.ts";
+import { FamilyError, isCaregiver, mutate, requireValue, type BedsideLanguage, type Household, type Member } from "./household.ts";
 import type { MediaStore } from "./media.ts";
+import { discardMedia } from "./messages.ts";
 import type { FamilyStore } from "./store.ts";
+import { keepTextClip, readableText, textKept } from "./texts.ts";
 
 // Natural announcement voices. Each bedside language offers a few ElevenLabs voices the family listened to
 // (scripts/voice-samples.mjs); a caregiver picks one per language, or keeps the iPad's built-in voice.
@@ -93,20 +95,38 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   requireValue(me.role === "bedside", "Only the bedside speaks announcements.", 403);
   requireValue(synthesize || speechConfigured(), "Natural voices aren't set up on this server.", 503);
   const text = typeof input.text === "string" ? input.text.trim() : "";
-  requireValue(text.length > 0 && text.length <= speechLimits.textCharacters, `Announcements can have up to ${speechLimits.textCharacters} characters.`);
+  // A text message's words, which can be longer than an announcement, up to their own limit.
+  const textID = text.length > 0 && await readableText(store, house, input.textID, language as BedsideLanguage, text, now) ? input.textID as string : undefined;
+  requireValue(text.length > 0 && (text.length <= speechLimits.textCharacters || textID), `Announcements can have up to ${speechLimits.textCharacters} characters.`);
   // Settings preview a listed voice before it's saved; otherwise it's the household's choice.
   const requested = input.voiceID;
   requireValue(requested === undefined || (typeof requested === "string" && speechCatalog[language].voices.some(v => v.id === requested)), "Choose one of the listed voices.");
   const voiceID = requested ?? speechVoice(house, language);
   requireValue(voiceID, "This language uses the iPad's built-in voice.", 409);
-  return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
+  if (!textID) return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
+  // A text's words are private: their reading is kept apart and deleted with the text.
+  const folder = `texts/${textID}`;
+  const pathname = clipPathname(house.id, voiceID, language, text, "bedside", folder);
+  requireValue(await keepTextClip(store, house.id, textID, pathname, now), "This text is no longer available.", 404);
+  const clip = await speechClip({ store, media, now, house, synthesize }, voiceID, language, text, "bedside", folder);
+  // Spoken after the clip is recorded. A text read or removed in that gap would otherwise keep the file
+  // until its record expired.
+  if (!await textKept(store, house.id, textID)) {
+    await discardMedia(store, media, house.id, [pathname], now);
+    throw new FamilyError("This text is no longer available.", 404);
+  }
+  return { clip };
+}
+
+/** Where a sentence's clip is kept. The same sentence in the same voice is the same clip; names stay out of the path. */
+export function clipPathname(householdID: string, voiceID: string, language: string, text: string, format: SpeechFormat = "bedside", folder?: string) {
+  const key = [speechModel, voiceID, language, text, ...(format === "bedside" ? [] : [format])];
+  return `speech/${householdID}/${folder ? `${folder}/` : ""}${createHash("sha256").update(JSON.stringify(key)).digest("hex")}.mp3`;
 }
 
 /** A sentence read in a listed voice, and a short-lived link to it. Kept in the media store, so it's paid for once. */
-export async function speechClip({ store, media, now, house, synthesize }: ClipContext, voiceID: string, language: string, text: string, format: SpeechFormat = "bedside") {
-  // The same sentence in the same voice is the same clip; names stay out of the path.
-  const key = [speechModel, voiceID, language, text, ...(format === "bedside" ? [] : [format])];
-  const pathname = `speech/${house.id}/${createHash("sha256").update(JSON.stringify(key)).digest("hex")}.mp3`;
+export async function speechClip({ store, media, now, house, synthesize }: ClipContext, voiceID: string, language: string, text: string, format: SpeechFormat = "bedside", folder?: string) {
+  const pathname = clipPathname(house.id, voiceID, language, text, format, folder);
   if (!await media().stat(pathname)) {
     // Counted before asking, so failing requests can't run up the plan either.
     const day = Math.floor(now / 86400);

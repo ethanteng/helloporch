@@ -6,8 +6,9 @@ import type { FamilyStore } from "./store.ts";
 
 // Every household gets its own Porch phone number, set up from the bedside during setup. Porch buys a local US number
 // from Twilio with its voice webhook pointing at Porch, so calls to it get voicemail (voicemail.ts) and ring the bedside
-// through one LiveKit inbound trunk that all of these numbers share. The number also goes on the outbound trunk: the
-// household's calls to regular phones show it, so calling back reaches the same Porch.
+// through one LiveKit inbound trunk that all of these numbers share, and its messaging webhook too, so texts to it reach
+// the bedside (texts.ts). The number also goes on the outbound trunk: the household's calls to regular phones show it,
+// so calling back reaches the same Porch.
 export const numberActions = new Set(["phoneNumberOptions", "assignPhoneNumber"]);
 
 const usNumber = /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/;
@@ -31,14 +32,14 @@ export class PurchaseRefused extends Error {}
 export type NumberProvider = {
   search(query: NumberQuery): Promise<AvailableNumber[]>;
   /** Throws `PurchaseRefused` only when Twilio certainly sold nothing. */
-  buy(number: string, options: { voiceURL: string; label: string }): Promise<OwnedNumber>;
+  buy(number: string, options: { voiceURL: string; smsURL: string; label: string }): Promise<OwnedNumber>;
   find(label: string): Promise<OwnedNumber | undefined>;
 };
 export type NumberServices = {
   provider: NumberProvider;
   sip: Pick<SipClient, "listSipInboundTrunk" | "createSipInboundTrunk" | "updateSipInboundTrunk" | "updateSipInboundTrunkFields" | "updateSipOutboundTrunkFields" | "listSipDispatchRule" | "createSipDispatchRule">;
 };
-export type NumberSettings = { accountSID: string; authToken: string; voiceURL: string; outboundTrunkID: string; limit: number; apiSecret: string };
+export type NumberSettings = { accountSID: string; authToken: string; voiceURL: string; smsURL: string; outboundTrunkID: string; limit: number; apiSecret: string };
 export type NumberContext = { store: FamilyStore; now: number; house: Household; me: Member; input: Record<string, unknown>; headers: Headers;
   services?: (settings: NumberSettings) => NumberServices };
 
@@ -53,7 +54,7 @@ export function numberSettings(): NumberSettings | undefined {
     // The live address, never a deployment's own: Twilio keeps calling this URL for as long as the number exists.
     const url = new URL(origin ?? "");
     if (url.protocol !== "https:" || url.origin !== origin?.replace(/\/$/, "")) return undefined;
-    return { accountSID, authToken, voiceURL: `${url.origin}/api/calls/inbound/voice`, outboundTrunkID, limit, apiSecret };
+    return { accountSID, authToken, voiceURL: `${url.origin}/api/calls/inbound/voice`, smsURL: `${url.origin}/api/calls/inbound/text`, outboundTrunkID, limit, apiSecret };
   } catch { return undefined; }
 }
 
@@ -88,7 +89,7 @@ export function twilioNumbers(accountSID: string, authToken: string, fetcher: ty
     },
     async buy(number, options) {
       let body: Record<string, unknown>;
-      try { body = await call("/IncomingPhoneNumbers.json", new URLSearchParams({ PhoneNumber: number, VoiceUrl: options.voiceURL, VoiceMethod: "POST", FriendlyName: options.label })); }
+      try { body = await call("/IncomingPhoneNumbers.json", new URLSearchParams({ PhoneNumber: number, VoiceUrl: options.voiceURL, VoiceMethod: "POST", SmsUrl: options.smsURL, SmsMethod: "POST", FriendlyName: options.label })); }
       // A 4xx is Twilio saying no. A 5xx or a timeout may still have sold it.
       catch (error) { throw error instanceof TwilioError && error.status < 500 ? new PurchaseRefused(error.message) : error; }
       const bought = owned(body);
@@ -222,7 +223,7 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
         // Counted only now, so a search that finds nothing, or fails, holds no place. A purchase Twilio turned down
         // gives it back. One whose outcome is unknown, such as a timeout, keeps it: Twilio may have sold the number.
         await holdPlace(store, householdID, settings.limit);
-        try { order = await services.provider.buy(choice.number, { voiceURL: settings.voiceURL, label: label(householdID) }); }
+        try { order = await services.provider.buy(choice.number, { voiceURL: settings.voiceURL, smsURL: settings.smsURL, label: label(householdID) }); }
         catch (error) {
           if (error instanceof PurchaseRefused) { try { await givePlaceBack(store, householdID); } catch { /* the next try counts it again */ } }
           throw error;
