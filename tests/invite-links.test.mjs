@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { GET } from '../app/.well-known/apple-app-site-association/route.ts';
-import { appLink, codeFromHash, inviteCode, inviteLink, porchServerOrigin } from '../lib/invite-links.ts';
+import { GET as getAssetLinks } from '../app/.well-known/assetlinks.json/route.ts';
+import { androidCertificates, appLink, codeFromHash, inviteCode, inviteLink, porchServerOrigin } from '../lib/invite-links.ts';
 
 const code = 'a'.repeat(64);
 
@@ -12,6 +13,19 @@ test("Apple's link file lets only the invitation pages open Porch", async () => 
   const { applinks } = await response.json();
   assert.deepEqual(applinks.details.map(d => d.appIDs), [['7U9T57JPF7.com.ethanteng.helloporch']]);
   assert.deepEqual(applinks.details[0].components.map(c => c['/']), ['/join', '/setup']);
+});
+
+test("Android's link file names Porch's package and signing keys, and nothing until a key exists", async () => {
+  const response = getAssetLinks();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /^application\/json/);
+  assert.deepEqual(await response.json(), []);
+  const fingerprint = Array.from({ length: 32 }, () => 'AB').join(':');
+  androidCertificates.push(fingerprint);
+  try {
+    assert.deepEqual(await getAssetLinks().json(), [{ relation: ['delegate_permission/common.handle_all_urls'],
+      target: { namespace: 'android_app', package_name: 'com.ethanteng.helloporch', sha256_cert_fingerprints: [fingerprint] } }]);
+  } finally { androidCertificates.length = 0; }
 });
 
 test("invitations for Porch's own server are web links with the code after the #", () => {

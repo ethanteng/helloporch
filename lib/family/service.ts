@@ -5,7 +5,7 @@ import { familyStore, type FamilyStore } from "./store.ts";
 import { activationKey, createActivation, markInvitationSetUp, rememberHousehold, type Activation } from "./activations.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideLanguage, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noCallLimit, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideDevice, bedsideLanguage, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noCallLimit, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -34,6 +34,11 @@ function name(value: unknown): string { requireValue(typeof value === "string" &
 function permissions(value: unknown): Permissions {
   requireValue(value !== null && typeof value === "object" && "audio" in value && "video" in value && typeof value.audio === "boolean" && typeof value.video === "boolean", "Choose audio and video permissions.");
   return { audio: value.audio, video: value.video };
+}
+/** The device's platform, which each app sends when it's set up. Apps from before Android send none: iOS. */
+function devicePlatform(value: unknown): { platform?: "android" } {
+  requireValue(value === undefined || value === "ios" || value === "android", "Update Porch, then try again.");
+  return value === "android" ? { platform: "android" } : {};
 }
 function registration(input: Record<string, unknown>) {
   requireValue(typeof input.deviceID === "string" && uuid.test(input.deviceID) && typeof input.deviceSecret === "string" && codePattern.test(input.deviceSecret), "Retry pairing from your Porch app.");
@@ -76,7 +81,8 @@ function publicCall(call: Call, me: Member, house: Household) {
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
 function publicPerson(m: Member, now: number, pushable: Pushable, profiles = false) {
   const photo = displayPhoto(m);
-  return { id: m.id, name: displayName(m), ...(photo ? { photoID: photo.id } : {}), role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || pushable(m.voip),
+  // `platform` lets each app name the other devices, such as "Mom's iPad" or "Mom's tablet".
+  return { id: m.id, name: displayName(m), ...(photo ? { photoID: photo.id } : {}), role: m.role, platform: m.platform ?? "ios", permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || pushable(m.voip),
     ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}),
     ...(profiles && m.role === "family" ? { invitedName: m.name, profile: publicProfile(m.profile), override: publicProfile(m.override) } : {}) };
 }
@@ -201,6 +207,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const enrolling = action === "enrollBedside";
       if (enrolling) requireValue(typeof input.pin === "string" && /^\d{6}$/.test(input.pin), "Choose a six-digit caregiver PIN.");
       const { deviceID, secret } = registration(input);
+      const platform = devicePlatform(input.platform);
       const id = deviceID;
       const bedsideName = name(input.name ?? "Your loved one");
       // The admin page's invitation this bedside was set up from, which then shows the household.
@@ -227,7 +234,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       // Also on a retry, in case a lost response came after the household was made but before these.
       const listed = async () => { await rememberHousehold(store, id); if (invitationID) await markInvitationSetUp(store, invitationID, id, now); };
       await reserveDevice(store, deviceID, secret, id, "bedside");
-      const me: Member = { id: deviceID, name: bedsideName, role: "bedside", secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
+      const me: Member = { id: deviceID, name: bedsideName, role: "bedside", ...platform, secretHash: hash(secret), permissions: { audio: false, video: false }, revoked: false, seenAt: now, available: false };
       // A bedside set up from the app starts with drop-in on, so family can look in without anyone answering; each
       // person's drop-in is still approved on their invitation. It gets its number in setup, and turns away unknown
       // callers from the start: its new number may have belonged to someone else, whose callers and robocalls still dial
@@ -260,6 +267,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       requireValue(reference, "This invitation expired or was cancelled. Ask for a new one.", 410);
       const { householdID, inviteID } = JSON.parse(reference);
       const { deviceID, secret } = registration(input);
+      const platform = devicePlatform(input.platform);
       await reserveDevice(store, deviceID, secret, householdID, inviteID);
       const { house } = await mutate(store, householdID, house => {
         const invite = house.invites.find(i => i.id === inviteID && i.secretHash === inviteHash && i.expiresAt > now);
@@ -270,7 +278,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         requireValue(!house.members.some(m => m.id === deviceID), "This device identity is already in use.", 409);
         requireValue(house.members.filter(m => !m.revoked).length < 20, "This household has reached its device limit.");
-        const me: Member = { invitationID: invite.id, id: deviceID, name: invite.name, role: "family", secretHash: hash(secret), permissions: invite.permissions, ...(invite.caregiver ? { caregiver: true } : {}), revoked: false, seenAt: now, available: false };
+        const me: Member = { invitationID: invite.id, id: deviceID, name: invite.name, role: "family", ...platform, secretHash: hash(secret), permissions: invite.permissions, ...(invite.caregiver ? { caregiver: true } : {}), revoked: false, seenAt: now, available: false };
         house.members.push(me); invite.claimedBy = deviceID;
       });
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID }));
@@ -462,7 +470,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         return undefined;
       }
       if (action === "setShareAttendance") {
-        requireValue(typeof input.enabled === "boolean", "Choose whether family see when someone is at the iPad.");
+        requireValue(typeof input.enabled === "boolean", `Choose whether family see when someone is at the ${bedsideDevice(house)}.`);
         // Turning it back on starts afresh, and turning it off forgets the last time, too.
         if (input.enabled && !attendanceShared(house)) house.attendanceSince = now;
         house.shareAttendance = input.enabled;

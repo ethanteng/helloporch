@@ -102,7 +102,7 @@ export async function handlePhoneCall(request: Request, action: Action, dependen
       ...(localRingback === true ? { localRingback: true } : {}),
       ...(typeof contactAuthorization === "string" ? { contactAuthorization } : {}) };
     const room = `porch-phone-${ticket.id}`;
-    const token = new AccessToken(config.apiKey, config.apiSecret, { identity: `porch-${ticket.id}`, name: "Porch iPad", ttl: "2m" });
+    const token = new AccessToken(config.apiKey, config.apiSecret, { identity: `porch-${ticket.id}`, name: "Porch bedside", ttl: "2m" });
     token.roomConfig = new RoomConfiguration({ maxParticipants: 2, emptyTimeout: 90, departureTimeout: 5 });
     token.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: false,
       canUpdateOwnMetadata: false, canPublishSources: [TrackSource.MICROPHONE] });

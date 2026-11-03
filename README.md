@@ -96,7 +96,7 @@ The site runs at http://localhost:3000. Fill in only the services you need. Neve
 | Phone numbers | `PORCH_SERVER_ORIGIN`, `PORCH_MAX_PHONE_NUMBERS` (nothing is bought without it), optional `PORCH_INBOUND_NUMBER` |
 | ElevenLabs | `ELEVENLABS_API_KEY` |
 | Server secrets | `PORCH_CONTACT_SETUP_CODE` (signing and recovery secret), legacy `PORCH_CALL_ACCESS_CODE` and `PORCH_PHONE_NUMBERS` |
-| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `MAILERLITE_PILOT_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL` |
+| Website | `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_ID`, `MAILERLITE_PILOT_GROUP_ID`, `NEXT_PUBLIC_DEMO_VIDEO_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL`, `NEXT_PUBLIC_PLAY_TESTING_URL` (Porch for Android on Google Play, once it's in testing) |
 
 To try the apps against a local server without real families, `scripts/seed-family-preview.mjs` creates sample devices in an isolated store prefix ([details](ios/FAMILY-SETUP.md#verify)).
 

@@ -422,6 +422,27 @@ test('VoIP registration is authenticated, device scoped, validated and never exp
  assert.equal((await f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential)).status,409);
 });
 
+test('each device says whether it runs Android, so the apps and server messages can name the bedside',async()=>{
+ const f=fixture();
+ const ids=()=>({deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex')});
+ assert.equal((await f.send('createHousehold',{name:'Mom',platform:'windows',...ids()},undefined,env.PORCH_CONTACT_SETUP_CODE)).status,400);
+ const tablet=await f.json('createHousehold',{name:'Mom',platform:'android',...ids()},undefined,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal(tablet.state.me.platform,'android');
+ const invite=(name)=>f.json('createInvite',{name,permissions:{audio:true,video:true}},tablet.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await f.send('claimInvite',{code:(await invite('Lee')).code,platform:'blackberry',...ids()})).status,400);
+ const pixel=await f.json('claimInvite',{code:(await invite('Lee')).code,platform:'android',...ids()});
+ const iphone=await f.json('claimInvite',{code:(await invite('Ethan')).code,...ids()});
+ assert.deepEqual(pixel.state.people.map(p=>[p.role,p.platform]),[['bedside','android']],"a family phone learns it's Mom's tablet");
+ const people=(await f.json('poll',{available:true},tablet.credential)).state.people;
+ assert.deepEqual(people.map(p=>[p.name,p.platform]),[['Lee','android'],['Ethan','ios']],'an app that sends no platform is iOS');
+ assert.equal(iphone.state.me.platform,'ios');
+ const wording=await f.send('setShareAttendance',{enabled:'no'},tablet.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await wording.json()).error,'Choose whether family see when someone is at the tablet.');
+ const ipad=await f.setup();
+ const ipadWording=await f.send('setShareAttendance',{enabled:'no'},ipad.bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ assert.equal((await ipadWording.json()).error,'Choose whether family see when someone is at the iPad.','iPad households read what they always have');
+});
+
 test('an Android phone registers its one FCM token for calls and messages, with no APNs environment',async()=>{
  const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push({device,call});return {delivered:true};}}),{bedside,family}=await f.setup();
  const token='fcm-token:'+'a1_-'.repeat(30);

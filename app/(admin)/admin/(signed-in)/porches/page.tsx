@@ -33,11 +33,11 @@ export default async function PorchesPage() {
             <tbody>
               {rows.map(row => (
                 <tr key={row.id}>
-                  <td title={row.id}>{row.bedsideName}{row.invitationLabel && <span className="sub">{row.invitationLabel}</span>}</td>
+                  <td title={row.id}>{row.bedsideName}{row.invitationLabel && <span className="sub">{row.invitationLabel}</span>}{row.androidBedside && <span className="sub">Android tablet</span>}</td>
                   <td>{row.porchNumber ? phoneNumber(row.porchNumber) : row.numberPending ? <span className="muted">Being set up</span> : <span className="muted">None</span>}</td>
                   <td>{row.setUpAt ? day(row.setUpAt) : <span className="muted">Before this list</span>}</td>
                   <td>{seen(row, now)}</td>
-                  <td>{row.familyPhones}</td>
+                  <td>{row.familyPhones}{row.androidPhones ? <span className="sub">{row.androidPhones} Android</span> : null}</td>
                   <td>{row.setupFinished ? <span className="tag good">Finished</span> : <span className="tag warn">Not finished</span>}</td>
                 </tr>
               ))}

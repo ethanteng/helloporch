@@ -299,6 +299,7 @@ test('the Porches list covers older households and holds no private details', as
   delete house.createdAt;
   house.porchNumber = { number: '+14155550101', assignedAt: f.now() };
   house.members.push({ id: randomUUID(), name: 'Private cousin name', role: 'family', secretHash: 'x', permissions: { audio: true, video: true }, revoked: false, seenAt: f.now(), available: false });
+  house.members.push({ id: randomUUID(), name: 'Private nephew name', role: 'family', platform: 'android', secretHash: 'x', permissions: { audio: true, video: true }, revoked: false, seenAt: f.now(), available: false });
   house.inbox = [{ id: 'm', text: 'Private message text' }];
   house.keypadNumbers = ['+14155559999'];
   await f.store.compareAndSet(`house:${house.id}`, raw, JSON.stringify(house));
@@ -307,7 +308,7 @@ test('the Porches list covers older households and holds no private details', as
   f.advance(3 * 86400);
 
   const rows = await listPorches(session, f.store);
-  assert.deepEqual(rows, [{ id: house.id, bedsideName: 'Mom', porchNumber: '+14155550101', numberPending: false, lastSeenAt: f.now() - 3 * 86400, familyPhones: 1, setupFinished: true }]);
+  assert.deepEqual(rows, [{ id: house.id, bedsideName: 'Mom', porchNumber: '+14155550101', numberPending: false, lastSeenAt: f.now() - 3 * 86400, familyPhones: 2, androidPhones: 1, setupFinished: true }]);
   const text = JSON.stringify(rows);
   for (const secret of ['Private cousin name', 'Private message text', '+14155559999', 'secretHash']) assert.ok(!text.includes(secret), secret);
 });

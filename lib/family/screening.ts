@@ -1,4 +1,4 @@
-import { isCaregiver, mutate, phoneDropIn, requireValue, FamilyError, type BlockedCaller, type Household, type Member } from "./household.ts";
+import { bedsideDevice, isCaregiver, mutate, phoneDropIn, requireValue, FamilyError, type BlockedCaller, type Household, type Member } from "./household.ts";
 import type { FamilyStore } from "./store.ts";
 
 // Blocking unknown callers: while a caregiver has it on, a regular phone call rings the bedside only when its
@@ -91,7 +91,7 @@ export async function handleScreeningAction(action: string, { store, now, house,
     await mutate(store, house.id, latest => {
       requireValue(latest.members.some(m => m.id === me.id && !m.revoked && isCaregiver(m)), "Only an approved caregiver can change access.", 403);
       // Until the iPad has reported its keypad, blocking would turn away the people saved on it.
-      if (enabled && !latest.keypadNumbers) throw new FamilyError("Open Porch on the bedside iPad so it can share its keypad contacts, then try again.", 409);
+      if (enabled && !latest.keypadNumbers) throw new FamilyError(`Open Porch on the bedside ${bedsideDevice(latest)} so it can share its keypad contacts, then try again.`, 409);
       latest.blockUnknownCallers = enabled;
     });
     return {};
