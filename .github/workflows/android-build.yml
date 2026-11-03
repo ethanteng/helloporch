@@ -1,0 +1,35 @@
+name: Android build
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android-build.yml']
+  pull_request:
+    paths: ['android/**', '.github/workflows/android-build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+# The runner's Android SDK has its licenses accepted, so Gradle downloads any
+# platform or build tools the project needs.
+jobs:
+  build:
+    name: Core tests, app build and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew --console=plain :core:test :app:assembleDebug :app:lintDebug
