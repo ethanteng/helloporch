@@ -91,7 +91,7 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
         {code === null ? (
           <p className={styles.problem} role="alert">This link is incomplete. Ask whoever sent it for a new one.</p>
         ) : android && !playTesting ? (
-          <p className={styles.problem}>Porch isn&rsquo;t on Android yet. Open this link on {kind === "bedside" ? "an iPad" : "an iPhone or iPad"} instead, or ask whoever sent it.</p>
+          <p className={styles.problem} role="alert">Porch isn&rsquo;t on Android yet. Open this link on {kind === "bedside" ? "an iPad" : "an iPhone or iPad"} instead, or ask whoever sent it.</p>
         ) : (
           <ol className={styles.steps}>
             <li>
