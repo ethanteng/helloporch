@@ -25,6 +25,10 @@ class NativeCallTest {
         val server = NativeCallServer(" https://porch.example.com/ ", code)
         assertEquals("https://porch.example.com/api/calls/token", server.tokenURL)
         assertEquals("http://localhost:3000", NativeCallServer("http://localhost:3000", code).baseURL)
+        // Scheme and host are folded, as iOS URLComponents does, including IPv6 localhost.
+        assertEquals("https://porch.example.com", NativeCallServer("HTTPS://Porch.Example.com", code).baseURL)
+        assertEquals("http://localhost:3000", NativeCallServer("HTTP://LOCALHOST:3000", code).baseURL)
+        assertEquals("http://[::1]:3000", NativeCallServer("http://[::1]:3000", code).baseURL)
         for (url in listOf("http://porch.example.com", "https://a:b@porch.example.com", "https://porch.example.com/path", "https://porch.example.com?code=secret",
             "https://porch.example.com#room", "wss://porch.example.com", "porch.example.com")) {
             assertFailsWith<ValidationException>(url) { NativeCallServer(url, code) }

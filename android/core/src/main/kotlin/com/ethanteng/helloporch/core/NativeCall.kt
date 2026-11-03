@@ -31,13 +31,17 @@ class NativeCallServer(url: String, accessCode: String) {
 
     init {
         val uri = try { URI(url.trim()) } catch (_: Exception) { null }
-        val host = uri?.host
-        val valid = uri != null && !host.isNullOrEmpty() && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
-            (uri.rawPath.isNullOrEmpty() || uri.rawPath == "/") &&
-            (uri.scheme == "https" || (uri.scheme == "http" && host in localHosts))
+        // Java keeps the scheme and host as typed. URLComponents, which the iOS app uses, folds both to lowercase,
+        // so a pasted "HTTPS://Porch.Example" or "HTTP://LOCALHOST" is the same server.
+        val scheme = uri?.scheme?.lowercase()
+        val host = uri?.host?.lowercase()
+        val valid = uri != null && scheme != null && !host.isNullOrEmpty() && uri.rawUserInfo == null && uri.rawQuery == null &&
+            uri.rawFragment == null && (uri.rawPath.isNullOrEmpty() || uri.rawPath == "/") &&
+            (scheme == "https" || (scheme == "http" && host in localHosts))
         if (!valid) throw ValidationException(
             "Enter your Porch server's HTTPS address, without a path, query, or login. HTTP localhost is allowed for simulator testing.")
-        baseURL = "${uri.scheme}://${uri.rawAuthority}"
+        val port = if (uri.port == -1) "" else ":${uri.port}"
+        baseURL = "$scheme://$host$port"
         val code = accessCode.trim()
         if (code.length !in 16..256 || code.any { it.code !in 0x21..0x7E }) throw ValidationException(
             "Enter the server's prototype access code: 16–256 characters with no spaces.")
