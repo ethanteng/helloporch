@@ -34,6 +34,13 @@ export function codeFromHash(hash: string): string | undefined {
   return inviteCode(new URLSearchParams(hash.replace(/^#/, "")).get("code"));
 }
 
+/** Phone or tablet, for an invitation page. Undefined when the browser isn't Android. Chrome's reduced user agent
+ * says "Mobile" on tablets too, so pass `navigator.userAgentData?.mobile`, which still tells them apart. */
+export function androidDevice(userAgent: string, mobileHint?: boolean): "phone" | "tablet" | undefined {
+  if (!/Android/i.test(userAgent)) return;
+  return (mobileHint ?? /Mobile/i.test(userAgent)) ? "phone" : "tablet";
+}
+
 /** Android fetches this from helloporch.store when Porch is installed, to let invitation links open it. */
 export function assetLinks() {
   return androidCertificates.length ? [{ relation: ["delegate_permission/common.handle_all_urls"],

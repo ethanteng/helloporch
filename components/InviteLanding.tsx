@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import PorchLogo from "@/components/PorchLogo";
-import { appLink, codeFromHash, type InviteKind } from "@/lib/invite-links";
+import { androidDevice, appLink, codeFromHash, type InviteKind } from "@/lib/invite-links";
 import styles from "./InviteLanding.module.css";
 
 // Set on the website project. Without it, the page asks for the link from whoever sent the invitation.
@@ -44,8 +44,9 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
   // Read after the page loads, so the page first shows what it shows on an iPhone or iPad.
   const [android, setAndroid] = useState<"phone" | "tablet">();
   useEffect(() => {
-    const agent = navigator.userAgent;
-    if (/Android/i.test(agent)) setAndroid(/Mobile/i.test(agent) ? "phone" : "tablet");
+    // Read after paint. Chrome's reduced user agent says "Mobile" on tablets; the client hint does not.
+    const form = androidDevice(navigator.userAgent, navigator.userAgentData?.mobile);
+    if (form) setAndroid(form);
   }, []);
   // Until Porch for Android is in testing, an Android visitor reads what an iPhone or iPad does, and that it isn't ready.
   const androidReady = !!android && !!playTesting;
