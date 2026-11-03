@@ -25,7 +25,13 @@ test('release health verifies configuration and a read-only storage operation wi
     assert.equal((await (await callingHealth(store)).json()).androidPushConfigured, true);
     process.env.FCM_PRIVATE_KEY = 'private-broken-key';
     const broken = await callingHealth(store);
-    assert.equal(broken.status, 503, 'a Firebase key that is there must work'); assert.equal((await broken.text()).includes('private-'), false);
+    assert.equal(broken.status, 503, 'a Firebase key that is there must work');
+    const brokenBody = await broken.text();
+    assert.equal(brokenBody.includes('private-'), false);
+    assert.equal(JSON.parse(brokenBody).androidPushConfigured, false, 'says the Firebase key is what is wrong');
+    delete process.env.APNS_PRIVATE_KEY;
+    assert.equal('androidPushConfigured' in await (await callingHealth(store)).json(), false, 'other failures say nothing about Android');
+    process.env.APNS_PRIVATE_KEY = env.APNS_PRIVATE_KEY;
     for (const key of Object.keys(fcm)) delete process.env[key];
     assert.equal((await callingHealth({ get: async () => { throw new Error('private-storage-secret'); } })).status, 503);
     delete process.env.APNS_PRIVATE_KEY;

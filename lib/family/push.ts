@@ -95,11 +95,13 @@ const invalidFcmTokenMessage = "The registration token is not a valid FCM regist
 // FCM HTTP v1. Data values must be strings. Never throws: a failed push is reported like an APNs one.
 async function sendFCM(device: VoIPRegistration, message: object, request: typeof fetch, now: number): Promise<PushResult> {
   try {
-    const authorization = await fcmAuthorization(request, now);
-    const response = await request(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(process.env.FCM_PROJECT_ID!)}/messages:send`, {
+    const send = async () => request(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(process.env.FCM_PROJECT_ID!)}/messages:send`, {
       method: "POST", signal: AbortSignal.timeout(5000),
-      headers: { authorization: `Bearer ${authorization}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${await fcmAuthorization(request, now)}`, "content-type": "application/json" },
       body: JSON.stringify({ message: { token: device.token, ...message } }) });
+    let response = await send();
+    // Google can revoke a cached access token early, such as when the key is rotated: sign in again, once.
+    if (response.status === 401) { await response.body?.cancel(); fcmAccess = undefined; response = await send(); }
     if (response.ok) return { delivered: true, invalidToken: false };
     let error: FCMError["error"];
     try { error = ((await response.json()) as FCMError).error; } catch { /* no detail */ }

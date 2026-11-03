@@ -161,6 +161,17 @@ test('FCM reports unregistered and invalid tokens, but not its own failures, as 
  assert.deepEqual(await sendVoIPPush(android,call,undefined,1800000000,google.request),{delivered:false},'a network error never throws');
 }));
 
+test('a rejected access token is fetched again once before the push fails',()=>withFCM(async()=>{
+ const google=fakeGoogle();let rejections=1;
+ google.reply(()=>rejections-->0?Response.json({error:{code:401,status:'UNAUTHENTICATED',message:'Request had invalid authentication credentials.'}},{status:401}):Response.json({name:'projects/porch-test/messages/2'}));
+ assert.deepEqual(await sendVoIPPush(android,call,undefined,1800000000,google.request),{delivered:true,invalidToken:false});
+ assert.equal(google.requests.filter(r=>r.url.includes('oauth2')).length,2,'signed in again');
+ assert.equal(google.sends().length,2);
+ rejections=Infinity;
+ assert.deepEqual(await sendVoIPPush(android,call,undefined,1800000000,google.request),{delivered:false,invalidToken:false},'a token rejected twice fails closed, keeping the device');
+ assert.equal(google.sends().length,4,'never more than one retry');
+}));
+
 test('a failed Google sign-in fails the push closed without sending it',()=>withFCM(async()=>{
  const requests=[];
  const request=async url=>{requests.push(String(url));return Response.json({error:'invalid_grant'},{status:400});};

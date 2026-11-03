@@ -3,7 +3,8 @@ import type { FamilyStore } from "../family/store.ts";
 import { callingHealth } from "../calls/health.ts";
 import { assertAdmin, type AdminSession } from "./session.ts";
 
-/** `androidPush`: whether the ready calling server can push to Android devices. Unknown while it isn't ready. */
+/** `androidPush`: whether the calling server can push to Android devices. While it isn't ready, this is known, and false,
+ * only when its Firebase key is what's wrong. */
 export type SystemStatus = { numbersInUse: number; numberLimit?: number; ready: boolean; commit?: string; androidPush?: boolean };
 
 export async function systemStatus(session: AdminSession, store: FamilyStore): Promise<SystemStatus> {
