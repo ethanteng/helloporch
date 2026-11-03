@@ -1,0 +1,66 @@
+{
+  "state": {
+    "householdID": "00000000-0000-4000-8000-000000000001",
+    "householdName": "Mom",
+    "dropInEnabled": false,
+    "messagesEnabled": true,
+    "ringSeconds": 45,
+    "heldMessages": 0,
+    "heldTexts": 0,
+    "newMessages": 0,
+    "me": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "name": "Ethan",
+      "role": "family",
+      "platform": "ios",
+      "permissions": {
+        "audio": true,
+        "video": true
+      },
+      "online": true,
+      "canReceiveCalls": true,
+      "caregiver": true,
+      "invitedName": "Ethan",
+      "profile": {},
+      "override": {}
+    },
+    "family": [
+      {
+        "id": "00000000-0000-4000-8000-000000000005",
+        "name": "Lee",
+        "canReceiveCalls": true
+      }
+    ],
+    "invitations": [],
+    "people": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "name": "Mom",
+        "role": "bedside",
+        "platform": "ios",
+        "permissions": {
+          "audio": false,
+          "video": false
+        },
+        "online": true,
+        "canReceiveCalls": true
+      }
+    ],
+    "call": {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "from": "00000000-0000-4000-8000-000000000001",
+      "to": "00000000-0000-4000-8000-000000000003",
+      "mode": "video",
+      "kind": "call",
+      "state": "accepted",
+      "createdAt": 1800000000,
+      "expiresAt": 9007199254740991,
+      "announcedAt": 1800000000,
+      "acceptedAt": 1800000000,
+      "source": "porch",
+      "callerName": "Mom"
+    },
+    "busy": true,
+    "serverTime": 1800000000
+  }
+}

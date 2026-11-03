@@ -3,9 +3,9 @@ name: Android build
 on:
   push:
     branches: [main]
-    paths: ['android/**', '.github/workflows/android-build.yml']
+    paths: ['android/**', 'tests/fixtures/**', '.github/workflows/android-build.yml']
   pull_request:
-    paths: ['android/**', '.github/workflows/android-build.yml']
+    paths: ['android/**', 'tests/fixtures/**', '.github/workflows/android-build.yml']
   workflow_dispatch:
 
 permissions:

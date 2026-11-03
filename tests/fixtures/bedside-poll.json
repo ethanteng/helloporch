@@ -1,0 +1,78 @@
+{
+  "state": {
+    "householdID": "00000000-0000-4000-8000-000000000001",
+    "householdName": "Mom",
+    "dropInEnabled": false,
+    "messagesEnabled": true,
+    "ringSeconds": 45,
+    "messages": [],
+    "texts": [],
+    "phoneDropIns": [],
+    "bedsideLanguage": "en",
+    "callScreening": {
+      "enabled": false,
+      "keypadNumbers": null,
+      "allowed": [],
+      "blocked": []
+    },
+    "shareAttendance": true,
+    "me": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Mom",
+      "role": "bedside",
+      "platform": "ios",
+      "permissions": {
+        "audio": false,
+        "video": false
+      },
+      "online": true,
+      "canReceiveCalls": true
+    },
+    "invitations": [
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "name": "Sam",
+        "expiresAt": 1800086400
+      }
+    ],
+    "people": [
+      {
+        "id": "00000000-0000-4000-8000-000000000003",
+        "name": "Ethan",
+        "role": "family",
+        "platform": "ios",
+        "permissions": {
+          "audio": true,
+          "video": true
+        },
+        "online": true,
+        "canReceiveCalls": true,
+        "caregiver": true,
+        "invitedName": "Ethan",
+        "profile": {},
+        "override": {},
+        "invitationID": "00000000-0000-4000-8000-000000000004"
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000005",
+        "name": "Lee",
+        "role": "family",
+        "platform": "android",
+        "permissions": {
+          "audio": true,
+          "video": true
+        },
+        "online": true,
+        "canReceiveCalls": true,
+        "caregiver": false,
+        "invitedName": "Lee",
+        "profile": {},
+        "override": {},
+        "invitationID": "00000000-0000-4000-8000-000000000006"
+      }
+    ],
+    "call": null,
+    "busy": false,
+    "serverTime": 1800000000
+  }
+}

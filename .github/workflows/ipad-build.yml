@@ -3,9 +3,9 @@ name: iPhone and iPad build
 on:
   push:
     branches: [main]
-    paths: ['ios/**', 'phone-adapter/**', '.github/workflows/ipad-build.yml']
+    paths: ['ios/**', 'phone-adapter/**', 'tests/fixtures/**', '.github/workflows/ipad-build.yml']
   pull_request:
-    paths: ['ios/**', 'phone-adapter/**', '.github/workflows/ipad-build.yml']
+    paths: ['ios/**', 'phone-adapter/**', 'tests/fixtures/**', '.github/workflows/ipad-build.yml']
   workflow_dispatch:
 
 permissions:
