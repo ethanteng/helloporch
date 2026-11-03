@@ -13,8 +13,9 @@ export type Profile = { name?: string; photo?: ProfilePhoto };
 export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
  * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`).
- * `attendedAt`: the bedside only, when it last noticed someone at the iPad (see `noteAttendance`). */
-export type Member = { voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+ * `attendedAt`: the bedside only, when it last noticed someone at the iPad (see `noteAttendance`).
+ * `platform`: "android" for an Android device. Devices set up before Android existed have none: iOS. */
+export type Member = { platform?: "android"; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
@@ -87,6 +88,10 @@ export function requireValue(condition: unknown, message: string, status = 400):
 export function displayName(member: Member): string { return member.override?.name ?? member.profile?.name ?? member.name; }
 export function displayPhoto(member: Member): ProfilePhoto | undefined { return member.override?.photo ?? member.profile?.photo; }
 // The bedside device is always a caregiver; family devices need the caregiver's approval (and the PIN).
+/** What the bedside is, for the server's own messages: an iPad, or an Android tablet. */
+export function bedsideDevice(house: Household) {
+  return house.members.find(m => m.role === "bedside" && !m.revoked)?.platform === "android" ? "tablet" : "iPad";
+}
 export function isCaregiver(member: Member) { return member.role === "bedside" || member.caregiver === true; }
 export function config(): CallServer {
   const { LIVEKIT_URL: serverUrl, LIVEKIT_API_KEY: apiKey, LIVEKIT_API_SECRET: apiSecret } = process.env;

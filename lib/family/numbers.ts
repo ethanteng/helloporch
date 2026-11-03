@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { RoomConfiguration, SIPInboundTrunkInfo, SipClient, type SipInboundTrunkUpdateOptions } from "livekit-server-sdk";
-import { config, FamilyError, mutate, requireValue, type Household, type Member } from "./household.ts";
+import { bedsideDevice, config, FamilyError, mutate, requireValue, type Household, type Member } from "./household.ts";
 import { callerVerificationAttribute, forwardedVerificationHeader, inboundRingLimitSeconds, inboundRoomPrefix, sipInboundCredentials, type InboundRoute } from "./inbound.ts";
 import type { FamilyStore } from "./store.ts";
 
@@ -202,7 +202,7 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
   if (house.porchNumber) return house;
   // Not due: the last try asked for another area code, or its wait has not finished. A missing setup is a caller error.
   if (!porchNumberDue(house, now)) {
-    requireValue(house.members.some(m => m.role === "bedside" && !m.revoked) && house.phoneSetup, "Choose an area code for this Porch's number on the bedside iPad.", 409);
+    requireValue(house.members.some(m => m.role === "bedside" && !m.revoked) && house.phoneSetup, `Choose an area code for this Porch's number on the bedside ${bedsideDevice(house)}.`, 409);
     return house;
   }
   const lockKey = `number-lock:${householdID}`, lock = await claim(store, lockKey, now, 90);
@@ -211,7 +211,7 @@ export async function ensurePorchNumber(store: FamilyStore, householdID: string,
     house = await read();
     if (house.porchNumber || !porchNumberDue(house, now)) return house;
     const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
-    requireValue(bedside && house.phoneSetup, "Choose an area code for this Porch's number on the bedside iPad.", 409);
+    requireValue(bedside && house.phoneSetup, `Choose an area code for this Porch's number on the bedside ${bedsideDevice(house)}.`, 409);
     const { areaCode } = house.phoneSetup;
     const orderKey = `number-order:${householdID}`;
     let order: OwnedNumber | null = JSON.parse(await store.get(orderKey) ?? "null");
@@ -281,7 +281,7 @@ async function nearbyAreaCodes(headers: Headers, provider: NumberProvider): Prom
 
 /** Caregiver actions on the bedside, PIN-checked before this point. */
 export async function handleNumberAction(action: string, { store, now, house, me, input, headers, services }: NumberContext): Promise<object> {
-  requireValue(me.role === "bedside", "Set up this Porch's phone number on the bedside iPad.", 403);
+  requireValue(me.role === "bedside", `Set up this Porch's phone number on the bedside ${bedsideDevice(house)}.`, 403);
   if (house.porchNumber) return { porchNumber: house.porchNumber.number };
   // A household set up by hand, like the first one, keeps the number it has. Only provision-number.mjs records it,
   // so the app can never buy it a new one.

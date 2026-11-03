@@ -4,9 +4,10 @@ import type { FamilyStore } from "../family/store.ts";
 import { assertAdmin, type AdminSession } from "./session.ts";
 
 /** What the admin page shows about a household. It never includes messages, family members' names, keypad contents or
- * call details. `bedsideName` is the person the Porch is for, such as "Mom". */
+ * call details. `bedsideName` is the person the Porch is for, such as "Mom". `androidBedside` and `androidPhones` say which
+ * of its devices run Android; the rest are iPads and iPhones. */
 export type PorchRow = { id: string; bedsideName: string; invitationLabel?: string; porchNumber?: string; numberPending: boolean;
-  setUpAt?: number; lastSeenAt?: number; familyPhones: number; setupFinished: boolean };
+  setUpAt?: number; lastSeenAt?: number; familyPhones: number; androidBedside?: true; androidPhones?: number; setupFinished: boolean };
 
 export async function listPorches(session: AdminSession, store: FamilyStore): Promise<PorchRow[]> {
   assertAdmin(session);
@@ -18,11 +19,13 @@ export async function listPorches(session: AdminSession, store: FamilyStore): Pr
     const house: Household = JSON.parse(raw);
     const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
     const invitation = invitations.find(i => i.householdID === house.id);
-    const familyPhones = house.members.filter(m => m.role === "family" && !m.revoked).length;
+    const phones = house.members.filter(m => m.role === "family" && !m.revoked), familyPhones = phones.length;
+    const androidPhones = phones.filter(m => m.platform === "android").length;
     return [{ id: house.id, bedsideName: bedside?.name ?? house.name, ...(invitation ? { invitationLabel: invitation.label } : {}),
       ...(house.porchNumber ? { porchNumber: house.porchNumber.number } : {}), numberPending: !house.porchNumber && !!house.phoneSetup,
       ...(house.createdAt ?? invitation?.setUpAt ? { setUpAt: house.createdAt ?? invitation?.setUpAt } : {}),
       ...(bedside ? { lastSeenAt: bedside.seenAt } : {}), familyPhones,
+      ...(bedside?.platform === "android" ? { androidBedside: true as const } : {}), ...(androidPhones ? { androidPhones } : {}),
       // Until the setup screens have a checklist, a Porch is set up once it has its number and a family phone.
       setupFinished: !!house.porchNumber && familyPhones > 0 }];
   }).sort((a, b) => (b.setUpAt ?? 0) - (a.setUpAt ?? 0));

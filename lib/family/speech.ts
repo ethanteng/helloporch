@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { FamilyError, isCaregiver, mutate, requireValue, type BedsideLanguage, type Household, type Member } from "./household.ts";
+import { bedsideDevice, FamilyError, isCaregiver, mutate, requireValue, type BedsideLanguage, type Household, type Member } from "./household.ts";
 import type { MediaStore } from "./media.ts";
 import { discardMedia } from "./messages.ts";
 import type { FamilyStore } from "./store.ts";
@@ -102,7 +102,7 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   const requested = input.voiceID;
   requireValue(requested === undefined || (typeof requested === "string" && speechCatalog[language].voices.some(v => v.id === requested)), "Choose one of the listed voices.");
   const voiceID = requested ?? speechVoice(house, language);
-  requireValue(voiceID, "This language uses the iPad's built-in voice.", 409);
+  requireValue(voiceID, `This language uses the ${bedsideDevice(house)}'s built-in voice.`, 409);
   if (!textID) return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
   // A text's words are private: their reading is kept apart and deleted with the text.
   const folder = `texts/${textID}`;

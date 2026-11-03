@@ -5,6 +5,10 @@
 export const porchWebOrigin = "https://helloporch.store";
 export const porchServerOrigin = "https://porch-calling-prototype.vercel.app";
 export const porchAppID = "7U9T57JPF7.com.ethanteng.helloporch";
+export const porchAndroidPackage = "com.ethanteng.helloporch";
+/** SHA-256 fingerprints of the certificates Android builds are signed with, as `keytool -list -v` prints them: Play App
+ * Signing's key, the upload key and the debug key. Until one exists, no build can open invitation links. */
+export const androidCertificates: string[] = [];
 export type InviteKind = "family" | "bedside";
 export const invitePaths: Record<InviteKind, string> = { family: "/join", bedside: "/setup" };
 // The app's own scheme: porch://pair for a family member, porch://activate for a bedside.
@@ -28,6 +32,19 @@ export function appLink(kind: InviteKind, code: string, server = porchServerOrig
 /** The code in a web invitation's `#`, such as "#code=…". */
 export function codeFromHash(hash: string): string | undefined {
   return inviteCode(new URLSearchParams(hash.replace(/^#/, "")).get("code"));
+}
+
+/** Phone or tablet, for an invitation page. Undefined when the browser isn't Android. Chrome's reduced user agent
+ * says "Mobile" on tablets too, so pass `navigator.userAgentData?.mobile`, which still tells them apart. */
+export function androidDevice(userAgent: string, mobileHint?: boolean): "phone" | "tablet" | undefined {
+  if (!/Android/i.test(userAgent)) return;
+  return (mobileHint ?? /Mobile/i.test(userAgent)) ? "phone" : "tablet";
+}
+
+/** Android fetches this from helloporch.store when Porch is installed, to let invitation links open it. */
+export function assetLinks() {
+  return androidCertificates.length ? [{ relation: ["delegate_permission/common.handle_all_urls"],
+    target: { namespace: "android_app", package_name: porchAndroidPackage, sha256_cert_fingerprints: androidCertificates } }] : [];
 }
 
 /** Apple fetches this from helloporch.store to let invitation links open Porch. */

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import PorchLogo from "@/components/PorchLogo";
-import { appLink, codeFromHash, type InviteKind } from "@/lib/invite-links";
+import { androidDevice, appLink, codeFromHash, type InviteKind } from "@/lib/invite-links";
 import styles from "./InviteLanding.module.css";
 
 // Set on the website project. Without it, the page asks for the link from whoever sent the invitation.
 const testFlight = process.env.NEXT_PUBLIC_TESTFLIGHT_URL;
+// Porch's Google Play testing page, once Porch for Android is in testing. Until then, Android visitors are told it isn't ready.
+const playTesting = process.env.NEXT_PUBLIC_PLAY_TESTING_URL;
 
 const copy = {
   family: {
@@ -27,6 +29,11 @@ const copy = {
     copyLabel: "Copy setup link",
   },
 } as const;
+const androidBedside = {
+  lede: "Open this page on the tablet that will stay with them. This link sets up one tablet.",
+  needs: ["A tablet with Android 15 or later, and Wi-Fi.",
+    "A Cell2Jack, and a corded phone set to tone dialing, such as a big-button picture phone. A USB hub keeps the tablet charging with it plugged in. You can connect the phone later."],
+};
 
 /** The page an invitation link opens when Porch isn't installed yet, or isn't opened by the link. */
 export default function InviteLanding({ kind }: { kind: InviteKind }) {
@@ -34,6 +41,18 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
   // Unknown until the page has read its link; null when the link has no code.
   const [code, setCode] = useState<string | null>();
   const [copied, setCopied] = useState(false);
+  // Read after the page loads, so the page first shows what it shows on an iPhone or iPad.
+  const [android, setAndroid] = useState<"phone" | "tablet">();
+  useEffect(() => {
+    // Read after paint. Chrome's reduced user agent says "Mobile" on tablets; the client hint does not.
+    // The DOM lib this repo typechecks with does not declare userAgentData.
+    const hints = navigator as Navigator & { userAgentData?: { mobile: boolean } };
+    const form = androidDevice(navigator.userAgent, hints.userAgentData?.mobile);
+    if (form) setAndroid(form);
+  }, []);
+  // Until Porch for Android is in testing, an Android visitor reads what an iPhone or iPad does, and that it isn't ready.
+  const androidReady = !!android && !!playTesting;
+  const device = !androidReady ? text.device : kind === "bedside" ? "tablet" : android;
   useEffect(() => {
     const hash = window.location.hash;
     // Without a hash, keep a code already read: React can run this twice, after the first run cleared it.
@@ -57,31 +76,40 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
       </header>
       <main className={styles.card}>
         <h1 className={styles.title}>{text.title}</h1>
-        <p className={styles.lede}>{text.lede}</p>
+        <p className={styles.lede}>{androidReady && kind === "bedside" ? androidBedside.lede : text.lede}</p>
 
         {kind === "bedside" && (
           <section className={styles.needs} aria-labelledby="needs-title">
             <h2 id="needs-title">What you need</h2>
             <ul>
-              <li>An iPad with an M-series chip (M1 or later), and Wi-Fi.</li>
-              <li>A Cell2Jack, and a corded phone set to tone dialing, such as a big-button picture phone. You can connect the phone later.</li>
+              {androidReady ? androidBedside.needs.map(need => <li key={need}>{need}</li>) : <>
+                <li>An iPad with an M-series chip (M1 or later), and Wi-Fi.</li>
+                <li>A Cell2Jack, and a corded phone set to tone dialing, such as a big-button picture phone. You can connect the phone later.</li>
+              </>}
             </ul>
           </section>
         )}
 
         {code === null ? (
           <p className={styles.problem} role="alert">This link is incomplete. Ask whoever sent it for a new one.</p>
+        ) : android && !playTesting ? (
+          <p className={styles.problem} role="alert">Porch isn&rsquo;t on Android yet. Open this link on {kind === "bedside" ? "an iPad" : "an iPhone or iPad"} instead, or ask whoever sent it.</p>
         ) : (
           <ol className={styles.steps}>
             <li>
               <h2>Get Porch</h2>
-              <p>Porch is in beta through Apple&rsquo;s TestFlight app. On this {text.device}, install TestFlight, then Porch.</p>
-              {testFlight ? <a className={styles.primary} href={testFlight}>Get Porch on TestFlight</a>
-                : <p className={styles.note}>Ask whoever sent this link for the link to get Porch.</p>}
+              {androidReady ? <>
+                <p>Porch for Android is in testing on Google Play. On this {device}, join the test, then install Porch.</p>
+                <a className={styles.primary} href={playTesting}>Get Porch on Google Play</a>
+              </> : <>
+                <p>Porch is in beta through Apple&rsquo;s TestFlight app. On this {device}, install TestFlight, then Porch.</p>
+                {testFlight ? <a className={styles.primary} href={testFlight}>Get Porch on TestFlight</a>
+                  : <p className={styles.note}>Ask whoever sent this link for the link to get Porch.</p>}
+              </>}
             </li>
             <li>
               <h2>Open it in Porch</h2>
-              <p>If Porch is already on this {text.device}, the link you tapped opens it. Once Porch is installed, tap here.</p>
+              <p>If Porch is already on this {device}, the link you tapped opens it. Once Porch is installed, tap here.</p>
               <a className={styles.primary} href={link} aria-disabled={!link}>{text.open}</a>
             </li>
             <li>
