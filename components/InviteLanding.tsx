@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import PorchLogo from "@/components/PorchLogo";
-import { androidDevice, appLink, codeFromHash, type InviteKind } from "@/lib/invite-links";
+import { androidDevice, appLink, codeFromHash, inviteLink, type InviteKind } from "@/lib/invite-links";
 import styles from "./InviteLanding.module.css";
 
 // Set on the website project. Without it, the page asks for the link from whoever sent the invitation.
@@ -62,9 +62,11 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
     history.replaceState(null, "", window.location.pathname);
   }, []);
   const link = code ? appLink(kind, code) : undefined;
-  const copyLink = async () => {
-    if (!link) return;
-    try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); }
+  // The page's own address no longer has the code, so this is how the link moves to another device.
+  const webLink = code ? inviteLink(kind, code) : undefined;
+  const copyLink = async (value = link) => {
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); setCopied(true); } catch { setCopied(false); }
   };
 
   return (
@@ -93,7 +95,10 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
         {code === null ? (
           <p className={styles.problem} role="alert">This link is incomplete. Ask whoever sent it for a new one.</p>
         ) : android && !playTesting ? (
-          <p className={styles.problem} role="alert">Porch isn&rsquo;t on Android yet. Open this link on {kind === "bedside" ? "an iPad" : "an iPhone or iPad"} instead, or ask whoever sent it.</p>
+          <>
+            <p className={styles.problem} role="alert">Porch isn&rsquo;t on Android yet. Open this link on {kind === "bedside" ? "an iPad" : "an iPhone or iPad"} instead, or ask whoever sent it.</p>
+            <button type="button" className={`${styles.secondary} ${styles.afterProblem}`} onClick={() => copyLink(webLink)} disabled={!webLink}>{copied ? "Copied" : "Copy this link"}</button>
+          </>
         ) : (
           <ol className={styles.steps}>
             <li>
@@ -115,7 +120,7 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
             <li>
               <h2>Or paste it</h2>
               <p>{text.paste}</p>
-              <button type="button" className={styles.secondary} onClick={copyLink} disabled={!link}>{copied ? "Copied" : text.copyLabel}</button>
+              <button type="button" className={styles.secondary} onClick={() => copyLink()} disabled={!link}>{copied ? "Copied" : text.copyLabel}</button>
             </li>
           </ol>
         )}

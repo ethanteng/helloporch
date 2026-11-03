@@ -6,8 +6,10 @@ export const porchWebOrigin = "https://helloporch.store";
 export const porchServerOrigin = "https://porch-calling-prototype.vercel.app";
 export const porchAppID = "7U9T57JPF7.com.ethanteng.helloporch";
 export const porchAndroidPackage = "com.ethanteng.helloporch";
-/** SHA-256 fingerprints of the certificates Android builds are signed with, as `keytool -list -v` prints them: Play App
- * Signing's key, the upload key and the debug key. Until one exists, no build can open invitation links. */
+/** The SHA-256 fingerprint of Play App Signing's certificate, as Play Console shows it, and no other. A debug or upload
+ * key isn't kept as safely, and any build it signs could open invitation links and read their codes. Approve the links
+ * for a debug build on its test device instead (Open by default, or `adb shell pm set-app-links-user-selection`).
+ * Until it's added, no build can open invitation links. */
 export const androidCertificates: string[] = [];
 export type InviteKind = "family" | "bedside";
 export const invitePaths: Record<InviteKind, string> = { family: "/join", bedside: "/setup" };

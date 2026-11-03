@@ -112,6 +112,10 @@
   font-style: italic;
 }
 
+.afterProblem {
+  margin-top: 16px;
+}
+
 .problem {
   margin-top: 28px;
   padding: 16px 20px;

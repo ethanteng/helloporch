@@ -123,7 +123,7 @@ Requirements for a model we support:
 - Each app can then name the bedside correctly ("Mom's iPad" or "Mom's tablet"), and the admin Porches page can show which devices a household uses.
 
 **App Links.**
-- Add `app/.well-known/assetlinks.json/route.ts` beside the Apple file, built in `lib/invite-links.ts`. It returns the package name and the SHA-256 fingerprints of the Play signing key, upload key and debug key.
+- Add `app/.well-known/assetlinks.json/route.ts` beside the Apple file, built in `lib/invite-links.ts`. It returns the package name and the SHA-256 fingerprint of the Play App Signing key only. A debug or upload key could sign a build that opens invitation links and reads their codes, so debug builds get the links approved on their test device instead.
 - It must not redirect on `helloporch.store`.
 - The app's intent filter verifies `/join` and `/setup`, and later `/bedside` when replacement links exist.
 
