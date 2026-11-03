@@ -75,6 +75,7 @@ final class Cell2JackKeypad {
     private var nextRetryDelay: TimeInterval = 1
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private(set) var records: [[String: Any]] = []
+    private var adapterSeen = false
     private let reportQueue = DispatchQueue(label: "porch.cell2jack.actions")
     private let defaults: UserDefaults
     private let isBedside: () -> Bool
@@ -262,6 +263,7 @@ final class Cell2JackKeypad {
     /// the Cell2Jack keypad is on.
     func receiveAdapterHangUp() {
         guard let root, sceneActive, isBedside(), windowScene?.activationState == .foregroundActive else { return }
+        adapterSeen = true
         // The adapter is not the driver session, so a retry stays live across a brief
         // resign-active. It still has to stop if this iPad is no longer the bedside.
         deliverHangUp("phone adapter", root: root) { [weak self] in
@@ -273,7 +275,8 @@ final class Cell2JackKeypad {
         NotificationCenter.default.post(name: .cell2JackKeypadChanged, object: nil)
     }
     func record(_ values: [String: Any]) {
-        guard enabled || worker != nil else { return }
+        // The adapter leaves the driver off, so its first hang-up starts the trace instead.
+        guard enabled || worker != nil || adapterSeen else { return }
         var values = values; values["utc"] = ISO8601DateFormatter().string(from: Date())
         // Health repeats every five seconds and its counts are cumulative; keeping only the
         // latest one stops it pushing key and call history out of the 200 records.

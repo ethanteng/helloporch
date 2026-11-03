@@ -511,11 +511,17 @@ final class Cell2JackRoutingTests: XCTestCase {
         keypad.root = clock; keypad.windowScene = scene
         keypad.activate() // the Cell2Jack keypad stays off, as in the family build
         XCTAssertNil(CallTrigger.slot(for: CallTrigger.receiverHangUpKey), "F24 is never a keypad key")
+        XCTAssertTrue(keypad.records.isEmpty, "Nothing is traced before the adapter is used")
         keypad.receiveAdapterHangUp()
         XCTAssertEqual(call.hangUps, 1); XCTAssertEqual(clock.hangUps, 0)
+        // The driver is off, so the adapter's own hang-up starts the trace.
+        XCTAssertEqual(keypad.records.last?["kind"] as? String, "hangUp")
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, "hung up")
+        XCTAssertEqual(keypad.records.last?["rawLine"] as? String, "phone adapter")
         keypad.setReceiverHangUp(false)
         keypad.receiveAdapterHangUp()
         XCTAssertEqual(call.hangUps, 1, "Hang up when the receiver is put back is off")
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, "receiver hang-up off")
         keypad.setReceiverHangUp(true)
         // A call screen still appearing gets it once it has appeared.
         call.appearing = true
@@ -532,6 +538,7 @@ final class Cell2JackRoutingTests: XCTestCase {
         call.appearing = false
         retries.removeFirst().perform()
         XCTAssertEqual(call.hangUps, 2, "Leaving bedside drops a waiting hang-up")
+        XCTAssertEqual(keypad.records.last?["outcome"] as? String, "dropped: session or foreground gate")
         keypad.receiveAdapterHangUp()
         XCTAssertEqual(call.hangUps, 2, "Only the bedside acts on it")
         bedside = true
