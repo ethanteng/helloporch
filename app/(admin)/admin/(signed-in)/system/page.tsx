@@ -20,8 +20,15 @@ export default async function SystemPage() {
         <div>
           <dt>Calling server</dt>
           <dd>{status.ready ? <span className="tag good">Ready</span> : <span className="tag warn">Not ready</span>}</dd>
-          <dd className="note">{status.ready ? `Calling, storage and push are configured. Release ${status.commit?.slice(0, 7)}.` : "Calling, storage or push configuration is missing. See /api/calls/health on the calling server."}</dd>
+          <dd className="note">{status.ready ? `Calling, storage and Apple push are configured. Release ${status.commit?.slice(0, 7)}.` : "Calling, storage or Apple push configuration is missing. See /api/calls/health on the calling server."}</dd>
         </div>
+        {status.androidPush !== undefined && (
+          <div>
+            <dt>Android push</dt>
+            <dd>{status.androidPush ? <span className="tag good">Ready</span> : <span className="tag warn">Not set up</span>}</dd>
+            <dd className="note">{status.androidPush ? "Android phones and tablets can be rung when Porch isn't open." : "Android devices ring only while Porch is open. Add FCM_PROJECT_ID, FCM_CLIENT_EMAIL and FCM_PRIVATE_KEY from a Firebase service account."}</dd>
+          </div>
+        )}
       </dl>
     </>
   );

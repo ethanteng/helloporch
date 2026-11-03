@@ -5,7 +5,7 @@ import { callLogEntry, recordCallAfter } from "./call-log.ts";
 import { callRoom, config, deliveryUnavailable, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
-import { sendVoIPPush, voipConfigured, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
+import { pushConfigured, sameRegistration, sendVoIPPush, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
 export const inboundRoomPrefix = "porch-inbound-";
 /** The inbound trunk's ringing cap. Each household's own ring time ends calls sooner. */
@@ -147,7 +147,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   }
   // Clear an expired prior phone call before trying to reserve the household.
   await reconcileInboundCall(store, route.householdID, now, dependencies);
-  const pushEnabled = !!dependencies.sendPush || voipConfigured();
+  const pushable = (device?: VoIPRegistration): device is VoIPRegistration => dependencies.sendPush ? !!device : pushConfigured(device);
   // The finished call this one takes the place of, saved to call history once this change is.
   let replaced: Call | undefined;
   const { house, result } = await mutate(store, route.householdID, house => {
@@ -156,7 +156,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     if (house.call?.id === session.callID) return house.call.state !== "ended";
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
     const ready = !!bedside?.available && bedside.seenAt > now - 30;
-    if (!bedside || (!ready && !(bedside.voip && pushEnabled)) || (house.call && house.call.state !== "ended")) return false;
+    if (!bedside || (!ready && !pushable(bedside.voip)) || (house.call && house.call.state !== "ended")) return false;
     // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the
     // master switch and a foreground bedside; otherwise the call rings normally.
     const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
@@ -177,7 +177,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   const call = house.call!, bedside = house.members.find(m => m.id === call.to)!;
   // Webhook retries and simultaneous copies share one delivery claim. No VoIP
   // push is used for drop-ins, cancellation, accepted calls, or an ended session.
-  if (call.kind !== "call" || call.state !== "pending" || !bedside.voip || !pushEnabled ||
+  if (call.kind !== "call" || call.state !== "pending" || !pushable(bedside.voip) ||
       !await store.create(`inbound-push:${room.sid}`, "1", 86400)) return;
   const registration = bedside.voip;
   let delivery: PushResult;
@@ -189,7 +189,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   if (!delivery.delivered) {
     const updated = await mutate(store, house.id, current => {
       const recipient = current.members.find(m => m.id === bedside.id);
-      if (delivery.invalidToken && recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
+      if (delivery.invalidToken && recipient && sameRegistration(recipient.voip, registration)) delete recipient.voip;
       const active = current.call;
       if (recipient && !(recipient.available && recipient.seenAt > now - 30) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
         finishCall(active, deliveryUnavailable, now);

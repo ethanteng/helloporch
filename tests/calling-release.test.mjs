@@ -10,14 +10,23 @@ const healthy = { ok: true, commit, callingConfigured: true, storageReachable: t
 test('release health verifies configuration and a read-only storage operation without exposing credentials', async () => {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   const env = { LIVEKIT_URL: 'wss://test.livekit.cloud', LIVEKIT_API_KEY: 'test-key', LIVEKIT_API_SECRET: 'private-livekit-secret', APNS_KEY_ID: 'test-key', APNS_TEAM_ID: 'test-team', APNS_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), APNS_BUNDLE_ID: 'com.example.porch', PORCH_DEPLOYMENT_COMMIT: commit };
-  const previous = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  const fcm = { FCM_PROJECT_ID: 'porch-test', FCM_CLIENT_EMAIL: 'push@porch-test.iam.gserviceaccount.com', FCM_PRIVATE_KEY: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() };
+  const previous = Object.fromEntries([...Object.keys(env), ...Object.keys(fcm)].map(key => [key, process.env[key]]));
   const reads = [];
   try {
     Object.assign(process.env, env);
+    for (const key of Object.keys(fcm)) delete process.env[key];
     const store = { get: async key => { reads.push(key); return null; } };
     const response = await callingHealth(store);
     assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(await response.json(), healthy); assert.deepEqual(reads, ['release-health']);
+    assert.deepEqual(await response.json(), { ...healthy, androidPushConfigured: false }, 'Android push is optional until Firebase is set up');
+    assert.deepEqual(reads, ['release-health']);
+    Object.assign(process.env, fcm);
+    assert.equal((await (await callingHealth(store)).json()).androidPushConfigured, true);
+    process.env.FCM_PRIVATE_KEY = 'private-broken-key';
+    const broken = await callingHealth(store);
+    assert.equal(broken.status, 503, 'a Firebase key that is there must work'); assert.equal((await broken.text()).includes('private-'), false);
+    for (const key of Object.keys(fcm)) delete process.env[key];
     assert.equal((await callingHealth({ get: async () => { throw new Error('private-storage-secret'); } })).status, 503);
     delete process.env.APNS_PRIVATE_KEY;
     const failed = await callingHealth(store);

@@ -422,6 +422,37 @@ test('VoIP registration is authenticated, device scoped, validated and never exp
  assert.equal((await f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential)).status,409);
 });
 
+test('an Android phone registers its one FCM token for calls and messages, with no APNs environment',async()=>{
+ const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push({device,call});return {delivered:true};}}),{bedside,family}=await f.setup();
+ const token='fcm-token:'+'a1_-'.repeat(30);
+ for (const value of [{token:'short',platform:'android'},{token:'has spaces '+token,platform:'android'},{token:'x'.repeat(1025),platform:'android'},{token,platform:'windows'},{token,environment:'production'}]) {
+  assert.equal((await f.send('registerVoIP',value,family.credential)).status,400,JSON.stringify(value).slice(0,60));
+ }
+ assert.equal((await f.json('registerVoIP',{token,platform:'android'},family.credential)).pushReady,true);
+ assert.equal((await f.send('registerAlerts',{token,platform:'android'},family.credential)).status,200);
+ assert.equal((await f.send('registerVoIP',{token:'ab'.repeat(32),environment:'production',platform:'ios'},bedside.credential)).status,200,'an iPad may name its platform');
+ await f.json('poll',{available:false},family.credential); f.advance(31);
+ await f.json('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential);
+ assert.deepEqual(pushes.map(p=>p.device),[{token,platform:'android'}]);
+});
+
+test('an Android phone can be rung once Firebase is set up, whether or not APNs is',async()=>{
+ const keys=['FCM_PROJECT_ID','FCM_CLIENT_EMAIL','FCM_PRIVATE_KEY','APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'],saved=keys.map(k=>process.env[k]);
+ try {
+  for (const k of keys) delete process.env[k];
+  // No sender is faked here, so nothing in this test may start a call.
+  const f=fixture(),{bedside,family}=await f.setup(),token='fcm-token:'+'a1_-'.repeat(30);
+  assert.equal((await f.json('registerVoIP',{token,platform:'android'},family.credential)).pushReady,false,'nothing to push with yet');
+  Object.assign(process.env,{FCM_PROJECT_ID:'porch-test',FCM_CLIENT_EMAIL:'push@porch-test.iam.gserviceaccount.com',FCM_PRIVATE_KEY:'unused-here'});
+  const registered=await f.json('registerVoIP',{token,platform:'android'},family.credential);
+  assert.equal(registered.pushReady,true); assert.ok(!JSON.stringify(registered.state).includes(token));
+  assert.equal((await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},bedside.credential)).pushReady,false,'the iPad still needs APNs');
+  await f.json('poll',{available:false},family.credential); f.advance(31);
+  const person=(await f.json('poll',{available:true},bedside.credential)).state.people[0];
+  assert.equal(person.online,false); assert.equal(person.canReceiveCalls,true);
+ } finally { keys.forEach((k,i)=>saved[i]===undefined?delete process.env[k]:process.env[k]=saved[i]); }
+});
+
 test('offline family devices receive ordinary-call pushes once after the winning reservation',async()=>{
  const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push({device,call});return {delivered:true};}});
  const {bedside,family}=await f.setup();

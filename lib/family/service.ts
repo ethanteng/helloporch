@@ -14,7 +14,7 @@ import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, re
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, needsReaping, phoneGuestActions, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
-import { sendAlertPush, sendVoIPPush, voipConfigured, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
+import { pushConfigured, sameRegistration, sendAlertPush, sendVoIPPush, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
@@ -60,6 +60,8 @@ function memberFor(house: Household, auth: Auth): Member {
   return member;
 }
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
+/** Whether a device can be woken for a call: it registered for push, and this server can push to its platform. */
+type Pushable = (device?: VoIPRegistration) => device is VoIPRegistration;
 const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "releaseText", "removeText", "caregiverTexts", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
@@ -72,9 +74,9 @@ function publicCall(call: Call, me: Member, house: Household) {
 }
 // `name` and `photoID` are what Porch shows. Caregiver screens and the member themselves also get the
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
-function publicPerson(m: Member, now: number, pushEnabled: boolean, profiles = false) {
+function publicPerson(m: Member, now: number, pushable: Pushable, profiles = false) {
   const photo = displayPhoto(m);
-  return { id: m.id, name: displayName(m), ...(photo ? { photoID: photo.id } : {}), role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled),
+  return { id: m.id, name: displayName(m), ...(photo ? { photoID: photo.id } : {}), role: m.role, permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || pushable(m.voip),
     ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}),
     ...(profiles && m.role === "family" ? { invitedName: m.name, profile: publicProfile(m.profile), override: publicProfile(m.override) } : {}) };
 }
@@ -84,14 +86,14 @@ function pendingInvites(house: Household, now: number) {
 }
 // Family devices only see the bedside in their snapshot, so caregiver screens get every
 // family device here. It is returned only after a PIN check.
-function adminState(house: Household, now: number, pushEnabled: boolean) {
+function adminState(house: Household, now: number, pushable: Pushable) {
   return { householdName: house.name, dropInEnabled: house.dropInEnabled, messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), texts: publicTexts(house, now), phoneDropIns: house.phoneDropIns ?? [], callScreening: publicCallScreening(house),
     shareAttendance: attendanceShared(house),
-    people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushEnabled, true)), invitations: pendingInvites(house, now) };
+    people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushable, true)), invitations: pendingInvites(house, now) };
 }
-function snapshot(house: Household, me: Member, now: number, pushEnabled = voipConfigured()) {
+function snapshot(house: Household, me: Member, now: number, pushable: Pushable = pushConfigured) {
   // The bedside is a caregiver device; a family member edits their own profile.
-  const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushEnabled, me.role === "bedside" || m.id === me.id), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
+  const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushable, me.role === "bedside" || m.id === me.id), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
   const call = house.call;
   const bedside = house.members.find(m => m.role === "bedside");
   const invited = call && ![call.from, call.to].includes(me.id) ? call.porchGuests?.filter(g => g.memberID === me.id).at(-1) : undefined;
@@ -127,7 +129,7 @@ function snapshot(house: Household, me: Member, now: number, pushEnabled = voipC
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
     // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only.
     ...(me.role === "family" ? { family: house.members.filter(m => !m.revoked && m.role === "family" && m.id !== me.id)
-      .map(m => ({ id: m.id, name: displayName(m), canReceiveCalls: online(m, now) || (!!m.voip && pushEnabled) })) } : {}),
+      .map(m => ({ id: m.id, name: displayName(m), canReceiveCalls: online(m, now) || pushable(m.voip) })) } : {}),
     invitations: me.role === "bedside" ? pendingInvites(house, now) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     // A family member rung into the call sees an incoming call of their own. Someone who left a call that went on
@@ -151,7 +153,7 @@ async function alertRecipient(store: FamilyStore, householdID: string, recipient
     body: `${message.mode === "video" ? "Video" : "Audio"} message · ${length}`, badge: unheardCount(house, recipientID, now) });
   if (result.invalidToken) await mutate(store, householdID, current => {
     const member = current.members.find(m => m.id === recipientID);
-    if (member?.alerts?.token === registration.token) delete member.alerts;
+    if (member && sameRegistration(member.alerts, registration)) delete member.alerts;
   });
 }
 async function endRoom(room: string, dependencies: FamilyDependencies) {
@@ -172,7 +174,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     let mediaStore = dependencies.media;
     const media = () => mediaStore ??= blobMediaStore();
     const action = input.action;
-    const pushEnabled = !!dependencies.sendPush || voipConfigured();
+    // Tests that fake the sender can push to any registered device.
+    const pushable = (device?: VoIPRegistration): device is VoIPRegistration => dependencies.sendPush ? !!device : pushConfigured(device);
     if (action === "createBedsideInvite") {
       requireValue((request.headers.get("X-Porch-Setup-Code") ?? "").length >= 16, "A server operator must authorize a new bedside device.", 403);
       await checkCaregiverCode(request, store, now);
@@ -243,12 +246,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
         await listed();
-        return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(existing, owner, now, pushEnabled) });
+        return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(existing, owner, now, pushable) });
       }
       if (enrolling) await initializeCaregiverPIN(input.pin, store, id);
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID: id }));
       await listed();
-      return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(house, me, now, pushEnabled) });
+      return callJSON({ credential: `${deviceID}.${secret}`, role: "bedside", state: snapshot(house, me, now, pushable) });
     }
     if (action === "claimInvite") {
       requireValue(typeof input.code === "string" && codePattern.test(input.code), "Paste a valid invitation.");
@@ -271,7 +274,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         house.members.push(me); invite.claimedBy = deviceID;
       });
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID }));
-      return callJSON({ credential: `${deviceID}.${secret}`, role: "family", state: snapshot(house, house.members.find(m => m.id === deviceID)!, now, pushEnabled) });
+      return callJSON({ credential: `${deviceID}.${secret}`, role: "family", state: snapshot(house, house.members.find(m => m.id === deviceID)!, now, pushable) });
     }
     const auth = await authenticate(request, store);
     if (action === "caregiverStatus" || action === "initializeCaregiverPIN") {
@@ -304,7 +307,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         alert: (recipientID, message) => alertRecipient(store, house.id, recipientID, message, now, dependencies) });
       if (!caregiverAction) return callJSON(result);
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });
+      return callJSON({ ...result, admin: adminState(current, now, pushable) });
     }
     if (textActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -313,7 +316,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const result = await handleTextAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, translate: dependencies.translate });
       if (!caregiverAction) return callJSON(result);
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, admin: adminState(current, now, pushEnabled) });
+      return callJSON({ ...result, admin: adminState(current, now, pushable) });
     }
     if (profileActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -321,7 +324,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handleProfileAction(String(action), { store, media, now, house, me: memberFor(house, auth), input });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), ...(caregiverAction ? { admin: adminState(current, now, pushEnabled) } : {}) });
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), ...(caregiverAction ? { admin: adminState(current, now, pushable) } : {}) });
     }
     if (speechActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -330,7 +333,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const result = await handleSpeechAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, synthesize: dependencies.synthesize });
       if (!caregiverAction) return callJSON(result);
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), admin: adminState(current, now, pushable) });
     }
     if (screeningActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -338,7 +341,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handleScreeningAction(String(action), { store, now, house, me: memberFor(house, auth), input });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), admin: adminState(current, now, pushable) });
     }
     if (numberActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -346,7 +349,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handleNumberAction(String(action), { store, now, house, me: memberFor(house, auth), input, headers: request.headers, services: dependencies.numberServices });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled), admin: adminState(current, now, pushEnabled) });
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), admin: adminState(current, now, pushable) });
     }
     if (phoneGuestActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -355,7 +358,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const result = await handlePhoneGuestAction(String(action), { store, now, house, me: memberFor(house, auth), input,
         services: (dependencies.phoneGuestServices ?? phoneGuestServices)(config()), endRoom: room => endRoom(room, dependencies) });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled) });
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable) });
     }
     if (porchGuestActions.has(String(action))) {
       const raw = await store.get(`house:${auth.householdID}`);
@@ -363,16 +366,16 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handlePorchGuestAction(String(action), { store, now, house, me: memberFor(house, auth), input,
         rooms: (dependencies.phoneGuestServices ?? phoneGuestServices)(config()).rooms,
-        reachable: member => online(member, now) || (!!member.voip && pushEnabled),
+        reachable: member => online(member, now) || pushable(member.voip),
         ring: async (guest, member, callerName) => {
-          if (member.voip && pushEnabled) {
-            const registration = member.voip;
+          const registration = member.voip;
+          if (pushable(registration)) {
             let delivery: PushResult;
             try { delivery = await (dependencies.sendPush ?? sendVoIPPush)(registration, { callID: guest.id, recipientID: member.id, callerName, mode: house.call!.mode, expiresAt: guest.ringUntil }); }
             catch { delivery = { delivered: false }; }
             if (delivery.invalidToken) await mutate(store, house.id, current => {
               const recipient = current.members.find(m => m.id === member.id);
-              if (recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
+              if (recipient && sameRegistration(recipient.voip, registration)) delete recipient.voip;
             });
             if (delivery.delivered) return true;
           }
@@ -380,7 +383,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           return online(member, now);
         } });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
-      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushEnabled) });
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable) });
     }
     // Hanging up leaves only you while the call can go on without you: two people still connected, counting a phone
     // guest only while whoever added it stays. So the bedside is never left alone with a phone, and a family guest
@@ -487,6 +490,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         // Alerts are ordinary notifications, for messages the bedside leaves; VoIP pushes only ring calls.
         const key = action === "registerVoIP" ? "voip" : "alerts";
         if (input.token === null) { delete me[key]; return undefined; }
+        // An Android device sends its one FCM token for both, which isn't hex and has no environment.
+        if (input.platform === "android") {
+          requireValue(typeof input.token === "string" && /^[A-Za-z0-9_:-]{20,1024}$/.test(input.token), "Invalid push token.");
+          me[key] = { token: input.token, platform: "android" };
+          return undefined;
+        }
+        requireValue(input.platform === undefined || input.platform === "ios", "Invalid push platform.");
         requireValue(typeof input.token === "string" && /^[a-f0-9]{32,512}$/.test(input.token) && input.token.length % 2 === 0, "Invalid push token.");
         requireValue(input.environment === "sandbox" || input.environment === "production", "Invalid push environment.");
         me[key] = { token: input.token, environment: input.environment };
@@ -577,7 +587,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const target = house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
-        if (!online(target, now) && !(input.kind === "call" && target.voip && pushEnabled)) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        if (!online(target, now) && !(input.kind === "call" && pushable(target.voip))) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
         const kind = input.kind;
         // Family phones call only the bedside, which rings for the caregiver's chosen time.
@@ -668,10 +678,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (action === "startCall" && house.call?.kind === "call") {
       const call = house.call;
       const target = house.members.find(m => m.id === call.to)!;
-      if (target.voip && pushEnabled) {
+      const registration = target.voip;
+      if (pushable(registration)) {
         // Outside the CAS mutation: concurrent callers/retries cannot send pushes
         // for a call that never won the household reservation.
-        const registration = target.voip;
         let delivery: PushResult;
         try { delivery = await (dependencies.sendPush ?? sendVoIPPush)(registration, {
           callID: call.id, recipientID: target.id, callerName: displayName(me), mode: call.mode, expiresAt: call.expiresAt,
@@ -679,7 +689,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (!delivery.delivered) {
           const updated = await mutate(store, house.id, current => {
             const recipient = current.members.find(m => m.id === target.id);
-            if (delivery.invalidToken && recipient?.voip?.token === registration.token && recipient.voip.environment === registration.environment) delete recipient.voip;
+            if (delivery.invalidToken && recipient && sameRegistration(recipient.voip, registration)) delete recipient.voip;
             const active = current.call;
             // A call-specific recipient receipt or answer outweighs a missing
             // APNs acknowledgment, even while the recipient is backgrounded.
@@ -715,11 +725,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     }
     if (removeFromRoom) {
       try { await removeMember(removeFromRoom); }
-      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }
+      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushable) }, 502); }
     }
     if (cleanupRoom) {
       try { await releaseRoom(cleanupRoom); }
-      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushEnabled) }, 502); }
+      catch { return callJSON({ error: "Access is updated. Couldn't confirm media disconnected; keep this device offline until the call ends.", state: snapshot(house, me, now, pushable) }, 502); }
       // The deleted room took any phone guest's telephone leg with it.
       const ended = house.call;
       if (ended?.state === "ended" && activePhoneGuest(ended) && callRoom(ended) === cleanupRoom) {
@@ -749,7 +759,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         canPublishSources: call.mode === "voice" ? [TrackSource.MICROPHONE] : [TrackSource.MICROPHONE, TrackSource.CAMERA] });
       return callJSON({ token: await token.toJwt(), serverUrl: configuration.serverUrl, room: roomName });
     }
-    return callJSON({ state: snapshot(house, me, now, pushEnabled), ...(caregiverAction ? { admin: adminState(house, now, pushEnabled) } : {}), ...(action === "registerVoIP" ? { pushReady: !!me.voip && pushEnabled } : {}), ...(action === "registerAlerts" ? { alertsReady: !!me.alerts && pushEnabled } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
+    return callJSON({ state: snapshot(house, me, now, pushable), ...(caregiverAction ? { admin: adminState(house, now, pushable) } : {}), ...(action === "registerVoIP" ? { pushReady: pushable(me.voip) } : {}), ...(action === "registerAlerts" ? { alertsReady: pushable(me.alerts) } : {}), ...(issuedCode && result ? { code: issuedCode, invitationID: result.inviteID, expiresAt: result.expiresAt } : {}) });
   } catch (error) {
     if (error instanceof FamilyError || error instanceof CaregiverAuthError) return callJSON({ error: error.message, ...(error instanceof FamilyError && error.code ? { errorCode: error.code } : {}) }, error.status);
     return callJSON({ error: "Family calling is unavailable. Check the connection and shared storage setup." }, 503);
