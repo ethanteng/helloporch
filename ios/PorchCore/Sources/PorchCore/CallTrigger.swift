@@ -7,6 +7,10 @@ public struct CallTrigger {
     private var lastLaunch: TimeInterval?
     public init() {}
 
+    /// F24, which the Porch phone adapter types when the receiver goes back on the cradle
+    /// (phone-adapter/README.md). Its other keys are keypad keys, read like any number pad's.
+    public static let receiverHangUpKey = 0x73
+
     public static func slot(for keyCode: Int) -> Int? {
         switch keyCode {
         case 0x59...0x61: return keyCode - 0x59 + 1 // keypad 1–9

@@ -28,6 +28,13 @@ final class PorchApp: UIResponder, UIApplicationDelegate {
 final class PorchWindow: UIWindow {
     override func sendEvent(_ event: UIEvent) {
         if event.type == .touches || event.type == .presses { AttendanceTracker.shared.noticed() }
+        // The phone adapter's hang-up key goes to the visible screen however the
+        // responder chain is set up, the way the Cell2Jack driver's hang-up does.
+        if let presses = event as? UIPressesEvent, presses.allPresses.contains(where: {
+            $0.phase == .began && $0.key.map { Int($0.keyCode.rawValue) } == CallTrigger.receiverHangUpKey
+        }) {
+            Cell2JackKeypad.shared.receiveAdapterHangUp()
+        }
         super.sendEvent(event)
     }
 }

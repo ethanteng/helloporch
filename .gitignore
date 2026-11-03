@@ -11,6 +11,7 @@ next-env.d.ts
 ios/PorchCore/.build/
 ios/PorchCore/.swiftpm/
 ios/build/
+phone-adapter/build/
 **/xcuserdata/
 *.p8
 *.p12

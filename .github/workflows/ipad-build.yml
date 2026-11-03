@@ -3,9 +3,9 @@ name: iPhone and iPad build
 on:
   push:
     branches: [main]
-    paths: ['ios/**', '.github/workflows/ipad-build.yml']
+    paths: ['ios/**', 'phone-adapter/**', '.github/workflows/ipad-build.yml']
   pull_request:
-    paths: ['ios/**', '.github/workflows/ipad-build.yml']
+    paths: ['ios/**', 'phone-adapter/**', '.github/workflows/ipad-build.yml']
   workflow_dispatch:
 
 permissions:
@@ -152,6 +152,7 @@ jobs:
       - name: Test Cell2Jack protocol, preview, and distribution checks
         run: |
           bash ios/scripts/test-cell2jack.sh
+          sh phone-adapter/test.sh
           python3 ios/scripts/check-keypad-preview.py
           python3 -m unittest discover -s ios/scripts -p test_distribution_profiles.py
       - name: Check shared feature sources and driver exclusion
