@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useContext, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Honeypot } from "./Honeypot";
 
 const WHO_OPTIONS = ["My mom", "My dad", "Both parents", "A grandparent", "Someone I care for"];
@@ -42,13 +42,17 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
   const [who, setWho] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the hidden field held, kept once filled. The follow-up answer sends it too, or answering would save a bot
+  // the route had turned away.
+  const honeypot = useRef("");
 
   const submit = async (value: string, source: Source, website: string) => {
+    honeypot.current ||= website;
     setFrom(source);
     setPending(true);
     setError(null);
     try {
-      await post({ email: value, website });
+      await post({ email: value, website: honeypot.current });
       setEmail(value);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -59,7 +63,7 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
 
   const pick = (value: string) => {
     setWho(value);
-    if (email) post({ email, who: value }).catch(() => {});
+    if (email) post({ email, who: value, website: honeypot.current }).catch(() => {});
   };
 
   return <Ctx.Provider value={{ email, from, who, pending, error, submit, pick }}>{children}</Ctx.Provider>;

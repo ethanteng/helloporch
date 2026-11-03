@@ -46,6 +46,10 @@ export default function PilotGuide() {
   const ipadGroup = useRef<HTMLDivElement>(null);
   const welcome = useRef<HTMLHeadingElement>(null);
   const honeypot = useRef<HTMLInputElement>(null);
+  // What the hidden field held, kept once filled. The form is gone when "Start with a number pad" signs them up
+  // again, and empty again after "Change your answers", so a bot the route turned away stays turned away.
+  const filledHoneypot = useRef("");
+  const honeypotValue = () => (filledHoneypot.current ||= honeypot.current?.value ?? "");
   const scrollToIpad = useRef(false);
   const need = choice && ipadNeeds[choice];
 
@@ -86,7 +90,7 @@ export default function PilotGuide() {
         interface: answers.choice,
         ipad: answers.hasIpad,
         language: answers.language,
-        website: honeypot.current?.value,
+        website: honeypotValue(),
       });
       setChoice(answers.choice);
       setPlatform("ios");
@@ -112,7 +116,7 @@ export default function PilotGuide() {
     setPlatform("android");
     setPending(true);
     setError(null);
-    signUp({ email: value, platform: "android", website: honeypot.current?.value })
+    signUp({ email: value, platform: "android", website: honeypotValue() })
       .then(() => {
         setReaskIpad(false);
         setJoined({ platform: "android", email: value });
