@@ -220,7 +220,12 @@ static void perform(c2j_session_action action) {
             if (!tuh_cdc_set_control_line_state(cell2jack, 0, configure_step, CONFIGURE_LINES))
                 c2j_session_configured(&session, millis(), false);
             return;
-        case C2J_DO_SEND_VERSION: ok = send_command('v'); break;
+        case C2J_DO_SEND_VERSION:
+            // Drop a partial line before each /v, as Cell2JackKeypadTransport.begin does,
+            // so a broken line cannot join the next attempt's bytes and invent a key.
+            c2j_parser_reset_partial_line(&parser);
+            ok = send_command('v');
+            break;
         case C2J_DO_SEND_LOGS_ON: ok = send_command('d'); break;
         case C2J_DO_SEND_LOGS_OFF: ok = send_command('q'); break;
     }
