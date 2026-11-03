@@ -2,9 +2,10 @@ import { checkBotId } from "botid/server";
 
 /** Why the pilot and waitlist routes turn a sign-up away. `honeypot`: something filled in the hidden field
  * (components/Honeypot.tsx), as bots that fill in every field do. The route answers as if it worked, so the bot learns
- * nothing. `bot`: BotID says the request didn't come from a person in a real browser, which catches headless browsers
- * and scripts posting straight to the route. A route has to be listed in instrumentation-client.ts for the browser to
- * send BotID its proof. */
+ * nothing. A later request from that page, such as the waitlist's follow-up or a changed pilot answer, has to send
+ * the same value or it is saved. `bot`: BotID says the request didn't come from a person in a real browser, which
+ * catches headless browsers and scripts posting straight to the route. A route has to be listed in
+ * instrumentation-client.ts for the browser to send BotID its proof. */
 export type Blocked = "honeypot" | "bot";
 
 export async function blockedSignup(honeypot: unknown): Promise<Blocked | null> {

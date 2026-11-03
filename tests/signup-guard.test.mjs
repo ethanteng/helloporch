@@ -58,6 +58,23 @@ afterEach(() => {
   delete globalThis[requestContext];
 });
 
+test('waitlist: answering who is saved when the hidden field was empty', async () => {
+  const route = routes.find((item) => item.name === 'waitlist');
+  assert.equal((await send(route, { email: 'ann@example.com', who: 'My mom' })).status, 200);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].fields.porch_who, 'My mom');
+});
+
+test('waitlist: answering who is not saved when the hidden field was filled', async () => {
+  const route = routes.find((item) => item.name === 'waitlist');
+  const response = await send(route, { email: 'ann@example.com', who: 'My mom', website: 'https://spam.example' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.equal(saved.length, 0);
+  assert.equal(logs[0].event, 'waitlist_blocked');
+  assert.equal(logs[0].reason, 'honeypot');
+});
+
 for (const route of routes) {
   test(`${route.name}: a filled-in hidden field looks like it worked but isn't saved`, async () => {
     const response = await send(route, { ...route.body, website: 'https://spam.example' });

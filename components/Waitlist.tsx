@@ -42,13 +42,17 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
   const [who, setWho] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Thanks replaces the form, so the follow-up has to send the same hidden field. A filled one was quietly
+  // dropped, and leaving it off here would create the subscriber.
+  const [website, setWebsite] = useState("");
 
-  const submit = async (value: string, source: Source, website: string) => {
+  const submit = async (value: string, source: Source, site: string) => {
     setFrom(source);
     setPending(true);
     setError(null);
     try {
-      await post({ email: value, website });
+      await post({ email: value, website: site });
+      setWebsite(site);
       setEmail(value);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -59,7 +63,7 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
 
   const pick = (value: string) => {
     setWho(value);
-    if (email) post({ email, who: value }).catch(() => {});
+    if (email) post({ email, who: value, website }).catch(() => {});
   };
 
   return <Ctx.Provider value={{ email, from, who, pending, error, submit, pick }}>{children}</Ctx.Provider>;

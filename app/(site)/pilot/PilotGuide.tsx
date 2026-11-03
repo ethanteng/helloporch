@@ -46,6 +46,14 @@ export default function PilotGuide() {
   const ipadGroup = useRef<HTMLDivElement>(null);
   const welcome = useRef<HTMLHeadingElement>(null);
   const honeypot = useRef<HTMLInputElement>(null);
+  // The thanks screen takes this field off the page, and "Change your answers" mounts a new empty one.
+  // Keep a filled value, or that later sign-up is saved after the first one was quietly dropped.
+  const filledHoneypot = useRef("");
+  const websiteValue = () => {
+    const current = honeypot.current?.value ?? "";
+    if (current.trim()) filledHoneypot.current = current;
+    return filledHoneypot.current;
+  };
   const scrollToIpad = useRef(false);
   const need = choice && ipadNeeds[choice];
 
@@ -86,7 +94,7 @@ export default function PilotGuide() {
         interface: answers.choice,
         ipad: answers.hasIpad,
         language: answers.language,
-        website: honeypot.current?.value,
+        website: websiteValue(),
       });
       setChoice(answers.choice);
       setPlatform("ios");
@@ -112,7 +120,7 @@ export default function PilotGuide() {
     setPlatform("android");
     setPending(true);
     setError(null);
-    signUp({ email: value, platform: "android", website: honeypot.current?.value })
+    signUp({ email: value, platform: "android", website: websiteValue() })
       .then(() => {
         setReaskIpad(false);
         setJoined({ platform: "android", email: value });
