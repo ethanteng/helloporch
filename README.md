@@ -55,7 +55,7 @@ The [family setup guide](ios/FAMILY-SETUP.md) describes all of this in detail.
 - **The apps talk to the calling server.** Almost everything goes through `POST /api/family`, which handles setup, pairing, the PIN, calls, presence, messages, profiles, phone numbers and history.
 - **Calls.** Live audio and video run on LiveKit Cloud. Phone calls in both directions go through LiveKit SIP and a Twilio Elastic SIP trunk, and Twilio voice webhooks handle voicemail.
 - **Storage.** Household state lives in Upstash Redis. Photos, messages, recordings and cached speech go to a private Vercel Blob store.
-- **Push and speech.** The server sends Apple push notifications (VoIP and alerts) directly over APNs. Speech comes from ElevenLabs and is cached.
+- **Push and speech.** The server sends Apple push notifications (VoIP and alerts) directly over APNs, and the same calls and message alerts to Android through Firebase. Speech comes from ElevenLabs and is cached.
 - **Hosting.** This repo deploys to two Vercel projects: `helloporch`, the website at helloporch.store, and `porch-calling-prototype`, the calling server the apps use.
 
 | Route | Purpose | Code |
