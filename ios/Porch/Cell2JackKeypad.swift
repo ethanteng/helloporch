@@ -262,7 +262,11 @@ final class Cell2JackKeypad {
     /// the Cell2Jack keypad is on.
     func receiveAdapterHangUp() {
         guard let root, sceneActive, isBedside(), windowScene?.activationState == .foregroundActive else { return }
-        deliverHangUp("phone adapter", root: root) { true }
+        // The adapter is not the driver session, so a retry stays live across a brief
+        // resign-active. It still has to stop if this iPad is no longer the bedside.
+        deliverHangUp("phone adapter", root: root) { [weak self] in
+            self?.isBedside() == true
+        }
     }
     private func changeStatus(_ text: String) {
         status = text

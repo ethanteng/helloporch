@@ -524,7 +524,14 @@ final class Cell2JackRoutingTests: XCTestCase {
         call.appearing = false
         retries.removeFirst().perform()
         XCTAssertEqual(call.hangUps, 2)
+        // A hang-up waiting out a transition is dropped if this iPad stops being the bedside.
+        call.appearing = true
+        keypad.receiveAdapterHangUp()
+        XCTAssertEqual(retries.count, 1)
         bedside = false
+        call.appearing = false
+        retries.removeFirst().perform()
+        XCTAssertEqual(call.hangUps, 2, "Leaving bedside drops a waiting hang-up")
         keypad.receiveAdapterHangUp()
         XCTAssertEqual(call.hangUps, 2, "Only the bedside acts on it")
         bedside = true
