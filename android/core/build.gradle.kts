@@ -20,3 +20,10 @@ dependencies {
     implementation(libs.libphonenumber)
     testImplementation(libs.kotlin.test.junit)
 }
+
+// The server's saved responses (tests/fixtures/), which ContractFixtureTest decodes. A changed fixture reruns the tests.
+val contractFixtures = rootProject.layout.projectDirectory.dir("../tests/fixtures")
+tasks.test {
+    inputs.dir(contractFixtures).withPropertyName("contractFixtures")
+    systemProperty("porch.fixtures", contractFixtures.asFile.absolutePath)
+}

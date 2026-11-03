@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: plan only. First written 2026-10-22 against `8c5cd8f`. Revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together, and to catch up with about 50 merged PRs. Nothing here is built yet.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 has started: the Gradle project and the PorchCore port to `:core`.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
