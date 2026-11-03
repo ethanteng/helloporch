@@ -1,3 +1,4 @@
+import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -6,4 +7,5 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.4.27"],
 };
 
-export default nextConfig;
+// Serves BotID's script and checks from this site, for the sign-up forms (instrumentation-client.ts).
+export default withBotId(nextConfig);

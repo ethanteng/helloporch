@@ -4,6 +4,7 @@ import { POST } from '../app/api/pilot/route.ts';
 
 const realFetch = globalThis.fetch;
 const realLog = console.log;
+const realWarn = console.warn;
 const realError = console.error;
 let sent;
 
@@ -20,12 +21,15 @@ beforeEach(() => {
     return new Response('{}', { status: 200 });
   };
   console.log = () => {};
+  // BotID warns that it calls everyone human outside Vercel (tests/signup-guard.test.mjs checks it).
+  console.warn = () => {};
   console.error = () => {};
 });
 
 afterEach(() => {
   globalThis.fetch = realFetch;
   console.log = realLog;
+  console.warn = realWarn;
   console.error = realError;
   delete process.env.MAILERLITE_API_KEY;
   delete process.env.MAILERLITE_PILOT_GROUP_ID;

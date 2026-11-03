@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useContext, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Honeypot } from "./Honeypot";
 
 const WHO_OPTIONS = ["My mom", "My dad", "Both parents", "A grandparent", "Someone I care for"];
 
@@ -12,7 +13,7 @@ type State = {
   who: string | null;
   pending: boolean;
   error: string | null;
-  submit: (email: string, from: Source) => Promise<void>;
+  submit: (email: string, from: Source, website: string) => Promise<void>;
   pick: (who: string) => void;
 };
 
@@ -41,13 +42,17 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
   const [who, setWho] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the hidden field held, kept once filled. The follow-up answer sends it too, or answering would save a bot
+  // the route had turned away.
+  const honeypot = useRef("");
 
-  const submit = async (value: string, source: Source) => {
+  const submit = async (value: string, source: Source, website: string) => {
+    honeypot.current ||= website;
     setFrom(source);
     setPending(true);
     setError(null);
     try {
-      await post({ email: value });
+      await post({ email: value, website: honeypot.current });
       setEmail(value);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -58,7 +63,7 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
 
   const pick = (value: string) => {
     setWho(value);
-    if (email) post({ email, who: value }).catch(() => {});
+    if (email) post({ email, who: value, website: honeypot.current }).catch(() => {});
   };
 
   return <Ctx.Provider value={{ email, from, who, pending, error, submit, pick }}>{children}</Ctx.Provider>;
@@ -67,9 +72,10 @@ export function WaitlistProvider({ children }: { children: ReactNode }) {
 function onSubmit(submit: State["submit"], from: Source) {
   return (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const v = String(new FormData(e.currentTarget).get("email") || "").trim();
+    const data = new FormData(e.currentTarget);
+    const v = String(data.get("email") || "").trim();
     if (!/\S+@\S+\.\S+/.test(v)) return;
-    submit(v, from);
+    submit(v, from, String(data.get("website") || ""));
   };
 }
 
@@ -110,6 +116,7 @@ export function HeroWaitlist() {
     <>
       <form className="pill-form pill-form--hero" onSubmit={onSubmit(submit, "hero")}>
         <input name="email" type="email" required placeholder="Your email address" aria-label="Your email address" autoComplete="email" />
+        <Honeypot />
         <button type="submit" disabled={pending}>
           {pending && here ? "Joining…" : "Join the waitlist"}
         </button>
@@ -129,6 +136,7 @@ export function JoinWaitlist() {
     <>
       <form className="pill-form pill-form--join" onSubmit={onSubmit(submit, "join")}>
         <input name="email" type="email" required placeholder="Your email address" aria-label="Your email address" autoComplete="email" />
+        <Honeypot />
         <button type="submit" disabled={pending}>
           {pending && here ? "Joining…" : "Join"}
         </button>
