@@ -588,7 +588,7 @@ Page contents:
   - the setup checklist;
   - the daily check.
 
-  Build each on Android in the same PR as iOS, or right after. The keypad backup must use one versioned format for both apps, with photos referenced by SHA-256, so a household can move between an iPad and an Android tablet.
+  Build each on Android in the same PR as iOS, or right after. The keypad backup must use one versioned format for both apps, with photos referenced by SHA-256, so a household can move between an iPad and an Android tablet. Android already saves contacts in the iOS shape, with an empty `address`. An iPad key whose contact calls only through an iOS-only method (a FaceTime-style address or a Shortcut) has no Porch call for Android, so importing one should leave that key empty and keep the rest of the keypad, not reject the whole backup.
 
 **Milestone C:** an all-Android household, and every mixed household, matches an all-iOS one.
 

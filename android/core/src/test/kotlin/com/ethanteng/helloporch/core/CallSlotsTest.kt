@@ -15,6 +15,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -45,6 +46,8 @@ class CallSlotsTest {
         loaded.save(settings, store)
         val saved = PorchJson.parseToJsonElement(assertNotNull(settings.getString("porch.slots.v2"))).jsonArray
         assertEquals(10, saved.size, "A build from before * and # reads exactly ten")
+        val contacts = saved.mapNotNull { (it as? JsonObject)?.get("contact") as? JsonObject }
+        assertEquals(listOf("\"\""), contacts.map { it["address"].toString() }, "iOS reads a contact only with its address, empty for a Porch contact")
         val reloaded = CallSlots.load(settings, store)
         assertEquals(loaded, reloaded)
         assertEquals("Mei", reloaded.contact(CallSlots.star)?.name)

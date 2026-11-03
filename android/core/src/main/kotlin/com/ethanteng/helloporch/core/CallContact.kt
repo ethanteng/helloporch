@@ -146,7 +146,8 @@ class CallContactSerializer(private val photoStore: ContactPhotoStore) : KSerial
     override fun deserialize(decoder: Decoder) = CallContact.restored(decoder.decodeSerializableValue(SavedContact.serializer()), photoStore)
 }
 
-/** A contact as settings keep it: the iOS app's shape without its iOS-only ways to call. Photos are kept by ID. */
+/** A contact as settings keep it: the iOS app's shape without its iOS-only ways to call. Photos are kept by ID.
+ * `address` is always empty here, but iOS reads a contact only with it, so a keypad saved here can move to an iPad. */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 internal class SavedContact(
@@ -155,6 +156,7 @@ internal class SavedContact(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val memberName: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val memberPhotoID: String? = null,
     val nativeCall: NativeCall,
+    val address: String = "",
     @EncodeDefault(EncodeDefault.Mode.NEVER) val phoneNumber: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val otherPhoneNumbers: List<String>? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val familyMemberID: String? = null,
