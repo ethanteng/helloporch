@@ -45,7 +45,9 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
   const [android, setAndroid] = useState<"phone" | "tablet">();
   useEffect(() => {
     // Read after paint. Chrome's reduced user agent says "Mobile" on tablets; the client hint does not.
-    const form = androidDevice(navigator.userAgent, navigator.userAgentData?.mobile);
+    // The DOM lib this repo typechecks with does not declare userAgentData.
+    const hints = navigator as Navigator & { userAgentData?: { mobile: boolean } };
+    const form = androidDevice(navigator.userAgent, hints.userAgentData?.mobile);
     if (form) setAndroid(form);
   }, []);
   // Until Porch for Android is in testing, an Android visitor reads what an iPhone or iPad does, and that it isn't ready.
