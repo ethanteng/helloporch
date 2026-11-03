@@ -1,3 +1,5 @@
+import { blockedSignup } from "../../../lib/signup-guard.ts";
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // How the family member will call, as it reads in MailerLite.
@@ -9,7 +11,8 @@ const INTERFACES = { keypad: "number pad", phone: "big-button phone" } as const;
 // Another language their loved one needs goes in porch_pilot_language, blank when Porch already speaks theirs.
 // Someone waiting for Android is saved with just their email and porch_pilot_interface "android".
 // MailerLite upserts by email, so sending changed answers updates them. Every request is also logged, as the
-// waitlist does, but function logs expire quickly, so MailerLite is the real record.
+// waitlist does, but function logs expire quickly, so MailerLite is the real record. Bots are logged and kept out of
+// MailerLite (lib/signup-guard.ts), so nobody whose email a bot typed in hears from us.
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -35,6 +38,14 @@ export async function POST(req: Request) {
         : null;
   if (!fields) {
     return Response.json({ error: "Please answer every step." }, { status: 400 });
+  }
+
+  const blocked = await blockedSignup(body?.website);
+  if (blocked) {
+    console.log(JSON.stringify({ event: "pilot_blocked", reason: blocked, email, at: new Date().toISOString() }));
+    return blocked === "bot"
+      ? Response.json({ error: "We couldn't sign you up just now. Please try again." }, { status: 403 })
+      : Response.json({ ok: true });
   }
 
   console.log(JSON.stringify({ event: "pilot_signup", email, ...fields, at: new Date().toISOString() }));

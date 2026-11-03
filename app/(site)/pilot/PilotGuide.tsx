@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Honeypot } from "@/components/Honeypot";
 import { costOf, ipadNeeds, keypadParts, phoneParts, priceLabel, type Part } from "./parts";
 import styles from "./pilot.module.css";
 
@@ -44,6 +45,7 @@ export default function PilotGuide() {
   const callGroup = useRef<HTMLDivElement>(null);
   const ipadGroup = useRef<HTMLDivElement>(null);
   const welcome = useRef<HTMLHeadingElement>(null);
+  const honeypot = useRef<HTMLInputElement>(null);
   const scrollToIpad = useRef(false);
   const need = choice && ipadNeeds[choice];
 
@@ -79,7 +81,13 @@ export default function PilotGuide() {
     setPending(true);
     setError(null);
     try {
-      await signUp({ email: answers.email, interface: answers.choice, ipad: answers.hasIpad, language: answers.language });
+      await signUp({
+        email: answers.email,
+        interface: answers.choice,
+        ipad: answers.hasIpad,
+        language: answers.language,
+        website: honeypot.current?.value,
+      });
       setChoice(answers.choice);
       setPlatform("ios");
       setReaskIpad(false);
@@ -104,7 +112,7 @@ export default function PilotGuide() {
     setPlatform("android");
     setPending(true);
     setError(null);
-    signUp({ email: value, platform: "android" })
+    signUp({ email: value, platform: "android", website: honeypot.current?.value })
       .then(() => {
         setReaskIpad(false);
         setJoined({ platform: "android", email: value });
@@ -207,6 +215,7 @@ export default function PilotGuide() {
         <p>Fill this in, and you’ll see what to get and how to start.</p>
       </div>
       <form className={styles.form} onSubmit={onSubmit} noValidate>
+        <Honeypot ref={honeypot} />
         <ol className={styles.steps}>
           <li className={styles.step}>
             <h3>
