@@ -89,7 +89,9 @@ async function fcmAuthorization(request: typeof fetch, now: number) {
   fcmAccess = { key, token, expiresAt: now + lifetime };
   return token;
 }
-type FCMError = { error?: { status?: string; details?: { errorCode?: string; fieldViolations?: { field?: string }[] }[] } };
+type FCMError = { error?: { status?: string; message?: string; details?: { errorCode?: string; fieldViolations?: { field?: string }[] }[] } };
+/** Firebase's documented invalid-token response is INVALID_ARGUMENT with this message and no field violation. */
+const invalidFcmTokenMessage = "The registration token is not a valid FCM registration token";
 // FCM HTTP v1. Data values must be strings. Never throws: a failed push is reported like an APNs one.
 async function sendFCM(device: VoIPRegistration, message: object, request: typeof fetch, now: number): Promise<PushResult> {
   try {
@@ -103,9 +105,9 @@ async function sendFCM(device: VoIPRegistration, message: object, request: typeo
     try { error = ((await response.json()) as FCMError).error; } catch { /* no detail */ }
     const codes = error?.details?.map(detail => detail.errorCode) ?? [];
     // Only FCM's own verdict on the token counts. A bare 404 can be a mistyped project, which must not forget every
-    // Android device, and our payload is fixed, so a bad argument counts only when FCM names the token.
-    const badToken = error?.details?.some(detail => detail.fieldViolations?.some(violation => violation.field === "message.token"));
-    return { delivered: false, invalidToken: codes.includes("UNREGISTERED") || codes.includes("SENDER_ID_MISMATCH") || !!badToken };
+    // Android device. Other INVALID_ARGUMENT failures are our payload, so those count only when FCM names the token.
+    const namesToken = error?.details?.some(detail => detail.fieldViolations?.some(violation => violation.field === "message.token"));
+    return { delivered: false, invalidToken: codes.includes("UNREGISTERED") || codes.includes("SENDER_ID_MISMATCH") || !!namesToken || error?.message === invalidFcmTokenMessage };
   } catch {
     return { delivered: false };
   }

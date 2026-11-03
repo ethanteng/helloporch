@@ -146,10 +146,12 @@ test('Android call pushes are high-priority data messages that stop with the rin
 
 test('FCM reports unregistered and invalid tokens, but not its own failures, as invalid registrations',()=>withFCM(async()=>{
  const google=fakeGoogle();
- const fcmError=(status,code,details=[])=>()=>Response.json({error:{code:status,status:code,message:'test',details}},{status});
+ const fcmError=(status,code,details=[],message='test')=>()=>Response.json({error:{code:status,status:code,message,details}},{status});
  const unregistered=[{'@type':'type.googleapis.com/google.firebase.fcm.v1.FcmError',errorCode:'UNREGISTERED'}];
  const badToken=[{'@type':'type.googleapis.com/google.firebase.fcm.v1.FcmError',errorCode:'INVALID_ARGUMENT'},{'@type':'type.googleapis.com/google.rpc.BadRequest',fieldViolations:[{field:'message.token',description:'The registration token is not a valid FCM registration token'}]}];
+ const documentedBadToken=[{'@type':'type.googleapis.com/google.firebase.fcm.v1.FcmError',errorCode:'INVALID_ARGUMENT'}];
  for (const [reply,invalidToken] of [[fcmError(404,'NOT_FOUND',unregistered),true],[fcmError(400,'INVALID_ARGUMENT',badToken),true],
+  [fcmError(400,'INVALID_ARGUMENT',documentedBadToken,'The registration token is not a valid FCM registration token'),true],
   [fcmError(403,'PERMISSION_DENIED',[{errorCode:'SENDER_ID_MISMATCH'}]),true],[fcmError(400,'INVALID_ARGUMENT',[{errorCode:'INVALID_ARGUMENT'}]),false],[fcmError(404,'NOT_FOUND'),false],
   [fcmError(429,'RESOURCE_EXHAUSTED',[{errorCode:'QUOTA_EXCEEDED'}]),false],[fcmError(503,'UNAVAILABLE'),false],[()=>new Response('not json',{status:500}),false]]) {
   google.reply(reply);
