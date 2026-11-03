@@ -171,7 +171,12 @@ final class Cell2JackKeypad {
                     if event.kind == .pulse {
                         self.record(["kind": "pulseDigitIgnored", "symbol": event.digit, "rawLine": event.line])
                     }
-                    if event.kind == .hangUp { self.deliverHangUp(event.line, root: root, token: token) }
+                    if event.kind == .hangUp {
+                        self.deliverHangUp(event.line, root: root) { [weak self] in
+                            guard let self else { return false }
+                            return self.generation == token && self.wanted && !self.stopping
+                        }
+                    }
                     guard event.kind == .digit else { continue }
                     let outcome = Cell2JackDigitRouter.route(event.digit, root: root)
                     self.record(["kind": "digit", "symbol": event.digit, "outcome": outcome,
@@ -237,19 +242,27 @@ final class Cell2JackKeypad {
     }
     /// The receiver can't repeat a hang-up the way a key can be pressed again, so one that
     /// lands while a screen is opening or closing is tried again for about two seconds.
-    private func deliverHangUp(_ line: String, root: UIViewController, token: UUID, attempt: Int = 1) {
+    /// `current` says whether the input that reported it is still the one in use.
+    private func deliverHangUp(_ line: String, root: UIViewController, attempt: Int = 1, current: @escaping () -> Bool) {
         let outcome = receiverHangUp ? Cell2JackDigitRouter.routeHangUp(root: root) : "receiver hang-up off"
         record(["kind": "hangUp", "outcome": outcome, "rawLine": line, "attempt": attempt])
         guard outcome == Cell2JackDigitRouter.transitioning, attempt < 6 else { return }
         enqueueRetry(0.4, DispatchWorkItem { [weak self, weak root] in
             guard let self else { return }
-            guard let root, self.generation == token, self.wanted, !self.stopping, self.sceneActive,
+            guard let root, current(), self.sceneActive,
                   self.windowScene?.activationState == .foregroundActive else {
                 self.record(["kind": "hangUp", "outcome": "dropped: session or foreground gate", "rawLine": line, "attempt": attempt + 1])
                 return
             }
-            self.deliverHangUp(line, root: root, token: token, attempt: attempt + 1)
+            self.deliverHangUp(line, root: root, attempt: attempt + 1, current: current)
         })
+    }
+    /// The phone adapter typed its hang-up key (`CallTrigger.receiverHangUpKey`). The adapter
+    /// is a USB keyboard, not this driver, so this works in every build and whether or not
+    /// the Cell2Jack keypad is on.
+    func receiveAdapterHangUp() {
+        guard let root, sceneActive, isBedside(), windowScene?.activationState == .foregroundActive else { return }
+        deliverHangUp("phone adapter", root: root) { true }
     }
     private func changeStatus(_ text: String) {
         status = text

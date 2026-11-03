@@ -14,6 +14,7 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 | `lib/calls/`, `lib/family/` | Server logic: households, pairing, calls, messages, phone numbers, push and speech |
 | `lib/admin/` | The admin page: password sign-in, sessions, invitations, the Porches list and the countries Porch can call |
 | `ios/` | The universal iOS and iPadOS app, the `PorchCore` Swift package and the Cell2Jack USB driver ([ios/README.md](ios/README.md)) |
+| `phone-adapter/` | Prototype firmware that makes a Cell2Jack look like a USB keypad, so the big-button phone works without the driver ([phone-adapter/README.md](phone-adapter/README.md)) |
 | `scripts/` | Operator scripts for setup, number provisioning and checks |
 | `tests/` | Node tests for the server |
 | `.github/workflows/` | CI, the calling-server deploy and the TestFlight upload |

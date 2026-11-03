@@ -496,6 +496,43 @@ final class Cell2JackRoutingTests: XCTestCase {
         transport.update(.finished("/q sent"))
     }
 
+    @MainActor func testPhoneAdapterHangUpKeyEndsTheVisibleCallWithoutTheDriver() throws {
+        let name = "adapter-hangup-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var retries: [DispatchWorkItem] = []
+        var bedside = true
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { bedside }, enqueueRetry: { _, work in retries.append(work) }) { update in
+            XCTFail("The adapter is a keyboard and needs no driver connection"); return Connection(update)
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive })
+        let clock = Receiver(), call = Receiver()
+        clock.overlay = call
+        keypad.root = clock; keypad.windowScene = scene
+        keypad.activate() // the Cell2Jack keypad stays off, as in the family build
+        XCTAssertNil(CallTrigger.slot(for: CallTrigger.receiverHangUpKey), "F24 is never a keypad key")
+        keypad.receiveAdapterHangUp()
+        XCTAssertEqual(call.hangUps, 1); XCTAssertEqual(clock.hangUps, 0)
+        keypad.setReceiverHangUp(false)
+        keypad.receiveAdapterHangUp()
+        XCTAssertEqual(call.hangUps, 1, "Hang up when the receiver is put back is off")
+        keypad.setReceiverHangUp(true)
+        // A call screen still appearing gets it once it has appeared.
+        call.appearing = true
+        keypad.receiveAdapterHangUp()
+        XCTAssertEqual(call.hangUps, 1); XCTAssertEqual(retries.count, 1)
+        call.appearing = false
+        retries.removeFirst().perform()
+        XCTAssertEqual(call.hangUps, 2)
+        bedside = false
+        keypad.receiveAdapterHangUp()
+        XCTAssertEqual(call.hangUps, 2, "Only the bedside acts on it")
+        bedside = true
+        keypad.pause()
+        keypad.receiveAdapterHangUp()
+        XCTAssertEqual(call.hangUps, 2, "Nor while Porch is in the background")
+    }
+
     @MainActor func testHealthReplacesOnlyTheHealthRecordBeforeIt() throws {
         let name = "cell2jack-health-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
