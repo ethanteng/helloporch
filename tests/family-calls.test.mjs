@@ -436,6 +436,15 @@ test('an Android phone registers its one FCM token for calls and messages, with 
  assert.deepEqual(pushes.map(p=>p.device),[{token,platform:'android'}]);
 });
 
+test('a token Firebase rejects for a call is forgotten for message alerts too',async()=>{
+ const f=fixture({sendPush:async()=>({delivered:false,invalidToken:true})}),{bedside,family}=await f.setup();
+ const token='fcm-token:'+'a1_-'.repeat(30);
+ await f.json('registerVoIP',{token,platform:'android'},family.credential); await f.json('registerAlerts',{token,platform:'android'},family.credential);
+ await f.json('poll',{available:false},family.credential);
+ assert.equal((await f.send('startCall',{targetID:family.state.me.id,mode:'voice',kind:'call'},bedside.credential)).status,409);
+ assert.ok(![...f.store.values.values()].some(value=>value.includes(token)),'neither slot keeps the dead token');
+});
+
 test('an Android phone can be rung once Firebase is set up, whether or not APNs is',async()=>{
  const keys=['FCM_PROJECT_ID','FCM_CLIENT_EMAIL','FCM_PRIVATE_KEY','APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'],saved=keys.map(k=>process.env[k]);
  try {

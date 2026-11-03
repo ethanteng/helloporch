@@ -5,7 +5,7 @@ import { callLogEntry, recordCallAfter } from "./call-log.ts";
 import { callRoom, config, deliveryUnavailable, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
-import { pushConfigured, sameRegistration, sendVoIPPush, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
+import { forgetRegistration, pushConfigured, sendVoIPPush, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
 
 export const inboundRoomPrefix = "porch-inbound-";
 /** The inbound trunk's ringing cap. Each household's own ring time ends calls sooner. */
@@ -189,7 +189,7 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
   if (!delivery.delivered) {
     const updated = await mutate(store, house.id, current => {
       const recipient = current.members.find(m => m.id === bedside.id);
-      if (delivery.invalidToken && recipient && sameRegistration(recipient.voip, registration)) delete recipient.voip;
+      if (delivery.invalidToken && recipient) forgetRegistration(recipient, registration);
       const active = current.call;
       if (recipient && !(recipient.available && recipient.seenAt > now - 30) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
         finishCall(active, deliveryUnavailable, now);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { createServer, connect } from 'node:http2';
 import { test } from 'node:test';
-import { apnsAuthorization, apnsConfigured, fcmAssertion, fcmConfigured, pushConfigured, sameRegistration, sendAlertPush, sendVoIPPush } from '../lib/family/push.ts';
+import { apnsAuthorization, apnsConfigured, fcmAssertion, fcmConfigured, forgetRegistration, pushConfigured, sameRegistration, sendAlertPush, sendVoIPPush } from '../lib/family/push.ts';
 
 test('APNs provider JWT uses ES256/P1363 and refreshes before one hour without exposing the key',()=>{
  const keys=['APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'];
@@ -197,6 +197,15 @@ test('each platform pushes only when its own sender is set up',()=>withFCM(async
  assert.deepEqual(await sendVoIPPush(android,call,undefined,1800000000,google.request),{delivered:false});
  assert.deepEqual(google.requests,[],'an unconfigured sender makes no request');
 }));
+
+test("a rejected token is forgotten for calls and alerts alike, but an iPhone's other token stays",()=>{
+ const phone={voip:{...android},alerts:{...android}};
+ forgetRegistration(phone,android);
+ assert.deepEqual(phone,{},'one FCM token serves both');
+ const iphone={voip:{token:'ab'.repeat(32),environment:'production'},alerts:{token:'cd'.repeat(32),environment:'production'}};
+ forgetRegistration(iphone,{token:'ab'.repeat(32),environment:'production'});
+ assert.deepEqual(iphone,{alerts:{token:'cd'.repeat(32),environment:'production'}});
+});
 
 test('cleanups compare the push service as well as the token',()=>{
  const ios={token:'ab'.repeat(32),environment:'production'};

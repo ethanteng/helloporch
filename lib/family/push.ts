@@ -21,6 +21,12 @@ export function pushConfigured(device?: VoIPRegistration): device is VoIPRegistr
 export function sameRegistration(current: VoIPRegistration | undefined, sent: VoIPRegistration) {
   return !!current && current.token === sent.token && current.environment === sent.environment && current.platform === sent.platform;
 }
+/** Forgets a token its push service rejected, wherever the device keeps it. An Android device registers its one FCM token
+ * for both calls and alerts, so a token rejected for one is gone for the other too. An iPhone's two tokens differ. */
+export function forgetRegistration(member: { voip?: VoIPRegistration; alerts?: VoIPRegistration }, rejected: VoIPRegistration) {
+  if (sameRegistration(member.voip, rejected)) delete member.voip;
+  if (sameRegistration(member.alerts, rejected)) delete member.alerts;
+}
 
 // Cache only the provider JWT, never device credentials or call payloads.
 let providerToken: { key: string; jwt: string; issuedAt: number } | undefined;

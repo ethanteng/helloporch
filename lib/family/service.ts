@@ -14,7 +14,7 @@ import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, re
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, needsReaping, phoneGuestActions, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
-import { pushConfigured, sameRegistration, sendAlertPush, sendVoIPPush, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
+import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
@@ -153,7 +153,7 @@ async function alertRecipient(store: FamilyStore, householdID: string, recipient
     body: `${message.mode === "video" ? "Video" : "Audio"} message · ${length}`, badge: unheardCount(house, recipientID, now) });
   if (result.invalidToken) await mutate(store, householdID, current => {
     const member = current.members.find(m => m.id === recipientID);
-    if (member && sameRegistration(member.alerts, registration)) delete member.alerts;
+    if (member) forgetRegistration(member, registration);
   });
 }
 async function endRoom(room: string, dependencies: FamilyDependencies) {
@@ -375,7 +375,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             catch { delivery = { delivered: false }; }
             if (delivery.invalidToken) await mutate(store, house.id, current => {
               const recipient = current.members.find(m => m.id === member.id);
-              if (recipient && sameRegistration(recipient.voip, registration)) delete recipient.voip;
+              if (recipient) forgetRegistration(recipient, registration);
             });
             if (delivery.delivered) return true;
           }
@@ -689,7 +689,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (!delivery.delivered) {
           const updated = await mutate(store, house.id, current => {
             const recipient = current.members.find(m => m.id === target.id);
-            if (delivery.invalidToken && recipient && sameRegistration(recipient.voip, registration)) delete recipient.voip;
+            if (delivery.invalidToken && recipient) forgetRegistration(recipient, registration);
             const active = current.call;
             // A call-specific recipient receipt or answer outweighs a missing
             // APNs acknowledgment, even while the recipient is backgrounded.
