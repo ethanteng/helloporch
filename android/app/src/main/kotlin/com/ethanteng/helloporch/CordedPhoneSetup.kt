@@ -113,7 +113,7 @@ fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> 
             Column(Modifier.widthIn(max = 760.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 TextButton(onClick = back) { Text("Back") }
                 Text("Connect the phone", style = MaterialTheme.typography.headlineMedium)
-                Text("Your loved one can call by pressing a key on the desk phone. You'll need the phone and the Cell2Jack.")
+                Text("${LocalBedsideName.current} can call by pressing a key on the desk phone. You'll need the phone and the Cell2Jack.")
                 Text("1. Plug the phone into the Cell2Jack, and the Cell2Jack into this tablet.", style = MaterialTheme.typography.bodyLarge)
                 Text("2. When Android asks to let Porch use the Cell2Jack, choose to always open Porch, then tap OK.",
                     style = MaterialTheme.typography.bodyLarge)
