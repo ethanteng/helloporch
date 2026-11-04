@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: plan only. First written 2026-10-22 against `8c5cd8f`. Revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together, and to catch up with about 50 merged PRs. Nothing here is built yet.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 has started: the Gradle project and the PorchCore port to `:core`.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
@@ -588,7 +588,7 @@ Page contents:
   - the setup checklist;
   - the daily check.
 
-  Build each on Android in the same PR as iOS, or right after. The keypad backup must use one versioned format for both apps, with photos referenced by SHA-256, so a household can move between an iPad and an Android tablet.
+  Build each on Android in the same PR as iOS, or right after. The keypad backup must use one versioned format for both apps, with photos referenced by SHA-256, so a household can move between an iPad and an Android tablet. Android already saves contacts in the iOS shape, with an empty `address`. An iPad key whose contact calls only through an iOS-only method (a FaceTime-style address or a Shortcut) has no Porch call for Android, so importing one should leave that key empty and keep the rest of the keypad, not reject the whole backup.
 
 **Milestone C:** an all-Android household, and every mixed household, matches an all-iOS one.
 
