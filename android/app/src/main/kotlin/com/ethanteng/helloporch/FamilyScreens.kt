@@ -18,6 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,38 +36,28 @@ import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyNames
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.joinFamily
-import java.net.URI
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Phase 1's screens: joining a family from an invitation, and the families this phone is in. */
+/** Family mode's screens: joining a family from an invitation, and the families this phone is in. Setup links go to
+ * the bedside's screens instead (PorchRoot). `onReady` says whether the list of families is showing, which is where a
+ * call could ring. */
 @Composable
-fun PorchScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Unit) {
+fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Unit, onReady: (Boolean) -> Unit = {}) {
     val links by app.coordinator.links.collectAsStateWithLifecycle()
     var joining by rememberSaveable { mutableStateOf(false) }
     // Joining or removing a family changes the list before any family has checked in.
     var changes by remember { mutableIntStateOf(0) }
     val families = remember(links, changes) { app.device.families }
     val done = { joining = false; changes++; onLinkHandled() }
+    val listing = !(link != null || joining || families.isEmpty())
+    SideEffect { onReady(listing) }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            when {
-                link != null && isBedsideSetup(link) -> BedsideSetupLater(onLinkHandled)
-                link != null || joining || families.isEmpty() ->
-                    JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done)
-                else -> Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ })
-            }
+            if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done)
+            else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ })
         }
     }
-}
-
-private fun isBedsideSetup(link: String) = runCatching { URI(link) }.getOrNull()?.let { it.host == "activate" || it.path == "/setup" } == true
-
-@Composable
-private fun BedsideSetupLater(onDone: () -> Unit) {
-    Text("Set up a bedside tablet", style = MaterialTheme.typography.headlineMedium)
-    Text("This test version of Porch for Android joins families on a phone. Setting up a tablet to stay with your loved one comes in a later version.")
-    Button(onClick = onDone) { Text("OK") }
 }
 
 @Composable
