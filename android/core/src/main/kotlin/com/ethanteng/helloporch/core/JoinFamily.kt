@@ -73,6 +73,9 @@ suspend fun joinFamily(
     if (!name.isNullOrEmpty()) device.setNickname(name, joined)
     else if (kept != null) device.setNickname(kept, joined)
     device.select(joined)
+    // A tablet defaults to the bedside. Only a join that landed should check in as a family phone: writing the mode
+    // down before the claim returns would make a refused invitation skip the welcome and stop being a bedside.
+    device.experience = PorchExperience.FAMILY
     coordinator.start()
     // Two sets of parents are often both "Mom". Left unnamed, the new one is numbered, so ask now, while
     // it's clear which one it is.

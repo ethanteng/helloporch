@@ -85,6 +85,26 @@ class JoinFamilyTest {
         assertEquals("Lee family", phone.coordinator.state?.householdName)
     }
 
+    /** A tablet is the bedside until a join lands. A refused claim must not record it as a family phone. */
+    @Test fun aRefusedInvitationLeavesATabletAsTheBedside() = runTest {
+        val server = Server(FamilyHarness(this, canBeBedside = true)).apply {
+            invitations["c".repeat(64)] = "home" to "Lee family"
+        }
+        val tablet = server.phone
+        assertEquals(PorchExperience.BEDSIDE, tablet.device.experience)
+        server.claim = { failure(410, "This invitation has expired. Ask for a new one.") }
+        assertEquals(410, assertFailsWith<FamilyServiceException> { tablet.join(invitation) }.status)
+        assertEquals(PorchExperience.BEDSIDE, tablet.device.experience)
+        assertEquals(emptyList(), tablet.device.families)
+
+        server.claim = { null }
+        val joined = tablet.join(invitation)
+        assertEquals(PorchExperience.FAMILY, tablet.device.experience)
+        assertEquals(listOf(joined.credential), tablet.device.families)
+        runCurrent()
+        assertEquals(joined.credential, tablet.coordinator.credential)
+    }
+
     @Test fun anInvitationTheServerDoesntAcceptSaysSo() = runTest {
         val server = server()
         server.claim = { failure(410, "This invitation has expired. Ask for a new one.") }
