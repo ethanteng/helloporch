@@ -17,8 +17,10 @@ kotlin {
 
 dependencies {
     api(libs.kotlinx.serialization.json)
+    api(libs.kotlinx.coroutines.core)
     implementation(libs.libphonenumber)
     testImplementation(libs.kotlin.test.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 // The server's saved responses (tests/fixtures/), which ContractFixtureTest decodes. A changed fixture reruns the tests.

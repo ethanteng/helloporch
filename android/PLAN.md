@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 has started: the Gradle project and the PorchCore port to `:core`.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1's exit criterion works in the emulator: an Android phone opens an invitation, joins the household and shows as online on the bedside. Still to do in phase 1: bedside slot and photo work after each snapshot, and testing App Links on a signed build.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
