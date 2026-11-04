@@ -69,18 +69,37 @@ class PorchApplication : Application() {
     /** The Cell2Jack, the bedside's corded-phone keypad. It runs only while the bedside is in front (MainActivity), and
      * is never made on a family phone. */
     val cell2jack by cell2jackKeypad
+    /** The activity is resumed. Process [onScreen] stays true through a system dialog that pauses the activity, such as
+     * the USB permission question, and the Cell2Jack should not run then. */
+    private var activityResumed = false
 
     fun switchExperience(experience: PorchExperience) {
         device.experience = experience
         modeChanges++
         if (onScreen) coordinator.start()
-        if (experience != PorchExperience.BEDSIDE) stopCell2Jack()
+        if (experience == PorchExperience.BEDSIDE) {
+            // Already in front: onResume ran while this tablet was still a family phone, so it never started the keypad.
+            if (activityResumed) cell2jack.start()
+        } else stopCell2Jack()
     }
 
     /** [joinFamily] writes the mode itself and checks in as a family phone. The screens read [modeChanges], so without
      * this they keep the welcome screen or the bedside clock until the next check-in, and Set up can switch the tablet
      * back. It does not check in again: that would tell the new family the phone had gone offline. */
     fun noteModeChanged() { modeChanges++ }
+
+    /** The activity is in front. A bedside starts its Cell2Jack; a family phone never makes one. */
+    fun bedsideCameToFront() {
+        activityResumed = true
+        if (device.experience != PorchExperience.BEDSIDE) return
+        cell2jack.start()
+    }
+
+    /** The activity left the front, such as behind another app, the screen turning off, or a system dialog. */
+    fun bedsideLeftFront() {
+        activityResumed = false
+        stopCell2Jack()
+    }
 
     /** Stops the Cell2Jack, if this device made one: when Porch leaves the front, or the tablet stops being the
      * bedside, such as by joining a family. */

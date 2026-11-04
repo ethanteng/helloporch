@@ -12,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import com.ethanteng.helloporch.core.PorchExperience
 
 /** Porch's one activity. An invitation or setup link that opens Porch arrives here, when it starts or while it's open. */
 class MainActivity : ComponentActivity() {
@@ -26,9 +25,10 @@ class MainActivity : ComponentActivity() {
         link.value = if (savedInstanceState == null) intent?.dataString else savedInstanceState.getString(linkKey)
         val app = application as PorchApplication
         // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
+        // Switching to the bedside while this activity is already resumed starts it too (PorchApplication.switchExperience).
         lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onResume(owner: LifecycleOwner) { if (app.device.experience == PorchExperience.BEDSIDE) app.cell2jack.start() }
-            override fun onPause(owner: LifecycleOwner) = app.stopCell2Jack()
+            override fun onResume(owner: LifecycleOwner) = app.bedsideCameToFront()
+            override fun onPause(owner: LifecycleOwner) = app.bedsideLeftFront()
         })
         setContent {
             MaterialTheme {
