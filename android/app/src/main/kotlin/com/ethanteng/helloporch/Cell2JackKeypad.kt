@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.SystemClock
 import android.util.AtomicFile
 import androidx.core.content.ContextCompat
@@ -198,6 +199,15 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
         refresh()
     }
 
+    /** The bedside came back to the front. The USB permission question is another activity, so a denial pauses Porch
+     * and returns here. An immutable result intent never arrives, which would leave setup saying it is still asking
+     * and hide Allow. Coming back without permission means the question was denied or dismissed, and setup can ask again. */
+    fun noteReturnedToFront() {
+        if (!asking) return
+        val device = findDevice()
+        if (device == null || !usb.hasPermission(device)) asking = false
+    }
+
     /**
      * Asks Android to let Porch use the Cell2Jack, unless it can already or the Cell2Jack isn't plugged in. Android's
      * question offers to always open Porch for it, which keeps the permission when it's unplugged and plugged back in.
@@ -208,9 +218,10 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
         asking = true
         updateAccess()
         record("usbPermissionRequested")
-        // Immutable, so Android doesn't fill in the answer. Porch asks UsbManager instead when it hears back.
+        // Mutable, because Android adds whether permission was granted. An immutable intent drops that answer, so a
+        // denial never comes back. The package keeps the broadcast inside Porch; the receiver checks UsbManager itself.
         val intent = Intent(permissionAction).setPackage(context.packageName)
-        usb.requestPermission(device, PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE))
+        usb.requestPermission(device, PendingIntent.getBroadcast(context, 0, intent, permissionIntentFlags))
     }
 
     /** Adds to the diagnostics while the phone keypad is on or connected, as call screens do on iOS. */
@@ -362,5 +373,10 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
     companion object {
         const val readyStatus = "Phone keypad ready"
         private const val permissionAction = "com.ethanteng.helloporch.CELL2JACK_PERMISSION"
+
+        /** API 31 requires an explicit mutability flag. setPackage makes the intent explicit enough for API 34, which
+         * otherwise refuses a mutable implicit intent. Older releases have no mutability flag. */
+        private val permissionIntentFlags: Int
+            get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
     }
 }

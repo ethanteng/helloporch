@@ -92,6 +92,7 @@ class PorchApplication : Application() {
     fun bedsideCameToFront() {
         activityResumed = true
         if (device.experience != PorchExperience.BEDSIDE) return
+        if (cell2jackKeypad.isInitialized()) cell2jack.noteReturnedToFront()
         cell2jack.start()
     }
 
