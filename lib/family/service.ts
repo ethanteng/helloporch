@@ -5,7 +5,7 @@ import { familyStore, type FamilyStore } from "./store.ts";
 import { activationKey, createActivation, markInvitationSetUp, rememberHousehold, type Activation } from "./activations.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideDevice, bedsideLanguage, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noCallLimit, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideDevice, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, expire, FamilyError, isBedsideLanguage, isCaregiver, mutate, noCallLimit, noteAttendance, phoneDropIn, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -597,7 +597,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
         if (!online(target, now) && !(input.kind === "call" && pushable(target.voip))) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(me.role === "family" && target.role === "bedside" && house.dropInEnabled && me.permissions[input.mode === "voice" ? "audio" : "video"], "You are not approved for this type of drop-in.", 403);
-        const kind = input.kind;
+        const kind = callKind(house, me, target, input.mode, input.kind, online(target, now));
         // Family phones call only the bedside, which rings for the caregiver's chosen time.
         const wait = me.role === "family" ? ringSeconds(house, kind) : input.waitSeconds !== undefined ? input.waitSeconds : 45;
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");

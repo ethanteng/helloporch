@@ -87,13 +87,38 @@ test('drop-in is opt-in by mode and requires a bedside device that is ready',asy
  await f.json('poll',{available:true},bedside.credential); f.advance(31);
  assert.equal((await start()).status,409);
 });
-test('an ordinary call rings even from someone approved to drop in',async()=>{
- const f=fixture(),{bedside,family}=await f.setup({audio:true,video:true});
- await f.json('setDropIn',{enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+test('a family member\'s Audio call and Video call drop in when they\'re approved for that drop-in and the bedside is open',async()=>{
+ const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push(call);return {delivered:true};}}),{bedside,family}=await f.setup({audio:true,video:false});
+ const memberID=family.state.me.id,pin=env.PORCH_CONTACT_SETUP_CODE;
+ const call=async(mode,from=family,targetID=bedside.state.me.id)=>{
+  const created=await f.json('startCall',{targetID,mode,kind:'call'},from.credential);
+  await f.json('endCall',{callID:created.state.call.id},from.credential);
+  return created.state.call;
+ };
+ // Drop-ins paused for everyone: it rings.
+ assert.equal((await call('voice')).kind,'call');
+ await f.json('setDropIn',{enabled:true},bedside.credential,pin);
+ await f.json('setRingSeconds',{seconds:15},bedside.credential,pin);
+ const dropIn=await call('voice');
+ assert.equal(dropIn.kind,'dropIn','the bedside answers it for them, as it does Drop in');
+ assert.equal(dropIn.expiresAt-dropIn.createdAt,75,'drop-ins keep their standard time');
+ // Not approved for video drop-in, so a video call rings.
+ assert.equal((await call('video')).kind,'call');
+ // The bedside's own calls never drop in.
+ assert.equal((await call('voice',bedside,memberID)).kind,'call');
+ assert.equal(pushes.length,0);
+ // A closed bedside Porch can't take a drop-in, so the call rings it by push instead.
+ await f.json('registerVoIP',{token:'ab'.repeat(32),environment:'production'},bedside.credential);
+ await f.json('poll',{available:false},bedside.credential);
+ assert.equal((await call('voice')).kind,'call'); assert.equal(pushes.length,1);
+ await f.json('poll',{available:true},bedside.credential);
+ // A call that became a drop-in is held to its approval like any other.
  const created=await f.json('startCall',{targetID:bedside.state.me.id,mode:'voice',kind:'call'},family.credential);
- assert.equal(created.state.call.kind,'call','they drop in with Drop in, not Audio call');
- // Older caregiver screens could set calls to drop in; the server no longer takes it.
- assert.equal((await f.send('setAutoDropIn',{memberID:family.state.me.id,enabled:true},bedside.credential,env.PORCH_CONTACT_SETUP_CODE)).status,400);
+ assert.equal(created.state.call.kind,'dropIn'); assert.equal(pushes.length,1);
+ await f.json('setPermissions',{memberID,permissions:{audio:false,video:false}},bedside.credential,pin);
+ assert.equal((await f.json('poll',{available:true},family.credential)).state.call.reason,'Drop-in access was changed.');
+ // Older caregiver screens could set one person's calls to drop in; the server still doesn't take that.
+ assert.equal((await f.send('setAutoDropIn',{memberID,enabled:true},bedside.credential,pin)).status,400);
 });
 test('an earlier poll arriving late cannot make the bedside look open again',async()=>{
  const pushes=[],f=fixture({sendPush:async(device,call)=>{pushes.push(call);return {delivered:true};}}),{bedside,family}=await f.setup({audio:true,video:false});

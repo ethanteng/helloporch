@@ -230,3 +230,10 @@ export function noteAttendance(house: Household, member: Member, secondsAgo: unk
   if (at < (house.attendanceSince ?? 0)) return;
   member.attendedAt = Math.max(member.attendedAt ?? 0, at);
 }
+/** What a new Porch call becomes. A family member's Audio call or Video call to the bedside drops in whenever they
+ * could have chosen that drop-in themselves and the bedside is ready for it, so nobody at the bedside has to answer
+ * someone it already lets connect. Otherwise it rings as usual, by push if the bedside Porch is closed. */
+export function callKind(house: Household, caller: Member, target: Member, mode: Mode, requested: Call["kind"], bedsideReady: boolean): Call["kind"] {
+  if (requested === "dropIn" || caller.role !== "family" || target.role !== "bedside" || !bedsideReady) return requested;
+  return house.dropInEnabled && caller.permissions[mode === "voice" ? "audio" : "video"] ? "dropIn" : "call";
+}

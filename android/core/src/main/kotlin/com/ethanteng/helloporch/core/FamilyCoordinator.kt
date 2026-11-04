@@ -224,7 +224,7 @@ class FamilyCoordinator(
         val result = service.send("startCall", values)
         update(result)
         val call = result.state?.call ?: throw FamilyServiceException("Couldn't start the call.", 503)
-        // The server decides whether an ordinary call drops in, from this phone's caregiver setting.
+        // The server turns an ordinary call into a drop-in when this phone is approved for that drop-in and the bedside is open.
         val wait = when {
             credential.role != PorchExperience.FAMILY -> waitSeconds
             call.kind == "dropIn" -> CallPreferences.dropInWaitSeconds
