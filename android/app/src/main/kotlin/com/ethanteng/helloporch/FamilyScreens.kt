@@ -87,7 +87,6 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         busy = true; error = null
         scope.launch {
             try {
-                app.device.experience = PorchExperience.FAMILY
                 val joined = joinFamily(invitation, nickname.ifBlank { null }, app.device, app.coordinator, { app.service(it) }, { app.service(it) })
                 if (joined.numberedName != null) naming = joined else onJoined()
             } catch (e: CancellationException) { throw e }
@@ -128,8 +127,10 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 Text(app.device.familyName(family) ?: state?.householdName ?: "Your family", style = MaterialTheme.typography.titleLarge)
                 Text(when {
                     link?.accessRemoved == true -> "This phone was removed from this family. Ask a caregiver for a new invitation."
-                    bedside != null -> "${bedside.name}'s ${if (bedside.platform == "android") "tablet" else "iPad"} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
+                    // A failed check-in keeps the last snapshot. Showing that bedside as on would stay true until the
+                    // next one that works, which is what a dropped connection looks like.
                     link?.error != null -> link.error!!
+                    bedside != null -> "${bedside.name}'s ${if (bedside.platform == "android") "tablet" else "iPad"} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
                     else -> "Checking in…"
                 })
                 if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
