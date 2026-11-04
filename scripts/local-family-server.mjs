@@ -34,7 +34,7 @@ const bedside = await call('createHousehold', { name: 'Mom', deviceID: randomUUI
 await call('initializeCaregiverPIN', { pin }, bedside.credential);
 const invite = async name => (await call('createInvite', { name, permissions: { audio: true, video: true }, caregiver: true }, bedside.credential, pin)).code;
 
-createServer(async (request, response) => {
+const onRequest = async (request, response) => {
   let body = '';
   for await (const chunk of request) body += chunk;
   if (request.method !== 'POST' || request.url !== '/api/family') { response.writeHead(404).end(); return; }
@@ -43,7 +43,15 @@ createServer(async (request, response) => {
   try { action = JSON.parse(body).action; } catch { /* the handler already answered it */ }
   if (action !== 'poll' || result.status !== 200) console.log(`${new Date().toISOString().slice(11, 19)} ${action} -> ${result.status}`);
   response.writeHead(result.status, Object.fromEntries(result.headers)).end(await result.text());
-}).listen(port, 'localhost', async () => {
+};
+// `adb reverse` connects to 127.0.0.1. Binding `localhost` is often only ::1, which that forward cannot reach.
+const ipv4 = createServer(onRequest);
+const ipv6 = createServer(onRequest);
+ipv4.listen(port, '127.0.0.1', async () => {
+  ipv6.on('error', error => {
+    if (error.code !== 'EADDRNOTAVAIL' && error.code !== 'EAFNOSUPPORT' && error.code !== 'EINVAL') throw error;
+  });
+  ipv6.listen(port, '::1');
   console.log(`Porch is running at ${origin}, with an in-memory household for "Mom". The caregiver PIN is ${pin}.`);
   console.log(`Invitation for a phone to join (works once, for a day):\n  porch://pair?${new URLSearchParams({ server: origin, code: await invite('Ethan') })}`);
 });
