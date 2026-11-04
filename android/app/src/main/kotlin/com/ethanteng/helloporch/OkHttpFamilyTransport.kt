@@ -3,6 +3,7 @@ package com.ethanteng.helloporch
 import com.ethanteng.helloporch.core.FamilyTransport
 import com.ethanteng.helloporch.core.TransportResponse
 import java.io.IOException
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -16,8 +17,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /** Porch's requests to its server. No cache and no cookies, like the iOS app's ephemeral session, and no `Origin`
- * header, which the server would reject. Cancelling the coroutine cancels the request. */
-class OkHttpFamilyTransport(private val client: OkHttpClient = OkHttpClient.Builder().cache(null).build()) : FamilyTransport {
+ * header, which the server would reject. Each request's own timeout covers all of it, so OkHttp's 10-second connect,
+ * read and write timeouts are off: they'd cut short the longer ones some actions need. Cancelling the coroutine
+ * cancels the request. */
+class OkHttpFamilyTransport(
+    private val client: OkHttpClient = OkHttpClient.Builder().cache(null)
+        .connectTimeout(Duration.ZERO).readTimeout(Duration.ZERO).writeTimeout(Duration.ZERO).build(),
+) : FamilyTransport {
     override suspend fun post(url: String, headers: Map<String, String>, body: String, timeoutMillis: Long): TransportResponse {
         val request = Request.Builder().url(url).post(body.toRequestBody(json)).apply { headers.forEach { (name, value) -> header(name, value) } }.build()
         val call = client.newCall(request).apply { timeout().timeout(timeoutMillis, TimeUnit.MILLISECONDS) }
