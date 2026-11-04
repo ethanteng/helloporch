@@ -74,8 +74,12 @@ class PorchApplication : Application() {
         device.experience = experience
         modeChanges++
         if (onScreen) coordinator.start()
-        if (experience != PorchExperience.BEDSIDE && cell2jackKeypad.isInitialized()) cell2jack.stop()
+        if (experience != PorchExperience.BEDSIDE) stopCell2Jack()
     }
+
+    /** Stops the Cell2Jack, if this device made one: when Porch leaves the front, or the tablet stops being the
+     * bedside, such as by joining a family. */
+    fun stopCell2Jack() { if (cell2jackKeypad.isInitialized()) cell2jack.stop() }
 
     override fun onCreate() {
         super.onCreate()

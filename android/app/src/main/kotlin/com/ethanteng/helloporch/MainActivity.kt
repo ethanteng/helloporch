@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onResume(owner: LifecycleOwner) { if (app.device.experience == PorchExperience.BEDSIDE) app.cell2jack.start() }
-            override fun onPause(owner: LifecycleOwner) { if (app.device.experience == PorchExperience.BEDSIDE) app.cell2jack.stop() }
+            override fun onPause(owner: LifecycleOwner) = app.stopCell2Jack()
         })
         setContent {
             MaterialTheme {

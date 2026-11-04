@@ -80,6 +80,8 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         scope.launch {
             try {
                 val joined = joinFamily(invitation, nickname.ifBlank { null }, app.device, app.coordinator, { app.service(it) }, { app.service(it) })
+                // Joining makes a tablet a family device, so a Cell2Jack it was using as the bedside stops.
+                app.stopCell2Jack()
                 val shared = joined.sharedName; val numbered = joined.numberedName
                 if (shared != null && numbered != null) naming = Naming(joined.credential.deviceID, shared, numbered) else onJoined()
             } catch (e: CancellationException) { throw e }
