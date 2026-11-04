@@ -77,6 +77,11 @@ class PorchApplication : Application() {
         if (experience != PorchExperience.BEDSIDE) stopCell2Jack()
     }
 
+    /** [joinFamily] writes the mode itself and checks in as a family phone. The screens read [modeChanges], so without
+     * this they keep the welcome screen or the bedside clock until the next check-in, and Set up can switch the tablet
+     * back. It does not check in again: that would tell the new family the phone had gone offline. */
+    fun noteModeChanged() { modeChanges++ }
+
     /** Stops the Cell2Jack, if this device made one: when Porch leaves the front, or the tablet stops being the
      * bedside, such as by joining a family. */
     fun stopCell2Jack() { if (cell2jackKeypad.isInitialized()) cell2jack.stop() }
