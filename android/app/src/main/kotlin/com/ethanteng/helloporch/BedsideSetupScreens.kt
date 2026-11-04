@@ -30,11 +30,11 @@ import com.ethanteng.helloporch.core.PorchNumber
 
 /** The corded phone's own screen, which the Cell2Jack connection provides: `onDone` goes on to adding the caregiver's
  * phone, and `onBack` returns to the choice of how they'll call. */
-typealias CordedPhoneSetup = @Composable (onDone: () -> Unit, onBack: () -> Unit) -> Unit
+typealias CordedPhoneStep = @Composable (onDone: () -> Unit, onBack: () -> Unit) -> Unit
 
 /** Setup's screens, one at a time. The system Back button goes back as the bar's Back does. */
 @Composable
-fun BedsideSetupFlow(app: PorchApplication, setup: BedsideSetup, cordedPhoneSetup: CordedPhoneSetup) {
+fun BedsideSetupFlow(app: PorchApplication, setup: BedsideSetup, cordedPhoneSetup: CordedPhoneStep) {
     // Each check-in can change the name these screens use, a number set up in the background, or a phone that joined.
     val links by app.coordinator.links.collectAsStateWithLifecycle()
     val lovedOne = setup.lovedOne

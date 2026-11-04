@@ -10,6 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import com.ethanteng.helloporch.core.PorchExperience
 
 /** Porch's one activity. An invitation or setup link that opens Porch arrives here, when it starts or while it's open. */
 class MainActivity : ComponentActivity() {
@@ -21,10 +24,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // A link not yet handled survives the activity being recreated, such as when the phone turns.
         link.value = if (savedInstanceState == null) intent?.dataString else savedInstanceState.getString(linkKey)
+        val app = application as PorchApplication
+        // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onResume(owner: LifecycleOwner) { if (app.device.experience == PorchExperience.BEDSIDE) app.cell2jack.start() }
+            override fun onPause(owner: LifecycleOwner) { if (app.device.experience == PorchExperience.BEDSIDE) app.cell2jack.stop() }
+        })
         setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalKeyListener provides keys) {
-                    PorchRoot(application as PorchApplication, link.value, onLinkHandled = { link.value = null })
+                    PorchRoot(app, link.value, onLinkHandled = { link.value = null },
+                        cordedPhoneSetup = { onDone, onBack -> CordedPhoneSetup(app.cell2jack, onDone, onBack) })
                 }
             }
         }

@@ -32,7 +32,7 @@ fun PorchRoot(
     app: PorchApplication,
     link: String?,
     onLinkHandled: () -> Unit,
-    cordedPhoneSetup: CordedPhoneSetup = { onDone, onBack -> CordedPhoneLater(onDone, onBack) },
+    cordedPhoneSetup: CordedPhoneStep = { onDone, onBack -> CordedPhoneLater(onDone, onBack) },
 ) {
     val setup: BedsideSetup = viewModel()
     val links by app.coordinator.links.collectAsStateWithLifecycle()

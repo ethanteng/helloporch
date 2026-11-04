@@ -65,10 +65,16 @@ class PorchApplication : Application() {
         set(value) = secrets.write(caregiverPINAccount, value.encodeToByteArray(), SecretStore.Access.WHEN_UNLOCKED)
 
     /** Shows the other mode and checks in as it. Push, which the old mode unregisters first, comes with calls (phase 3). */
+    private val cell2jackKeypad = lazy { Cell2JackKeypad(this, settings) }
+    /** The Cell2Jack, the bedside's corded-phone keypad. It runs only while the bedside is in front (MainActivity), and
+     * is never made on a family phone. */
+    val cell2jack by cell2jackKeypad
+
     fun switchExperience(experience: PorchExperience) {
         device.experience = experience
         modeChanges++
         if (onScreen) coordinator.start()
+        if (experience != PorchExperience.BEDSIDE && cell2jackKeypad.isInitialized()) cell2jack.stop()
     }
 
     override fun onCreate() {
