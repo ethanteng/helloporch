@@ -88,6 +88,9 @@ class FamilyCoordinator(
     val credential: FamilyCredential? get() = current?.credential
     var isActive = false
         private set
+    /** Changes whenever polling starts or pauses, so work begun after one snapshot, such as a keypad report, can tell
+     * when it no longer belongs: Porch paused, or it checks in for another household now. */
+    val session: Long get() = generation
 
     fun link(credential: FamilyCredential): FamilyLinks.Link? = entry(credential)?.snapshot()
     /** What one family last said. A call keeps following its own family, whichever one the screens show. */
