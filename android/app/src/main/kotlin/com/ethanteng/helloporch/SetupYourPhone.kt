@@ -130,8 +130,13 @@ class SetupYourPhone(
         // An invitation lasts a day. One that runs out while it's showing is replaced, for the same name. It stays until
         // the new one is ready, so a phone that joins meanwhile still counts.
         expiry?.cancel()
+        val waitSeconds = shown.expiresAt - nowSeconds()
+        // Only a code that still has time left is replaced on that timer. A stamp already in the past (expiresAt
+        // missing, or the tablet's clock a day ahead) stays on screen: a zero wait would ask for another code and
+        // repeat. Coming back to this screen tries once more.
+        if (waitSeconds <= 0) return
         expiry = scope.launch {
-            delay((shown.expiresAt - nowSeconds()).coerceAtLeast(0) * 1000)
+            delay(waitSeconds * 1000)
             if (invitation == shown) createInvitation()
         }
     }
