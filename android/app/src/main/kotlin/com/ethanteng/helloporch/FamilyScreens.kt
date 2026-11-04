@@ -73,7 +73,8 @@ private fun BedsideSetupLater(onDone: () -> Unit) {
 private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boolean, onJoined: () -> Unit, onCancel: (() -> Unit)?) {
     var text by rememberSaveable(initialLink) { mutableStateOf(initialLink) }
     var nickname by rememberSaveable { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    // Saved, so turning the phone doesn't hide why a join failed.
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var naming by rememberSaveable(stateSaver = namingSaver) { mutableStateOf<Naming?>(null) }
     val scope = rememberCoroutineScope()
@@ -130,7 +131,7 @@ private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit
 private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit) {
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
-    var leaveError by remember { mutableStateOf<String?>(null) }
+    var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     Text(if (families.size == 1) "Your family" else "Your families", style = MaterialTheme.typography.headlineMedium)
     for (family in families) {
