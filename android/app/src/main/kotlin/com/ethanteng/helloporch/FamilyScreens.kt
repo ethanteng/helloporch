@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -32,7 +33,6 @@ import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyInvitation
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyNames
-import com.ethanteng.helloporch.core.JoinedFamily
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.joinFamily
 import java.net.URI
@@ -75,7 +75,7 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
     var nickname by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var naming by remember { mutableStateOf<JoinedFamily?>(null) }
+    var naming by rememberSaveable(stateSaver = namingSaver) { mutableStateOf<Naming?>(null) }
     val scope = rememberCoroutineScope()
     Text(if (adding) "Join another family" else "Join a family", style = MaterialTheme.typography.headlineMedium)
     Text("Paste the invitation link a caregiver sent you. It works once, for 24 hours.")
@@ -88,35 +88,50 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         scope.launch {
             try {
                 val joined = joinFamily(invitation, nickname.ifBlank { null }, app.device, app.coordinator, { app.service(it) }, { app.service(it) })
-                if (joined.numberedName != null) naming = joined else onJoined()
+                val shared = joined.sharedName; val numbered = joined.numberedName
+                if (shared != null && numbered != null) naming = Naming(joined.credential.deviceID, shared, numbered) else onJoined()
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e.message ?: "Couldn't join. Check the connection and try again." }
             finally { busy = false }
         }
     }) { Text(if (busy) "Joining…" else "Join family") }
     onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
-    naming?.let { joined -> NameFamily(app, joined, onDone = { naming = null; onJoined() }) }
+    naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
+
+/** A joined family waiting to be named. Saved, so turning the phone keeps the prompt; only its device ID is, since the
+ * pairing itself stays in the secret store. */
+private data class Naming(val deviceID: String, val sharedName: String, val numberedName: String)
+private val namingSaver = listSaver<Naming?, String>(
+    save = { it?.let { naming -> listOf(naming.deviceID, naming.sharedName, naming.numberedName) } ?: emptyList() },
+    restore = { if (it.size == 3) Naming(it[0], it[1], it[2]) else null })
 
 /** Two sets of parents are often both "Mom". Left unnamed, the new one is numbered, so Porch asks now, while it's clear
  * which one it is. */
 @Composable
-private fun NameFamily(app: PorchApplication, joined: JoinedFamily, onDone: () -> Unit) {
+private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     AlertDialog(onDismissRequest = onDone,
         title = { Text("Name this family") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("You're in more than one family called ${joined.sharedName}. Until you name this one, it's ${joined.numberedName}.")
+                Text("You're in more than one family called ${naming.sharedName}. Until you name this one, it's ${naming.numberedName}.")
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
             }
         },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { app.device.setNickname(name, joined.credential); onDone() }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDone) { Text("Keep ${joined.numberedName}") } })
+        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = {
+            app.device.families.firstOrNull { it.deviceID == naming.deviceID }?.let { app.device.setNickname(name, it) }
+            onDone()
+        }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDone) { Text("Keep ${naming.numberedName}") } })
 }
 
 @Composable
 private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit) {
+    // The family being left, by device ID, while the phone asks to be sure.
+    var leaving by rememberSaveable { mutableStateOf<String?>(null) }
+    var leaveError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     Text(if (families.size == 1) "Your family" else "Your families", style = MaterialTheme.typography.headlineMedium)
     for (family in families) {
         val link = links.link(family)
@@ -134,10 +149,28 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     else -> "Checking in…"
                 })
                 if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
+                else TextButton(onClick = { leaveError = null; leaving = family.deviceID }) { Text("Leave this family") }
             }
         }
     }
     Text("This test version joins families and checks in with them. Calls, messages and caregiver mode come in later versions.",
         style = MaterialTheme.typography.bodySmall)
+    leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }
+    families.firstOrNull { it.deviceID == leaving }?.let { family ->
+        val name = app.device.familyName(family) ?: links.state(family)?.householdName ?: "this family"
+        // As on iOS (FamilyProfiles.swift): the phone leaves on the server, then forgets the family.
+        AlertDialog(onDismissRequest = { leaving = null },
+            title = { Text("Leave $name?") },
+            text = { Text("This phone stops getting their calls and messages. To join again, you'll need a new invitation.") },
+            confirmButton = { TextButton(onClick = {
+                leaving = null
+                scope.launch {
+                    try { app.coordinator.leave(family); onChanged() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { leaveError = e.message ?: "Couldn't leave. Check the connection and try again." }
+                }
+            }) { Text("Leave") } },
+            dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } })
+    }
 }
