@@ -1,26 +1,28 @@
 package com.ethanteng.helloporch
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
 
-/** A placeholder until the welcome screen in phase 2. */
+/** Porch's one activity. An invitation link that opens Porch arrives here, when it starts or while it's open. */
 class MainActivity : ComponentActivity() {
+    private val link = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        if (savedInstanceState == null) link.value = intent?.dataString
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
-                    Box(contentAlignment = Alignment.Center) { Text("Porch", style = MaterialTheme.typography.displayMedium) }
-                }
-            }
+            MaterialTheme { PorchScreens(application as PorchApplication, link.value, onLinkHandled = { link.value = null }) }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.dataString?.let { link.value = it }
     }
 }
