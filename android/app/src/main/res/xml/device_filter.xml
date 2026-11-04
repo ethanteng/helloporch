@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Cell2Jack's CH340, VID 0x1A86 and PID 0x7523, in decimal. Generic CH340 adapters share this ID, as they do on iOS. -->
+<resources>
+    <usb-device vendor-id="6790" product-id="29987" />
+</resources>
