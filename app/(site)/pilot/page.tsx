@@ -3,14 +3,18 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
+import { pageMetadata } from "@/lib/site-metadata";
 import PilotSignup from "./PilotSignup";
 import styles from "./pilot.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/pilot",
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "Try the Porch prototype at home, on an iPad or Android tablet with a big-button corded phone: what it works on, what you’ll need, what the pilot asks of you, and a short sign-up.",
-};
+    "Try the Porch prototype at home on an iPad or Android tablet with a big-button corded phone. See what you’ll need, then sign up with your email.",
+  shareTitle: "Join the Porch pilot",
+  image: { url: "/og/pilot.jpg", alt: "HelloPorch: Join the Porch pilot. Beside the Porch prototype, a tablet and a big-button phone." },
+});
 
 // What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call.
 // The links are the ones I use, on Amazon.

@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
+import { pageMetadata } from "@/lib/site-metadata";
 import styles from "./privacy.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/privacy",
   title: "Privacy Policy | HelloPorch",
   description:
     "What the Porch app and the HelloPorch website collect, why, who helps us run Porch, how long we keep information, and how to have it deleted.",
-};
+  image: { url: "/og/home.jpg", alt: "HelloPorch: the video phone for people who find phones hard." },
+});
 
 const updated = "November 2, 2026";
 // Where privacy questions and deletion requests go.

@@ -6,6 +6,7 @@ import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
 import { JoinSection, PilotButton } from "@/components/PilotJoin";
 import { WaitlistProvider } from "@/components/Waitlist";
+import { pageMetadata } from "@/lib/site-metadata";
 import FeatureTabs from "./FeatureTabs";
 import { accessibility, calling, clip, safety, type Clip, type Screenshot } from "./clips";
 import styles from "./features.module.css";
@@ -14,11 +15,14 @@ import story from "./story.module.css";
 import ThreeWayCalling from "./ThreeWayCalling";
 import WatchClip from "./WatchClip";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/features",
   title: "See How It Works | HelloPorch",
   description:
-    "Porch is for people who find phones hard: they press a face to call, big buttons work with shaky hands, Porch answers approved callers for them, messages play on their own, it speaks Mandarin, Cantonese and Spanish, and you can bring family onto a call. Watch short clips of each.",
-};
+    "Watch how Porch works: they press a face to call, Porch answers approved family for them, messages play on their own, and it speaks their language.",
+  shareTitle: "They press a face. You pick up.",
+  image: { url: "/og/features.jpg", alt: "HelloPorch: They press a face. You pick up. Beside the Porch prototype, a tablet and a big-button phone." },
+});
 
 export default function FeaturesPage() {
   return (

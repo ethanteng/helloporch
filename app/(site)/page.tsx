@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import PorchFace from "@/components/PorchFace";
@@ -10,6 +11,15 @@ import styles from "./_home/home.module.css";
 import { clip } from "./features/clips";
 import { AddPersonIcon, PhoneIcon, TextIcon } from "./features/icons";
 import WatchClip from "./features/WatchClip";
+import { pageMetadata } from "@/lib/site-metadata";
+
+export const metadata: Metadata = pageMetadata({
+  path: "/",
+  title: "HelloPorch | A video phone for people with dementia, Parkinson’s or shaky hands",
+  description: "Porch is a tablet and a big-button keypad with photos of loved ones on the buttons. One press starts a video call. Made for Parkinson’s, dementia and shaky hands.",
+  shareTitle: "The video phone for people who find phones hard",
+  image: { url: "/og/home.jpg", alt: "HelloPorch: the video phone for people who find phones hard, beside Ethan’s mom on her first Porch call." },
+});
 
 // Who Porch is for and what it is, beside Mom's first real call; what's hard for them; who can call; and the pilot as
 // the way to try it now, with the keypad we're designing and its waitlist after.

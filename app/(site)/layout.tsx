@@ -1,16 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Sans, Newsreader } from "next/font/google";
 import Analytics from "@/components/Analytics";
+import { SITE_URL } from "@/lib/site-metadata";
 import "./globals.css";
 
 const serif = Newsreader({ subsets: ["latin"], style: ["normal", "italic"], axes: ["opsz"], variable: "--font-serif" });
 const sans = DM_Sans({ subsets: ["latin"], axes: ["opsz"], variable: "--font-sans" });
 const brand = Bricolage_Grotesque({ subsets: ["latin"], axes: ["opsz"], variable: "--font-brand" });
 
+// Pages set their own titles, descriptions, canonical links and link previews (lib/site-metadata.ts); these are the
+// fallback, and metadataBase turns their relative URLs into helloporch.store ones.
 export const metadata: Metadata = {
-  title: "HelloPorch | One-button video calling for dementia & Parkinson’s",
-  description:
-    "HelloPorch makes one-button video calling simpler for people with Parkinson’s, dementia, and limited dexterity, with a tablet and large physical photo buttons.",
+  metadataBase: new URL(SITE_URL),
+  title: "HelloPorch | A video phone for people with dementia, Parkinson’s or shaky hands",
+  description: "Porch is a tablet and a big-button keypad with photos of loved ones on the buttons. One press starts a video call. Made for Parkinson’s, dementia and shaky hands.",
 };
 
 export const viewport: Viewport = {

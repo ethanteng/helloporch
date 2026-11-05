@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SiteNav from "@/components/SiteNav";
+import { pageMetadata } from "@/lib/site-metadata";
 import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
 import { JoinSection } from "@/components/PilotJoin";
@@ -7,22 +8,15 @@ import { WaitlistProvider } from "@/components/Waitlist";
 import { introduction, chapters } from "./films";
 import styles from "./story.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/story",
   title: "Our Story | HelloPorch",
   description:
     "My mom has Parkinson’s and dementia, and her phone got too hard for her to use. These short videos explain why I’m building HelloPorch for her.",
-  openGraph: {
-    title: "I’m building HelloPorch for my mom.",
-    description: "My mom’s phone got too hard for her to use, so I’m building something simpler.",
-    type: "website",
-    images: [{ url: introduction.poster, width: 1920, height: 1080, alt: "HelloPorch: Built for my mom. One-press video calling." }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "I’m building HelloPorch for my mom.",
-    images: [introduction.poster],
-  },
-};
+  shareTitle: "I’m building HelloPorch for my mom.",
+  shareDescription: "My mom’s phone got too hard for her to use, so I’m building something simpler.",
+  image: { url: introduction.poster, width: 1920, height: 1080, alt: "HelloPorch: Built for my mom. One-press video calling." },
+});
 
 export default function StoryPage() {
   return (
