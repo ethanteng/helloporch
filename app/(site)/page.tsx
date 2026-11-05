@@ -17,8 +17,8 @@ export const metadata: Metadata = pageMetadata({
   path: "/",
   title: "HelloPorch | A video phone for people with dementia, Parkinson’s or shaky hands",
   description: "Porch is a tablet and a big-button keypad with photos of loved ones on the buttons. One press starts a video call. Made for Parkinson’s, dementia and shaky hands.",
-  shareTitle: "The video phone for people who find phones hard",
-  image: { url: "/og/home.jpg", alt: "HelloPorch: the video phone for people who find phones hard, beside Ethan’s mom on her first Porch call." },
+  shareTitle: "Video calling for people who struggle with phones",
+  image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones, beside Ethan’s mom on her first Porch call." },
 });
 
 // Who Porch is for and what it is, beside Mom's first real call; what's hard for them; who can call; and the pilot as
@@ -32,7 +32,7 @@ export default function Home() {
         <header className={styles.splitHero}>
           <div className={styles.splitCopy}>
             <h1 className={`${styles.splitTitle} ${styles.splitTitleLong}`}>
-              The video phone for people who <em>find phones hard.</em>
+              Video calling for people who <em>struggle with phones.</em>
             </h1>
             <div className={styles.ledeGroup}>
               <p className={styles.splitLede}>

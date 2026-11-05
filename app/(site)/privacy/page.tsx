@@ -9,7 +9,7 @@ export const metadata: Metadata = pageMetadata({
   title: "Privacy Policy | HelloPorch",
   description:
     "What the Porch app and the HelloPorch website collect, why, who helps us run Porch, how long we keep information, and how to have it deleted.",
-  image: { url: "/og/home.jpg", alt: "HelloPorch: the video phone for people who find phones hard." },
+  image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
 const updated = "November 2, 2026";
