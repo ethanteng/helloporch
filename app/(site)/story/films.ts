@@ -9,9 +9,9 @@ export const introduction = {
 export const chapters = [
   {
     "id": "phone-barrier",
-    "title": "When a phone becomes a barrier.",
+    "title": "Her phone got too hard to use.",
     "duration": "28 sec",
-    "description": "My mom’s hands are slow and stiff. She forgets where her phone is, and often it isn’t charged. People call, but they can’t reach her. Something that used to be familiar has become really hard for her to use.",
+    "description": "My mom’s hands are slow and stiff. She forgets where her phone is, and it’s often not charged. So people call, and they can’t reach her.",
     "src": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/01-phone-barrier.mp4",
     "poster": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/01-phone-barrier-landscape.jpg",
     "captions": "/story/captions/01-phone-barrier.vtt",
@@ -19,9 +19,9 @@ export const chapters = [
   },
   {
     "id": "family-far-away",
-    "title": "When family lives far away.",
+    "title": "Her brother and sister live far away.",
     "duration": "26 sec",
-    "description": "My brother and I live close by, so we see our mom a lot. Her brother and sister live in another state. For them, the phone was how they stayed in touch. They still try to call, but it’s gotten really hard to connect.",
+    "description": "My brother and I live nearby, so we see our mom a lot. Her brother and sister live in another state, and the phone was how they kept in touch. They still call, but it’s gotten hard for them to reach her.",
     "src": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/02-family-far-away.mp4",
     "poster": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/02-family-far-away-landscape.jpg",
     "captions": "/story/captions/02-family-far-away.vtt",
@@ -29,9 +29,9 @@ export const chapters = [
   },
   {
     "id": "one-press",
-    "title": "Old-school speed dial. Now with video.",
+    "title": "A landline with speed dial, but with video.",
     "duration": "30 sec",
-    "description": "Think of a landline with speed dial, but with video. She presses one big physical button, and it starts a video call. When her siblings call, HelloPorch answers automatically for her. No phone to find, no screen to unlock, no app to remember.",
+    "description": "She presses one big button, and a video call starts. When her brother or sister calls, HelloPorch answers for her, so she doesn’t have to find or unlock anything.",
     "src": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/03-one-press-video-calling.mp4",
     "poster": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/03-one-press-video-calling-landscape.jpg",
     "captions": "/story/captions/03-one-press-video-calling.vtt",
@@ -39,9 +39,9 @@ export const chapters = [
   },
   {
     "id": "familiar-simple",
-    "title": "As little to figure out as possible.",
+    "title": "For her first, and then for other families.",
     "duration": "30 sec",
-    "description": "I want HelloPorch to feel familiar to my mom. Remembering the steps and physically using a phone have become too much of a barrier. I’m building this for her, and I hope what I learn can eventually be useful to other families too.",
+    "description": "I want it to feel familiar, with as little as possible for her to figure out. I’m building it for her first, and I hope it helps other families too. I’ll share what I learn along the way.",
     "src": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/04-familiar-simple.mp4",
     "poster": "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/04-familiar-simple-landscape.jpg",
     "captions": "/story/captions/04-familiar-simple.vtt",
