@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files Porch hands to another app, such as the Porch number's contact card. Only this folder of the cache. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

@@ -145,6 +145,8 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     bedside != null -> "${bedside.name}'s ${if (bedside.platform == "android") "tablet" else "iPad"} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
                     else -> "Checking in…"
                 })
+                // Anyone can call the bedside on its own number, from any phone.
+                state?.porchNumber?.takeIf { link.accessRemoved != true }?.let { PorchNumberCard(bedside?.name ?: state.householdName, it) }
                 if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
                 else TextButton(onClick = { leaveError = null; leaving = family.deviceID }) { Text("Leave this family") }
             }

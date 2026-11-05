@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2's bedside setup, welcome, replacement and Cell2Jack transport are built and checked in the emulator; the Cell2Jack itself, QR joining from a real phone, and the family Porch number card are still to do.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is built and checked in the emulator (#116 and the family Porch number card); what's left of it needs hardware: the Cell2Jack on a real tablet, and QR joining from a real phone once a signed build is in assetlinks.json.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
