@@ -74,8 +74,8 @@ export default function Home() {
                 </div>
               </div>
               <p className={styles.needIf}>If their hands shake</p>
-              <h3>Big, firm buttons.</h3>
-              <p>A light tap works, and so does a heavy press. They never have to hit a tiny icon on glass.</p>
+              <h3>Big buttons. No tiny screens.</h3>
+              <p>A light tap or a firm press works just as well. No more trying to hit tiny buttons on a touchscreen.</p>
             </article>
             <article className={styles.need}>
               <div className={styles.needArt}>
@@ -90,10 +90,10 @@ export default function Home() {
                 </div>
               </div>
               <p className={styles.needIf}>If they have memory loss</p>
-              <h3>Always where they left it.</h3>
+              <h3>Always in the same place.</h3>
               <p>
-                Porch stays plugged in on their table, so it’s never lost or out of charge. They press a face instead of
-                remembering a number, and Porch answers your calls for them.
+                Porch stays plugged in and ready to use. No lost phones, dead batteries, or remembering how to answer.
+                Porch can do that for them.
               </p>
             </article>
             <article className={styles.need}>
@@ -107,8 +107,11 @@ export default function Home() {
                 </div>
               </div>
               <p className={styles.needIf}>If English isn’t their first language</p>
-              <h3>Their own language.</h3>
-              <p>Porch shows and speaks Mandarin, Cantonese, or Spanish, and translates your texts before reading them aloud. More languages are coming soon.</p>
+              <h3>Speak their language.</h3>
+              <p>
+                Porch supports Mandarin, Cantonese, and Spanish, and can translate and read your text messages aloud in their
+                language. More languages coming soon.
+              </p>
             </article>
             <article className={styles.need}>
               <div className={styles.needArt}>
@@ -117,8 +120,8 @@ export default function Home() {
                 </div>
               </div>
               <p className={styles.needIf}>If you worry about scams</p>
-              <h3>Only people you choose.</h3>
-              <p>Unknown numbers are blocked by default. Porch only picks up for family you’ve approved.</p>
+              <h3>Only people you trust.</h3>
+              <p>You decide who can reach your loved one. Unknown callers are blocked automatically.</p>
             </article>
           </div>
         </section>
