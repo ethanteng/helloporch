@@ -39,8 +39,8 @@ const STEPS: { title: string; text?: string }[] = [
     text: "Install the Porch app on the tablet, plug in the phone and the Cell2Jack, and add the people they call most. Family and friends also install the Porch app on their phones.",
   },
   {
-    title: "They lift the receiver and press a photo to call.",
-    text: "They see and hear you on the tablet. Putting the receiver back ends the call.",
+    title: "They press your photo to call.",
+    text: "They see and hear you on the tablet, just like a regular video call.",
   },
 ];
 
