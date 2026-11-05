@@ -123,8 +123,8 @@ export default function Home() {
           }
         >
           Call any time and Porch picks up for them, but only for family you’ve approved. It says who’s calling out loud,
-          and they can press 0 to stop it. Numbers you haven’t approved are blocked from the first day, so scam calls never
-          reach them.
+          and counts down before answering. Numbers you haven’t approved are blocked by default so scam calls never reach
+          them.
         </SafetySection>
 
         <section className={styles.more} aria-labelledby="more-title">
