@@ -115,6 +115,12 @@
   color: var(--muted);
 }
 
+.kitRule a {
+  color: var(--tomato-deep);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
 .stepRow li {
   display: flex;
   gap: 18px;
@@ -211,54 +217,6 @@
   width: 100%;
 }
 
-.choice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.choice legend {
-  float: left;
-  margin-right: 6px;
-  font: 600 16px var(--sans);
-  color: var(--muted-2);
-}
-
-.choice label {
-  cursor: pointer;
-}
-
-.choice input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.choice span {
-  display: inline-block;
-  padding: 9px 16px;
-  border: 1.5px solid oklch(0.82 0.03 70);
-  border-radius: 99px;
-  background: var(--paper);
-  font: 500 16px var(--sans);
-  color: var(--ink);
-}
-
-.choice input:checked + span {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
-}
-
-.choice input:focus-visible + span {
-  outline: 2px solid var(--tomato-deep);
-  outline-offset: 2px;
-}
-
 .emailRow {
   display: flex;
   gap: 6px;
@@ -309,7 +267,7 @@
 /* ---------- B: at a glance ---------- */
 .glance {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   padding: clamp(56px, 7vw, 88px) 40px 0;
 }

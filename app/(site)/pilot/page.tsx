@@ -13,33 +13,37 @@ export const metadata: Metadata = {
 };
 
 // What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call.
-const KIT: { name: string; rule: string; optional?: boolean; photo: string }[] = [
+// The links are the ones I use, on Amazon.
+const KIT: { name: string; rule: string; optional?: boolean; photo: string; href?: string }[] = [
   { name: "A tablet", rule: "iPad or Android", photo: "/pilot/ipad.jpg" },
-  { name: "A big-button corded phone", rule: "Any brand", photo: "/pilot/phone.jpg" },
-  { name: "A Cell2Jack", rule: "Must be a Cell2Jack", photo: "/pilot/cell2jack.jpg" },
-  { name: "A USB-C hub", rule: "Any brand, with a charging port", photo: "/pilot/hub.jpg" },
-  { name: "A sturdy stand", rule: "Any brand", optional: true, photo: "/pilot/stand.jpg" },
+  { name: "A big-button corded phone", rule: "Any brand", photo: "/pilot/phone.jpg", href: "https://www.amazon.com/dp/B0FZ99J2QG" },
+  { name: "A Cell2Jack", rule: "Must be a Cell2Jack", photo: "/pilot/cell2jack.jpg", href: "https://www.amazon.com/dp/B089984QRT" },
+  { name: "A USB-C hub", rule: "Any brand, with a charging port", photo: "/pilot/hub.jpg", href: "https://www.amazon.com/dp/B0BQLLB61B" },
+  { name: "A sturdy stand", rule: "Any brand", optional: true, photo: "/pilot/stand.jpg", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
 ];
 
-const ASKS = ["Answer my emails and surveys.", "Talk with me now and then.", "Tell me when things break."];
+const ASKS = ["Respond to my emails and surveys.", "Talk with me now and then.", "Tell me when things break."];
 
-const STEPS: { title: string; text: string }[] = [
-  { title: "Sign up with your email.", text: "Tell me whether they’ll use an iPad or an Android tablet." },
+const STEPS: { title: string; text?: string }[] = [
+  { title: "Sign up with your email." },
   {
-    title: "I check your tablet and send an invitation.",
+    title: "I send you an invitation via email.",
     text: "Porch isn’t in the app stores yet, so it comes through Apple’s TestFlight or Google Play’s testing program.",
   },
   {
-    title: "You set it up together.",
-    text: "Plug in the tablet, the phone and the Cell2Jack, then add the people they call most. Family install the Porch app.",
+    title: "You set it up (under 5 minutes).",
+    text: "Install the Porch app on the tablet, plug in the phone and the Cell2Jack, and add the people they call most. Family and friends also install the Porch app on their phones.",
   },
-  { title: "They lift the receiver and press a photo.", text: "They see and hear you on the tablet. Putting the receiver back ends the call." },
+  {
+    title: "They lift the receiver and press a photo to call.",
+    text: "They see and hear you on the tablet. Putting the receiver back ends the call.",
+  },
 ];
 
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Which tablets work?",
-    a: "Most recent iPads and Android tablets. After you sign up, tell me which one you have, and I’ll confirm it works before you buy anything.",
+    a: "Most recent iPads and Android tablets work.",
   },
   {
     q: "Which phone should I get?",
@@ -55,7 +59,7 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
 ];
 
-// What the pilot is and asks, with the sign-up in the first screen. Pages without their own waitlist section send the
+// What the pilot is, what it needs and asks, with the sign-up in the first screen. Pages without their own waitlist section send the
 // menu's waitlist link to the home page's.
 export default function PilotPage() {
   return (
@@ -69,8 +73,8 @@ export default function PilotPage() {
               Join the <em>Porch pilot.</em>
             </h1>
             <p className={styles.lede}>
-              Try the prototype at home, on an iPad or Android tablet with a big-button corded phone. Then tell me what works
-              and what doesn’t.
+              Try the prototype at home on an iPad or Android tablet, with a big-button corded phone. Family and friends call
+              from the Porch app on iPhone or Android. Then tell me what works and what doesn’t.
             </p>
             <div className={styles.signup}>
               <h2 className={styles.srOnly}>Sign up for the pilot</h2>
@@ -90,18 +94,6 @@ export default function PilotPage() {
 
         <section className={styles.glance} aria-label="The pilot at a glance">
           <article className={styles.glanceCard}>
-            <p className={styles.glanceLabel}>Works on</p>
-            <h3>iOS and Android</h3>
-            <ul className={styles.glanceList}>
-              <li>
-                <strong>By their bed:</strong> an iPad or an Android tablet
-              </li>
-              <li>
-                <strong>For the family:</strong> the Porch app on iPhone or Android
-              </li>
-            </ul>
-          </article>
-          <article className={styles.glanceCard}>
             <p className={styles.glanceLabel}>You’ll need</p>
             <h3>A tablet and a corded phone</h3>
             <ul className={styles.kitList}>
@@ -113,7 +105,17 @@ export default function PilotPage() {
                   <span>
                     <strong>{part.name}</strong>
                     {part.optional ? <em> (optional)</em> : null}
-                    <span className={styles.kitRule}>{part.rule}</span>
+                    <span className={styles.kitRule}>
+                      {part.rule}
+                      {part.href ? (
+                        <>
+                          {" · "}
+                          <a href={part.href} target="_blank" rel="noopener noreferrer">
+                            See it on Amazon
+                          </a>
+                        </>
+                      ) : null}
+                    </span>
                   </span>
                 </li>
               ))}
@@ -141,7 +143,7 @@ export default function PilotPage() {
                   {i + 1}
                 </span>
                 <h3>{step.title}</h3>
-                <p>{step.text}</p>
+                {step.text ? <p>{step.text}</p> : null}
               </li>
             ))}
           </ol>
