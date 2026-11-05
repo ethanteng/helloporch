@@ -44,7 +44,7 @@ export default function FeaturesPage() {
                 <li>Mandarin, Cantonese, Spanish, and more soon</li>
               </ul>
               <div className={story.heroActions}>
-                <PilotButton />
+                <PilotButton size="lg" />
               </div>
             </div>
             <div className={story.heroMedia}>

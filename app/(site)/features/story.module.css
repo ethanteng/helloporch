@@ -1284,6 +1284,13 @@
   width: 100%;
 }
 
+/* As on the home page, the big pilot button spans a phone's width; its row stretches so the button can fill it. */
+@media (max-width: 760px) {
+  .heroCopy .heroActions {
+    align-self: stretch;
+  }
+}
+
 .heroActions {
   display: flex;
   flex-wrap: wrap;
