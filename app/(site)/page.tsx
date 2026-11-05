@@ -36,12 +36,12 @@ export default function Home() {
             </h1>
             <div className={styles.ledeGroup}>
               <p className={styles.splitLede}>
-                Porch is a tablet and big-button keypad with photos of friends &amp; loved ones on the buttons.{" "}
-                <strong>One button press immediately starts a video call.</strong>
+                Porch pairs a tablet with a big-button keypad, with photos of friends and loved ones on each button.{" "}
+                <strong>One press starts a video call.</strong>
               </p>
               <p className={styles.splitLede}>
-                It’s made for people with Parkinson’s, dementia, or shaky hands, and for anyone who isn’t comfortable with
-                technology.
+                It’s made for people with Parkinson’s, dementia, unsteady hands, or anyone who finds today’s phones too
+                difficult to use.
               </p>
             </div>
             <div className={styles.heroActions}>
