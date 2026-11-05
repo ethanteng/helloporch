@@ -16,6 +16,7 @@ import androidx.core.content.FileProvider
 import com.ethanteng.helloporch.core.PorchContactCard
 import com.ethanteng.helloporch.core.PorchNumber
 import java.io.File
+import java.util.UUID
 
 /** Anyone can call the bedside on its own number, from any phone, so a family phone offers to save it and share it.
  * `name` is who the Porch is for. */
@@ -45,7 +46,11 @@ private fun shareNumber(context: Context, name: String, number: String) {
     val note = PorchContactCard.note(name, number)
     val send = Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, note)
     val card = try {
-        val folder = File(context.cacheDir, "shared").apply { mkdirs() }
+        val shared = File(context.cacheDir, "shared")
+        // Each share gets its own folder. Two families can both be "Mom", and a messaging app may read its attachment
+        // only when the text is sent, so a later share must not replace an earlier one's card. A day is plenty.
+        shared.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.deleteRecursively() }
+        val folder = File(shared, UUID.randomUUID().toString()).apply { mkdirs() }
         File(folder, PorchContactCard.fileName(name)).apply { writeText(PorchContactCard.vCard(name, number)) }
     } catch (_: Exception) { null }
     if (card != null) {
