@@ -52,22 +52,6 @@ const CHAPTERS: Chapter[] = [
     tint: "oklch(0.88 0.075 80)",
   },
   {
-    id: "hands",
-    kicker: "For unsteady hands",
-    title: "Buttons they can actually press.",
-    body: (
-      <>
-        <p>
-          My mom’s Parkinson’s has made her hands slow and stiff. Touchscreens became almost impossible for her to use.
-          Porch uses big, firm buttons with plenty of space between them. A light tap works, and so does a heavy press.
-        </p>
-      </>
-    ),
-    watch: [{ id: "choosing-the-keypad", label: "The keypads we tried" }],
-    scene: <HandsScene />,
-    tint: "oklch(0.9 0.035 70)",
-  },
-  {
     id: "pickup",
     kicker: "When you call them",
     title: "Porch picks up for them.",
@@ -86,6 +70,22 @@ const CHAPTERS: Chapter[] = [
     watch: [{ id: "video-drop-in", label: "A video drop-in" }],
     scene: <PickupScene />,
     tint: "oklch(0.87 0.05 45)",
+  },
+  {
+    id: "hands",
+    kicker: "For unsteady hands",
+    title: "Buttons they can actually press.",
+    body: (
+      <>
+        <p>
+          My mom’s Parkinson’s has made her hands slow and stiff. Touchscreens became almost impossible for her to use.
+          Porch uses big, firm buttons with plenty of space between them. A light tap works, and so does a heavy press.
+        </p>
+      </>
+    ),
+    watch: [{ id: "choosing-the-keypad", label: "The keypads we tried" }],
+    scene: <HandsScene />,
+    tint: "oklch(0.9 0.035 70)",
   },
   {
     id: "messages",
