@@ -119,6 +119,9 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
     private var foreground = false
     private var wanted = false
     private var asking = false
+    /** The plugging-in ([UsbDevice.getDeviceId]) the bedside last asked about by itself, so an answer of no isn't asked
+     * again until the Cell2Jack is plugged back in. */
+    private var askedAbout: Int? = null
     private var job: Job? = null
     private var stopping: Job? = null
     private var tokens = 0
@@ -167,6 +170,7 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
     fun setEnabled(value: Boolean) {
         Cell2JackSettings.setEnabled(settings, value)
         _enabled.value = value
+        askIfNeeded()
         refresh()
     }
 
@@ -181,6 +185,7 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
         foreground = true
         if (enabled.value) record("sceneActive", "trying" to trying)
         updateAccess()
+        askIfNeeded()
         refresh()
     }
 
@@ -222,6 +227,21 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
         // denial never comes back. The package keeps the broadcast inside Porch; the receiver checks UsbManager itself.
         val intent = Intent(permissionAction).setPackage(context.packageName)
         usb.requestPermission(device, PendingIntent.getBroadcast(context, 0, intent, permissionIntentFlags))
+    }
+
+    /**
+     * The phone keypad is on and the bedside is in front, but Android hasn't let Porch use the Cell2Jack: ask, once each
+     * time it's plugged in. Android forgets the permission when the tablet restarts. [Cell2JackAttachedActivity] lets
+     * Android give it back at startup, and this is for when that didn't happen; without it the phone stays silent until
+     * someone plugs the Cell2Jack back in. Plugged in while Porch is open, Android asks by itself, so this waits for the
+     * bedside to come to the front. Setup's Connect the phone screen asks for itself, with the keypad off.
+     */
+    private fun askIfNeeded() {
+        if (!enabled.value || !foreground) return
+        val device = findDevice() ?: return
+        if (usb.hasPermission(device) || asking || askedAbout == device.deviceId) return
+        askedAbout = device.deviceId
+        requestPermission()
     }
 
     /** Adds to the diagnostics while the phone keypad is on or connected, as call screens do on iOS. */

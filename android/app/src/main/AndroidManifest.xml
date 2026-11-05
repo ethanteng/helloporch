@@ -48,7 +48,19 @@
                 <data android:host="pair" />
                 <data android:host="activate" />
             </intent-filter>
-            <!-- The Cell2Jack. Plugged in, Android offers to always open Porch for it, which also lets Porch use it. -->
+        </activity>
+        <!-- The Cell2Jack. Plugged in, Android offers to always open Porch for it, which also lets Porch use it. This
+             activity takes it rather than MainActivity because it can run before the tablet is unlocked, so Android lets
+             Porch use a Cell2Jack that was plugged in when the tablet started up. -->
+        <activity
+            android:name=".Cell2JackAttachedActivity"
+            android:directBootAware="true"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:process=":usb"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
