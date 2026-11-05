@@ -77,10 +77,11 @@ export default function FeaturesPage() {
           <section id="clips" className={styles.library} aria-labelledby="clips-title">
             <div className={styles.libraryHead}>
               <h2 id="clips-title" className={styles.libraryTitle}>
-                Watch it <em>all.</em>
+                See it for <em>yourself.</em>
               </h2>
               <p className={styles.lede}>
-                Short clips of real calls on the Porch prototype, from the button they press to the phone in your hand.
+                These are real clips from the Porch prototype, including my mom’s first call and some of the key features we’ve
+                built since.
               </p>
             </div>
 
