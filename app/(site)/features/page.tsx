@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import SiteNav from "@/components/SiteNav";
@@ -12,7 +11,6 @@ import { accessibility, calling, clip, safety, type Clip, type Screenshot } from
 import styles from "./features.module.css";
 import Story from "./Story";
 import story from "./story.module.css";
-import ThreeWayCalling from "./ThreeWayCalling";
 import WatchClip from "./WatchClip";
 
 export const metadata: Metadata = pageMetadata({
@@ -20,8 +18,8 @@ export const metadata: Metadata = pageMetadata({
   title: "See How It Works | HelloPorch",
   description:
     "Watch how Porch works: they press a face to call, Porch answers approved family for them, messages play on their own, and it speaks their language.",
-  shareTitle: "They press a face. You pick up.",
-  image: { url: "/og/features.jpg", alt: "HelloPorch: They press a face. You pick up. Beside the Porch prototype, a tablet and a big-button phone." },
+  shareTitle: "Video calls, at the press of a button.",
+  image: { url: "/og/features.jpg", alt: "HelloPorch: Video calls, at the press of a button. Beside the Porch prototype, a tablet and a big-button phone." },
 });
 
 export default function FeaturesPage() {
@@ -34,7 +32,7 @@ export default function FeaturesPage() {
           <header className={story.hero}>
             <div className={story.heroCopy}>
               <h1 className={story.title}>
-                They press a face. <em>You pick up.</em>
+                Video calls, <em>at the press of a button.</em>
               </h1>
               <p className={story.lede}>
                 Porch makes video calling easy for people who struggle with phones. It’s a tablet and big-button phone with
@@ -77,10 +75,11 @@ export default function FeaturesPage() {
           <section id="clips" className={styles.library} aria-labelledby="clips-title">
             <div className={styles.libraryHead}>
               <h2 id="clips-title" className={styles.libraryTitle}>
-                Watch it <em>all.</em>
+                See it for <em>yourself.</em>
               </h2>
               <p className={styles.lede}>
-                Short clips of real calls on the Porch prototype, from the button they press to the phone in your hand.
+                These are real clips from the Porch prototype, including my mom’s first call and some of the key features we’ve
+                built since.
               </p>
             </div>
 
@@ -89,11 +88,7 @@ export default function FeaturesPage() {
                 {
                   id: "calling",
                   label: "Calling",
-                  content: (
-                    <Clips clips={calling}>
-                      <ThreeWayCalling />
-                    </Clips>
-                  ),
+                  content: <Clips clips={calling} />,
                 },
                 { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
                 { id: "safety", label: "Safety", content: <Screenshots shots={safety} /> },
@@ -110,8 +105,7 @@ export default function FeaturesPage() {
   );
 }
 
-// `children` follow the clips, such as an entry shown with screens instead of a clip.
-function Clips({ clips, children }: { clips: Clip[]; children?: ReactNode }) {
+function Clips({ clips }: { clips: Clip[] }) {
   return (
     <div className={styles.clips}>
       {clips.map((clip) => (
@@ -131,7 +125,6 @@ function Clips({ clips, children }: { clips: Clip[]; children?: ReactNode }) {
           </div>
         </article>
       ))}
-      {children}
     </div>
   );
 }
