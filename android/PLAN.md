@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is built and checked in the emulator (#116 and the family Porch number card); what's left of it needs hardware: the Cell2Jack on a real tablet, and QR joining from a real phone once a signed build is in assetlinks.json.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is merged (#116, #117) and checked in the emulator. On 2026-11-05 a real tablet (a MUISOO KB10) set up against the local server and passed the Cell2Jack key test, and the Cell2Jack now keeps working after the tablet restarts; see [first tablet](#first-tablet-muisoo-kb10). What's left of phase 2 is QR joining from a real phone, once a signed build is in assetlinks.json.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
@@ -181,6 +181,22 @@ On each candidate tablet:
 6. **Video call.** Check echo cancellation, speaker volume, and where the camera sits on the stand.
 
 Exit criteria: at least one tablet model passes everything. That model becomes the one the pilot page lists.
+
+#### First tablet: MUISOO KB10
+
+Checked 2026-11-05 with the debug build and the local server, over wireless debugging (the Cell2Jack takes the only USB-C port).
+
+- **Passed.**
+  - Android 16 with a smallest width of 800 dp, so Porch offers bedside mode.
+  - The Cell2Jack connects straight to the tablet: CH340 version `0x31`, 2 Mbaud, firmware `a06`. Porch heard 0–9, `*`, `#` and the receiver going back.
+  - "Always open Porch" is remembered across unplugging, and Porch stops the Cell2Jack when it leaves the front and reconnects when it comes back.
+  - After a restart, Android gives Porch the Cell2Jack again before the tablet unlocks, through a direct-boot-aware activity; see [Cell2Jack](#cell2jack).
+- **Against it.**
+  - It's an Android Go device (`ro.config.low_ram`, 2.8 GB). Check what Go limits once calls exist: full-screen intents, background work, and LiveKit video on 3 GB.
+  - Its firmware clears the screen lock and restarts ("reboot for clean password") after a Volume Up/Down sequence and Power on the lock screen. That's fine for a bedside with no screen lock, but not for a family member's own tablet.
+- **Not checked yet.**
+  - Charging: powering the Cell2Jack from its own port drained it from 95% to 92% in a few minutes. It needs the hub with power passthrough, and an overnight run.
+  - Each connection gets no data after its first `/d` and connects on the second try, about 3 s later. Compare with the iPad's log before treating it as normal.
 
 ## Phase 1: foundations
 
@@ -620,6 +636,7 @@ Used by the bedside tablet from phase 2.
   - Off by default for existing installs. Setup turns it on once the phone answers.
   - It runs only in bedside mode with Porch in the foreground. On pause, send `/q` and close the connection.
   - Reconnect after 1, 2, 4, 8, then 15 s. The delay resets after 30 s of a healthy connection.
+  - **After a restart.** Android forgets the USB permission when the tablet restarts, and it looks for the app to open for a plugged-in Cell2Jack before the tablet is unlocked. So `USB_DEVICE_ATTACHED` goes to `Cell2JackAttachedActivity`, which is direct-boot-aware and runs in its own `:usb` process where `PorchApplication` starts nothing; opening it is what gives Porch the permission. Once the tablet is unlocked, it opens `MainActivity`. If Porch still can't use the Cell2Jack, the bedside asks once each time it's plugged in, when it comes to the front with the phone keypad on.
 - **Status and diagnostics.** "Phone keypad ready" shows for 3 s. Diagnostics keep the last 200 actions and a 64 KiB raw tail.
 
 ## Phase 7: hardening and release
