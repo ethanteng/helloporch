@@ -108,7 +108,7 @@ export default function Home() {
               </div>
               <p className={styles.needIf}>If you worry about scams</p>
               <h3>Only people you choose.</h3>
-              <p>Unknown numbers are blocked from day one. Porch only picks up for family you’ve approved.</p>
+              <p>Unknown numbers are blocked by default. Porch only picks up for family you’ve approved.</p>
             </article>
           </div>
         </section>

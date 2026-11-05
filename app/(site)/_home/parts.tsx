@@ -143,7 +143,7 @@ export function SafetySection({ title, children }: { title: ReactNode; children:
             <SpeakerIcon /> Porch says who it is, out loud, first
           </li>
           <li>
-            <ShieldIcon /> Unknown numbers are blocked from day one
+            <ShieldIcon /> Unknown numbers are blocked by default
           </li>
         </ul>
       </div>
