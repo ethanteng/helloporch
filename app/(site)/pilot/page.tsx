@@ -26,40 +26,47 @@ const KIT: { name: string; rule: string; optional?: boolean; photo: string; href
   { name: "A sturdy stand", rule: "Any brand", optional: true, photo: "/pilot/stand.jpg", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
 ];
 
-const ASKS = ["Respond to my emails and surveys.", "Talk with me now and then.", "Tell me when things break."];
-
-const STEPS: { title: string; text?: string }[] = [
-  { title: "Sign up with your email." },
+// Each step's text, one paragraph per entry.
+const STEPS: { title: string; text: string[] }[] = [
   {
-    title: "I send you an invitation via email.",
-    text: "Porch isn’t in the app stores yet, so it comes through Apple’s TestFlight or Google Play’s testing program.",
+    title: "Leave your email.",
+    text: ["I’ll reach out with an invitation and instructions for getting started."],
   },
   {
-    title: "You set it up (under 5 minutes).",
-    text: "Install the Porch app on the tablet, plug in the phone and the Cell2Jack, and add the people they call most. Family and friends also install the Porch app on their phones.",
+    title: "Install Porch.",
+    text: ["Porch isn’t in the app stores yet. You’ll get it through Apple’s TestFlight or Google Play’s testing program."],
   },
   {
-    title: "They press your photo to call.",
-    text: "They see and hear you on the tablet, just like a regular video call.",
+    title: "Set it up for your family.",
+    text: [
+      "Connect the tablet and phone, add the people your loved one calls most, and have family members install the Porch app.",
+    ],
+  },
+  {
+    title: "Start calling.",
+    text: [
+      "They press your photo to call. They see and hear you on the tablet, and can use the familiar phone receiver if they prefer.",
+      "When you call them, Porch can even answer automatically.",
+    ],
   },
 ];
 
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
-    q: "Which tablets work?",
-    a: "Most recent iPads and Android tablets work.",
+    q: "Can I use a tablet I already own?",
+    a: "Most recent iPads and Android tablets should work, but compatibility depends on the model and accessories.",
   },
   {
-    q: "Which phone should I get?",
-    a: "Any corded home phone with big number keys. Photo slots on the keys make it easiest. The adapter that connects it has to be a Cell2Jack.",
+    q: "Do I need a special phone?",
+    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it.",
   },
   {
-    q: "How does the family call?",
-    a: "With the Porch app on an iPhone or Android phone. If they miss a call in the app, Porch rings their regular number instead.",
+    q: "How do family members call?",
+    a: "Through the Porch app on their iPhone or Android phone. If they miss a video call, Porch can ring their regular phone number instead.",
   },
   {
-    q: "Does Porch speak their language?",
-    a: "Porch speaks English, Mandarin, Cantonese and Spanish, and more languages are coming. Tell me if your family needs another.",
+    q: "Can Porch speak another language?",
+    a: "Yes! Porch supports English, Mandarin, Cantonese, and Spanish, with more languages on the way. Let me know if there’s another language your family needs.",
   },
 ];
 
@@ -75,10 +82,14 @@ export default function PilotPage() {
             <h1 className={styles.title}>
               Join the <em>Porch pilot.</em>
             </h1>
-            <p className={styles.lede}>
-              Try the prototype at home on an iPad or Android tablet, with a big-button corded phone. Family and friends call
-              from the Porch app on iPhone or Android. Then tell me what works and what doesn’t.
-            </p>
+            <div className={styles.lede}>
+              <p>I’m inviting families to try Porch at home with their loved ones.</p>
+              <p>
+                The prototype runs on an iPad or Android tablet, paired with a big-button corded phone. Family and friends use
+                the Porch app on their own phones to make video calls.
+              </p>
+              <p>All I ask in return is your honest feedback. What’s working, what’s confusing, and what could be better.</p>
+            </div>
             <div className={styles.signup}>
               <h2 className={styles.srOnly}>Sign up for the pilot</h2>
               <PilotSignup />
@@ -97,8 +108,12 @@ export default function PilotPage() {
 
         <section className={styles.glance} aria-label="The pilot at a glance">
           <article className={styles.glanceCard}>
-            <p className={styles.glanceLabel}>You’ll need</p>
-            <h3>A tablet and a corded phone</h3>
+            <h2 className={styles.glanceLabel}>What you’ll need.</h2>
+            <h3>A tablet, a phone, and a couple of adapters.</h3>
+            <p className={styles.glanceText}>
+              Porch works with a compatible iPad or Android tablet and a big-button corded phone. You’ll also need a Cell2Jack
+              adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
+            </p>
             <ul className={styles.kitList}>
               {KIT.map((part) => (
                 <li key={part.name}>
@@ -125,13 +140,13 @@ export default function PilotPage() {
             </ul>
           </article>
           <article className={styles.glanceCard}>
-            <p className={styles.glanceLabel}>I’ll ask you to</p>
-            <h3>Tell me how it goes</h3>
-            <ul className={styles.glanceList}>
-              {ASKS.map((ask) => (
-                <li key={ask}>{ask}</li>
-              ))}
-            </ul>
+            <h2 className={styles.glanceLabel}>What I’ll ask of you.</h2>
+            <h3>Just tell me how it’s going.</h3>
+            <p className={styles.glanceText}>
+              Try Porch with your loved one and let me know what works and what doesn’t. I’ll check in occasionally by email or
+              a quick conversation.
+            </p>
+            <p className={styles.glanceText}>And if something breaks or gets confusing, I definitely want to know about it.</p>
           </article>
         </section>
 
@@ -146,7 +161,9 @@ export default function PilotPage() {
                   {i + 1}
                 </span>
                 <h3>{step.title}</h3>
-                {step.text ? <p>{step.text}</p> : null}
+                {step.text.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
               </li>
             ))}
           </ol>
@@ -154,7 +171,7 @@ export default function PilotPage() {
 
         <section className={`${styles.band} ${styles.lastBand}`} aria-labelledby="faq-title">
           <h2 id="faq-title" className={styles.h2}>
-            A few <em>questions.</em>
+            A few common <em>questions.</em>
           </h2>
           <div className={styles.faq}>
             {QUESTIONS.map(({ q, a }) => (
