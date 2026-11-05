@@ -108,6 +108,8 @@ class PorchApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Cell2JackAttachedActivity's process can start before the tablet is unlocked, when nothing here can be read.
+        if (Application.getProcessName().endsWith(Cell2JackAttachedActivity.processSuffix)) return
         // Porch checks in while it's open and tells each family when it closes. Push wakes it for calls (phase 3).
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) { onScreen = true; coordinator.start() }
