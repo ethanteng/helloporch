@@ -68,6 +68,12 @@ const call = async (action, values = {}, credential, code) => {
 
 const bedside = await call('createHousehold', { name: 'Mom', deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') }, undefined, setupCode);
 await call('initializeCaregiverPIN', { pin }, bedside.credential);
+// Every household has its own number. This one is made up, and shown on family phones' Porch number card.
+{
+  const key = `house:${bedside.state.householdID}`, raw = await store.get(key), house = JSON.parse(raw);
+  house.porchNumber = { number: '+15105550100', assignedAt: Math.floor(Date.now() / 1000) };
+  await store.compareAndSet(key, raw, JSON.stringify(house));
+}
 const invite = async name => (await call('createInvite', { name, permissions: { audio: true, video: true }, caregiver: true }, bedside.credential, pin)).code;
 // A new bedside's setup link, as the admin page's invitation sends it: the operator's code authorizes one new household.
 const activation = async () => (await call('createBedsideInvite', {}, undefined, setupCode)).code;
