@@ -1,0 +1,159 @@
+/* The pilot button, and the closing section that asks families to join the pilot, with the waitlist as a quiet
+   second line. */
+
+/* ---------- Pilot-first buttons, and the waitlist card in the join section ---------- */
+.ctaPrimary,
+.ctaHoney {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 58px;
+  padding: 0 28px;
+  border-radius: 99px;
+  font: 600 18px var(--sans);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.ctaPrimary {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 10px 30px -16px oklch(0.4 0.05 60 / 0.5);
+}
+
+.ctaPrimary:hover {
+  background: var(--tomato-deep);
+}
+
+.ctaHoney {
+  background: oklch(0.85 0.1 80);
+  color: var(--ink);
+}
+
+.ctaHoney:hover {
+  background: oklch(0.8 0.11 80);
+}
+
+.ctaPrimary:focus-visible,
+.ctaHoney:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 3px;
+}
+
+.pilotKicker {
+  font: 600 14px var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: oklch(0.85 0.1 80);
+}
+
+.joinActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.joinNote {
+  font: 400 15px/1.4 var(--sans);
+  color: oklch(0.82 0.02 70);
+}
+
+.joinPhoto {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 28px;
+}
+
+.joinPhoto img {
+  object-fit: cover;
+  object-position: 50% 50%;
+}
+
+.waitQuiet {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 28px;
+  padding-top: 28px;
+  border-top: 1px solid oklch(0.42 0.03 45);
+}
+
+.waitQuiet p {
+  flex: 1 1 340px;
+  max-width: 620px;
+  font: 400 15px/1.55 var(--sans);
+  color: oklch(0.78 0.02 70);
+}
+
+.waitQuiet strong {
+  font-weight: 600;
+  color: oklch(0.9 0.02 70);
+}
+
+.waitQuiet :global(.pill-form) {
+  flex: 0 1 380px;
+  max-width: 380px;
+  padding: 4px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px oklch(0.52 0.03 45);
+}
+
+.waitQuiet :global(.pill-form input) {
+  height: 40px;
+  padding: 0 14px;
+  font-size: 15px;
+  color: #fff;
+}
+
+.waitQuiet :global(.pill-form button) {
+  height: 40px;
+  padding: 0 18px;
+  background: transparent;
+  color: oklch(0.85 0.1 80);
+  font: 600 15px var(--sans);
+}
+
+.waitQuiet :global(.pill-form button:hover) {
+  background: oklch(0.36 0.04 45);
+}
+
+@media (max-width: 760px) {
+  .waitQuiet :global(.pill-form) {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .ctaPrimary,
+  .ctaHoney {
+    height: 54px;
+    padding: 0 24px;
+    font-size: 17px;
+  }
+}
+
+/* ---------- Combined page: a bigger pilot button, and the clip under the photo ---------- */
+.ctaLg {
+  height: 72px;
+  padding: 0 40px;
+  gap: 12px;
+  font-size: 22px;
+}
+
+.ctaLg svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 760px) {
+  .ctaLg {
+    width: 100%;
+    justify-content: center;
+    height: 64px;
+    font-size: 20px;
+  }
+}

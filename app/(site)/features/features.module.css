@@ -161,51 +161,6 @@
   border-radius: 26px;
 }
 
-.join {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-  margin: 0 clamp(16px, 3vw, 40px) clamp(32px, 3vw, 40px);
-  padding: clamp(40px, 6vw, 72px) clamp(20px, 6vw, 72px);
-  border-radius: clamp(32px, 4vw, 48px);
-  background: oklch(0.3 0.04 45);
-  color: #fff;
-  text-align: center;
-  scroll-margin-top: 24px;
-}
-
-.join h2 {
-  max-width: 700px;
-  font: 400 clamp(44px, 5.5vw, 64px) / 1.05 var(--serif);
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-}
-
-.join h2 em {
-  color: oklch(0.85 0.1 80);
-}
-
-.joinBody {
-  max-width: 600px;
-  color: oklch(0.88 0.02 70);
-  font: 400 clamp(17px, 1.8vw, 19px) / 1.6 var(--sans);
-  text-wrap: pretty;
-}
-
-.signup {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  width: 100%;
-  max-width: 560px;
-}
-
-.signup :global(.who-options) {
-  justify-content: center;
-}
-
 @media (max-width: 900px) {
   .clips {
     max-width: 440px;

@@ -1,126 +1,85 @@
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
-import DemoVideo from "@/components/DemoVideo";
 import PorchFace from "@/components/PorchFace";
-import PorchKeypad, { ScreenKey } from "@/components/PorchKeypad";
-import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
-import { HeroWaitlist, JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
+import SiteNav from "@/components/SiteNav";
+import { WaitlistProvider } from "@/components/Waitlist";
+import { Arrow, JoinSection, PilotButton } from "@/components/PilotJoin";
+import { CallLog, Compare, DeviceIllustration, FounderNote, KeysCloseUp, SafetySection } from "./_home/parts";
+import styles from "./_home/home.module.css";
+import { clip } from "./features/clips";
+import { AddPersonIcon, PhoneIcon, TextIcon } from "./features/icons";
+import WatchClip from "./features/WatchClip";
+import { pageMetadata } from "@/lib/site-metadata";
 
-const PHONE_STEPS = ["Unlock the phone", "Find the video app", "Scroll to Sarah", "Tap the tiny camera icon"];
+export const metadata: Metadata = pageMetadata({
+  path: "/",
+  title: "HelloPorch | A video phone for people with dementia, Parkinson’s or shaky hands",
+  description: "Porch is a tablet and a big-button keypad with photos of loved ones on the buttons. One press starts a video call. Made for Parkinson’s, dementia and shaky hands.",
+  shareTitle: "The video phone for people who find phones hard",
+  image: { url: "/og/home.jpg", alt: "HelloPorch: the video phone for people who find phones hard, beside Ethan’s mom on her first Porch call." },
+});
 
+// Who Porch is for and what it is, beside Mom's first real call; what's hard for them; who can call; and the pilot as
+// the way to try it now, with the keypad we're designing and its waitlist after.
 export default function Home() {
   return (
     <WaitlistProvider>
       <div className="page">
         <SiteNav />
 
-        <header className="hero">
-          <div className="hero__badge">
-            One-step video calling for your loved ones with Parkinson&rsquo;s, dementia, or unsteady hands.
+        <header className={styles.splitHero}>
+          <div className={styles.splitCopy}>
+            <h1 className={`${styles.splitTitle} ${styles.splitTitleLong}`}>
+              The video phone for people who <em>find phones hard.</em>
+            </h1>
+            <div className={styles.ledeGroup}>
+              <p className={styles.splitLede}>
+                Porch is a tablet and big-button keypad with photos of friends &amp; loved ones on the buttons.{" "}
+                <strong>One button press immediately starts a video call.</strong>
+              </p>
+              <p className={styles.splitLede}>
+                It’s made for people with Parkinson’s, dementia, or shaky hands, and for anyone who isn’t comfortable with
+                technology.
+              </p>
+            </div>
+            <div className={styles.heroActions}>
+              <PilotButton size="lg" />
+            </div>
           </div>
-          <h1 className="hero__title">
-            Speed dial, <em>with video.</em>
-          </h1>
-          <p className="hero__lede">
-            Porch is a tablet and a large-button keypad with familiar faces. No apps, no passwords.{" "}
-            <strong>One press starts a video call.</strong>
-          </p>
-          <HeroWaitlist />
-          <Link href="/features" className="hero__secondary">
-            <span className="hero__secondary-icon" aria-hidden="true">
-              <svg viewBox="0 0 12 12" width="16" height="16">
-                <path d="M3 1.5v9l7.5-4.5z" fill="currentColor" />
-              </svg>
-            </span>
-            See how it works
-          </Link>
+          <div className={styles.heroMedia}>
+            <figure className={styles.momPhoto}>
+              <Image
+                src="/features/first-real-call.jpg"
+                alt="Ethan's mom at her desk, holding the handset of a big-button phone, talking to her son on the tablet beside it."
+                fill
+                preload
+                sizes="(max-width: 900px) 100vw, 460px"
+              />
+            </figure>
+            <WatchClip clip={clip("first-real-call")} label="Watch my mom’s first real Porch call" />
+          </div>
         </header>
 
-        <section className="device" aria-label="The Porch tablet and keypad">
-          <div className="device__stage">
-            <div className="device__tablet-wrap">
-              <div className="device__tablet">
-                <div className="device__screen">
-                  <PorchFace who="sarah" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
-                  <div className="device__name">Sarah</div>
-                  <div className="device__self">
-                    <PorchFace who="walt" shape="rect" width="100%" height="100%" style={{ position: "absolute", inset: 0 }} />
-                  </div>
+        <section className={styles.needs} aria-labelledby="needs-title">
+          <h2 id="needs-title" className={styles.centerTitle}>
+            What’s hard <em>for them?</em>
+          </h2>
+          <div className={styles.needsGrid}>
+            <article className={styles.need}>
+              <div className={styles.needArt}>
+                <div style={{ zoom: 0.62 }}>
+                  <KeysCloseUp />
                 </div>
               </div>
-              <div className="device__stand" />
-            </div>
-            <PorchKeypad />
-          </div>
-        </section>
-
-        <section className="compare">
-          <div className="compare__group">
-            <h2 className="section-title section-title--sm">Four steps on a phone.</h2>
-            <ul className="compare__steps">
-              {PHONE_STEPS.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="compare__group">
-            <h2 className="section-title section-title--lg">
-              <em className="bold-italic">One on Porch.</em>
-            </h2>
-            <div className="call-pill">
-              <div className="call-pill__ring" />
-              <div className="call-pill__ring call-pill__ring--late" />
-              <div className="call-pill__face">
-                <PorchFace who="sarah" size={104} talking />
-              </div>
-              Call Sarah
-            </div>
-          </div>
-        </section>
-
-        <section className="steps">
-          <div className="steps__grid">
-            <article className="step">
-              <div className="step__art" style={{ background: "oklch(0.93 0.03 75)" }}>
-                <TableScene />
-              </div>
-              <StepText n={1} title="You set it on the table.">
-                A tablet on a sturdy stand, with a large-button keypad beside it. Plug it in once and add the people they
-                call most.
-              </StepText>
+              <p className={styles.needIf}>If their hands shake</p>
+              <h3>Big, firm buttons.</h3>
+              <p>A light tap works, and so does a heavy press. They never have to hit a tiny icon on glass.</p>
             </article>
-            <article className="step">
-              <div className="step__art step__art--center" style={{ background: "oklch(0.88 0.075 80)" }}>
-                <div className="press-face">
-                  <PorchFace who="sarah" size={164} />
-                  <div className="press-face__tap" />
-                </div>
-              </div>
-              <StepText n={2} title="They press a face.">
-                Each button has a photo and a name in large print. Start a video call with one press.
-              </StepText>
-            </article>
-            <article className="step">
-              <div className="step__art step__art--center" style={{ background: "oklch(0.87 0.05 45)" }}>
-                <div className="phone">
-                  <div className="phone__screen">
-                    <PorchFace who="walt" shape="rect" width="100%" height="100%" talking style={{ position: "absolute", inset: 0 }} />
-                    <div className="phone__caption">Dad · Porch</div>
-                  </div>
-                </div>
-              </div>
-              <StepText n={3} title="You answer on your phone.">
-                The call rings in the Porch app, like any other video call.
-              </StepText>
-            </article>
-          </div>
-        </section>
-
-        <section className="features">
-          <div className="features__grid">
-            <article className="feature">
-              <div className="feature__art">
-                <div className="incoming">
+            <article className={styles.need}>
+              <div className={styles.needArt}>
+                <div className="incoming" style={{ zoom: 0.8 }}>
                   <div className="incoming__screen">
                     <div className="incoming__face">
                       <PorchFace who="mike" size={58} />
@@ -130,110 +89,104 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <h3 className="feature__title">Call in anytime.</h3>
-              <p className="feature__body">Porch picks up for them, so they can see you without tapping anything.</p>
+              <p className={styles.needIf}>If they have memory loss</p>
+              <h3>Always where they left it.</h3>
+              <p>
+                Porch stays plugged in on their table, so it’s never lost or out of charge. They press a face instead of
+                remembering a number, and Porch answers your calls for them.
+              </p>
             </article>
-            <article className="feature">
-              <div className="feature__art">
-                <div className="big-help">HELP</div>
+            <article className={styles.need}>
+              <div className={styles.needArt}>
+                <div className={styles.langPills} aria-hidden="true">
+                  <span>普通话</span>
+                  <span>廣東話</span>
+                  <span>Español</span>
+                  <span>English</span>
+                  <span data-soon>More soon</span>
+                </div>
               </div>
-              <h3 className="feature__title">One red button for emergencies.</h3>
-              <p className="feature__body">It calls everyone on their list until someone picks up.</p>
+              <p className={styles.needIf}>If English isn’t their first language</p>
+              <h3>Their own language.</h3>
+              <p>Porch shows and speaks Mandarin, Cantonese, or Spanish, and translates your texts before reading them aloud. More languages are coming soon.</p>
             </article>
-            <article className="feature">
-              <div className="feature__art">
-                <KeysCloseUp />
+            <article className={styles.need}>
+              <div className={styles.needArt}>
+                <div style={{ zoom: 0.46 }}>
+                  <CallLog compact />
+                </div>
               </div>
-              <h3 className="feature__title">Made for unsteady hands.</h3>
-              <p className="feature__body">Large, firm buttons work with a light tap or a heavy press.</p>
+              <p className={styles.needIf}>If you worry about scams</p>
+              <h3>Only people you choose.</h3>
+              <p>Unknown numbers are blocked by default. Porch only picks up for family you’ve approved.</p>
             </article>
           </div>
         </section>
 
-        <section id="join" className="join">
-          <div className="join__copy">
-            <h2 className="join__title">
-              Get Porch <em>first.</em>
-            </h2>
-            <p className="join__body">
-              We&rsquo;re building early units now. Join the waitlist and we&rsquo;ll email you when one can be yours.
-            </p>
-            <JoinWaitlist />
+        <Compare />
+
+        <SafetySection
+          title={
+            <>
+              Only the people you choose <em>get through.</em>
+            </>
+          }
+        >
+          Call any time and Porch picks up for them, but only for family you’ve approved. It says who’s calling out loud,
+          and counts down before answering. Numbers you haven’t approved are blocked by default so scam calls never reach
+          them.
+        </SafetySection>
+
+        <section className={styles.more} aria-labelledby="more-title">
+          <h2 id="more-title" className={styles.centerTitle}>
+            A few more things <em>it does.</em>
+          </h2>
+          <div className={styles.moreGrid}>
+            <article>
+              <span className={styles.moreIcon}>
+                <TextIcon />
+              </span>
+              <h3>Messages play on their own</h3>
+              <p>Send a video or a text. When she sits down in front of the tablet, Porch plays it or reads it aloud.</p>
+            </article>
+            <article>
+              <span className={styles.moreIcon}>
+                <AddPersonIcon />
+              </span>
+              <h3>Add someone to the call</h3>
+              <p>Bring your brother onto the call, or the bank when they need to hear her say it’s OK.</p>
+            </article>
+            <article>
+              <span className={styles.moreIcon}>
+                <PhoneIcon />
+              </span>
+              <h3>It still reaches you</h3>
+              <p>Porch tries a video call in the app first. If you don’t answer, it rings your regular phone.</p>
+            </article>
           </div>
-          <div className="film">
-            <DemoVideo />
-          </div>
+          <Link href="/features" className={styles.textLink}>
+            Watch each one in action <Arrow />
+          </Link>
         </section>
+
+        <FounderNote />
+
+        <section className={styles.next} aria-labelledby="next-title">
+          <p className={styles.kicker}>What we’re building next</p>
+          <h2 id="next-title" className={styles.centerTitle}>
+            Our own <em>keypad.</em>
+          </h2>
+          <p className={styles.centerBody}>
+            Photo buttons for the people they call most, and a red button that calls everyone on their list until
+            someone picks up.
+          </p>
+        </section>
+        <DeviceIllustration tag="In design" />
+
+        <JoinSection />
 
         <SiteFooter />
       </div>
     </WaitlistProvider>
-  );
-}
-
-function StepText({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
-  return (
-    <div className="step__text">
-      <div className="step__num">{n}</div>
-      <div className="step__copy">
-        <h3 className="step__title">{title}</h3>
-        <p className="step__body">{children}</p>
-      </div>
-    </div>
-  );
-}
-
-/* Step 1: tablet on a stand and the keypad, sitting on a table in perspective. */
-function TableScene() {
-  const abs = (s: React.CSSProperties): React.CSSProperties => ({ position: "absolute", ...s });
-  return (
-    <>
-      <div style={abs({ left: 0, right: 0, bottom: 0, height: 22, background: "oklch(0.86 0.03 68)" })} />
-      <div style={abs({ left: 44, top: 206, width: 14, height: 60, background: "oklch(0.55 0.07 52)" })} />
-      <div style={abs({ right: 44, top: 206, width: 14, height: 60, background: "oklch(0.55 0.07 52)" })} />
-      <div style={abs({ left: 18, right: 18, top: 146, height: 48, background: "oklch(0.74 0.07 58)", clipPath: "polygon(7% 0,93% 0,100% 100%,0 100%)" })} />
-      <div style={abs({ left: 18, right: 18, top: 194, height: 14, background: "oklch(0.6 0.07 54)", borderRadius: "0 0 4px 4px" })} />
-      <div style={abs({ left: "50%", top: 160, width: 150, height: 16, transform: "translateX(-50%)", borderRadius: "50%", background: "radial-gradient(closest-side,oklch(0.35 0.05 50 / .45),oklch(0.35 0.05 50 / 0))" })} />
-      <div style={abs({ left: "50%", top: 184, width: 200, height: 16, transform: "translateX(-50%)", borderRadius: "50%", background: "radial-gradient(closest-side,oklch(0.35 0.05 50 / .5),oklch(0.35 0.05 50 / 0))" })} />
-      <div style={abs({ left: "50%", top: 44, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" })}>
-        <div style={{ width: 168, height: 108, padding: 6, borderRadius: 14, background: "oklch(0.24 0.02 50)", boxSizing: "border-box" }}>
-          <div style={{ height: "100%", borderRadius: 8, background: "oklch(0.945 0.02 75)", display: "grid", placeItems: "center", font: "400 14px var(--font-serif), serif", color: "oklch(0.25 0.03 45)" }}>
-            Good afternoon, Walt
-          </div>
-        </div>
-        <div style={{ width: 56, height: 22, background: "oklch(0.6 0.06 60)", clipPath: "polygon(22% 0,78% 0,100% 100%,0 100%)" }} />
-      </div>
-      <PorchKeypad style={{ position: "absolute", left: "calc(50% - 78px)", top: 120, transform: "scale(0.27)", transformOrigin: "0 0" }} />
-    </>
-  );
-}
-
-/* "Made for unsteady hands": the Sarah key pressed under a fingertip, the Mike key raised. */
-function KeysCloseUp() {
-  const abs = (s: React.CSSProperties): React.CSSProperties => ({ position: "absolute", transformStyle: "preserve-3d", ...s });
-  return (
-    <div style={{ position: "relative", width: 280, height: 200, perspective: 900 }}>
-      <div
-        style={abs({
-          left: 10,
-          top: 24,
-          width: 260,
-          height: 160,
-          borderRadius: 28,
-          background: "linear-gradient(165deg,oklch(0.995 0.003 85),oklch(0.93 0.006 80))",
-          boxShadow: "inset 0 2px 0 #fff,0 10px 0 oklch(0.84 0.008 75),0 24px 30px -14px oklch(0.3 0.05 50 / .45)",
-          transform: "rotateX(30deg) rotateY(-12deg)",
-        })}
-      >
-        <div style={abs({ left: 24, top: 30 })}>
-          <ScreenKey who="sarah" name="Sarah" pressed />
-        </div>
-        <div style={abs({ left: 136, top: 30 })}>
-          <ScreenKey who="mike" name="Mike" />
-        </div>
-        <div style={abs({ left: 26, top: 32, width: 96, height: 96, borderRadius: "50%", border: "3px solid oklch(0.64 0.17 35 / .5)", boxSizing: "border-box", transform: "translateZ(34px)" })} />
-        <div style={abs({ left: 40, top: 46, width: 68, height: 68, borderRadius: "50%", background: "oklch(0.82 0.06 55 / .6)", border: "2px solid oklch(0.97 0.02 60 / .9)", boxSizing: "border-box", transform: "translateZ(36px)" })} />
-      </div>
-    </div>
   );
 }

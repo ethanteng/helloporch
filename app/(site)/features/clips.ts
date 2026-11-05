@@ -33,7 +33,7 @@ export const calling: Clip[] = [
     id: "mom-calls-me",
     title: "One press, and you’re face to face.",
     description:
-      "They press the button with your photo on it. Your phone rings in the Porch app, you answer, and you’re seeing each other in seconds. Nothing to find, unlock, or remember.",
+      "They press the button with your photo on it. Your phone rings in the Porch app, you answer, and you’re seeing each other in seconds. They don’t have to find the phone or remember how it works.",
     duration: "15 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Mom%20Calls%20Me%20compressed.mp4",
     poster: "/features/mom-calls-me.jpg",

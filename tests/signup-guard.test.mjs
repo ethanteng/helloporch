@@ -14,7 +14,7 @@ let logs;
 let botVerdict;
 
 const routes = [
-  { name: 'pilot', POST: pilot, body: { email: 'ann@example.com', interface: 'keypad', ipad: true } },
+  { name: 'pilot', POST: pilot, body: { email: 'ann@example.com' } },
   { name: 'waitlist', POST: waitlist, body: { email: 'ann@example.com' } },
 ];
 

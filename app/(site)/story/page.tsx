@@ -1,27 +1,22 @@
 import type { Metadata } from "next";
 import SiteNav from "@/components/SiteNav";
+import { pageMetadata } from "@/lib/site-metadata";
 import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
-import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
+import { JoinSection } from "@/components/PilotJoin";
+import { WaitlistProvider } from "@/components/Waitlist";
 import { introduction, chapters } from "./films";
 import styles from "./story.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/story",
   title: "Our Story | HelloPorch",
   description:
-    "I’m building HelloPorch for my mom: one-press video calling that feels familiar. Watch our story, see the prototype, and tell me about your family.",
-  openGraph: {
-    title: "I’m building HelloPorch for my mom.",
-    description: "How a phone became a barrier to family, and why I’m trying something simpler.",
-    type: "website",
-    images: [{ url: introduction.poster, width: 1920, height: 1080, alt: "HelloPorch: Built for my mom. One-press video calling." }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "I’m building HelloPorch for my mom.",
-    images: [introduction.poster],
-  },
-};
+    "My mom has Parkinson’s and dementia, and her phone got too hard for her to use. These short videos explain why I’m building HelloPorch for her.",
+  shareTitle: "I’m building HelloPorch for my mom.",
+  shareDescription: "My mom’s phone got too hard for her to use, so I’m building something simpler.",
+  image: { url: introduction.poster, width: 1920, height: 1080, alt: "HelloPorch: Built for my mom. One-press video calling." },
+});
 
 export default function StoryPage() {
   return (
@@ -32,14 +27,13 @@ export default function StoryPage() {
 
         <main id="story">
           <header className={styles.hero}>
-            <div className="hero__badge">Our story</div>
             <h1 className={styles.title}>
               <span>I’m building HelloPorch</span>{" "}
               <em>for my mom.</em>
             </h1>
             <p className={styles.lede}>
-              Using a phone has become really hard for my mom. I’m trying to make it easier for her to
-              stay in touch with the people she loves, with something that feels familiar.
+              My mom can’t really use her phone anymore, so people who call her can’t reach her. I’m
+              building something simple enough for her to use.
             </p>
           </header>
 
@@ -52,12 +46,12 @@ export default function StoryPage() {
               className={`${styles.player} ${styles.introPlayer}`}
             />
             <div className={styles.introCopy}>
-              <p className={styles.kicker}>Start here · 2 min 09 sec</p>
-              <h2 id="intro-title">It started with my mom.</h2>
+              <p className={styles.kicker}>The full video · 2 min 09 sec</p>
+              <h2 id="intro-title">The whole story.</h2>
               <p>
                 I’m Ethan. My mom is 78 and lives in assisted living. She has advanced Parkinson’s and
-                dementia, and the phone she used to rely on has become difficult to use. This is why
-                I’m building HelloPorch, and a look at what I’m trying.
+                dementia, and she can’t really use her phone anymore. In this video I explain why I’m
+                building HelloPorch and show what I’ve made so far.
               </p>
               <Transcript text={introduction.transcript} />
             </div>
@@ -65,8 +59,8 @@ export default function StoryPage() {
 
           <section id="chapters" className={styles.chapters} aria-labelledby="chapters-title">
             <div className={styles.chaptersIntro}>
-              <h2 id="chapters-title">A little at a time.</h2>
-              <p>Prefer the short version? Here’s the same story in four clips.</p>
+              <h2 id="chapters-title">In four short clips.</h2>
+              <p>The same story, in four parts of about 30 seconds each.</p>
             </div>
             {chapters.map((chapter, index) => (
               <article key={chapter.id} id={chapter.id} className={styles.chapter} aria-labelledby={`${chapter.id}-title`}>
@@ -90,16 +84,7 @@ export default function StoryPage() {
             ))}
           </section>
 
-          <section id="join" className={styles.join} aria-labelledby="join-title">
-            <h2 id="join-title">Does this sound <em>familiar?</em></h2>
-            <p className={styles.joinBody}>
-              I know we’re not the only family facing this. If someone in your family is having a hard
-              time using a phone, join the waitlist.
-            </p>
-            <div className={styles.signup}>
-              <JoinWaitlist />
-            </div>
-          </section>
+          <JoinSection />
         </main>
 
         <SiteFooter />
