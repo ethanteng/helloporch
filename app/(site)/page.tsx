@@ -147,20 +147,23 @@ export default function Home() {
                 <TextIcon />
               </span>
               <h3>Messages play on their own</h3>
-              <p>Send a video or a text. When she sits down in front of the tablet, Porch plays it or reads it aloud.</p>
+              <p>Send your loved one a video or text message. When they sit down in front of the tablet, Porch plays it or reads it aloud.</p>
             </article>
             <article>
               <span className={styles.moreIcon}>
                 <AddPersonIcon />
               </span>
               <h3>Add someone to the call</h3>
-              <p>Bring your brother onto the call, or the bank when they need to hear her say it’s OK.</p>
+              <p>
+                Add another friend or family member to the call. You can even bring in someone from the bank when you’re
+                helping your loved one with their finances and need their approval.
+              </p>
             </article>
             <article>
               <span className={styles.moreIcon}>
                 <PhoneIcon />
               </span>
-              <h3>It still reaches you</h3>
+              <h3>Fallback to regular phone calls</h3>
               <p>Porch tries a video call in the app first. If you don’t answer, it rings your regular phone.</p>
             </article>
           </div>
