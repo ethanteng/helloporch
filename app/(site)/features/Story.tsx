@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import Image from "next/image";
 import PorchFace, { type Who } from "@/components/PorchFace";
 import { ScreenKey } from "@/components/PorchKeypad";
 import { clip } from "./clips";
@@ -37,8 +38,8 @@ const CHAPTERS: Chapter[] = [
     title: "One press, and it’s ringing.",
     body: (
       <>
-        Every button on their corded phone or keypad has a face and a name, so they know exactly who they’re calling.
-        One press starts the call. There’s nothing to dial.
+        Every button on their phone has a face and a name on it. They press yours, and your phone rings with a video
+        call. If you can’t get to the Porch app in time, Porch rings your regular number instead.
       </>
     ),
     watch: [
@@ -49,13 +50,29 @@ const CHAPTERS: Chapter[] = [
     tint: "oklch(0.88 0.075 80)",
   },
   {
+    id: "hands",
+    kicker: "For unsteady hands",
+    title: "Buttons they can actually press.",
+    body: (
+      <>
+        Parkinson’s has made my mom’s hands slow and stiff, and her phone’s touchscreen became something she couldn’t
+        really use. Porch uses a phone with big, firm buttons and space between them. A light tap works, and so does a
+        heavy press.
+      </>
+    ),
+    watch: [{ id: "choosing-the-keypad", label: "The keypads we tried" }],
+    scene: <HandsScene />,
+    tint: "oklch(0.9 0.035 70)",
+  },
+  {
     id: "pickup",
     kicker: "When you call them",
     title: "Porch picks up for them.",
     body: (
       <>
-        Porch says who’s calling, out loud, and answers on its own. They don’t have to do a thing. And every Porch has
-        its own private phone number, so you can call from the Porch app or dial it from any phone.
+        When someone you’ve approved calls, Porch says who it is out loud and answers on its own, so they don’t have to
+        do anything. Numbers you haven’t approved can’t get through at all, which keeps scam calls away. Every Porch has
+        its own phone number, so family can call from the Porch app or from any phone.
       </>
     ),
     watch: [{ id: "video-drop-in", label: "A video drop-in" }],
@@ -69,7 +86,8 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         Record a video or voice message in the Porch app, or just text their Porch number from any phone. When they sit
-        down in front of the iPad, Porch plays whatever’s waiting and reads texts aloud. Nothing to open, nothing to miss.
+        down in front of the tablet, Porch plays whatever’s waiting and reads texts aloud. They don’t have to remember to
+        check.
       </>
     ),
     watch: [
@@ -86,7 +104,8 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         Porch shows and speaks Mandarin, Cantonese, or Spanish as well as English, from the clock to its announcements.
-        Texts sent to their Porch number are translated into their language automatically.
+        Texts sent to their Porch number are translated into their language automatically. More languages are coming
+        soon.
       </>
     ),
     watch: [{ id: "multi-language", label: "Switching languages" }],
@@ -182,6 +201,28 @@ function PressScene() {
           </span>
         </li>
       </ol>
+    </div>
+  );
+}
+
+/* ---------- Hands: the real phone, with what its buttons are like ---------- */
+
+function HandsScene() {
+  return (
+    <div className={styles.hands}>
+      <div className={styles.handsPhoto}>
+        <Image
+          src="/pilot/phone.jpg"
+          alt="A white corded phone with twelve big buttons, each with a photo on it."
+          fill
+          sizes="(max-width: 900px) 80vw, 360px"
+        />
+      </div>
+      <ul className={styles.handsNotes}>
+        <li>Big buttons with room between them</li>
+        <li>A light tap works</li>
+        <li>So does a heavy press</li>
+      </ul>
     </div>
   );
 }

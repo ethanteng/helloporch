@@ -4,7 +4,8 @@ import Image from "next/image";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
-import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
+import { JoinSection, PilotButton } from "@/components/PilotJoin";
+import { WaitlistProvider } from "@/components/Waitlist";
 import FeatureTabs from "./FeatureTabs";
 import { accessibility, calling, clip, safety, type Clip, type Screenshot } from "./clips";
 import styles from "./features.module.css";
@@ -16,7 +17,7 @@ import WatchClip from "./WatchClip";
 export const metadata: Metadata = {
   title: "See How It Works | HelloPorch",
   description:
-    "Nothing to unlock: they press a face to call, Porch answers your calls for them, messages play on their own, it speaks Mandarin, Cantonese and Spanish, and you can bring the whole family onto a call. Watch short clips of each.",
+    "Porch is for people who find phones hard: they press a face to call, big buttons work with shaky hands, Porch answers approved callers for them, messages play on their own, it speaks Mandarin, Cantonese and Spanish, and you can bring family onto a call. Watch short clips of each.",
 };
 
 export default function FeaturesPage() {
@@ -30,25 +31,34 @@ export default function FeaturesPage() {
             <div className={story.heroCopy}>
               <div className="hero__badge">See how it works</div>
               <h1 className={story.title}>
-                Nothing to unlock. <em>Just press.</em>
+                They press a face. <em>You pick up.</em>
               </h1>
               <p className={story.lede}>
-                No apps to open, and no tiny buttons to find on a touchscreen. Porch is an iPad that’s always ready and a
-                phone with real buttons, each one labeled with the face and name of someone they love.
+                Porch is for people who find phones hard. It’s a tablet that stays on one simple screen, beside a big-button
+                corded phone with photos of friends and loved ones on its buttons.
               </p>
-              <WatchClip clip={clip("first-real-call")} label="Watch Mom’s first real call" hero />
+              <ul className={story.forList} aria-label="Who Porch is for">
+                <li>Parkinson’s and tremors</li>
+                <li>Dementia and memory loss</li>
+                <li>Not comfortable with technology</li>
+                <li>Mandarin, Cantonese, Spanish, and more soon</li>
+              </ul>
+              <div className={story.heroActions}>
+                <PilotButton />
+                <WatchClip clip={clip("first-real-call")} label="Watch Mom’s first real call" hero />
+              </div>
             </div>
             <figure className={story.heroPhoto}>
               <Image
                 src="/pilot/setup.jpg"
-                alt="Porch on a wooden table: an iPad on a stand showing a large clock and a Call someone button, beside a white corded phone whose big buttons each carry a family photo."
+                alt="Porch on a wooden table: a tablet on a stand showing a large clock and a Call someone button, beside a white corded phone whose big buttons each carry a family photo."
                 fill
                 preload
                 sizes="(max-width: 900px) min(100vw, 480px), 520px"
               />
               <figcaption className={story.callouts}>
                 <span className={story.callout} style={{ left: "47%", top: "16%" }}>
-                  Always on. No passcode, no apps.
+                  Always on, never locked
                 </span>
                 <span className={story.callout} style={{ left: "6%", top: "86%" }}>
                   Real buttons with faces and names
@@ -86,17 +96,7 @@ export default function FeaturesPage() {
             />
           </section>
 
-          <section id="join" className={styles.join} aria-labelledby="join-title">
-            <h2 id="join-title">
-              Want Porch for <em>your family?</em>
-            </h2>
-            <p className={styles.joinBody}>
-              We’re building early units now. Join the waitlist and we’ll email you when one can be yours.
-            </p>
-            <div className={styles.signup}>
-              <JoinWaitlist />
-            </div>
-          </section>
+          <JoinSection />
         </main>
 
         <SiteFooter />
