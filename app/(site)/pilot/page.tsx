@@ -17,7 +17,6 @@ export default function PilotPage() {
 
       <main>
         <header className={styles.hero}>
-          <div className="hero__badge">For families interested in our pilot program</div>
           <h1 className={styles.title}>
             Getting ready for <em>the Porch pilot.</em>
           </h1>

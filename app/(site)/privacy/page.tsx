@@ -67,7 +67,6 @@ export default function PrivacyPage() {
 
       <main id="policy">
         <header className={styles.hero}>
-          <div className="hero__badge">Privacy policy</div>
           <h1 className={styles.title}>
             What Porch keeps, <em>and why.</em>
           </h1>

@@ -32,7 +32,6 @@ export default function StoryPage() {
 
         <main id="story">
           <header className={styles.hero}>
-            <div className="hero__badge">Our story</div>
             <h1 className={styles.title}>
               <span>I’m building HelloPorch</span>{" "}
               <em>for my mom.</em>

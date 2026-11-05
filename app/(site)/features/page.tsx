@@ -29,7 +29,6 @@ export default function FeaturesPage() {
         <main>
           <header className={story.hero}>
             <div className={story.heroCopy}>
-              <div className="hero__badge">See how it works</div>
               <h1 className={story.title}>
                 They press a face. <em>You pick up.</em>
               </h1>

@@ -54,7 +54,6 @@ export default function PricingPage() {
         <SiteNav />
         <main id="main-content" className={styles.main}>
           <header className={styles.hero}>
-            <span className="hero__badge">Pricing preview</span>
             <h1 className={styles.title}>Porch for <em>your family.</em></h1>
             <p className={styles.lede}>One subscription for your loved one’s iPad. Family members can call from their own devices at no extra charge.</p>
             <p className={styles.previewNote}>Proposed software pricing · Porch is currently in its pilot</p>
