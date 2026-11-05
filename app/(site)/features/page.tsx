@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import SiteNav from "@/components/SiteNav";
@@ -12,7 +11,6 @@ import { accessibility, calling, clip, safety, type Clip, type Screenshot } from
 import styles from "./features.module.css";
 import Story from "./Story";
 import story from "./story.module.css";
-import ThreeWayCalling from "./ThreeWayCalling";
 import WatchClip from "./WatchClip";
 
 export const metadata: Metadata = pageMetadata({
@@ -90,11 +88,7 @@ export default function FeaturesPage() {
                 {
                   id: "calling",
                   label: "Calling",
-                  content: (
-                    <Clips clips={calling}>
-                      <ThreeWayCalling />
-                    </Clips>
-                  ),
+                  content: <Clips clips={calling} />,
                 },
                 { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
                 { id: "safety", label: "Safety", content: <Screenshots shots={safety} /> },
@@ -111,8 +105,7 @@ export default function FeaturesPage() {
   );
 }
 
-// `children` follow the clips, such as an entry shown with screens instead of a clip.
-function Clips({ clips, children }: { clips: Clip[]; children?: ReactNode }) {
+function Clips({ clips }: { clips: Clip[] }) {
   return (
     <div className={styles.clips}>
       {clips.map((clip) => (
@@ -132,7 +125,6 @@ function Clips({ clips, children }: { clips: Clip[]; children?: ReactNode }) {
           </div>
         </article>
       ))}
-      {children}
     </div>
   );
 }
