@@ -2,24 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
-import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
+import { JoinSection } from "@/components/PilotJoin";
+import { WaitlistProvider } from "@/components/Waitlist";
 import PricingPlans from "./PricingPlans";
 import styles from "./pricing.module.css";
 
 export const metadata: Metadata = {
   title: "Pricing Preview | HelloPorch",
-  description: "One HelloPorch software plan: $39 a month for one loved-one iPad, with unlimited family members, Porch calls, drop-ins and regular phone calls. Add another loved-one iPad for $30 a month.",
+  description: "One HelloPorch software plan: $39 a month for one loved one’s tablet, with unlimited family members, Porch calls, drop-ins and regular phone calls. Add another tablet for $30 a month.",
   robots: { index: false, follow: false },
 };
 
 const questions = [
   {
     question: "What does one subscription cover?",
-    answer: "The $39 monthly subscription covers one loved one’s iPad and every Porch feature. Invite as many family members as you like; they can connect from their own devices at no extra charge.",
+    answer: "The $39 monthly subscription covers one loved one’s tablet and every Porch feature. Invite as many family members as you like. They use the Porch app on iPhone or Android at no extra charge.",
   },
   {
     question: "Do family members pay separately?",
-    answer: "No. Family members connect from their own devices at no extra charge. There are no per-person fees or paid feature upgrades.",
+    answer: "No. Family members use the Porch app on their own iPhone or Android phone at no extra charge. There are no per-person fees or paid feature upgrades.",
   },
   {
     question: "Is there a calling-minute limit?",
@@ -27,23 +28,23 @@ const questions = [
   },
   {
     question: "What if I have more than one loved one?",
-    answer: "Add another loved-one iPad for $30 a month, or $330 a year with annual billing. Two iPads are $69 a month or $759 a year; three are $99 a month or $1,089 a year. Every iPad gets the same features, and your family receives one bill.",
+    answer: "Add another tablet for $30 a month, or $330 a year with annual billing. Two tablets are $69 a month or $759 a year, and three are $99 a month or $1,089 a year. Every tablet gets the same features, and your family gets one bill.",
   },
   {
-    question: "Does the price include an iPad or a keypad?",
-    answer: "No. This is a software subscription. You’ll need a compatible iPad, home Wi-Fi and a USB number pad, or a big-button phone once Apple approves it. Our pilot guide lists the equipment and which iPads work with it.",
+    question: "Does the price include the tablet or the phone?",
+    answer: "No. This is a software subscription. You’ll need an iPad or Android tablet, home Wi-Fi, a big-button corded phone and a Cell2Jack to connect it. Our pilot page lists the equipment, with links to the ones we use.",
   },
   {
-    question: "What happens if we replace the iPad?",
-    answer: "Move the existing subscription to the replacement iPad. Replacing a loved one’s device doesn’t mean buying another subscription.",
+    question: "What happens if we replace the tablet?",
+    answer: "Move the subscription to the new tablet. Replacing a loved one’s tablet doesn’t mean buying another subscription.",
   },
   {
     question: "How does annual billing work?",
-    answer: "Annual billing includes twelve months of service for the price of eleven. One loved-one iPad is $429 a year, paid once annually. Each additional loved-one iPad is $330 a year. The monthly option starts at $39, plus $30 for each additional iPad.",
+    answer: "Annual billing gives you twelve months for the price of eleven. One tablet is $429 a year, paid once a year, and each additional tablet is $330 a year. Monthly billing is $39, plus $30 for each additional tablet.",
   },
   {
     question: "Can I subscribe today?",
-    answer: "Not yet. This is a preview of the pricing we’re considering while Porch is in its pilot. Join the waitlist for launch updates. There’s no payment or subscription when you join, and final pricing and availability may change.",
+    answer: "Not yet. This is a preview of the pricing we’re considering while Porch is in its pilot. You can try Porch now by joining the pilot, or join the waitlist for launch updates. Neither one starts a subscription, and final pricing and availability may change.",
   },
 ];
 
@@ -55,7 +56,7 @@ export default function PricingPage() {
         <main id="main-content" className={styles.main}>
           <header className={styles.hero}>
             <h1 className={styles.title}>Porch for <em>your family.</em></h1>
-            <p className={styles.lede}>One subscription for your loved one’s iPad. Family members can call from their own devices at no extra charge.</p>
+            <p className={styles.lede}>One subscription for your loved one’s tablet. Family members call from the Porch app on iPhone or Android at no extra charge.</p>
             <p className={styles.previewNote}>Proposed software pricing · Porch is currently in its pilot</p>
           </header>
 
@@ -64,7 +65,7 @@ export default function PricingPage() {
           <section className={styles.included} aria-labelledby="included-title">
             <h2 id="included-title">Calling and <em>privacy.</em></h2>
             <div className={styles.promises}>
-              <div><span className={styles.promiseNumber} aria-hidden="true">1</span><h3>One-press calling</h3><p>Start a call with a USB number pad or a big-button phone.</p></div>
+              <div><span className={styles.promiseNumber} aria-hidden="true">1</span><h3>One-press calling</h3><p>They lift the receiver of a big-button corded phone and press a photo to call.</p></div>
               <div><span className={styles.promiseNumber} aria-hidden="true">2</span><h3>Control who can connect</h3><p>Manage contacts and choose who may start an audio or video drop-in.</p></div>
               <div><span className={styles.promiseNumber} aria-hidden="true">3</span><h3>No call-length limits</h3><p>Talk for as long as you like, with no monthly minute allowance or automatic cutoff.</p></div>
             </div>
@@ -73,8 +74,8 @@ export default function PricingPage() {
           <section className={styles.faq} aria-labelledby="faq-title">
             <div className={styles.faqIntro}>
               <h2 id="faq-title">About the <em>subscription.</em></h2>
-              <p>For help choosing an iPad or keypad, read our setup guide.</p>
-              <Link href="/pilot">See the setup guide <Arrow /></Link>
+              <p>To see the equipment you’ll need, read the pilot page.</p>
+              <Link href="/pilot">See what you’ll need <Arrow /></Link>
             </div>
             <div className={styles.questions}>
               {questions.map(({ question, answer }) => (
@@ -86,12 +87,7 @@ export default function PricingPage() {
             </div>
           </section>
 
-          <section id="join" className={styles.join} aria-labelledby="join-title">
-            <h2 id="join-title">Get <em>launch updates.</em></h2>
-            <p>Leave your email and we’ll let you know when subscriptions are available.</p>
-            <div className={styles.signup}><JoinWaitlist /></div>
-            <p className={styles.joinNote}>Porch is currently in its pilot. Joining the waitlist is free and doesn’t start a subscription.</p>
-          </section>
+          <JoinSection />
         </main>
         <SiteFooter />
       </div>

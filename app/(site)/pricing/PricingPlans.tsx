@@ -10,17 +10,17 @@ const features = [
   "Regular phone calls and a phone number included",
   "No minute allowances or call-length limits",
   "Audio and video messages, plus telephone voicemail",
-  "One-press calling with a USB number pad or big-button phone",
+  "One-press calling with a big-button corded phone",
   "Caregiver controls and privacy settings",
 ];
 const dollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export default function PricingPlans() {
   const [annual, setAnnual] = useState(false);
-  const [ipads, setIpads] = useState(1);
-  const monthly = 39 + (ipads - 1) * 30;
+  const [tablets, setTablets] = useState(1);
+  const monthly = 39 + (tablets - 1) * 30;
   const yearly = monthly * 11;
-  const scope = ipads === 1 ? "1 iPad for your loved one" : `${ipads} iPads for your loved ones`;
+  const scope = tablets === 1 ? "1 tablet for your loved one" : `${tablets} tablets for your loved ones`;
 
   return (
     <>
@@ -33,27 +33,27 @@ export default function PricingPlans() {
           <div className={styles.planSummary}>
             <p className={styles.planLabel}>One plan, all features</p>
             <h2 id="porch-title">Porch</h2>
-            <p className={styles.planDescription}>Calling, drop-ins and messages for your loved one’s iPad.</p>
+            <p className={styles.planDescription}>Calling, drop-ins and messages for your loved one’s tablet.</p>
             <p className={styles.price} aria-live="polite" aria-atomic="true"><span>{dollars.format(annual ? yearly : monthly)}</span><span className={styles.period}>/ {annual ? "year" : "month"}</span></p>
             <p className={styles.billing}>{annual ? `${dollars.format(yearly)} billed annually · Save ${dollars.format(monthly)} a year` : `${dollars.format(monthly)} billed monthly`}</p>
             <p className={styles.scope}><strong>{scope}</strong><br />Unlimited family members and their devices</p>
-            <div className={styles.quantity} role="group" aria-label="Number of loved-one iPads">
-              <button type="button" onClick={() => setIpads((count) => count - 1)} disabled={ipads === 1} aria-label="Remove one loved-one iPad">−</button>
-              <output aria-live="polite">{ipads} {ipads === 1 ? "iPad" : "iPads"}</output>
-              <button type="button" onClick={() => setIpads((count) => count + 1)} aria-label="Add one loved-one iPad">+</button>
+            <div className={styles.quantity} role="group" aria-label="Number of tablets">
+              <button type="button" onClick={() => setTablets((count) => count - 1)} disabled={tablets === 1} aria-label="Remove one tablet">−</button>
+              <output aria-live="polite">{tablets} {tablets === 1 ? "tablet" : "tablets"}</output>
+              <button type="button" onClick={() => setTablets((count) => count + 1)} aria-label="Add one tablet">+</button>
             </div>
-            <p className={styles.bundleNote}>Each additional iPad for a loved one is {annual ? "$330/year" : "$30/month"}.<br />All iPads share one bill and include the same features.</p>
-            <a className={styles.button} href="#join">Join the waitlist <Arrow /></a>
+            <p className={styles.bundleNote}>Each additional tablet for a loved one is {annual ? "$330/year" : "$30/month"}.<br />All tablets share one bill and include the same features.</p>
+            <a className={styles.button} href="/pilot">Join the pilot <Arrow /></a>
             <p className={styles.noPayment}>No payment today</p>
           </div>
           <div className={styles.featureBlock}>
-            <h3 className={styles.featureHeading}>Included with every iPad</h3>
+            <h3 className={styles.featureHeading}>Included with every tablet</h3>
             <ul className={styles.features}>{features.map((feature) => <li key={feature}><span aria-hidden="true" className={styles.check}>✓</span><span>{feature}</span></li>)}</ul>
-            <p className={styles.planFootnote}>Family members connect free from their own devices. You choose who can call and who may drop in.</p>
+            <p className={styles.planFootnote}>Family members use the Porch app free on iPhone or Android. You choose who can call and who may drop in.</p>
           </div>
         </article>
       </section>
-      <p className={styles.belowPlans}>Use your own compatible iPad and home Wi-Fi. Hardware isn’t included.</p>
+      <p className={styles.belowPlans}>Use your own iPad or Android tablet and home Wi-Fi. Hardware isn’t included.</p>
     </>
   );
 }
