@@ -2,23 +2,41 @@ package com.ethanteng.helloporch
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 
-/** Porch's one activity. An invitation link that opens Porch arrives here, when it starts or while it's open. */
+/** Porch's one activity. An invitation or setup link that opens Porch arrives here, when it starts or while it's open. */
 class MainActivity : ComponentActivity() {
     private val link = mutableStateOf<String?>(null)
+    private val keys = KeyListener()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // A link not yet handled survives the activity being recreated, such as when the phone turns.
         link.value = if (savedInstanceState == null) intent?.dataString else savedInstanceState.getString(linkKey)
+        val app = application as PorchApplication
+        // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
+        // Switching to the bedside while this activity is already resumed starts it too (PorchApplication.switchExperience).
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onResume(owner: LifecycleOwner) = app.bedsideCameToFront()
+            override fun onPause(owner: LifecycleOwner) = app.bedsideLeftFront()
+        })
         setContent {
-            MaterialTheme { PorchScreens(application as PorchApplication, link.value, onLinkHandled = { link.value = null }) }
+            MaterialTheme {
+                CompositionLocalProvider(LocalKeyListener provides keys) {
+                    PorchRoot(app, link.value, onLinkHandled = { link.value = null },
+                        cordedPhoneSetup = { onDone, onBack -> CordedPhoneSetup(app.cell2jack, onDone, onBack) })
+                }
+            }
         }
     }
 
@@ -32,5 +50,16 @@ class MainActivity : ComponentActivity() {
         outState.putString(linkKey, link.value)
     }
 
+    // A keypad's keys reach the screen listening for them once Compose has passed them up, as `pressesBegan` does on
+    // iOS. Nothing on that screen takes typing, so digits always get here.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = keys.onKey?.invoke(event) == true || super.onKeyDown(keyCode, event)
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = keys.onKey?.invoke(event) == true || super.onKeyUp(keyCode, event)
+
     private companion object { const val linkKey = "porch.link" }
 }
+
+/** Keys from a keypad or keyboard that Compose didn't use, for the one screen listening for them. It returns true for a
+ * key it handled. */
+class KeyListener { var onKey: ((KeyEvent) -> Boolean)? = null }
+
+val LocalKeyListener = staticCompositionLocalOf { KeyListener() }

@@ -20,7 +20,7 @@ CI runs the same command ([android-build.yml](../.github/workflows/android-build
 
 ## Try it against a local server
 
-[`scripts/local-family-server.mjs`](../scripts/local-family-server.mjs) runs the server's real `/api/family` handler on this computer with an in-memory store. It sets up a stand-in bedside, "Mom", which checks in every few seconds, and prints an invitation link. Nothing leaves the process: no Redis, LiveKit or push. Debug builds may use plain HTTP to `localhost` only.
+[`scripts/local-family-server.mjs`](../scripts/local-family-server.mjs) runs the server's real `/api/family` handler on this computer with an in-memory store. It sets up a stand-in bedside, "Mom", which checks in every few seconds, and prints an invitation link and a setup link for a new bedside tablet. Nothing leaves the process: no Redis, LiveKit or push, and Porch numbers are made up by a stand-in for Twilio (area code 212 has none, to try choosing another). Debug builds may use plain HTTP to `localhost` only.
 
 ```bash
 node scripts/local-family-server.mjs
@@ -35,6 +35,8 @@ adb shell am start -a android.intent.action.VIEW -d '<the porch://pair link it p
 ```
 
 Tap **Join family**. The server prints when the phone comes online, and the phone shows the bedside as on and ready. Press Home and the server shows it going offline.
+
+On a tablet emulator, open the `porch://activate` link instead to set the tablet up as a bedside. The server prints each device as it starts checking in and whether it can take calls, and the link for each invitation the tablet makes, such as setup's QR code, so a phone can join without a camera.
 
 ## Keeping the apps in step
 

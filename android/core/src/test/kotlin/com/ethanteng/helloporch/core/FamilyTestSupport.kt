@@ -71,7 +71,9 @@ internal class FamilyHarness(scope: TestScope, canBeBedside: Boolean = false) {
     val caregiver = RemoteCaregiverSession { Instant.ofEpochMilli(scope.testScheduler.currentTime) }
     var receiving = true
     val changes = mutableListOf<FamilyLinks>()
+    /** More work after each change, as the app's own `afterChange` does. */
+    var onChange: (FamilyLinks) -> Unit = {}
     val serviceFor: (FamilyCredential) -> FamilyService = { FamilyService(it, transport) }
     val serviceAt: (String) -> FamilyService = { FamilyService(it, null, transport) }
-    val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver) { changes += it }
+    val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver) { changes += it; onChange(it) }
 }

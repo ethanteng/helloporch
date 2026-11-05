@@ -2,6 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Calls, asked for in the bedside's setup so the first call doesn't stop at a prompt. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- A family phone without them still joins and gets messages. Which tablets the bedside supports is listed, not filtered. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- The Cell2Jack plugs into a bedside tablet's USB port. A phone without USB host still installs Porch. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <!-- No Auto Backup: a phone restored from a backup must not clone this device's identity in a family. -->
     <application
@@ -40,6 +48,13 @@
                 <data android:host="pair" />
                 <data android:host="activate" />
             </intent-filter>
+            <!-- The Cell2Jack. Plugged in, Android offers to always open Porch for it, which also lets Porch use it. -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
         </activity>
     </application>
 </manifest>
