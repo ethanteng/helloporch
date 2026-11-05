@@ -45,18 +45,20 @@ private fun addToContacts(context: Context, name: String, number: String) {
 private fun shareNumber(context: Context, name: String, number: String) {
     val note = PorchContactCard.note(name, number)
     val send = Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, note)
-    val card = try {
+    val uri = try {
         val shared = File(context.cacheDir, "shared")
         // Each share gets its own folder. Two families can both be "Mom", and a messaging app may read its attachment
         // only when the text is sent, so a later share must not replace an earlier one's card. A day is plenty.
         shared.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.deleteRecursively() }
         val folder = File(shared, UUID.randomUUID().toString()).apply { mkdirs() }
-        File(folder, PorchContactCard.fileName(name)).apply { writeText(PorchContactCard.vCard(name, number)) }
+        val card = File(folder, PorchContactCard.fileName(name)).apply { writeText(PorchContactCard.vCard(name, number)) }
+        // Handing the file to another app can fail on its own. The text below still carries the number.
+        FileProvider.getUriForFile(context, "${context.packageName}.files", card)
     } catch (_: Exception) { null }
-    if (card != null) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", card)
+    if (uri != null) {
         send.setType("text/x-vcard").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         send.clipData = ClipData.newRawUri(null, uri)
     } else send.setType("text/plain")
-    context.startActivity(Intent.createChooser(send, "Share this number"))
+    try { context.startActivity(Intent.createChooser(send, "Share this number")) }
+    catch (_: ActivityNotFoundException) { Toast.makeText(context, "This phone has no app to share it with.", Toast.LENGTH_LONG).show() }
 }
