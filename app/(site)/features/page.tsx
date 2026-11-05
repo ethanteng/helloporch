@@ -45,26 +45,28 @@ export default function FeaturesPage() {
               </ul>
               <div className={story.heroActions}>
                 <PilotButton />
-                <WatchClip clip={clip("first-real-call")} label="Watch Mom’s first real call" hero />
               </div>
             </div>
-            <figure className={story.heroPhoto}>
-              <Image
-                src="/pilot/setup.jpg"
-                alt="Porch on a wooden table: a tablet on a stand showing a large clock and a Call someone button, beside a white corded phone whose big buttons each carry a family photo."
-                fill
-                preload
-                sizes="(max-width: 900px) min(100vw, 480px), 520px"
-              />
-              <figcaption className={story.callouts}>
-                <span className={story.callout} style={{ left: "47%", top: "16%" }}>
-                  Always on, never locked
-                </span>
-                <span className={story.callout} style={{ left: "6%", top: "86%" }}>
-                  Real buttons with faces and names
-                </span>
-              </figcaption>
-            </figure>
+            <div className={story.heroMedia}>
+              <figure className={story.heroPhoto}>
+                <Image
+                  src="/pilot/setup.jpg"
+                  alt="Porch on a wooden table: a tablet on a stand showing a large clock and a Call someone button, beside a white corded phone whose big buttons each carry a family photo."
+                  fill
+                  preload
+                  sizes="(max-width: 900px) min(100vw, 480px), 520px"
+                />
+                <figcaption className={story.callouts}>
+                  <span className={story.callout} style={{ left: "47%", top: "16%" }}>
+                    Always on, never locked
+                  </span>
+                  <span className={story.callout} style={{ left: "6%", top: "86%" }}>
+                    Real buttons with faces and names
+                  </span>
+                </figcaption>
+              </figure>
+              <WatchClip clip={clip("first-real-call")} label="Watch Mom’s first real call" />
+            </div>
           </header>
 
           <Story />

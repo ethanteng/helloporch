@@ -22,7 +22,6 @@
 }
 
 .title em {
-  display: block;
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--tomato);
@@ -1270,7 +1269,20 @@
   }
 }
 
-/* ---------- Hero: who it's for, and the pilot button beside the clip ---------- */
+/* ---------- Hero: who it's for and the pilot button, with the clip under the photo ---------- */
+
+.heroMedia {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  min-width: 0;
+}
+
+.heroMedia .heroPhoto {
+  width: 100%;
+}
 
 .heroActions {
   display: flex;
