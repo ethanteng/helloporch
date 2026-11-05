@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import StoryVideo from "@/components/StoryVideo";
-import { JoinWaitlist, WaitlistProvider } from "@/components/Waitlist";
+import { JoinSection } from "@/components/PilotJoin";
+import { WaitlistProvider } from "@/components/Waitlist";
 import { introduction, chapters } from "./films";
 import styles from "./story.module.css";
 
@@ -89,16 +90,7 @@ export default function StoryPage() {
             ))}
           </section>
 
-          <section id="join" className={styles.join} aria-labelledby="join-title">
-            <h2 id="join-title">Does this sound <em>familiar?</em></h2>
-            <p className={styles.joinBody}>
-              I know we’re not the only family facing this. If someone in your family is having a hard
-              time using a phone, join the waitlist.
-            </p>
-            <div className={styles.signup}>
-              <JoinWaitlist />
-            </div>
-          </section>
+          <JoinSection />
         </main>
 
         <SiteFooter />

@@ -59,12 +59,11 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
 ];
 
-// What the pilot is, what it needs and asks, with the sign-up in the first screen. Pages without their own waitlist section send the
-// menu's waitlist link to the home page's.
+// What the pilot is, what it needs and asks, with the sign-up in the first screen.
 export default function PilotPage() {
   return (
     <div className="page">
-      <SiteNav current="pilot" joinHref="/#join" />
+      <SiteNav current="pilot" />
 
       <main>
         <header className={styles.hero}>

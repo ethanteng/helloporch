@@ -63,7 +63,7 @@ export default function PrivacyPage() {
   return (
     <div className={`page ${styles.page}`}>
       <a href="#policy" className={styles.skip}>Skip to the policy</a>
-      <SiteNav joinHref="/#join" />
+      <SiteNav />
 
       <main id="policy">
         <header className={styles.hero}>

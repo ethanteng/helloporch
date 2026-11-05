@@ -1,9 +1,9 @@
 import Link from "next/link";
 import PorchLogo from "@/components/PorchLogo";
 
-// While the Porch keypad is being designed, the pilot is the main ask: the button joins the pilot, and the waitlist is a
-// plain link. Pages without their own waitlist section send that link to the home page's.
-export default function SiteNav({ current, joinHref = "#join" }: { current?: "pilot" | "features" | "story"; joinHref?: string }) {
+// While the Porch keypad is being designed, the pilot is the main ask, so the menu's button joins the pilot. The
+// waitlist is a quiet line at the end of the pages that have it.
+export default function SiteNav({ current }: { current?: "pilot" | "features" | "story" }) {
   return (
     <nav className="nav" aria-label="Main navigation">
       <Link href="/" className="logo" aria-label="HelloPorch home">
@@ -17,9 +17,6 @@ export default function SiteNav({ current, joinHref = "#join" }: { current?: "pi
           <Link href="/story" className="nav__link" aria-current={current === "story" ? "page" : undefined}>
             Our story
           </Link>
-          <a href={joinHref} className="nav__link">
-            Waitlist
-          </a>
         </div>
         <Link href="/pilot" className="nav__cta" aria-current={current === "pilot" ? "page" : undefined}>
           Join the pilot
