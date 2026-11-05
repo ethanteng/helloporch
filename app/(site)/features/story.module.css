@@ -34,6 +34,12 @@
   text-wrap: pretty;
 }
 
+/* Same as the bold sentence in the home page's lede. */
+.lede strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
 /* The home page's "See how it works" link, as a button that opens a clip. */
 .heroCopy .heroWatch {
   margin: 0;

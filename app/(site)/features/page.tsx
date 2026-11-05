@@ -37,14 +37,14 @@ export default function FeaturesPage() {
                 They press a face. <em>You pick up.</em>
               </h1>
               <p className={story.lede}>
-                Porch is for people who find phones hard. It pairs a tablet with a big-button phone, with photos of friends and
-                loved ones on the buttons. They press a face to call, and Porch can even answer incoming calls for them.
+                Porch makes video calling easy for people who struggle with phones. It’s a tablet and big-button phone with
+                photos of loved ones on the buttons. <strong>One press starts a video call.</strong> And when you call them,
+                Porch can answer for them.
               </p>
               <ul className={story.forList} aria-label="Who Porch is for">
-                <li>Parkinson’s and tremors</li>
-                <li>Dementia and memory loss</li>
-                <li>Not comfortable with technology</li>
-                <li>Mandarin, Cantonese, Spanish, and more soon</li>
+                <li>Parkinson’s &amp; limited dexterity</li>
+                <li>Dementia &amp; memory loss</li>
+                <li>Anyone who struggles with phones</li>
               </ul>
               <div className={story.heroActions}>
                 <PilotButton size="lg" />
