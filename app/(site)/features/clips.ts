@@ -22,54 +22,54 @@ export type Screenshot = {
 export const calling: Clip[] = [
   {
     id: "first-real-call",
-    title: "Our first real call.",
+    title: "Mom’s first real call",
     description:
-      "Our first milestone: my mom, Porch’s first user, making the first real call from her own desk. She picks up the handset, presses my brother’s photo, and a few seconds later they’re face to face. It’s the moment we’ve been building toward.",
+      "My mom makes her first call using Porch, right from her own desk. She presses my brother’s photo, he answers, and they’re talking face to face a few seconds later.",
     duration: "22 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Celebrate%20first%20real%20HelloPorch%20call%20compressed.mp4",
     poster: "/features/first-real-call.jpg",
   },
   {
     id: "mom-calls-me",
-    title: "One press, and you’re face to face.",
+    title: "One button starts a video call",
     description:
-      "They press the button with your photo on it. Your phone rings in the Porch app, you answer, and you’re seeing each other in seconds. They don’t have to find the phone or remember how it works.",
+      "They press your photo, your Porch app rings, and you answer. No looking up contacts, dialing numbers, or navigating menus.",
     duration: "15 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Mom%20Calls%20Me%20compressed.mp4",
     poster: "/features/mom-calls-me.jpg",
   },
   {
     id: "phone-fallback",
-    title: "Their call still gets through.",
+    title: "If you miss the video call",
     description:
-      "Porch tries a video call first. If you don’t answer in the app, it rings your regular phone instead, and you talk by voice. For them, it’s still just one press.",
+      "Porch tries your regular phone number next, so you can still talk even if you don’t answer in the app. They only have to press once.",
     duration: "24 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Mom%20calls%20me%20%28phone%20fallback%29%20compressed.mp4",
     poster: "/features/phone-fallback.jpg",
   },
   {
     id: "video-drop-in",
-    title: "Stop by, like you would on the porch.",
+    title: "Porch answers for them",
     description:
-      "People they trust can drop in with video or voice. Porch says who’s coming, counts down 3, 2, 1, and connects on its own, so they don’t have to answer.",
+      "Call your loved one through Porch, and it announces who’s calling before answering automatically. They don’t have to do a thing.",
     duration: "15 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Video%20drop-in%20compressed.mp4",
     poster: "/features/video-drop-in.jpg",
   },
   {
     id: "send-a-message",
-    title: "Send a hello, any time.",
+    title: "Leave them a message",
     description:
-      "Record a short video or voice message on your phone, whether it’s a reminder about Tuesday’s appointment or just “I love you.” It shows up on their Porch right away, and you’ll see when they’ve played it.",
+      "Send a quick video or voice message from the Porch app. It could be an appointment reminder, a family update, or just a quick hello.",
     duration: "26 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Send%20a%20message%20compressed.mp4",
     poster: "/features/send-a-message.jpg",
   },
   {
     id: "auto-play-messages",
-    title: "Your message finds them.",
+    title: "Messages play automatically",
     description:
-      "When they’re there to see it, Porch plays your message on its own. They don’t have to remember to check or figure out how to open it, so nothing you send goes unseen.",
+      "When they’re in front of the tablet, Porch plays their waiting messages. No notifications to notice, inboxes to check, or buttons to press.",
     duration: "16 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Auto-play%20messages%20compressed.mp4",
     poster: "/features/auto-play-messages.jpg",
@@ -79,18 +79,18 @@ export const calling: Clip[] = [
 export const accessibility: Clip[] = [
   {
     id: "multi-language",
-    title: "In the language they grew up with.",
+    title: "In the language they grew up with",
     description:
-      "Set Porch to Mandarin, Cantonese, Spanish, or English. The clock and call screens switch over, and Porch speaks its announcements in that language too, so everything they see and hear feels familiar.",
+      "Choose English, Mandarin, Cantonese, or Spanish. Porch displays its screens and speaks its announcements in their language, so they don’t have to figure things out in English.",
     duration: "17 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Multi-language%20support%20compressed.mp4",
     poster: "/features/multi-language.jpg",
   },
   {
     id: "choosing-the-keypad",
-    title: "A phone they already know how to use.",
+    title: "Why we chose a big-button phone",
     description:
-      "Big buttons, each with the face of someone they love, on a phone like the landline they’ve had for years. They can see who they’re calling, with no numbers to memorize and no cheat sheet to lose. See the other keypads we tried, and why this one won.",
+      "We tried a few different keypads before settling on a familiar corded phone with big buttons and photos. Here’s what we tried and why this one worked best for my mom.",
     duration: "4 min 24 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Form%20factor%20selection%20with%20closing%20card%20compressed.mp4",
     poster: "/features/choosing-the-keypad.jpg",
@@ -101,9 +101,9 @@ export const accessibility: Clip[] = [
 // as a full row (ThreeWayCalling.tsx) rather than a clip card.
 export const threeWayFilm: Clip = {
   id: "three-way-calling",
-  title: "When the bank needs them on the line, too.",
+  title: "Bring someone else into the call",
   description:
-    "You’re sorting out their account, and the bank won’t go on until they say it’s OK themselves. Call them on Porch, tap Add someone, and bring the bank into the same call. They hear everything and answer in their own voice, while you work the phone menu and sit through the hold music. When you hang up, the bank hangs up too, so they’re never left alone with a caller they didn’t choose. Family can join the same way, with video.",
+    "Add another family member, an old friend, or even someone from the bank when they need to speak with your loved one directly. Everyone can be on the same call.",
   duration: "22 sec",
   src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20v2%20compressed.mp4",
   poster: "/features/three-way-calling.jpg",
@@ -112,9 +112,9 @@ export const threeWayFilm: Clip = {
 export const safety: Screenshot[] = [
   {
     id: "block-unknown-callers",
-    title: "Scammers can’t get through.",
+    title: "Unknown callers are blocked",
     description:
-      "Porch blocks unknown callers from the day it’s set up, so only the people on their keypad and numbers you allow can ring.",
+      "Only approved people can call your loved one’s Porch. Unknown numbers are blocked by default, so they don’t have to deal with unwanted calls.",
     label: "On by default",
     image: "/features/block-unknown-callers.png",
     alt: "Porch’s Calls settings in caregiver mode on an iPhone. Under “Calls to Mom,” Block unknown callers is switched on, with the note “Only keypad contacts and numbers you allow can ring.” Below it, Blocked numbers shows 4, with 1 allowed.",
