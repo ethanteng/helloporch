@@ -38,8 +38,10 @@ const CHAPTERS: Chapter[] = [
     title: "One press, and it’s ringing.",
     body: (
       <>
-        Every button on their phone has a face and a name on it. They press yours, and your phone rings with a video
-        call. If you can’t get to the Porch app in time, Porch rings your regular number instead.
+        <p>
+          Every button has a photo and a name. They press yours, and your Porch app rings with a video call. If you
+          don’t answer, Porch calls your regular phone instead, so you can still talk.
+        </p>
       </>
     ),
     watch: [
@@ -55,9 +57,10 @@ const CHAPTERS: Chapter[] = [
     title: "Buttons they can actually press.",
     body: (
       <>
-        Parkinson’s has made my mom’s hands slow and stiff, and her phone’s touchscreen became something she couldn’t
-        really use. Porch uses a phone with big, firm buttons and space between them. A light tap works, and so does a
-        heavy press.
+        <p>
+          My mom’s Parkinson’s has made her hands slow and stiff. Touchscreens became almost impossible for her to use.
+          Porch uses big, firm buttons with plenty of space between them. A light tap works, and so does a heavy press.
+        </p>
       </>
     ),
     watch: [{ id: "choosing-the-keypad", label: "The keypads we tried" }],
@@ -70,9 +73,14 @@ const CHAPTERS: Chapter[] = [
     title: "Porch picks up for them.",
     body: (
       <>
-        When someone you’ve approved calls, Porch says who it is out loud and answers on its own, so they don’t have to
-        do anything. Numbers you haven’t approved can’t get through at all, which keeps scam calls away. Every Porch has
-        its own phone number, so family can call from the Porch app or from any phone.
+        <p>
+          When someone you’ve approved calls, Porch announces who’s calling, then answers automatically. They don’t
+          have to find a phone, unlock a screen, or press anything.
+        </p>
+        <p>
+          Family can call using the Porch app or from an approved phone number. Everyone else is blocked by
+          default.
+        </p>
       </>
     ),
     watch: [{ id: "video-drop-in", label: "A video drop-in" }],
@@ -82,12 +90,13 @@ const CHAPTERS: Chapter[] = [
   {
     id: "messages",
     kicker: "Between calls",
-    title: "Messages and texts play themselves.",
+    title: "Messages that play themselves.",
     body: (
       <>
-        Record a video or voice message in the Porch app, or just text their Porch number from any phone. When they sit
-        down in front of the tablet, Porch plays whatever’s waiting and reads texts aloud. They don’t have to remember to
-        check.
+        <p>
+          Send a video or voice message through the Porch app, or text their Porch number. When they’re in front of the
+          tablet, Porch plays the messages or reads them aloud. No inboxes to check or buttons to press.
+        </p>
       </>
     ),
     watch: [
@@ -103,9 +112,10 @@ const CHAPTERS: Chapter[] = [
     title: "In the language they grew up with.",
     body: (
       <>
-        Porch shows and speaks Mandarin, Cantonese, or Spanish as well as English, from the clock to its announcements.
-        Texts sent to their Porch number are translated into their language automatically. More languages are coming
-        soon.
+        <p>
+          Porch shows and speaks English, Mandarin, Cantonese, or Spanish, including its screens and announcements. It
+          can also translate incoming texts into their language before reading them aloud. More languages are coming.
+        </p>
       </>
     ),
     watch: [{ id: "multi-language", label: "Switching languages" }],
@@ -115,11 +125,13 @@ const CHAPTERS: Chapter[] = [
   {
     id: "together",
     kicker: "All together",
-    title: "Bring everyone onto the call.",
+    title: "Bring someone else into the call.",
     body: (
       <>
-        On a call with them, tap Add someone to bring in a brother, a grandchild, or an old friend. It helps with the
-        hard calls too, like the bank, when they need to be on the line and you’re there to help.
+        <p>
+          Add a sibling, grandchild, or old friend to the conversation. You can even bring in someone from the bank when
+          you’re helping your loved one with their finances and the bank needs to speak with them directly.
+        </p>
       </>
     ),
     watch: [{ id: "three-way-calling", label: "Adding the bank" }],
@@ -147,7 +159,7 @@ export default function Story() {
               {chapter.kicker}
             </p>
             <h2 id={`${chapter.id}-title`}>{chapter.title}</h2>
-            <p className={styles.body}>{chapter.body}</p>
+            <div className={styles.body}>{chapter.body}</div>
             <div className={styles.watchRow}>
               {chapter.watch.map((w) => (
                 <WatchClip key={w.id} clip={clip(w.id)} label={w.label} />

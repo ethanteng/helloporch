@@ -37,8 +37,8 @@ export default function FeaturesPage() {
                 They press a face. <em>You pick up.</em>
               </h1>
               <p className={story.lede}>
-                Porch is for people who find phones hard. It’s a tablet that stays on one simple screen, beside a big-button
-                corded phone with photos of friends and loved ones on its buttons.
+                Porch is for people who find phones hard. It pairs a tablet with a big-button phone, with photos of friends and
+                loved ones on the buttons. They press a face to call, and Porch can even answer incoming calls for them.
               </p>
               <ul className={story.forList} aria-label="Who Porch is for">
                 <li>Parkinson’s and tremors</li>

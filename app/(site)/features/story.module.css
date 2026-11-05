@@ -158,7 +158,11 @@
   text-wrap: balance;
 }
 
+/* A chapter's text, in one or more paragraphs. */
 .body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   max-width: 520px;
   font: 400 18px/1.6 var(--sans);
   color: var(--muted-2);
