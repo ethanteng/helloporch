@@ -18,8 +18,8 @@ export const metadata: Metadata = pageMetadata({
   title: "See How It Works | HelloPorch",
   description:
     "Watch how Porch works: they press a face to call, Porch answers approved family for them, messages play on their own, and it speaks their language.",
-  shareTitle: "They press a face. You pick up.",
-  image: { url: "/og/features.jpg", alt: "HelloPorch: They press a face. You pick up. Beside the Porch prototype, a tablet and a big-button phone." },
+  shareTitle: "Video calls, at the press of a button.",
+  image: { url: "/og/features.jpg", alt: "HelloPorch: Video calls, at the press of a button. Beside the Porch prototype, a tablet and a big-button phone." },
 });
 
 export default function FeaturesPage() {
@@ -32,7 +32,7 @@ export default function FeaturesPage() {
           <header className={story.hero}>
             <div className={story.heroCopy}>
               <h1 className={story.title}>
-                They press a face. <em>You pick up.</em>
+                Video calls, <em>at the press of a button.</em>
               </h1>
               <p className={story.lede}>
                 Porch makes video calling easy for people who struggle with phones. It’s a tablet and big-button phone with
