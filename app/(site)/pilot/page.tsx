@@ -40,7 +40,7 @@ const STEPS: { title: string; text?: string }[] = [
   },
   {
     title: "They press your photo to call.",
-    text: "They see and hear you on the tablet, just like a regular video call. They can also use the familiar phone receiver if they prefer.",
+    text: "They see and hear you on the tablet, just like a regular video call.",
   },
 ];
 
