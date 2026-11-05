@@ -49,9 +49,10 @@ export default function PilotSignup() {
         <input id={`${id}-email`} name="email" type="email" required placeholder="Your email address" aria-label="Your email address" autoComplete="email" />
         <Honeypot />
         <button type="submit" disabled={pending}>
-          {pending ? "Joining…" : "Join the pilot"}
+          {pending ? "Sending…" : "Request a pilot invite"}
         </button>
       </div>
+      <p className={styles.formNote}>Just your email for now. I’ll be in touch with next steps.</p>
       {error ? (
         <p className={styles.error} role="alert">
           {error}
