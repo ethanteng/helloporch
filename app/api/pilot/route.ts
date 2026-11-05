@@ -2,43 +2,30 @@ import { blockedSignup } from "../../../lib/signup-guard.ts";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// How the family member will call, as it reads in MailerLite.
-const INTERFACES = { keypad: "number pad", phone: "big-button phone" } as const;
+// Which tablet the family member will use, as it reads in MailerLite.
+const TABLETS = { ipad: "ipad", android: "android", unsure: "not sure" } as const;
 
-// Signs a family up for the pilot from the pilot page. Adds them to MailerLite when MAILERLITE_API_KEY is set,
-// in MAILERLITE_PILOT_GROUP_ID if given, with their answers in the porch_pilot_interface and porch_pilot_ipad
-// fields, so the families waiting for the big-button phone can be emailed together once Apple approves it.
-// Another language their loved one needs goes in porch_pilot_language, blank when Porch already speaks theirs.
-// Someone waiting for Android is saved with just their email and porch_pilot_interface "android".
-// MailerLite upserts by email, so sending changed answers updates them. Every request is also logged, as the
-// waitlist does, but function logs expire quickly, so MailerLite is the real record. Bots are logged and kept out of
-// MailerLite (lib/signup-guard.ts), so nobody whose email a bot typed in hears from us.
+// Signs a family up for the pilot from the pilot page: their email and which tablet their family member will use.
+// Adds them to MailerLite when MAILERLITE_API_KEY is set, in MAILERLITE_PILOT_GROUP_ID if given. The big-button
+// corded phone is the only way to call now, so porch_pilot_interface is always "big-button phone", and the tablet
+// goes in the existing porch_pilot_ipad field ("ipad", "android" or "not sure"); families who signed up with the
+// old survey keep its answers there ("yes" or "no" for a compatible iPad). MailerLite upserts by email, so signing up
+// again updates the answer. Every request is also logged, as the waitlist does, but function logs expire quickly, so
+// MailerLite is the real record. Bots are logged and kept out of MailerLite (lib/signup-guard.ts), so nobody whose
+// email a bot typed in hears from us.
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
-  const choice: keyof typeof INTERFACES | undefined =
-    typeof body?.interface === "string" && Object.hasOwn(INTERFACES, body.interface) ? body.interface : undefined;
-  const ipad = typeof body?.ipad === "boolean" ? body.ipad : undefined;
-  const language = typeof body?.language === "string" ? body.language.trim().slice(0, 100) : "";
+  const tablet: keyof typeof TABLETS | undefined =
+    typeof body?.tablet === "string" && Object.hasOwn(TABLETS, body.tablet) ? body.tablet : undefined;
 
   if (!EMAIL_RE.test(email) || email.length > 254) {
     return Response.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
-
-  // HelloPorch is iPhone and iPad only. Waiting for Android needs no other answers.
-  const fields =
-    body?.platform === "android"
-      ? { porch_pilot_interface: "android" }
-      : choice && ipad !== undefined
-        ? {
-            porch_pilot_interface: INTERFACES[choice],
-            porch_pilot_ipad: ipad ? "yes" : "no",
-            porch_pilot_language: language,
-          }
-        : null;
-  if (!fields) {
-    return Response.json({ error: "Please answer every step." }, { status: 400 });
+  if (!tablet) {
+    return Response.json({ error: "Please choose the tablet they'll use." }, { status: 400 });
   }
+  const fields = { porch_pilot_interface: "big-button phone", porch_pilot_ipad: TABLETS[tablet] };
 
   const blocked = await blockedSignup(body?.website);
   if (blocked) {
