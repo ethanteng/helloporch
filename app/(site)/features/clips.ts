@@ -74,6 +74,16 @@ export const calling: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Auto-play%20messages%20compressed.mp4",
     poster: "/features/auto-play-messages.jpg",
   },
+  // A film of the app's own 3-way calling screens, rendered by scripts/render-three-way-film.mjs.
+  {
+    id: "three-way-calling",
+    title: "Bring someone else into the call",
+    description:
+      "Add another family member, an old friend, or even someone from the bank when they need to speak with your loved one directly. Everyone can be on the same call.",
+    duration: "22 sec",
+    src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20v2%20compressed.mp4",
+    poster: "/features/three-way-calling.jpg",
+  },
 ];
 
 export const accessibility: Clip[] = [
@@ -97,18 +107,6 @@ export const accessibility: Clip[] = [
   },
 ];
 
-// A film of the app's own 3-way calling screens, rendered by scripts/render-three-way-film.mjs. It closes the Calling tab
-// as a full row (ThreeWayCalling.tsx) rather than a clip card.
-export const threeWayFilm: Clip = {
-  id: "three-way-calling",
-  title: "Bring someone else into the call",
-  description:
-    "Add another family member, an old friend, or even someone from the bank when they need to speak with your loved one directly. Everyone can be on the same call.",
-  duration: "22 sec",
-  src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20v2%20compressed.mp4",
-  poster: "/features/three-way-calling.jpg",
-};
-
 export const safety: Screenshot[] = [
   {
     id: "block-unknown-callers",
@@ -121,7 +119,7 @@ export const safety: Screenshot[] = [
   },
 ];
 
-const allClips = [...calling, ...accessibility, threeWayFilm];
+const allClips = [...calling, ...accessibility];
 
 /** A clip by its id, for the story at the top of the page to play. */
 export function clip(id: string): Clip {
