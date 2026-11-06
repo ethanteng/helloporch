@@ -460,9 +460,13 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             }
         }
 
-        OutlinedButton(onClick = { removing = if (member == null) Removing.KEYPAD else if (key == null) Removing.PORCH else Removing.EITHER },
-            Modifier.fillMaxWidth().heightIn(min = 50.dp), enabled = !admin.busy,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Remove ${subject.firstName}") }
+        // This phone can't remove itself. The server refuses that, and the refusal would end caregiver mode. Another
+        // caregiver removes it; leaving the family is on this phone's own card. The bedside isn't one of these people.
+        if (member?.id != admin.myID || admin.myID == null) {
+            OutlinedButton(onClick = { removing = if (member == null) Removing.KEYPAD else if (key == null) Removing.PORCH else Removing.EITHER },
+                Modifier.fillMaxWidth().heightIn(min = 50.dp), enabled = !admin.busy,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Remove ${subject.firstName}") }
+        }
     }
 
     if (choosingColor && contact != null) ButtonColorDialog(contact.buttonColorHex, onDismiss = { choosingColor = false }, onChoose = { hex ->
