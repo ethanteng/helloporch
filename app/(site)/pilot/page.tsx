@@ -17,13 +17,13 @@ export const metadata: Metadata = pageMetadata({
 });
 
 // What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call.
-// The links are the ones I use, on Amazon.
-const KIT: { name: string; rule: string; optional?: boolean; photo: string; href?: string }[] = [
-  { name: "A tablet", rule: "iPad or Android", photo: "/pilot/ipad.jpg" },
-  { name: "A big-button corded phone", rule: "Any brand", photo: "/pilot/phone.jpg", href: "https://www.amazon.com/dp/B0FZ99J2QG" },
-  { name: "A Cell2Jack", rule: "Must be a Cell2Jack", photo: "/pilot/cell2jack.jpg", href: "https://www.amazon.com/dp/B089984QRT" },
-  { name: "A USB-C hub", rule: "Any brand, with a charging port", photo: "/pilot/hub.jpg", href: "https://www.amazon.com/dp/B0BQLLB61B" },
-  { name: "A sturdy stand", rule: "Any brand", optional: true, photo: "/pilot/stand.jpg", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
+// The links are the ones I use, on Amazon, and the prices are roughly what they cost there.
+const KIT: { name: string; rule: string; price: string; optional?: boolean; photo: string; href?: string }[] = [
+  { name: "A tablet", rule: "iPad or Android", price: "About $150 to $350 new", photo: "/pilot/ipad.jpg" },
+  { name: "A big-button corded phone", rule: "Any brand", price: "About $28", photo: "/pilot/phone.jpg", href: "https://www.amazon.com/dp/B0FZ99J2QG" },
+  { name: "A Cell2Jack", rule: "Must be a Cell2Jack", price: "About $37", photo: "/pilot/cell2jack.jpg", href: "https://www.amazon.com/dp/B089984QRT" },
+  { name: "A USB-C hub", rule: "Any brand, with a charging port", price: "About $19", photo: "/pilot/hub.jpg", href: "https://www.amazon.com/dp/B0BQLLB61B" },
+  { name: "A sturdy stand", rule: "Any brand", price: "About $30", optional: true, photo: "/pilot/stand.jpg", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
 ];
 
 // Each step's text, one paragraph per entry.
@@ -114,50 +114,51 @@ export default function PilotPage() {
         </header>
 
         <section className={styles.glance} aria-label="The pilot at a glance">
-          <article className={styles.glanceCard}>
-            <h2 className={styles.glanceLabel}>What you’ll need.</h2>
-            <h3>You’ll provide the hardware. I’ll provide the app.</h3>
-            <p className={styles.glanceText}>
-              Porch works with a compatible iPad or Android tablet and a big-button corded phone. You’ll also need a Cell2Jack
-              adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
-            </p>
-            <p className={styles.glanceText}>
-              You may already have some of what you need. Here’s the hardware for the current pilot. I’ll help you check
-              compatibility before you buy anything.
-            </p>
-            <ul className={styles.kitList}>
+          <article className={`${styles.glanceCard} ${styles.kitCard}`}>
+            <div className={styles.kitIntro}>
+              <h2 className={styles.glanceLabel}>What you’ll need.</h2>
+              <h3>You’ll provide the hardware. I’ll provide the app.</h3>
+              <p className={styles.glanceText}>
+                Porch works with a compatible iPad or Android tablet and a big-button corded phone. You’ll also need a
+                Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
+              </p>
+              <p className={styles.glanceText}>
+                You may already have some of what you need. Here’s the hardware for the current pilot.
+              </p>
+            </div>
+            <ul className={styles.kitGrid}>
               {KIT.map((part) => (
                 <li key={part.name}>
-                  <span className={styles.kitThumb}>
-                    <Image src={part.photo} alt="" fill sizes="56px" />
+                  <span className={styles.kitPhoto}>
+                    <Image src={part.photo} alt="" fill sizes="(max-width: 760px) 45vw, (max-width: 1140px) 30vw, 220px" />
                   </span>
-                  <span>
-                    <strong>{part.name}</strong>
+                  <strong className={styles.kitName}>
+                    {part.name}
                     {part.optional ? <em> (optional)</em> : null}
-                    <span className={styles.kitRule}>
-                      {part.rule}
-                      {part.href ? (
-                        <>
-                          {" · "}
-                          <a href={part.href} target="_blank" rel="noopener noreferrer">
-                            See it on Amazon
-                          </a>
-                        </>
-                      ) : null}
-                    </span>
-                  </span>
+                  </strong>
+                  <span className={styles.kitRule}>{part.rule}</span>
+                  <span className={styles.kitPrice}>{part.price}</span>
+                  {part.href ? (
+                    <a className={styles.kitLink} href={part.href} target="_blank" rel="noopener noreferrer">
+                      See it on Amazon
+                    </a>
+                  ) : null}
                 </li>
               ))}
             </ul>
           </article>
-          <article className={styles.glanceCard}>
-            <h2 className={styles.glanceLabel}>What I’ll ask of you.</h2>
-            <h3>Just tell me how it’s going.</h3>
-            <p className={styles.glanceText}>
-              Try Porch with your loved one and let me know what works and what doesn’t. I’ll check in occasionally by email or
-              a quick conversation.
-            </p>
-            <p className={styles.glanceText}>And if something breaks or gets confusing, I definitely want to know about it.</p>
+          <article className={`${styles.glanceCard} ${styles.askCard}`}>
+            <div className={styles.askHead}>
+              <h2 className={styles.glanceLabel}>What I’ll ask of you.</h2>
+              <h3>Just tell me how it’s going.</h3>
+            </div>
+            <div className={styles.askText}>
+              <p className={styles.glanceText}>
+                Try Porch with your loved one and let me know what works and what doesn’t. I’ll check in occasionally by
+                email or a quick conversation.
+              </p>
+              <p className={styles.glanceText}>And if something breaks or gets confusing, I definitely want to know about it.</p>
+            </div>
           </article>
         </section>
 
