@@ -147,16 +147,27 @@ const authorizeContact = async (request, response, body) => {
   reply(200, { authorization: `local.${Buffer.from(JSON.stringify({ phoneNumber: input.phoneNumber, exp: expiresAt })).toString('base64url')}`, expiresAt });
 };
 const blockedCall = async (request, response) => {
-  const number = new URL(request.url, origin).searchParams.get('number') ?? '';
-  if (!/^\+[1-9][0-9]{6,14}$/.test(number)) { response.writeHead(400).end('Pass ?number= with + and the country code.\n'); return; }
-  let listed = 0;
-  for (const [key, raw] of store.values) {
-    if (!key.startsWith('house:') || !JSON.parse(raw).blockUnknownCallers) continue;
-    await blockCall(store, key.slice('house:'.length), randomUUID(), number, Math.floor(Date.now() / 1000));
-    listed += 1;
+  try {
+    const number = new URL(request.url, origin).searchParams.get('number') ?? '';
+    if (!/^\+[1-9][0-9]{6,14}$/.test(number)) { response.writeHead(400).end('Pass ?number= with + and the country code.\n'); return; }
+    let listed = 0;
+    // Snapshot the households first. Recording the call writes into the store while this loop is walking it.
+    for (const [key, raw] of [...store.values].filter(([key]) => key.startsWith('house:'))) {
+      const house = JSON.parse(raw);
+      if (!house.blockUnknownCallers) continue;
+      // A number already on the keypad, allowed, or approved for drop-in is not turned away.
+      const before = house.blockedCallers?.find(caller => caller.number === number)?.calls ?? 0;
+      await blockCall(store, key.slice('house:'.length), randomUUID(), number, Math.floor(Date.now() / 1000));
+      const saved = JSON.parse(store.values.get(key));
+      const after = saved.blockedCallers?.find(caller => caller.number === number)?.calls ?? 0;
+      if (after > before) listed += 1;
+    }
+    console.log(`${time()} a call from ${number} was blocked by ${listed} household${listed === 1 ? '' : 's'}`);
+    response.writeHead(200).end(`Blocked by ${listed} household${listed === 1 ? '' : 's'}.\n`);
+  } catch (error) {
+    console.log(`${time()} blocked-call failed: ${error.message}`);
+    if (!response.headersSent) response.writeHead(500).end(`${error.message}\n`);
   }
-  console.log(`${time()} a call from ${number} was blocked by ${listed} household${listed === 1 ? '' : 's'}`);
-  response.writeHead(200).end(`Blocked by ${listed} household${listed === 1 ? '' : 's'}.\n`);
 };
 const onRequest = async (request, response) => {
   const chunks = [];
