@@ -39,7 +39,6 @@ object FamilyPhotos {
     private val loading = mutableSetOf<String>()
     /** When a photo that couldn't be downloaded may be tried again, in elapsed milliseconds. */
     private val retryAfter = mutableMapOf<String, Long>()
-    private var kept: Set<String>? = null
     private val client by lazy { OkHttpClient.Builder().callTimeout(60, TimeUnit.SECONDS).build() }
     private val uploads by lazy { OkHttpClient.Builder().callTimeout(120, TimeUnit.SECONDS).build() }
 
@@ -54,11 +53,10 @@ object FamilyPhotos {
     fun sync(app: PorchApplication, state: FamilySnapshot, credential: FamilyCredential, slots: CallSlots) {
         val wanted = state.people.mapNotNull { person -> person.photoID?.let { it to person.id } }.toMap()
         for ((id, memberID) in wanted) load(app, id, mapOf("memberID" to JsonPrimitive(memberID)), credential)
+        // A key keeps its previous photo, and a removed member's, until those IDs leave this set. Prune on every
+        // check-in: a photo is deleted a day after it was saved, which is later than the check-in that dropped it.
         val keep = wanted.keys + slots.contacts.mapNotNull { it?.memberPhotoID }
-        if (keep != kept) {
-            kept = keep
-            app.photos.familyMembers.prune(keeping = keep)
-        }
+        app.photos.familyMembers.prune(keeping = keep)
     }
 
     /** Starts downloading a photo unless it's already here, downloading, or failed in the last minute. */
