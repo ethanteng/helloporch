@@ -702,16 +702,25 @@ typealias MediaAccess = (video: Boolean, done: (Boolean) -> Unit) -> Unit
 fun rememberMediaAccess(): MediaAccess {
     val context = LocalContext.current
     val waiting = remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+    val asked = remember { mutableStateOf<List<String>>(emptyList()) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         val done = waiting.value
+        val needed = asked.value
         waiting.value = null
-        done?.invoke(results.values.all { it })
+        asked.value = emptyList()
+        // Dismissing the prompt returns an empty map, and `all` on an empty collection is true, so check each permission
+        // that was asked for. Otherwise drop-in would be approved without the microphone or camera.
+        done?.invoke(needed.isNotEmpty() && needed.all { results[it] == true })
     }
     return remember(launcher) {
         { video, done ->
             val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA.takeIf { video })
                 .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-            if (needed.isEmpty()) done(true) else { waiting.value = done; launcher.launch(needed.toTypedArray()) }
+            if (needed.isEmpty()) done(true) else {
+                waiting.value = done
+                asked.value = needed
+                launcher.launch(needed.toTypedArray())
+            }
         }
     }
 }
