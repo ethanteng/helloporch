@@ -347,8 +347,8 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             Avatar(subject.name, photo, 96.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
-                    staysInCaregiverMode()
-                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    try { staysInCaregiverMode { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
+                    catch (_: ActivityNotFoundException) { admin.error = "No app on this device can choose a photo." }
                 }, enabled = !admin.busy) {
                     Text(if (photo == null) "Add photo" else "Change photo")
                 }
@@ -701,8 +701,7 @@ fun shareInvitation(context: Context, link: String) {
     val note = if (link.startsWith("https:")) "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It works once, for 24 hours."
         else "Join our Porch! This link works once, for 24 hours."
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$note\n$link")
-    staysInCaregiverMode()
-    try { context.startActivity(Intent.createChooser(send, null)) } catch (_: ActivityNotFoundException) {}
+    try { staysInCaregiverMode { context.startActivity(Intent.createChooser(send, null)) } } catch (_: ActivityNotFoundException) {}
 }
 
 // MARK: Shared pieces

@@ -173,7 +173,7 @@ private fun AddPhoneDropInScreen(admin: CaregiverAdmin, onDone: () -> Unit) {
             }
             FormButton("Choose from Contacts", filled = false, onClick = {
                 // Android's picker hands Porch the one number tapped, without access to the rest of the contacts.
-                try { staysInCaregiverMode(); pickContact.launch(Unit) } catch (_: ActivityNotFoundException) { admin.error = "This tablet has no contacts app. Type the number instead." }
+                try { staysInCaregiverMode { pickContact.launch(Unit) } } catch (_: ActivityNotFoundException) { admin.error = "No contacts app is available. Type the number instead." }
             })
             FormButton(if (admin.busy) "Saving…" else "Approve audio drop-in", enabled = !admin.busy, onClick = {
                 val trimmed = name.trim()

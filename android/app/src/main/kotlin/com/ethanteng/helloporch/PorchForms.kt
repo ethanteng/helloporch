@@ -123,10 +123,20 @@ fun PrivacyPolicyLink() {
 }
 
 fun openPrivacyPolicy(context: Context) {
-    staysInCaregiverMode()
-    try { context.startActivity(Intent(Intent.ACTION_VIEW, "https://helloporch.store/privacy".toUri())) } catch (_: ActivityNotFoundException) {}
+    try { staysInCaregiverMode { context.startActivity(Intent(Intent.ACTION_VIEW, "https://helloporch.store/privacy".toUri())) } }
+    catch (_: ActivityNotFoundException) {}
 }
 
 /** Before Porch opens another app's screen for the caregiver, such as the photo picker, the share sheet or the privacy
- * policy: caregiver mode on a family phone stays open behind it. */
-fun staysInCaregiverMode() = RemoteCaregiverSession.shared.stayThroughNextStop()
+ * policy: caregiver mode on a family phone stays open behind it. If that screen doesn't open, the next time Porch
+ * leaves is still the caregiver leaving. */
+fun staysInCaregiverMode(open: () -> Unit) {
+    RemoteCaregiverSession.shared.stayThroughNextStop()
+    try {
+        open()
+    } catch (e: Exception) {
+        // The screen never opened, so the next time Porch leaves is the caregiver leaving.
+        RemoteCaregiverSession.shared.returned()
+        throw e
+    }
+}
