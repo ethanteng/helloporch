@@ -312,7 +312,7 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
                         record("hangUp", "outcome" to "receiver hang-up off", "rawLine" to event.line)
                     } else {
                         AttendanceTracker.shared.noticed()
-                        record("hangUp", "outcome" to deliver(event), "rawLine" to event.line)
+                        deliverHangUp(event, attempt = 1)
                     }
                 }
                 Cell2JackDigitEvent.Kind.DIGIT -> {
@@ -329,9 +329,28 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
     }
 
     private fun deliver(event: Cell2JackDigitEvent): String = when {
-        _events.subscriptionCount.value == 0 -> "screen does not accept phone keys"
+        _events.subscriptionCount.value == 0 -> noScreen
         _events.tryEmit(event) -> "delivered"
         else -> "dropped: screen is behind"
+    }
+
+    /**
+     * A key that finds no screen listening can be pressed again, but a hang-up can't be repeated without lifting the
+     * receiver. So one that arrives while one screen gives way to the next is tried again every 0.4 seconds, up to six
+     * tries, as on iOS (ios/CELL2JACK-CALLS.md). Leaving Porch drops a waiting try.
+     */
+    private fun deliverHangUp(event: Cell2JackDigitEvent, attempt: Int) {
+        val outcome = deliver(event)
+        if (outcome == noScreen && attempt < 6) {
+            record("hangUp", "outcome" to "retrying", "attempt" to attempt, "rawLine" to event.line)
+            scope.launch {
+                delay(400)
+                if (wanted) deliverHangUp(event, attempt + 1)
+                else record("hangUp", "outcome" to "dropped: session or foreground gate", "attempt" to attempt + 1, "rawLine" to event.line)
+            }
+            return
+        }
+        record("hangUp", "outcome" to outcome, "attempt" to attempt, "rawLine" to event.line)
     }
 
     private fun setStatus(text: String) {
@@ -392,6 +411,7 @@ class Cell2JackKeypad(context: Context, private val settings: PorchSettings) {
 
     companion object {
         const val readyStatus = "Phone keypad ready"
+        private const val noScreen = "screen does not accept phone keys"
         private const val permissionAction = "com.ethanteng.helloporch.CELL2JACK_PERMISSION"
 
         /** API 31 requires an explicit mutability flag. setPackage makes the intent explicit enough for API 34, which

@@ -40,6 +40,8 @@ class CallCenter(private val app: PorchApplication) {
     private val rang = ArrayDeque<String>()
     private val trigger = CallTrigger()
     private var cancelOpening = false
+    /** Who the bedside is calling, said while that call starts. */
+    private var announcement: OutgoingAnnouncement? = null
     private var noticeGeneration = 0
 
     /** Whether a call screen is showing, so nothing else may ring or open. */
@@ -145,25 +147,31 @@ class CallCenter(private val app: PorchApplication) {
         cancelOpening = false
         app.cell2jack.record("callStartRequested", "digitSource" to "shared touch/keyboard/USB handler")
         opening = true
+        // Said while the call is set up, so whoever pressed the key hears straight away who they're calling.
+        val announcement = OutgoingAnnouncement(app, name)
+        this.announcement = announcement
         app.scope.launch {
             try {
                 // Phone fallback comes later in phase 3. Until then a Porch call rings for the full wait, phone number or not.
                 val session = app.coordinator.startCall(memberID, name, mode, dropIn = false, waitSeconds = 45)
                 if (cancelOpening || !app.onScreen) {
+                    announcement.stop()
                     session.end()
                     app.cell2jack.record("pendingCallCancelled")
                     return@launch
                 }
                 app.cell2jack.record("callSessionCreated")
-                show(session.copy(peerContact = contact), name, photo)
+                show(session.copy(peerContact = contact), name, photo, announcement)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                announcement.stop()
                 if (cancelOpening) return@launch
                 app.cell2jack.record("callStartFailed", "error" to e.message)
                 error = text("Couldn't call %@", name) + "\n\n" + BedsideText.error(app, e.message ?: "Couldn't start the call.")
             } finally {
                 opening = false
+                this@CallCenter.announcement = null
             }
         }
     }
@@ -174,6 +182,7 @@ class CallCenter(private val app: PorchApplication) {
     fun cancelPendingCall(): String {
         if (!opening) return "no call"
         cancelOpening = true
+        announcement?.stop()
         note(text("Ending call…"))
         return "cancel pending call requested"
     }
@@ -185,8 +194,8 @@ class CallCenter(private val app: PorchApplication) {
         cancelPendingCall()
     }
 
-    private fun show(session: FamilyCallSession, name: String, photo: ByteArray?) {
-        val call = PorchCall(app, session, name, photo, onClosed = { if (active === it) active = null })
+    private fun show(session: FamilyCallSession, name: String, photo: ByteArray?, announcement: OutgoingAnnouncement? = null) {
+        val call = PorchCall(app, session, name, photo, announcement, onClosed = { if (active === it) active = null })
         active = call
         call.start()
     }

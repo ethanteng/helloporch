@@ -1,9 +1,12 @@
 package com.ethanteng.helloporch
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.CallContact
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTone
@@ -31,8 +34,9 @@ import kotlinx.serialization.json.JsonPrimitive
  * IncomingFamilyCallViewController. On iOS a family phone rings through CallKit instead; Android's calling system and
  * push come at the end of phase 3, and until then a family phone rings here while Porch is open.
  *
- * A drop-in announces itself and connects after a countdown later in phase 3. Until then it waits for Answer, as iOS
- * does when the announcement can't play. [IncomingCallScreen] shows it. Main thread only.
+ * A drop-in, which only the bedside takes, says who is dropping in and connects after counting down from 5, unless
+ * someone taps Don't connect or presses the call-control key. One whose announcement can't play waits for Answer
+ * instead, as on iOS. [IncomingCallScreen] shows it. Main thread only.
  */
 class IncomingCall(
     private val app: PorchApplication,
@@ -48,14 +52,21 @@ class IncomingCall(
     val dropIn = call.kind == "dropIn"
     var answering by mutableStateOf(false); private set
     var status by mutableStateOf(text(when {
-        dropIn -> if (video) "Video drop-in" else "Audio drop-in"
+        dropIn -> if (video) "Announcing video drop-in…" else "Announcing audio drop-in…"
         else -> if (video) "Incoming video call" else "Incoming audio call"
     })); private set
+    /** A drop-in whose announcement couldn't play, which waits for Answer like a call. */
+    private var manualAnswer by mutableStateOf(false)
+    /** Calls show Answer. A drop-in connects by itself, so it shows only Don't connect unless its announcement failed. */
+    val showsAnswer: Boolean get() = !dropIn || manualAnswer
     val answerTitle = text(if (video) "Answer video call" else "Answer audio call")
     val declineTitle = text(if (dropIn) "Don't connect" else "Decline")
-    /** On the bedside, how the call-control key answers and declines. */
-    val keypadHint: String? = if (credential.role != PorchExperience.BEDSIDE) null
-        else slots().digit(KeypadAction.CALL_CONTROL)?.let { CallSlots.symbol(it) }?.let { text("Tap %@ to answer. Hold %@ to decline.", it, it) }
+    /** On the bedside, how the call-control key answers, declines, or stops a drop-in. */
+    val keypadHint: String? get() {
+        if (credential.role != PorchExperience.BEDSIDE) return null
+        val key = slots().digit(KeypadAction.CALL_CONTROL)?.let { CallSlots.symbol(it) } ?: return null
+        return if (dropIn && !manualAnswer) text("Press %@ to stop this drop-in.", key) else text("Tap %@ to answer. Hold %@ to decline.", key, key)
+    }
 
     private val ring = TonePlayer(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
     private val scope = MainScope()
@@ -63,20 +74,49 @@ class IncomingCall(
     private val key = IncomingCallKey()
     private var holdJob: Job? = null
     private var closed = false
+    private val announcer = if (dropIn) Announcer(app) else null
+    private var countdown: Job? = null
     /** The call as the latest snapshot has it, for a drop-in's announcement time. */
     private var latest = call
     /** The server's clock minus this device's, in seconds, from the latest snapshot. */
     private var skew = 0L
 
     fun start() {
-        if (!ring.play(CallTone.INCOMING)) status = text("The sound couldn't play. Tap Answer to connect.")
         scope.launch { app.coordinator.links.collect(::check) }
+        if (announcer == null) {
+            if (!ring.play(CallTone.INCOMING)) status = text("The sound couldn't play. Tap Answer to connect.")
+            return
+        }
+        // The chime, who is dropping in, then 5 seconds to stop it. The server waits for that too: it accepts a drop-in
+        // only 5 seconds after the bedside saw it.
+        announcer.announceDropIn(name, video) { said ->
+            if (answering || closed || !app.onScreen) return@announceDropIn
+            if (said) countDown()
+            else {
+                manualAnswer = true
+                status = text("The sound couldn't play. Tap Answer to connect.")
+            }
+        }
+    }
+
+    private fun countDown() {
+        countdown = scope.launch {
+            for (remaining in 5 downTo 1) {
+                status = text(if (video) "Video drop-in\nConnecting in %d…" else "Audio drop-in\nConnecting in %d…", remaining)
+                delay(1_000)
+            }
+            answer()
+        }
     }
 
     fun answer() {
         if (answering || closed) return
+        // A drop-in connects only with the microphone and, for video, the camera already allowed. It never stops to ask.
+        if (dropIn && (!granted(Manifest.permission.RECORD_AUDIO) || (video && !granted(Manifest.permission.CAMERA)))) { decline(); return }
         answering = true
         ring.stop()
+        announcer?.stop()
+        countdown?.cancel()
         holdJob?.cancel()
         status = text("Connecting…")
         val session = session()
@@ -132,7 +172,8 @@ class IncomingCall(
     fun keyDown(digit: Int, keyCode: Int): Boolean {
         if (slots().action(digit) != KeypadAction.CALL_CONTROL) return false
         if (!trigger.keyDown(keyCode) || answering) return true
-        decide(key.begin(keyCode, dropIn = false))
+        // During a drop-in's announcement and countdown, the key stops it at once.
+        decide(key.begin(keyCode, dropIn = dropIn && !manualAnswer))
         if (!answering) {
             holdJob?.cancel()
             holdJob = scope.launch { delay(1_000); decide(key.held(keyCode)) }
@@ -150,6 +191,7 @@ class IncomingCall(
     /** A key on the Cell2Jack phone. A serial report is a tap, never a long press, so the call-control key answers. */
     fun cell2jackDigit(digit: Int): String {
         if (answering || slots().action(digit) != KeypadAction.CALL_CONTROL) return "incoming key ignored"
+        if (dropIn && !manualAnswer) { decline(); return "drop-in cancelled" }
         answer()
         return "answer requested"
     }
@@ -179,6 +221,8 @@ class IncomingCall(
         if (closed) return
         closed = true
         ring.stop()
+        announcer?.stop()
+        countdown?.cancel()
         holdJob?.cancel()
         trigger.resetKeys()
         key.cancel()
@@ -187,6 +231,7 @@ class IncomingCall(
     }
 
     private fun nowSeconds() = System.currentTimeMillis() / 1_000
+    private fun granted(permission: String) = ContextCompat.checkSelfPermission(app, permission) == PackageManager.PERMISSION_GRANTED
 
     private fun session() = FamilyCallSession(credential, call, name, app.service(credential), peerContact = contact)
     private fun slots(): CallSlots = try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() }

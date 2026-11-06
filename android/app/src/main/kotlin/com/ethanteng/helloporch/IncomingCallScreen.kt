@@ -38,8 +38,8 @@ fun IncomingCallScreen(app: PorchApplication, incoming: IncomingCall) = LargeTyp
             }
         }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            CallButton(incoming.answerTitle, !incoming.answering, onClick = incoming::answer, app = app, color = CallColors.answer,
-                translated = true, modifier = Modifier.fillMaxWidth())
+            if (incoming.showsAnswer) CallButton(incoming.answerTitle, !incoming.answering, onClick = incoming::answer, app = app,
+                color = CallColors.answer, translated = true, modifier = Modifier.fillMaxWidth())
             CallButton(incoming.declineTitle, true, onClick = incoming::decline, app = app, color = CallColors.end,
                 translated = true, modifier = Modifier.fillMaxWidth())
         }
