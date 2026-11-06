@@ -50,7 +50,8 @@ fun PorchRoot(
     val defaultOrigin = app.device.defaultOrigin
     val setupLink = link != null && runCatching { BedsideInvitation(link, defaultOrigin) }.isSuccess
     val familyLink = link != null && !setupLink && runCatching { FamilyInvitation(link, defaultOrigin) }.isSuccess
-    val busy = setup.open || setup.unlocking || replacement != null
+    val calls = app.calls
+    val busy = setup.open || setup.unlocking || replacement != null || calls.busy
 
     fun setUpBedside(url: String, replacing: Boolean) {
         app.device.saveActivation(url)
@@ -82,7 +83,12 @@ fun PorchRoot(
     BackHandler(enabled = joining && (welcoming || experience != PorchExperience.FAMILY)) { onLinkHandled() }
     BackHandler(enabled = !joining && welcoming && page != WelcomePage.WELCOME) { page = WelcomePage.WELCOME }
 
+    val active = calls.active
+    val incoming = calls.incoming
     when {
+        // A call takes over from whatever is showing, as on iOS.
+        active != null -> CallScreen(app, active)
+        incoming != null -> IncomingCallScreen(app, incoming)
         family -> FamilyScreens(app, if (joining) link else null, onLinkHandled, onReady = { familyReady = it })
         welcoming && page == WelcomePage.ON_TABLET -> BedsideOnTablet(onJoin = { page = WelcomePage.JOINING }, onBack = { page = WelcomePage.WELCOME })
         welcoming -> Welcome(
@@ -95,11 +101,12 @@ fun PorchRoot(
         else -> BedsideHome(app, links, setup)
     }
     // Only the bedside's home and a family phone's list of families can take a call, with nothing open over them.
-    val ready = notice == null && if (family) familyReady && !joining else !welcoming && !busy
+    val ready = notice == null && !calls.busy && if (family) familyReady && !joining else !welcoming && !busy
     SideEffect { app.screenReady = ready }
 
     replacement?.let { url -> ReplaceBedside(app, onReplace = { replacement = null; setUpBedside(url, replacing = true) }, onCancel = { replacement = null }) }
     PorchErrorDialog(notice) { notice = null }
+    if (active == null && incoming == null) PorchErrorDialog(calls.error) { calls.error = null }
 }
 
 /** The first screen on a device that isn't set up either way: setting Porch up for someone, or joining a family. */

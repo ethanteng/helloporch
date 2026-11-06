@@ -51,6 +51,8 @@ class PorchApplication : Application() {
             afterChange = ::afterSnapshot)
     }
     val keypadReport by lazy { KeypadNumberReport(scope, { service(it) }, pin = { caregiverPIN }, now = SystemClock::elapsedRealtime) }
+    /** The call this device is ringing for or on. */
+    val calls by lazy { CallCenter(this) }
     /** Counts mode changes, so the screens pick the new mode up. */
     var modeChanges by mutableIntStateOf(0)
         private set
@@ -113,7 +115,7 @@ class PorchApplication : Application() {
         // Porch checks in while it's open and tells each family when it closes. Push wakes it for calls (phase 3).
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) { onScreen = true; coordinator.start() }
-            override fun onStop(owner: LifecycleOwner) { onScreen = false; coordinator.pause() }
+            override fun onStop(owner: LifecycleOwner) { onScreen = false; coordinator.pause(); calls.leftScreen() }
         })
     }
 
@@ -121,6 +123,8 @@ class PorchApplication : Application() {
      * family members, and the server hears the keypad's numbers. Photo sync and speech-clip prefetch come with the
      * clock's contact grid and calls (phase 3). */
     private fun afterSnapshot(links: FamilyLinks) {
+        // A call to this device rings, on the bedside and on family phones.
+        calls.noteLinks(links)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
         try {
             val slots = CallSlots.load(settings, photos)
