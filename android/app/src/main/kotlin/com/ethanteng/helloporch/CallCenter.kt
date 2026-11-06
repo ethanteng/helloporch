@@ -106,6 +106,12 @@ class CallCenter(private val app: PorchApplication) {
 
     /** The bedside presses a key, or taps a person: calls whoever is on that key, as iOS's call(slot:) does. */
     fun bedsideKey(digit: Int) {
+        // While a call is still starting, the clock stays up but is no longer ready for a new one. The call-control
+        // key cancels it, as the Cell2Jack does on iOS; the receiver does too, through [cancelPendingCall].
+        if (opening) {
+            if (slots().action(digit) == KeypadAction.CALL_CONTROL) cancelPendingCall()
+            return
+        }
         if (busy || !app.screenReady) return
         val slots = slots()
         val action = slots.action(digit)
