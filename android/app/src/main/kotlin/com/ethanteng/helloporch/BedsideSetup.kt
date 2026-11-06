@@ -237,11 +237,16 @@ class BedsideSetup(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Caregiver mode is open, after the PIN. */
+    var caregiver by mutableStateOf(false)
+        private set
+
     fun openGate() { error = null; unlocking = true }
     fun closeGate() { unlocking = false }
+    fun closeCaregiver() { caregiver = false }
 
-    /** Checks the PIN with the server, then goes on with setup, as `CaregiverPINViewController` does before caregiver
-     * mode on iOS. */
+    /** Checks the PIN with the server, then goes on with setup, or opens caregiver mode, as `CaregiverPINViewController`
+     * does on iOS. */
     fun unlock(pin: String) {
         if (checkingPIN) return
         if (!pinPattern.matches(pin)) { error = "Enter six digits."; return }
@@ -252,7 +257,8 @@ class BedsideSetup(application: Application) : AndroidViewModel(application) {
                 app.service(credential).send("verifyPIN", pin = pin)
                 app.caregiverPIN = pin
                 unlocking = false
-                if (unfinished) resume()
+                // A setup that stopped after its PIN goes on; otherwise the PIN opens caregiver mode.
+                if (unfinished) resume() else caregiver = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {

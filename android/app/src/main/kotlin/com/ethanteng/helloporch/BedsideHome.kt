@@ -8,6 +8,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +35,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -135,8 +142,8 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
                     state != null -> ClockButton(text(if (calls.opening) "Calling…" else "Call someone"), callHeight, buttonColor, buttonText, large, narrow,
                         enabled = !calls.opening) { picking = true }
                 }
-                // For a caregiver, until caregiver mode (phase 4) has a place for it: Porch should be the home screen, so
-                // the tablet comes back to it after a restart and Home can't leave it.
+                // A caregiver's shortcut that skips the PIN; This tablet in caregiver mode has it too. Porch should be the
+                // home screen, so the tablet comes back to it after a restart and Home can't leave it.
                 if (paired && !isHome) BedsideHomeScreen.request(context)?.let { ask ->
                     TextButton(onClick = { askHome.launch(ask) }) {
                         Text("Make Porch this tablet's home screen", color = palette?.controlForeground ?: PorchColors.nightSecondary, fontSize = 18.sp)
@@ -144,6 +151,10 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
                 }
             }
         } }
+        // Above the clock, so a short landscape screen's date doesn't paint over it. A tap, or a hold of half a
+        // second, opens the PIN, as on iOS.
+        if (paired && state != null) CaregiverButton(text("Caregiver mode"), palette?.controlForeground ?: PorchColors.nightSecondary,
+            Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp), onOpen = setup::openGate)
     }
 }
 
@@ -155,6 +166,18 @@ private fun FittedText(text: AnnotatedString, color: Color, size: TextUnit, weig
         style = LocalTextStyle.current.merge(TextStyle(color = color, fontWeight = weight, textAlign = TextAlign.Center,
             fontFeatureSettings = if (digits) "tnum" else null)),
         autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = size, stepSize = 2.sp))
+}
+
+/** The gear in the clock's corner that opens caregiver mode, after the PIN. */
+@Composable
+private fun CaregiverButton(name: String, color: Color, modifier: Modifier, onOpen: () -> Unit) {
+    // A click, so a screen reader's double-tap opens it as a touch does. The click merges its content, so the gear's
+    // name goes on the glyph inside it, which is otherwise read as "⚙".
+    Box(modifier.size(64.dp).clip(CircleShape)
+        .combinedClickable(role = Role.Button, onClick = onOpen, onLongClick = onOpen),
+        contentAlignment = Alignment.Center) {
+        Text("\u2699\uFE0E", Modifier.clearAndSetSemantics { contentDescription = name }, color = color, fontSize = 32.sp)
+    }
 }
 
 /** The clock's big button: Call someone, or setting Porch up. */
@@ -191,7 +214,8 @@ fun CaregiverGate(setup: BedsideSetup) {
         FormSection("Your caregiver PIN") {
             FormField(pin, { pin = it.filter(Char::isDigit).take(6) }, "Six-digit PIN", "Enter six digits",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation())
-            FormButton("Open caregiver mode", onClick = { setup.unlock(pin) }, enabled = !setup.checkingPIN)
+            // The PIN goes on with a setup that stopped after it, and opens caregiver mode otherwise.
+            FormButton(if (setup.unfinished) "Continue" else "Open caregiver mode", onClick = { setup.unlock(pin) }, enabled = !setup.checkingPIN)
         }
         // Reachable without the PIN, so anyone at the bedside can read it.
         PrivacyPolicyLink()
