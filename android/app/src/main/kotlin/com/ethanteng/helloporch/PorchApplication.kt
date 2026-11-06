@@ -130,6 +130,8 @@ class PorchApplication : Application() {
     private fun afterSnapshot(links: FamilyLinks) {
         // A call to this device rings, on the bedside and on family phones.
         calls.noteLinks(links)
+        // Photos caregiver mode downloaded on a family phone don't stay.
+        if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
         try {
             val slots = CallSlots.load(settings, photos)

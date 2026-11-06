@@ -316,4 +316,71 @@ class FamilyCoordinatorTest {
         session.begin("654321"); session.end()
         assertNull(session.activePIN)
     }
+
+    @Test fun caregiverModeEndsWhenPorchLeavesTheScreenButNotForWhatItOpened() {
+        val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
+        session.begin("123456")
+        session.stayThroughNextStop()
+        session.leftForeground()
+        assertTrue(session.isActive, "the photo picker or share sheet")
+        session.returned()
+        session.leftForeground()
+        assertFalse(session.isActive, "Home, or the screen turning off")
+
+        session.begin("123456")
+        // Something that opens over Porch without Porch leaving the screen, then the caregiver goes Home.
+        session.stayThroughNextStop()
+        session.returned()
+        session.leftForeground()
+        assertFalse(session.isActive)
+    }
+
+    @Test fun caregiverModeEndsWhenPorchComesBackWithoutThePickersAnswer() {
+        val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
+        session.begin("123456")
+        session.stayThroughNextStop(answers = true)
+        session.leftForeground()
+        session.answered()
+        session.returned()
+        assertTrue(session.isActive, "a photo chosen, or none")
+
+        session.stayThroughNextStop(answers = true)
+        session.leftForeground()
+        // Home from the picker, which runs on its own, then Porch from the launcher.
+        session.returned()
+        assertFalse(session.isActive)
+
+        session.begin("123456")
+        session.stayThroughNextStop(answers = true)
+        session.didNotOpen()
+        session.returned()
+        assertTrue(session.isActive, "a picker that couldn't open")
+        session.leftForeground()
+        assertFalse(session.isActive)
+
+        // Home from a picker on Porch's own task, then Porch from the launcher, which closes the picker unanswered.
+        session.begin("123456")
+        val departed = session.departures
+        session.stayThroughNextStop(answers = true)
+        session.leftForeground()
+        session.reopened()
+        session.answered()
+        session.returned()
+        assertFalse(session.isActive)
+        assertEquals(departed + 1, session.departures)
+    }
+
+    @Test fun caregiverModeForgetsTheHouseholdWithThePINAndCountsDepartures() {
+        val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
+        session.begin("123456")
+        session.household = FamilyAdminState("Mom", dropInEnabled = true, people = emptyList())
+        val departed = session.departures
+        session.stayThroughNextStop()
+        session.leftForeground()
+        assertEquals(departed, session.departures, "the photo picker isn't leaving")
+        assertEquals("Mom", session.household?.householdName)
+        session.leftForeground()
+        assertEquals(departed + 1, session.departures, "a PIN check that finishes now must not open caregiver mode")
+        assertNull(session.household)
+    }
 }

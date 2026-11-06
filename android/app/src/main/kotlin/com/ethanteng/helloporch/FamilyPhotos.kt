@@ -29,8 +29,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Family members' photos from Porch, kept on the bedside under their content ID (the SHA-256 of the JPEG), as iOS's
- * FamilyPhotos keeps them: everyone's current photo, for the keypad, calls and caregiver mode. A family phone's own
- * photo comes with profiles. Main thread only, apart from the downloads and uploads.
+ * FamilyPhotos keeps them: everyone's current photo, for the keypad, calls and caregiver mode. Caregiver mode on a
+ * family phone downloads the ones it shows. A family phone's own photo comes with profiles. Main thread only, apart from
+ * the downloads and uploads.
  */
 object FamilyPhotos {
     /** Goes up as each photo is saved, so screens that show photos read them again. */
@@ -68,14 +69,31 @@ object FamilyPhotos {
         }
     }
 
+    /** A family member's photo for caregiver mode on a family phone, which asks with the caregiver PIN. */
+    fun loadForCaregiver(app: PorchApplication, id: String, memberID: String, credential: FamilyCredential, pin: String) =
+        load(app, id, mapOf("memberID" to JsonPrimitive(memberID)), credential, "caregiverProfilePhoto", pin)
+
+    /**
+     * With every family phone check-in: a phone keeps no one's photo yet, so ones caregiver mode downloaded are deleted
+     * a day after they were saved, as iOS's sync deletes them. Hourly, so the folder isn't read on every check-in.
+     */
+    fun pruneOnFamilyPhone(app: PorchApplication) {
+        val now = SystemClock.elapsedRealtime()
+        if (prunedAt != 0L && now - prunedAt < 3_600_000) return
+        prunedAt = now
+        kept = null
+        app.photos.familyMembers.prune(keeping = emptySet())
+    }
+
     /** Starts downloading a photo unless it's already here, downloading, or failed in the last minute. */
-    private fun load(app: PorchApplication, id: String, values: Map<String, JsonElement>, credential: FamilyCredential) {
+    private fun load(app: PorchApplication, id: String, values: Map<String, JsonElement>, credential: FamilyCredential,
+        action: String = "profilePhoto", pin: String? = null) {
         val store = app.photos.familyMembers
         if (store.contains(id) || id in loading || (retryAfter[id] ?: 0) > SystemClock.elapsedRealtime()) return
         loading += id
         app.scope.launch {
             try {
-                val photo = app.service(credential).send("profilePhoto", values).photo
+                val photo = app.service(credential).send(action, values, pin = pin).photo
                     ?: throw FamilyServiceException("This photo isn't available.", 404)
                 val data = withContext(Dispatchers.IO) {
                     client.newCall(Request.Builder().url(photo.url).build()).execute().use { http ->

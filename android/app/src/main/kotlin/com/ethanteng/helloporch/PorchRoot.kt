@@ -109,7 +109,8 @@ fun PorchRoot(
         setup.caregiver -> CaregiverMode(app, links, onClose = setup::closeCaregiver)
         else -> BedsideHome(app, links, setup)
     }
-    // Only the bedside's home and a family phone's list of families can take a call, with nothing open over them.
+    // Only the bedside's home and a family phone's list of families, or its caregiver mode, can take a call, with nothing
+    // open over them.
     val ready = notice == null && !calls.busy && if (family) familyReady && !joining else !welcoming && !busy
     SideEffect { app.screenReady = ready }
 

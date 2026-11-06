@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PhoneNumberNormalization
+import com.ethanteng.helloporch.core.RemoteCaregiverSession
 import com.ethanteng.helloporch.core.ValidationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -46,8 +48,9 @@ private enum class DropInScreen { PERSON, ADD_PHONE }
 fun DropInPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
     var screen by rememberSaveable { mutableStateOf<DropInScreen?>(null) }
     var memberID by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(screen) { if (screen != null) admin.refresh() }
     when (screen) {
-        null -> FormScreen(CaregiverPage.DROP_IN.title, navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
+        null -> FormScreen(CaregiverPage.DROP_IN.title(admin.onBedside), navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
             DropInPage(app, admin, links, onPerson = { memberID = it; screen = DropInScreen.PERSON }, onAddPhone = { screen = DropInScreen.ADD_PHONE })
         }
         DropInScreen.PERSON -> PersonPage(app, admin, links, memberID, null, onDone = { screen = null })
@@ -57,13 +60,14 @@ fun DropInPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
 
 /**
  * Who can drop in, as iOS's DropInSettingsViewController shows it: the switch that pauses drop-ins for everyone, then
- * family members and phone numbers that can, and family members who can't. A drop-in answers on this tablet, so it
- * needs the tablet's microphone, and for video its camera.
+ * family members and phone numbers that can, and family members who can't. A drop-in answers on the bedside, so it
+ * needs the tablet's microphone, and for video its camera. Only the tablet can grant those, so a family phone doesn't
+ * ask.
  */
 @Composable
 private fun DropInPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onPerson: (String) -> Unit, onAddPhone: () -> Unit) {
     val context = LocalContext.current
-    val mediaAccess = rememberMediaAccess()
+    val mediaAccess = rememberMediaAccess(admin.onBedside)
     val state = admin.state(links)
     val enabled = state?.dropInEnabled == true
     val people = state?.people.orEmpty()
@@ -84,7 +88,7 @@ private fun DropInPage(app: PorchApplication, admin: CaregiverAdmin, links: Fami
                 else admin.error = "Allow the $devices for Porch in the tablet's settings before turning on drop-ins."
             }
         })
-        if (enabled && !granted) {
+        if (enabled && !granted && admin.onBedside) {
             HorizontalDivider()
             CaregiverRow { Text("Allow the $devices for Porch in the tablet's settings, or drop-ins can't connect.", color = MaterialTheme.colorScheme.error) }
         }
@@ -96,7 +100,7 @@ private fun DropInPage(app: PorchApplication, admin: CaregiverAdmin, links: Fami
     CaregiverGroup("Can drop in") {
         can.forEachIndexed { index, person ->
             if (index > 0) HorizontalDivider()
-            val photo = remember(person.photoID, FamilyPhotos.saved) { FamilyPhotos.data(app, person.photoID) }
+            val photo = memberPhoto(app, admin, person)
             CaregiverRow(onClick = { onPerson(person.id) }, label = "${person.name}, Porch app, ${person.dropInModes.orEmpty()}") {
                 Avatar(person.name, photo, 40.dp)
                 Column(Modifier.weight(1f)) {
@@ -131,7 +135,7 @@ private fun DropInPage(app: PorchApplication, admin: CaregiverAdmin, links: Fami
     if (cannot.isNotEmpty()) CaregiverGroup("Can't drop in") {
         cannot.forEachIndexed { index, person ->
             if (index > 0) HorizontalDivider()
-            val photo = remember(person.photoID, FamilyPhotos.saved) { FamilyPhotos.data(app, person.photoID) }
+            val photo = memberPhoto(app, admin, person)
             CaregiverRow(onClick = { onPerson(person.id) }, label = "${person.name}, can't drop in") {
                 Avatar(person.name, photo, 40.dp)
                 Text(person.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
@@ -149,11 +153,12 @@ private fun AddPhoneDropInScreen(admin: CaregiverAdmin, onDone: () -> Unit) {
     BackHandler(onBack = onDone)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val mediaAccess = rememberMediaAccess()
+    val mediaAccess = rememberMediaAccess(admin.onBedside)
     val region = remember { homeRegion() }
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     val pickContact = rememberLauncherForActivityResult(PickPhoneNumber()) { uri ->
+        RemoteCaregiverSession.shared.answered()
         if (uri != null) scope.launch {
             val picked = pickedNumber(context, uri) ?: run { admin.error = "That contact's number couldn't be read. Type it instead."; return@launch }
             picked.first?.let { name = it }
@@ -170,14 +175,14 @@ private fun AddPhoneDropInScreen(admin: CaregiverAdmin, onDone: () -> Unit) {
             }
             FormButton("Choose from Contacts", filled = false, onClick = {
                 // Android's picker hands Porch the one number tapped, without access to the rest of the contacts.
-                try { pickContact.launch(Unit) } catch (_: ActivityNotFoundException) { admin.error = "This tablet has no contacts app. Type the number instead." }
+                try { staysInCaregiverMode(answers = true) { pickContact.launch(Unit) } } catch (_: ActivityNotFoundException) { admin.error = "No contacts app is available. Type the number instead." }
             })
             FormButton(if (admin.busy) "Saving…" else "Approve audio drop-in", enabled = !admin.busy, onClick = {
                 val trimmed = name.trim()
                 // The server refuses a blank or oversized name. Ask for the microphone only once this can be saved.
                 if (trimmed.isEmpty() || trimmed.length > 80) { admin.error = "Enter a name with 1–80 characters."; return@FormButton }
                 val number = try { PhoneNumberNormalization.e164(phone, region) } catch (e: ValidationException) { admin.error = e.message; return@FormButton }
-                // A drop-in answers on this tablet, so only it can grant its own microphone.
+                // A drop-in answers on the bedside, so only the tablet can grant its own microphone.
                 mediaAccess(false) { allowed ->
                     if (!allowed) admin.error = "Allow the microphone in the tablet's settings before approving drop-in."
                     else admin.perform("setPhoneDropIn", mapOf("number" to JsonPrimitive(number), "name" to JsonPrimitive(trimmed),

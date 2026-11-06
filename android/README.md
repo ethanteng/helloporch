@@ -34,7 +34,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -a android.intent.action.VIEW -d '<the porch://pair link it printed>'
 ```
 
-Tap **Join family**. The server prints when the phone comes online, and the phone shows the bedside as on and ready. Press Home and the server shows it going offline.
+Tap **Join family**. The server prints when the phone comes online, and the phone shows the bedside as on and ready. Press Home and the server shows it going offline. That invitation makes the phone a caregiver, so its family card has **Caregiver mode**, which opens with the caregiver PIN the server printed.
 
 On a tablet emulator, open the `porch://activate` link instead to set the tablet up as a bedside. The server prints each device as it starts checking in and whether it can take calls, and the link for each invitation the tablet makes, such as setup's QR code, so a phone can join without a camera.
 

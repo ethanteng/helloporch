@@ -492,13 +492,13 @@ Built in five pull requests:
 1. **The tablet's caregiver mode.** The gear and PIN on the clock, the two panes, the household's name and number, and Calls, Display & voice, Privacy, Caregivers & PIN, and This tablet.
 2. **People.** The keypad, the person page and the key editor, with invitations, and family members' photos downloaded to the tablet. The bedside's people screen lists only the people on keys, as iOS's does, in their button colors.
 3. **Drop-in, call history and blocked numbers.** The Drop-in page with its switch, who can and can't drop in, and adding a phone number; Call history and Blocked numbers open from Calls.
-4. **Caregiver mode on a family phone.**
+4. **Caregiver mode on a family phone.** Caregiver mode on a caregiver's family card, the PIN, and the pages a phone can change, with what only the bedside can change listed apart. Pages read the household again as they open, since a phone's check-ins leave out caregiver details. Calls still ring while it's open, which closes it.
 5. **The Porch keyboard, and About.**
 
 The pages follow [CaregiverSettings.swift](../ios/Porch/CaregiverSettings.swift):
 
 - **On the tablet:** People, Calls, Drop-in, Messages, Display & voice, Privacy, Caregivers & PIN, and This tablet. It uses two panes, with the list beside the page.
-- **On a phone:** the same, minus Display & voice and This tablet, with rows marked "On the bedside" for settings only the tablet can change. The phone keeps the PIN in memory for 10 idle minutes and clears it when Porch goes to the background.
+- **On a phone:** the same, minus Display & voice and This tablet, with rows marked "On the bedside" for settings only the tablet can change. The phone keeps the PIN in memory for 10 idle minutes and clears it when Porch goes to the background. The photo picker, share sheet and privacy policy are other apps' screens on Android, so opening them from caregiver mode doesn't count as leaving.
 - **Entry.** A gear tap, or a 0.5 s hold, on the tablet. Then `caregiverStatus` and `verifyPIN`, with a PIN matching `^[0-9]{6}$`. The privacy policy (helloporch.store/privacy, in Custom Tabs) is reachable without the PIN.
 - **Header.** The household name, which can be renamed, and the Porch number. A pending number opens the number screen.
 

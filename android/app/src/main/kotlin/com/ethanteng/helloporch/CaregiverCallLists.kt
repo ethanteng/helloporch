@@ -29,7 +29,6 @@ import com.ethanteng.helloporch.core.CallHistoryEntry
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.NativeCall
-import com.ethanteng.helloporch.core.PorchExperience
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Date
@@ -42,7 +41,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * shows them. The server keeps them (`callHistory`); this screen asks for them when it opens and on Refresh.
  */
 @Composable
-internal fun CallHistoryScreen(app: PorchApplication, onDone: () -> Unit) {
+internal fun CallHistoryScreen(app: PorchApplication, admin: CaregiverAdmin, onDone: () -> Unit) {
     BackHandler(onBack = onDone)
     val scope = rememberCoroutineScope()
     var calls by remember { mutableStateOf<List<CallHistoryEntry>?>(null) }
@@ -51,14 +50,13 @@ internal fun CallHistoryScreen(app: PorchApplication, onDone: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     fun reload() {
         if (loading) return
-        val credential = app.device.credential(PorchExperience.BEDSIDE)
-        if (credential == null) { failure = "Go back to the clock and open caregiver mode to finish setup."; return }
         loading = true
         scope.launch {
             try {
-                calls = app.service(credential).send("callHistory", pin = app.caregiverPIN).calls.orEmpty()
+                calls = admin.request("callHistory").calls.orEmpty()
                 // A check-in can rename a keypad contact while this list stays open, so Refresh reads those names again.
-                slots = try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { null }
+                // A family phone has no keypad, so phone callers show as Porch named them.
+                slots = if (!admin.onBedside) null else try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { null }
                 failure = null
             } catch (e: CancellationException) {
                 throw e
@@ -139,7 +137,7 @@ private fun CallRow(call: CallHistoryEntry, slots: CallSlots?, time: String) {
 internal fun BlockedNumbersScreen(admin: CaregiverAdmin, links: FamilyLinks, onDone: () -> Unit) {
     BackHandler(onBack = onDone)
     var clearing by remember { mutableStateOf(false) }
-    val screening = links.state?.callScreening
+    val screening = admin.state(links)?.callScreening
     val format = remember { IcuDateFormat.getDateTimeInstance(IcuDateFormat.RELATIVE_SHORT, IcuDateFormat.SHORT) }
     fun moment(seconds: Long): String = format.format(Date(seconds * 1000))
     FormScreen("Blocked numbers", navigation = { TextButton(onClick = onDone) { Text("Back") } }) {
