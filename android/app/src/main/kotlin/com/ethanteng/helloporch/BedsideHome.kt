@@ -88,8 +88,13 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
         if (scene != null) ScenePictureFading(scene, Modifier.fillMaxSize())
         LargeType { BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 32.dp, vertical = 16.dp)) {
             // Fitted to the tablet, as on iOS, rather than capped at phone-sized text. The bottom is kept for calling.
-            val large = maxWidth >= 600.dp && maxHeight >= 500.dp
-            val callHeight = if (large) 124.dp else if (maxHeight < 500.dp) 80.dp else 96.dp
+            // iOS measures the safe area. This box is already inset by the padding on it: 32 dp on each side, 16 dp
+            // above and below.
+            val safeWidth = maxWidth + 64.dp
+            val safeHeight = maxHeight + 32.dp
+            val large = safeWidth >= 600.dp && safeHeight >= 500.dp
+            val narrow = safeWidth < 400.dp
+            val callHeight = if (large) 124.dp else if (safeHeight < 500.dp) 80.dp else 96.dp
             val width = maxOf(200f, maxWidth.value)
             val height = maxOf(80f, maxHeight.value - callHeight.value - 116f)
             val timeSize = minOf(width * 0.43f, height * 0.48f).sp
@@ -120,9 +125,9 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
                 val buttonColor = palette?.controlBackground?.copy(alpha = 0.6f) ?: PorchColors.nightSurface
                 val buttonText = palette?.controlForeground ?: PorchColors.nightText
                 when {
-                    !paired -> ClockButton("Set up Porch", callHeight, buttonColor, buttonText, large) { setup.start() }
-                    state != null && setup.unfinished -> ClockButton("Finish setting up Porch", callHeight, buttonColor, buttonText, large, onClick = setup::openGate)
-                    state != null -> ClockButton(text(if (calls.opening) "Calling…" else "Call someone"), callHeight, buttonColor, buttonText, large,
+                    !paired -> ClockButton("Set up Porch", callHeight, buttonColor, buttonText, large, narrow) { setup.start() }
+                    state != null && setup.unfinished -> ClockButton("Finish setting up Porch", callHeight, buttonColor, buttonText, large, narrow, onClick = setup::openGate)
+                    state != null -> ClockButton(text(if (calls.opening) "Calling…" else "Call someone"), callHeight, buttonColor, buttonText, large, narrow,
                         enabled = !calls.opening) { picking = true }
                 }
                 // For a caregiver, until caregiver mode (phase 4) has a place for it: Porch should be the home screen, so
@@ -149,11 +154,11 @@ private fun FittedText(text: AnnotatedString, color: Color, size: TextUnit, weig
 
 /** The clock's big button: Call someone, or setting Porch up. */
 @Composable
-private fun ClockButton(title: String, height: Dp, color: Color, text: Color, large: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ClockButton(title: String, height: Dp, color: Color, text: Color, large: Boolean, narrow: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     Button(onClick = onClick, enabled = enabled, modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().height(height),
         shape = RoundedCornerShape(24.dp),
         colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = text, disabledContainerColor = color, disabledContentColor = text.copy(alpha = 0.6f))) {
-        Text(title, fontSize = if (large) 48.sp else 32.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(title, fontSize = if (large) 48.sp else if (narrow) 28.sp else 32.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
