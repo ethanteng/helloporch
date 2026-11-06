@@ -19,22 +19,47 @@
 //   adb reverse tcp:7880 tcp:7880 && adb reverse tcp:7881 tcp:7881
 // Porch's server only hands out secure LiveKit addresses, so this one says wss:// to the handler and this script
 // changes it to ws:// on the way out. The apps take ws:// only for this device.
-import { randomBytes, randomUUID } from 'node:crypto';
+//
+// --phone <env file> --phone-from <number> makes phone fallback real: the bedside's calls to regular phones go through
+// LiveKit Cloud's phone trunk and Twilio, which ring a real phone and cost money. Only LIVEKIT_URL, LIVEKIT_API_KEY,
+// LIVEKIT_API_SECRET and LIVEKIT_SIP_OUTBOUND_TRUNK_ID are read from the file, so nothing here reaches Redis. Calls come
+// from --phone-from, which must be a number the Twilio account owns, since this household's own number is made up.
+// Approve only your own numbers on the keypad.
+//   node scripts/local-family-server.mjs 3010 --livekit --phone .env.local --phone-from +15105550123
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { RoomServiceClient } from 'livekit-server-sdk';
-import { handleFamily } from '../lib/family/service.ts';
+import { authorizeBedsideCalling, handleFamily } from '../lib/family/service.ts';
 import { blockCall } from '../lib/family/screening.ts';
+import { handlePhoneCall } from '../lib/calls/phone.ts';
 
 const options = process.argv.slice(2), livekit = options.includes('--livekit');
-const port = Number(options.find(option => !option.startsWith('--')) ?? 3010), origin = `http://localhost:${port}`;
+const valueOf = flag => { const at = options.indexOf(flag); return at < 0 ? undefined : options[at + 1]; };
+const port = Number(options.find((option, index) => /^[0-9]+$/.test(option) && !options[index - 1]?.startsWith('--phone')) ?? 3010), origin = `http://localhost:${port}`;
+// Real phone calls (see the top of this file). Only these four settings are taken from the file.
+const phoneFile = valueOf('--phone'), phoneFrom = valueOf('--phone-from');
+const phone = phoneFile && (() => {
+  const wanted = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'LIVEKIT_SIP_OUTBOUND_TRUNK_ID'], found = {};
+  for (const line of readFileSync(phoneFile, 'utf8').split('\n')) {
+    const match = /^\s*(?:export\s+)?([A-Z_]+)\s*=\s*(.*?)\s*$/.exec(line);
+    if (match && wanted.includes(match[1])) found[match[1]] = match[2].replace(/^(['"])(.*)\1$/, '$2');
+  }
+  const missing = wanted.filter(name => !found[name]);
+  if (missing.length) throw new Error(`${phoneFile} has no ${missing.join(', ')}.`);
+  if (!/^wss:\/\//.test(found.LIVEKIT_URL)) throw new Error(`LIVEKIT_URL in ${phoneFile} isn't a wss:// address.`);
+  if (!/^\+[1-9][0-9]{6,14}$/.test(phoneFrom ?? '')) throw new Error('--phone needs --phone-from with a number the Twilio account owns, such as +15105550123.');
+  return { url: found.LIVEKIT_URL, key: found.LIVEKIT_API_KEY, secret: found.LIVEKIT_API_SECRET, trunk: found.LIVEKIT_SIP_OUTBOUND_TRUNK_ID };
+})();
 // livekit-server --dev's address and keys, which are public test values.
 const localLiveKit = { url: 'ws://localhost:7880', secure: 'wss://localhost:7880', key: 'devkey', secret: 'secret' };
 const setupCode = randomBytes(24).toString('hex'), pin = '246810';
 // What buying a Porch number needs (lib/family/numbers.ts). None of it is real: the stand-ins below are all it reaches.
 Object.assign(process.env, { LIVEKIT_URL: livekit ? localLiveKit.secure : 'wss://local.invalid', LIVEKIT_API_KEY: livekit ? localLiveKit.key : 'local',
   LIVEKIT_API_SECRET: livekit ? localLiveKit.secret : randomBytes(24).toString('hex'), PORCH_CONTACT_SETUP_CODE: setupCode,
-  TWILIO_ACCOUNT_SID: `AC${'0'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'local', PORCH_SERVER_ORIGIN: 'https://local.invalid', LIVEKIT_SIP_OUTBOUND_TRUNK_ID: 'ST_local',
-  LIVEKIT_SIP_URI: 'sip:local.invalid', PORCH_MAX_PHONE_NUMBERS: '20' });
+  TWILIO_ACCOUNT_SID: `AC${'0'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'local', PORCH_SERVER_ORIGIN: 'https://local.invalid',
+  // The real trunk only with --phone. Porch numbers stay made up either way: their stand-ins below never use it.
+  LIVEKIT_SIP_OUTBOUND_TRUNK_ID: phone ? phone.trunk : 'ST_local', LIVEKIT_SIP_URI: 'sip:local.invalid', PORCH_MAX_PHONE_NUMBERS: '20' });
 class MemoryStore {
   values = new Map();
   async get(key) { return this.values.get(key) ?? null; }
@@ -144,7 +169,29 @@ const authorizeContact = async (request, response, body) => {
   if (typeof input.phoneNumber !== 'string' || !/^\+[1-9][0-9]{6,14}$/.test(input.phoneNumber)) return reply(400, { error: 'Enter a phone number with + and its country code.' });
   if (input.phoneNumber.startsWith('+44')) return reply(400, { error: "Porch can't call phone numbers in United Kingdom yet." });
   const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
-  reply(200, { authorization: `local.${Buffer.from(JSON.stringify({ phoneNumber: input.phoneNumber, exp: expiresAt })).toString('base64url')}`, expiresAt });
+  if (!phone) return reply(200, { authorization: `local.${Buffer.from(JSON.stringify({ phoneNumber: input.phoneNumber, exp: expiresAt })).toString('base64url')}`, expiresAt });
+  // With --phone, signed as lib/calls/contacts.ts signs it, so the real phone handler below accepts it.
+  const approval = Buffer.from(JSON.stringify({ phoneNumber: input.phoneNumber, audience: origin, exp: expiresAt })).toString('base64url');
+  const signature = createHmac('sha256', phone.secret).update(`porch-contact-v1.${setupCode}.${approval}`).digest('base64url');
+  reply(200, { authorization: `${approval}.${signature}`, expiresAt });
+};
+
+// With --phone, /api/calls/phone/{prepare,start,end}: the real handler, with this household's bedside checked against
+// the in-memory store, LiveKit Cloud for the phone's room, and --phone-from as the caller ID.
+const phoneCall = async (request, response, body, action) => {
+  const result = await handlePhoneCall(new Request(`${origin}${request.url}`, { method: 'POST', headers: new Headers(request.headers), body }), action, {
+    store,
+    authorize: async incoming => {
+      const bedside = await authorizeBedsideCalling(incoming, store);
+      if (bedside instanceof Response) return bedside;
+      return { ...bedside, serverUrl: phone.url, apiKey: phone.key, apiSecret: phone.secret, fromNumber: phoneFrom };
+    },
+  });
+  const text = await result.text();
+  let output = {};
+  try { output = JSON.parse(text); } catch { /* not JSON */ }
+  console.log(`${time()} phone/${action} -> ${result.status}${output.error ? ` (${output.error})` : ''}`);
+  response.writeHead(result.status, { 'Content-Type': 'application/json' }).end(text);
 };
 const blockedCall = async (request, response) => {
   try {
@@ -176,6 +223,12 @@ const onRequest = async (request, response) => {
   if (request.url.startsWith('/media/')) { serveMedia(request, response, raw); return; }
   if (request.method === 'POST' && request.url.startsWith('/local/blocked-call')) { await blockedCall(request, response); return; }
   if (request.method === 'POST' && request.url === '/api/calls/contacts/authorize') { await authorizeContact(request, response, body); return; }
+  const phoneAction = /^\/api\/calls\/phone\/(prepare|start|end)$/.exec(request.url ?? '')?.[1];
+  if (request.method === 'POST' && phoneAction) {
+    if (!phone) { response.writeHead(503, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Start the local server with --phone to try phone fallback.' })); return; }
+    await phoneCall(request, response, body, phoneAction);
+    return;
+  }
   if (request.method !== 'POST' || request.url !== '/api/family') { response.writeHead(404).end(); return; }
   // Where Vercel says the request came from, as it does in production, so phoneNumberOptions has a suggestion: Oakland.
   const headers = new Headers(request.headers);
@@ -208,6 +261,7 @@ ipv4.listen(port, '127.0.0.1', async () => {
   ipv6.listen(port, '::1');
   console.log(`Porch is running at ${origin}, with an in-memory household for "Mom". The caregiver PIN is ${pin}.`);
   console.log(livekit ? `Calls connect through LiveKit at ${localLiveKit.url}.` : 'Calls start but never connect. Add --livekit to connect them (see the top of this file).');
+  if (phone) console.log(`Phone fallback rings real phones through ${new URL(phone.url).host}, from ${phoneFrom}.`);
   console.log(`Invitation for a phone to join (works once, for a day):\n  porch://pair?${new URLSearchParams({ server: origin, code: await invite('Ethan') })}`);
   console.log(`Setup link for a new bedside tablet (works once, for a day):\n  porch://activate?${new URLSearchParams({ server: origin, code: await activation() })}`);
 });
