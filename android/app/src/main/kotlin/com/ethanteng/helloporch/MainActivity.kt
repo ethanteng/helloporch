@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.ethanteng.helloporch.core.RemoteCaregiverSession
 
 /** Porch's one activity. An invitation or setup link that opens Porch arrives here, when it starts or while it's open. */
 class MainActivity : ComponentActivity() {
@@ -27,8 +28,10 @@ class MainActivity : ComponentActivity() {
         // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
         // Switching to the bedside while this activity is already resumed starts it too (PorchApplication.switchExperience).
         lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onResume(owner: LifecycleOwner) = app.bedsideCameToFront()
+            override fun onResume(owner: LifecycleOwner) { app.bedsideCameToFront(); RemoteCaregiverSession.shared.returned() }
             override fun onPause(owner: LifecycleOwner) = app.bedsideLeftFront()
+            // Caregiver mode on a family phone ends when Porch leaves the screen, as on iOS, but not when it turns.
+            override fun onStop(owner: LifecycleOwner) { if (!isChangingConfigurations) RemoteCaregiverSession.shared.leftForeground() }
         })
         setContent {
             MaterialTheme {

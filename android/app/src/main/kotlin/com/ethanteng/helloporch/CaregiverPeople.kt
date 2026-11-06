@@ -98,10 +98,11 @@ data class PeopleRoute(val kind: Kind, val memberID: String? = null, val slot: I
 @Composable
 fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
     var route by rememberSaveable { mutableStateOf<PeopleRoute?>(null) }
+    LaunchedEffect(route) { if (route != null) admin.refresh() }
     val open = route
     val close = { route = null }
     when (open?.kind) {
-        null -> FormScreen("People", navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
+        null -> FormScreen(CaregiverPage.PEOPLE.title(admin.onBedside), navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
             PeopleList(app, admin, links, onOpen = { route = it })
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
@@ -114,6 +115,8 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
 private fun PeopleList(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onOpen: (PeopleRoute) -> Unit) {
     val state = admin.state(links)
     val slots = admin.slots
+    // The keypad is set on the bedside. A family phone lists just the family, as iOS's does.
+    if (!admin.onBedside) { FamilyGroup(app, admin, state, slots, onOpen); return }
     Text("Keypad", style = MaterialTheme.typography.titleLarge)
     if (admin.slotsUnreadable) {
         Text("The saved keypad couldn't be read. Set up each key again, and each one is saved as you go.", color = MaterialTheme.colorScheme.error)
@@ -196,16 +199,16 @@ private fun FamilyGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
     val invitations = state?.invitations.orEmpty()
     // Invitations last a day, so the expiry needs its day ("tomorrow, 3:14 PM").
     val expiry = remember { IcuDateFormat.getDateTimeInstance(IcuDateFormat.RELATIVE_SHORT, IcuDateFormat.SHORT) }
-    CaregiverGroup("Family on Porch") {
+    CaregiverGroup(if (admin.onBedside) "Family on Porch" else null) {
         people.forEachIndexed { index, person ->
             if (index > 0) HorizontalDivider()
             val access = person.access ?: "Calls only"
             val key = keyFor(slots, person)?.let(CallSlots::symbol)
-            val photo = remember(person.photoID, FamilyPhotos.saved) { FamilyPhotos.data(app, person.photoID) }
+            val photo = memberPhoto(app, admin, person)
             CaregiverRow(onClick = { onOpen(PeopleRoute(PeopleRoute.Kind.PERSON, memberID = person.id)) }) {
                 Avatar(person.name, photo)
                 Column(Modifier.weight(1f)) {
-                    Text(person.name, style = MaterialTheme.typography.titleMedium)
+                    Text(if (person.id == admin.myID) "${person.name} (this phone)" else person.name, style = MaterialTheme.typography.titleMedium)
                     Text("${person.shortStatus} · $access", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 key?.let { Text("Key $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -269,7 +272,7 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     var choosingColor by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val mediaAccess = rememberMediaAccess()
+    val mediaAccess = rememberMediaAccess(admin.onBedside)
     val state = admin.state(links)
     val slots = admin.slots
     val subject = resolve(state, slots, memberID, slot)
@@ -338,13 +341,15 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     FormScreen(subject.name, navigation = { TextButton(onClick = onDone) { Text("Back") } }) {
         // Name and photo.
         val member = subject.member
-        val photo = remember(contact, member?.photoID, FamilyPhotos.saved) {
-            contact?.customPhotoData ?: FamilyPhotos.data(app, member?.photoID) ?: contact?.photoData
-        }
+        val memberPhoto = member?.let { memberPhoto(app, admin, it) }
+        val photo = remember(contact, memberPhoto) { contact?.customPhotoData ?: memberPhoto ?: contact?.photoData }
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Avatar(subject.name, photo, 96.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !admin.busy) {
+                OutlinedButton(onClick = {
+                    staysInCaregiverMode()
+                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }, enabled = !admin.busy) {
                     Text(if (photo == null) "Add photo" else "Change photo")
                 }
                 // Back to their own photo, or no photo: a caregiver's choice for a family member, or a key's own photo.
@@ -394,8 +399,8 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             }
         }
 
-        // The keypad.
-        CaregiverGroup {
+        // The keypad, which only the bedside has.
+        if (admin.onBedside) CaregiverGroup {
             CaregiverRow {
                 Text("Keypad key", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Box {
@@ -446,9 +451,11 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
         DropInGroup(app, admin, state, subject, mediaAccess)
 
         member?.let { person ->
+            // A caregiver's phone can't take its own access away: another caregiver can.
+            val isMe = person.id == admin.myID
             CaregiverGroup {
-                ToggleRow("Caregiver mode", person.caregiver == true, enabled = !admin.busy,
-                    detail = "Can change settings from their phone with the PIN.",
+                ToggleRow("Caregiver mode", person.caregiver == true, enabled = !admin.busy && !isMe,
+                    detail = if (isMe) "Another caregiver can change this." else "Can change settings from their phone with the PIN.",
                     onChange = { admin.perform("setCaregiver", mapOf("memberID" to JsonPrimitive(person.id), "enabled" to JsonPrimitive(it))) })
             }
         }
@@ -568,8 +575,8 @@ private fun ReachGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fami
 @Composable
 private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: FamilyAdminState?, subject: Subject, mediaAccess: MediaAccess) {
     val person = subject.member
-    // Approvals live on the server, so a bedside that isn't paired yet can't offer them.
-    val number = subject.contact?.phoneNumber?.takeIf { app.device.credential(PorchExperience.BEDSIDE) != null }
+    // Approvals live on the server, so a bedside that isn't paired yet can't offer them. A key's number is the bedside's.
+    val number = subject.contact?.phoneNumber?.takeIf { admin.onBedside && app.device.credential(PorchExperience.BEDSIDE) != null }
     if (person == null && number == null) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Drop-in", style = MaterialTheme.typography.titleLarge)
@@ -579,7 +586,7 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
             fun change(audio: Boolean, video: Boolean) {
                 val send = { admin.perform("setPermissions", mapOf("memberID" to JsonPrimitive(person.id),
                     "permissions" to JsonObject(mapOf("audio" to JsonPrimitive(audio), "video" to JsonPrimitive(video))))) }
-                // Drop-in answers on this tablet, so only it can grant its own microphone and camera.
+                // Drop-in answers on the bedside, so only the tablet can grant its own microphone and camera.
                 if (audio || video) mediaAccess(video) { granted ->
                     if (granted) send() else admin.error = "Allow the microphone and camera in the tablet's settings before approving drop-in."
                 } else send()
@@ -612,7 +619,8 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
 
 /**
  * A new invitation, as iOS's FamilyInviteViewController makes it: who it's for, drop-in, and caregiver mode. Once it's
- * made, the tablet shows its code for a phone's camera, and can send it.
+ * made, it shows its code for a phone's camera, and can send it. Made on a caregiver's phone, the drop-in it approves
+ * still answers on the bedside, so the phone doesn't ask for its own microphone.
  */
 @Composable
 fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, returnsToPerson: Boolean, onCreated: (id: String, name: String) -> Unit,
@@ -620,7 +628,7 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
     BackHandler(onBack = onDone)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val mediaAccess = rememberMediaAccess()
+    val mediaAccess = rememberMediaAccess(admin.onBedside)
     var name by rememberSaveable { mutableStateOf(prefilledName.orEmpty()) }
     // Family can drop in unless the caregiver turns it off for them.
     var audio by rememberSaveable { mutableStateOf(true) }
@@ -631,19 +639,18 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
     var busy by remember { mutableStateOf(false) }
     val made = link != null
     fun create() {
-        val credential = app.device.credential(PorchExperience.BEDSIDE) ?: return
+        val origin = admin.origin ?: return
         busy = true
         scope.launch {
             try {
                 val values = mapOf("name" to JsonPrimitive(name), "caregiver" to JsonPrimitive(caregiver),
                     "permissions" to JsonObject(mapOf("audio" to JsonPrimitive(audio), "video" to JsonPrimitive(video))))
-                val response = app.service(credential).send("createInvite", values, pin = app.caregiverPIN)
+                val response = admin.request("createInvite", values)
                 val code = response.code
                 val id = response.invitationID
                 if (code == null || id == null) throw IllegalStateException("Couldn't make the invitation. Try again.")
-                app.coordinator.update(response)
                 onCreated(id, name.trim())
-                link = FamilyInvitation.url(credential.origin, code, app.device.defaultOrigin)
+                link = FamilyInvitation.url(origin, code, app.device.defaultOrigin)
                 expiresAt = response.expiresAt ?: 0
             } catch (e: CancellationException) {
                 throw e
@@ -676,7 +683,7 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
         }
         FormButton(when { shown != null -> "Share invitation"; busy -> "Creating…"; else -> "Create invitation" }, enabled = !busy && (shown != null || !made), onClick = {
             if (shown != null) { shareInvitation(context, shown); return@FormButton }
-            // Drop-in answers on this tablet, so only it can grant its own microphone and camera.
+            // Drop-in answers on the bedside, so only the tablet can grant its own microphone and camera.
             if (audio || video) mediaAccess(video) { granted ->
                 if (granted) create() else admin.error = "Grant microphone and camera access before approving drop-in."
             } else create()
@@ -690,6 +697,7 @@ fun shareInvitation(context: Context, link: String) {
     val note = if (link.startsWith("https:")) "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It works once, for 24 hours."
         else "Join our Porch! This link works once, for 24 hours."
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$note\n$link")
+    staysInCaregiverMode()
     try { context.startActivity(Intent.createChooser(send, null)) } catch (_: ActivityNotFoundException) {}
 }
 
@@ -698,8 +706,9 @@ fun shareInvitation(context: Context, link: String) {
 /** Asks for the microphone, and the camera with `video`, then calls back with whether the tablet may use them. */
 typealias MediaAccess = (video: Boolean, done: (Boolean) -> Unit) -> Unit
 
+/** `ask` is false on a family phone, whose own microphone and camera a drop-in doesn't use: it allows at once. */
 @Composable
-fun rememberMediaAccess(): MediaAccess {
+fun rememberMediaAccess(ask: Boolean = true): MediaAccess {
     val context = LocalContext.current
     val waiting = remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
     val asked = remember { mutableStateOf<List<String>>(emptyList()) }
@@ -712,14 +721,14 @@ fun rememberMediaAccess(): MediaAccess {
         // that was asked for. Otherwise drop-in would be approved without the microphone or camera.
         done?.invoke(needed.isNotEmpty() && needed.all { results[it] == true })
     }
-    return remember(launcher) {
+    return remember(launcher, ask) {
         { video, done ->
-            val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA.takeIf { video })
+            val missing = listOfNotNull(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA.takeIf { video })
                 .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-            if (needed.isEmpty()) done(true) else {
+            if (!ask || missing.isEmpty()) done(true) else {
                 waiting.value = done
-                asked.value = needed
-                launcher.launch(needed.toTypedArray())
+                asked.value = missing
+                launcher.launch(missing.toTypedArray())
             }
         }
     }

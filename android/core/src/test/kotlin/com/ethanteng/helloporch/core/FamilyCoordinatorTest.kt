@@ -316,4 +316,22 @@ class FamilyCoordinatorTest {
         session.begin("654321"); session.end()
         assertNull(session.activePIN)
     }
+
+    @Test fun caregiverModeEndsWhenPorchLeavesTheScreenButNotForWhatItOpened() {
+        val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
+        session.begin("123456")
+        session.stayThroughNextStop()
+        session.leftForeground()
+        assertTrue(session.isActive, "the photo picker or share sheet")
+        session.returned()
+        session.leftForeground()
+        assertFalse(session.isActive, "Home, or the screen turning off")
+
+        session.begin("123456")
+        // Something that opens over Porch without Porch leaving the screen, then the caregiver goes Home.
+        session.stayThroughNextStop()
+        session.returned()
+        session.leftForeground()
+        assertFalse(session.isActive)
+    }
 }

@@ -40,6 +40,7 @@ data class FamilyCallSession(
 class RemoteCaregiverSession(private val clock: () -> Instant = { Instant.now() }) {
     private var pin: String? = null
     private var expiresAt: Instant = Instant.MIN
+    private var staying = false
 
     fun begin(pin: String) {
         this.pin = pin
@@ -49,7 +50,19 @@ class RemoteCaregiverSession(private val clock: () -> Instant = { Instant.now() 
     fun end() {
         pin = null
         expiresAt = Instant.MIN
+        staying = false
     }
+
+    /** Porch is about to open something over itself for the caregiver, such as the photo picker or the share sheet.
+     * On Android that's another app's screen, so Porch going behind it isn't the caregiver leaving. iOS shows those
+     * inside Porch. */
+    fun stayThroughNextStop() { staying = true }
+
+    /** Porch left the screen. That ends caregiver mode, unless it was for something Porch opened. */
+    fun leftForeground() { if (staying) staying = false else end() }
+
+    /** Porch is in front again, so the next time it leaves is the caregiver leaving. */
+    fun returned() { staying = false }
 
     val isActive: Boolean get() = pin != null && expiresAt > clock()
 

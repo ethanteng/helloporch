@@ -23,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -44,29 +45,49 @@ import com.ethanteng.helloporch.core.FamilyNames
 import com.ethanteng.helloporch.core.FamilyPerson
 import com.ethanteng.helloporch.core.NativeCall
 import com.ethanteng.helloporch.core.PorchExperience
+import com.ethanteng.helloporch.core.RemoteCaregiverSession
 import com.ethanteng.helloporch.core.joinFamily
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Family mode's screens: joining a family from an invitation, and the families this phone is in. Setup links go to
- * the bedside's screens instead (PorchRoot). `onReady` says whether the list of families is showing, which is where a
- * call could ring. */
+/** Family mode's screens: joining a family from an invitation, the families this phone is in, and caregiver mode for
+ * one of them. Setup links go to the bedside's screens instead (PorchRoot). `onReady` says whether the list of families
+ * or caregiver mode is showing, which is where a call could ring. A call takes over the screen and closes caregiver
+ * mode. */
 @Composable
 fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Unit, onReady: (Boolean) -> Unit = {}) {
     val links by app.coordinator.links.collectAsStateWithLifecycle()
     var joining by rememberSaveable { mutableStateOf(false) }
+    // The family caregiver mode is open for, by device ID, and why it last ended on its own, such as a changed PIN.
+    var caregiving by rememberSaveable { mutableStateOf<String?>(null) }
+    var caregiverNotice by rememberSaveable { mutableStateOf<String?>(null) }
     // Joining or removing a family changes the list before any family has checked in.
     var changes by remember { mutableIntStateOf(0) }
     val families = remember(links, changes) { app.device.families }
     val done = { joining = false; changes++; onLinkHandled() }
-    val listing = !(link != null || joining || families.isEmpty())
-    SideEffect { onReady(listing) }
+    // An invitation opened meanwhile, or the family leaving this phone, ends caregiver mode.
+    val caregiverFamily = families.firstOrNull { it.deviceID == caregiving }?.takeIf { link == null && !joining }
+    LaunchedEffect(caregiving, caregiverFamily == null) {
+        if (caregiving != null && caregiverFamily == null) { RemoteCaregiverSession.shared.end(); caregiving = null }
+    }
+    val listing = caregiverFamily == null && !(link != null || joining || families.isEmpty())
+    SideEffect { onReady(listing || caregiverFamily != null) }
+    if (caregiverFamily != null) {
+        RemoteCaregiverMode(app, caregiverFamily, links, onClose = { reason -> caregiving = null; caregiverNotice = reason })
+        return
+    }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done)
-            else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ })
+            else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ },
+                onCaregiver = { family ->
+                    // Every visit starts with the PIN.
+                    RemoteCaregiverSession.shared.end()
+                    caregiving = family.deviceID
+                })
         }
     }
+    PorchErrorDialog(caregiverNotice) { caregiverNotice = null }
 }
 
 @Composable
@@ -136,7 +157,8 @@ private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit
 }
 
 @Composable
-private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit) {
+private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit,
+    onCaregiver: (FamilyCredential) -> Unit) {
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -171,7 +193,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     // A failed check-in keeps the last snapshot. Showing that bedside as on would stay true until the
                     // next one that works, which is what a dropped connection looks like.
                     link?.error != null -> link.error!!
-                    bedside != null -> "${bedside.name}'s ${if (bedside.platform == "android") "tablet" else "iPad"} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
+                    bedside != null -> "${bedside.name}'s ${bedsideDevice(state)} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
                     else -> "Checking in…"
                 })
                 if (bedside != null && link.accessRemoved != true) {
@@ -183,12 +205,16 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 }
                 // Anyone can call the bedside on its own number, from any phone.
                 state?.porchNumber?.takeIf { link.accessRemoved != true }?.let { PorchNumberCard(bedside?.name ?: state.householdName, it) }
+                // Caregivers change the bedside's settings from here with its PIN.
+                if (state?.me?.caregiver == true && link.accessRemoved != true) {
+                    OutlinedButton(onClick = { onCaregiver(family) }, Modifier.fillMaxWidth()) { Text("Caregiver mode") }
+                }
                 if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
                 else TextButton(onClick = { leaveError = null; leaving = family.deviceID }) { Text("Leave this family") }
             }
         }
     }
-    Text("This test version joins families, checks in with them and calls while Porch is open. Messages and caregiver mode come in later versions.",
+    Text("This test version joins families, checks in with them and calls while Porch is open. Messages come in a later version.",
         style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }

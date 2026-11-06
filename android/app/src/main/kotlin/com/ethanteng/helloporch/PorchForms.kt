@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import com.ethanteng.helloporch.core.RemoteCaregiverSession
 
 /** A screen of Porch's forms, as iOS's caregiver forms are: a bar with its title and a way back, and one column, at most
  * 760 dp wide like the iOS card, that scrolls. `navigation` is the bar's button, such as Cancel or Back. */
@@ -122,5 +123,10 @@ fun PrivacyPolicyLink() {
 }
 
 fun openPrivacyPolicy(context: Context) {
+    staysInCaregiverMode()
     try { context.startActivity(Intent(Intent.ACTION_VIEW, "https://helloporch.store/privacy".toUri())) } catch (_: ActivityNotFoundException) {}
 }
+
+/** Before Porch opens another app's screen for the caregiver, such as the photo picker, the share sheet or the privacy
+ * policy: caregiver mode on a family phone stays open behind it. */
+fun staysInCaregiverMode() = RemoteCaregiverSession.shared.stayThroughNextStop()

@@ -78,7 +78,7 @@ fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: Fa
         CaregiverPage.DROP_IN -> { DropInPages(app, admin, links, onBack); return }
         else -> {}
     }
-    FormScreen(page.title, navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
+    FormScreen(page.title(admin.onBedside), navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
         when (page) {
             CaregiverPage.PEOPLE, CaregiverPage.CALLS, CaregiverPage.DROP_IN -> {}
             CaregiverPage.DISPLAY -> DisplayPage(app, admin, links)
@@ -92,7 +92,7 @@ fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: Fa
 /** A screen opened over a page, such as the household's name. */
 @Composable
 fun CaregiverScreenContent(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, screen: CaregiverScreen, onDone: () -> Unit) {
-    val lovedOne = links.state?.householdName ?: "your loved one"
+    val lovedOne = admin.state(links)?.householdName ?: "your loved one"
     when (screen) {
         CaregiverScreen.NAME -> HouseholdNameScreen(admin, links, onDone)
         CaregiverScreen.CHANGE_PIN -> ChangePINScreen(app, admin, onDone)
@@ -119,22 +119,24 @@ private enum class CallsScreen { HISTORY, BLOCKED }
 @Composable
 fun CallsPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
     var screen by rememberSaveable { mutableStateOf<CallsScreen?>(null) }
+    LaunchedEffect(screen) { if (screen != null) admin.refresh() }
     when (screen) {
-        null -> FormScreen(CaregiverPage.CALLS.title, navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
+        null -> FormScreen(CaregiverPage.CALLS.title(admin.onBedside), navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
             CallsPage(app, admin, links, onHistory = { screen = CallsScreen.HISTORY }, onBlocked = { screen = CallsScreen.BLOCKED })
         }
-        CallsScreen.HISTORY -> CallHistoryScreen(app, onDone = { screen = null })
+        CallsScreen.HISTORY -> CallHistoryScreen(app, admin, onDone = { screen = null })
         CallsScreen.BLOCKED -> BlockedNumbersScreen(admin, links, onDone = { screen = null })
     }
 }
 
 /** Calls to and from the bedside, as iOS's CallSettingsViewController sets them. Ringing and screening are kept with the
- * household; phone fallback, leaving a message and hanging up after silence are the tablet's own. Changes apply at once. */
+ * household; phone fallback, leaving a message and hanging up after silence are the tablet's own. Changes apply at once.
+ * A family phone, as on iOS, sets who can ring and sees call history; the rest is set on the bedside. */
 @Composable
 private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onHistory: () -> Unit, onBlocked: () -> Unit) {
-    val snapshot = links.state
-    val name = snapshot?.householdName ?: "your loved one"
-    val screening = snapshot?.callScreening
+    val snapshot = admin.snapshot(links)
+    val name = admin.state(links)?.householdName ?: "your loved one"
+    val screening = admin.state(links)?.callScreening
     val settings = app.settings
     // What the page shows while a change saves. A change that fails goes back to what's saved.
     var ring by remember(snapshot?.ringSeconds) { mutableIntStateOf(snapshot?.ringSeconds ?: CallPreferences.defaultVoicemailSeconds) }
@@ -145,10 +147,12 @@ private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
     }
     val ringRange = CallPreferences.voicemailRange
     CaregiverGroup("Calls to $name") {
-        StepperRow("Ring before voicemail", if (snapshot == null) "–" else duration(ring),
-            onMinus = (snapshot != null && !admin.busy && ring - 5 >= ringRange.first).then { changeRing(ring - 5) },
-            onPlus = (snapshot != null && !admin.busy && ring + 5 <= ringRange.last).then { changeRing(ring + 5) })
-        HorizontalDivider()
+        if (admin.onBedside) {
+            StepperRow("Ring before voicemail", if (snapshot == null) "–" else duration(ring),
+                onMinus = (snapshot != null && !admin.busy && ring - 5 >= ringRange.first).then { changeRing(ring - 5) },
+                onPlus = (snapshot != null && !admin.busy && ring + 5 <= ringRange.last).then { changeRing(ring + 5) })
+            HorizontalDivider()
+        }
         ToggleRow("Block unknown callers", screening?.enabled == true,
             onChange = { admin.perform("setBlockUnknownCallers", mapOf("enabled" to JsonPrimitive(it))) },
             detail = when {
@@ -167,6 +171,10 @@ private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
             Text(if (blocked.isEmpty()) "None" else "${blocked.size}", style = MaterialTheme.typography.titleMedium)
             if (screening != null) Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+    if (!admin.onBedside) {
+        CaregiverGroup { CallHistoryRow(onHistory) }
+        return
     }
     var fallback by remember { mutableIntStateOf(CallPreferences.fallbackSeconds(settings)) }
     var leaveMessage by remember { mutableStateOf(CallPreferences.leaveMessageWhenUnanswered(settings)) }
@@ -201,12 +209,17 @@ private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
                 onPlus = (minutes < CallPreferences.silenceRange.last / 60).then { changeSilence(minutes + 1) })
         }
         HorizontalDivider()
-        CaregiverRow(onClick = onHistory) {
-            Text("Call history", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        CallHistoryRow(onHistory)
         HorizontalDivider()
         SoundTests(app)
+    }
+}
+
+@Composable
+private fun CallHistoryRow(onClick: () -> Unit) {
+    CaregiverRow(onClick = onClick) {
+        Text("Call history", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -388,9 +401,9 @@ fun Choices(options: List<String>, selected: Int, modifier: Modifier = Modifier,
  * presence camera. */
 @Composable
 private fun PrivacyPage(admin: CaregiverAdmin, links: FamilyLinks) {
-    val share = links.state?.shareAttendance
+    val share = admin.state(links)?.shareAttendance
     CaregiverGroup {
-        ToggleRow("Show family when someone is at the tablet", share == true,
+        ToggleRow("Show family when someone is at the ${bedsideDevice(admin.snapshot(links))}", share == true,
             onChange = { admin.perform("setShareAttendance", mapOf("enabled" to JsonPrimitive(it))) },
             detail = if (share == null) "Not available on this Porch's server yet." else "Touches and key presses count.",
             enabled = share != null && !admin.busy)
@@ -400,7 +413,8 @@ private fun PrivacyPage(admin: CaregiverAdmin, links: FamilyLinks) {
 
 // MARK: Caregivers & PIN
 
-/** Who can open caregiver mode from their phone with the PIN, and the PIN itself. */
+/** Who can open caregiver mode from their phone with the PIN, and on the bedside, the PIN itself. A caregiver's phone
+ * can't take its own access away: another caregiver can. */
 @Composable
 private fun CaregiversPage(admin: CaregiverAdmin, links: FamilyLinks, onScreen: (CaregiverScreen) -> Unit) {
     Text("Caregivers can change settings from their phone with the PIN.", style = MaterialTheme.typography.bodyLarge)
@@ -409,11 +423,13 @@ private fun CaregiversPage(admin: CaregiverAdmin, links: FamilyLinks, onScreen: 
         if (people.isEmpty()) CaregiverRow { Text("No family members yet.") }
         people.forEachIndexed { index, person ->
             if (index > 0) HorizontalDivider()
-            ToggleRow(person.name, person.caregiver == true, enabled = !admin.busy,
+            val isMe = person.id == admin.myID
+            ToggleRow(if (isMe) "${person.name} (this phone)" else person.name, person.caregiver == true, enabled = !admin.busy && !isMe,
+                detail = if (isMe) "Another caregiver can change this." else null,
                 onChange = { admin.perform("setCaregiver", mapOf("memberID" to JsonPrimitive(person.id), "enabled" to JsonPrimitive(it))) })
         }
     }
-    CaregiverGroup { ActionRow("Change caregiver PIN") { onScreen(CaregiverScreen.CHANGE_PIN) } }
+    if (admin.onBedside) CaregiverGroup { ActionRow("Change caregiver PIN") { onScreen(CaregiverScreen.CHANGE_PIN) } }
 }
 
 @Composable
@@ -442,7 +458,7 @@ private fun ChangePINScreen(app: PorchApplication, admin: CaregiverAdmin, onDone
 
 @Composable
 private fun HouseholdNameScreen(admin: CaregiverAdmin, links: FamilyLinks, onDone: () -> Unit) {
-    var name by rememberSaveable { mutableStateOf(links.state?.householdName.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(admin.state(links)?.householdName.orEmpty()) }
     FormScreen("Name", navigation = { TextButton(onClick = onDone) { Text("Cancel") } }) {
         FormField(name, { name = it }, "Who is this Porch for?", "Your loved one",
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
