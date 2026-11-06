@@ -133,17 +133,19 @@ class Announcer(private val app: PorchApplication) {
 
     /**
      * The chime, then `message`. `done` gets whether it was said, and isn't called after [stop]. The voices are the
-     * saved ones unless caregiver settings pass the ones being chosen, to preview them.
+     * saved ones unless caregiver settings pass the ones being chosen, to preview them; a preview waits up to
+     * `naturalWait` milliseconds for a natural clip that isn't here yet, as iOS does.
      */
     fun speak(message: String, language: BedsideLanguage = BedsideText.language(app),
         voiceName: String? = BedsidePreferences.load(app.settings).announcementVoiceIdentifier(language),
-        naturalVoice: String? = NaturalVoice.selected(app, language), done: (Boolean) -> Unit) {
+        naturalVoice: String? = NaturalVoice.selected(app, language), naturalWait: Long = 0, done: (Boolean) -> Unit) {
         stop()
         completion = done
         if (!chime.play(CallTone.ANNOUNCEMENT)) { finish(false); return }
         startJob = scope.launch {
             delay((CallTone.ANNOUNCEMENT.duration * 1_000).toLong())
-            val ready = naturalVoice?.let { NaturalVoice.cached(app, message, language, it) }
+            // A call or a drop-in never waits for a clip; a preview of a voice just chosen fetches it.
+            val ready = naturalVoice?.let { NaturalVoice.clip(app, message, language, it, naturalWait) }
             if (ready != null && playClip(ready) { said -> if (said) finish(true) else { ready.delete(); speakBuiltIn(message, language, voiceName) } }) {
                 armWatchdog()
                 return@launch

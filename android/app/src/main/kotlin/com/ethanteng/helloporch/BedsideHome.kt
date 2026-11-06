@@ -8,6 +8,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,14 +35,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -172,10 +170,12 @@ private fun FittedText(text: AnnotatedString, color: Color, size: TextUnit, weig
 /** The gear in the clock's corner that opens caregiver mode, after the PIN. */
 @Composable
 private fun CaregiverButton(color: Color, modifier: Modifier, onOpen: () -> Unit) {
-    Box(modifier.size(64.dp).clip(CircleShape).pointerInput(Unit) {
-        detectTapGestures(onTap = { onOpen() }, onLongPress = { onOpen() })
-    }.clearAndSetSemantics { contentDescription = "Caregiver mode"; role = Role.Button }, contentAlignment = Alignment.Center) {
-        Text("\u2699\uFE0E", color = color, fontSize = 32.sp)
+    // A click, so a screen reader's double-tap opens it as a touch does. The click merges its content, so the gear's
+    // name goes on the glyph inside it, which is otherwise read as "⚙".
+    Box(modifier.size(64.dp).clip(CircleShape)
+        .combinedClickable(role = Role.Button, onClickLabel = "Open caregiver mode", onClick = onOpen, onLongClick = onOpen),
+        contentAlignment = Alignment.Center) {
+        Text("\u2699\uFE0E", Modifier.clearAndSetSemantics { contentDescription = "Caregiver mode" }, color = color, fontSize = 32.sp)
     }
 }
 

@@ -11,8 +11,10 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,6 +43,14 @@ object NaturalVoice {
     /** The clip for `text`, if this tablet has it. */
     fun cached(app: PorchApplication, text: String, language: BedsideLanguage, voiceID: String): File? =
         file(app, text, language, voiceID).takeIf { it.exists() }
+
+    /** The clip for `text` if it's here, or arrives within `millis`. One that arrives later is kept for next time. */
+    suspend fun clip(app: PorchApplication, text: String, language: BedsideLanguage, voiceID: String, millis: Long): File? {
+        cached(app, text, language, voiceID)?.let { return it }
+        if (millis <= 0) return null
+        val pending = app.scope.async { load(app, text, language, voiceID) }
+        return withTimeoutOrNull(millis) { pending.await() }
+    }
 
     /**
      * Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone who may drop

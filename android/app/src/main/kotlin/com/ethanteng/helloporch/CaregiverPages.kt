@@ -325,7 +325,7 @@ private fun AnnouncementVoice(app: PorchApplication, language: BedsideLanguage, 
             status = "Playing the voice…"
             // In the language being chosen, which may not be saved yet.
             val message = language.format("%@ is dropping in with video. Connecting in five seconds.", language.text("A family member"))
-            announcer.speak(message, language, builtIn, natural) { said ->
+            announcer.speak(message, language, builtIn, natural, naturalWait = 8_000) { said ->
                 status = if (said) "Preview completed. Tap Save to keep your choice." else "Couldn't play the preview. Check the tablet's volume."
             }
         })
