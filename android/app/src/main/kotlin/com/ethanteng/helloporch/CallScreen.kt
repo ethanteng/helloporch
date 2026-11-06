@@ -190,8 +190,9 @@ internal fun CallButton(title: String, enabled: Boolean, onClick: () -> Unit, ap
     val narrow = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() } < 600.dp
     Button(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 64.dp),
         contentPadding = PaddingValues(horizontal = if (narrow) 8.dp else 16.dp, vertical = 8.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = CallColors.text,
-            disabledContainerColor = color.copy(alpha = 0.4f), disabledContentColor = CallColors.text.copy(alpha = 0.6f))) {
+        // Names use the night text color. Controls stay white, as on iOS, so End and Answer stay readable on red and green.
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White,
+            disabledContainerColor = color.copy(alpha = 0.4f), disabledContentColor = Color.White.copy(alpha = 0.6f))) {
         Text(if (translated) title else BedsideText.string(app, title), fontSize = if (narrow) 16.sp else 20.sp, maxLines = 1,
             softWrap = false, overflow = TextOverflow.Ellipsis)
     }
