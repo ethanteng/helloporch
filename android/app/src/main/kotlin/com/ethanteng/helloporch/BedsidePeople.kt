@@ -19,7 +19,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -44,25 +47,37 @@ fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
             person.role == PorchExperience.FAMILY && person.canReceiveCalls != false && keyed.none { it.second.familyMemberID == person.id }
         }
     }
-    CallKeys(app, onDigit = { digit -> onClose(); app.calls.bedsideKey(digit) }, onHangUp = { "hang-up ignored on people" })
+    // One choice. A second tap would otherwise start another call and report that caregiver mode isn't set up.
+    var chosen by remember { mutableStateOf(false) }
+    fun place(call: () -> Unit) {
+        if (chosen || app.calls.busy) return
+        chosen = true
+        onClose()
+        call()
+    }
+    // A key with nobody on it stays here. Closing first would leave the clock, which is where that notice is shown.
+    CallKeys(app, onDigit = { digit -> if (slots.contact(digit) != null) place { app.calls.bedsideKey(digit) } },
+        onHangUp = { "hang-up ignored on people" })
     fun text(english: String, vararg arguments: Any?) = BedsideText.string(app, english, *arguments)
     Surface(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.safeDrawingPadding().fillMaxSize().padding(24.dp)) {
             val columns = if (maxWidth >= 600.dp) 2 else 1
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // The list has to have a finite height. A lazy grid measured with an infinite height can't be laid out.
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text("Who would you like to call?"), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
                     TextButton(onClick = onClose) { Text(text("Back to clock"), fontSize = 20.sp) }
                 }
                 if (keyed.isEmpty() && others.isEmpty()) Text(text("No one is on the keypad yet. A caregiver can add people in caregiver mode."),
                     style = MaterialTheme.typography.titleLarge)
-                LazyVerticalGrid(GridCells.Fixed(columns), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                LazyVerticalGrid(GridCells.Fixed(columns), Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(keyed, key = { "key-${it.first}" }) { (digit, contact) ->
-                        PersonCard(contact.name, contact.photoData, text("Press %@", CallSlots.symbol(digit))) { onClose(); app.calls.bedsideKey(digit) }
+                        PersonCard(contact.name, contact.photoData, text("Press %@", CallSlots.symbol(digit))) { place { app.calls.bedsideKey(digit) } }
                     }
                     items(others, key = { "member-${it.id}" }) { person ->
                         val photo = remember(person.photoID) { person.photoID?.let { app.photos.familyMembers.data(it) } }
-                        PersonCard(person.name, photo, text("Tap to call")) { onClose(); app.calls.callFromBedside(person) }
+                        PersonCard(person.name, photo, text("Tap to call")) { place { app.calls.callFromBedside(person) } }
                     }
                 }
             }
