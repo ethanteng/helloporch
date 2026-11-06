@@ -56,6 +56,7 @@ import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.ValidationException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
@@ -186,9 +187,16 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
         if (action != KeypadAction.PERSON) {
             val chosen = action
             saving = true
-            admin.launch {
+            // The editor's own scope: leaving it, including Cancel, stops a save that hasn't been written yet. Caregiver
+            // mode's scope would finish the save after the editor is gone.
+            scope.launch {
                 try {
-                    if (syncPhoneDropIn(null, "") && saveSlots { it.setContact(null, slot); it.setAction(chosen, slot) }) onDone()
+                    ensureActive()
+                    if (!syncPhoneDropIn(null, "")) return@launch
+                    ensureActive()
+                    if (admin.saveSlots { it.setContact(null, slot); it.setAction(chosen, slot) }) onDone()
+                } catch (e: CancellationException) {
+                    throw e
                 } finally {
                     saving = false
                 }
@@ -199,14 +207,17 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
         phone = saved.phoneNumber.orEmpty()
         otherNumbers = saved.otherPhoneNumbers
         saving = true
-        admin.launch {
+        scope.launch {
             try {
                 saved.phoneNumber?.let { PhoneApprovals.authorize(app, it, refresh = true) }
-                if (syncPhoneDropIn(saved.phoneNumber, saved.name) && saveSlots { it.setContact(saved, slot); it.setAction(KeypadAction.PERSON, slot) }) onDone()
+                ensureActive()
+                if (!syncPhoneDropIn(saved.phoneNumber, saved.name)) return@launch
+                ensureActive()
+                if (admin.saveSlots { it.setContact(saved, slot); it.setAction(KeypadAction.PERSON, slot) }) onDone()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn't save this number. Check your internet and try again."
+                admin.error = e.message ?: "Couldn't save this number. Check your internet and try again."
             } finally {
                 saving = false
             }
