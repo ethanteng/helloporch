@@ -72,7 +72,7 @@ private fun SetupScreen(setup: BedsideSetup, content: @Composable ColumnScope.()
         setup.canGoBack -> { { TextButton(onClick = setup::back) { Text("Back") } } }
         else -> null
     }
-    FormScreen("Set up Porch", navigation, content)
+    FormScreen("Set up Porch", navigation, content = content)
 }
 
 /** For the first screen: this device can be a family member's instead, and anyone can read the privacy policy. */

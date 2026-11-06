@@ -56,10 +56,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Caregiver mode's pages on the bedside, as iOS's CaregiverPage lists them. Drop-in and Messages come in later pull
- * requests (android/PLAN.md, phase 4). */
+/** Caregiver mode's pages on the bedside, as iOS's CaregiverPage lists them. Messages comes with messages
+ * (android/PLAN.md, phase 5). */
 enum class CaregiverPage(val title: String) {
-    PEOPLE("People"), CALLS("Calls"), DISPLAY("Display & voice"), PRIVACY("Privacy"), CAREGIVERS("Caregivers & PIN"), DEVICE("This tablet"),
+    PEOPLE("People"), CALLS("Calls"), DROP_IN("Drop-in"), DISPLAY("Display & voice"), PRIVACY("Privacy"), CAREGIVERS("Caregivers & PIN"), DEVICE("This tablet"),
 }
 
 /** Screens a caregiver opens over a page. */

@@ -40,7 +40,8 @@ import androidx.core.net.toUri
 /** A screen of Porch's forms, as iOS's caregiver forms are: a bar with its title and a way back, and one column, at most
  * 760 dp wide like the iOS card, that scrolls. `navigation` is the bar's button, such as Cancel or Back. */
 @Composable
-fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, actions: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
             // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them.
@@ -48,6 +49,7 @@ fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, cont
                 navigation?.invoke()
                 Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, textAlign = if (navigation == null) TextAlign.Center else TextAlign.Start)
+                actions?.invoke()
             }
             HorizontalDivider()
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {

@@ -491,7 +491,7 @@ Built in five pull requests:
 
 1. **The tablet's caregiver mode.** The gear and PIN on the clock, the two panes, the household's name and number, and Calls, Display & voice, Privacy, Caregivers & PIN, and This tablet.
 2. **People.** The keypad, the person page and the key editor, with invitations, and family members' photos downloaded to the tablet. The bedside's people screen lists only the people on keys, as iOS's does, in their button colors.
-3. **Drop-in, call history and blocked numbers.**
+3. **Drop-in, call history and blocked numbers.** The Drop-in page with its switch, who can and can't drop in, and adding a phone number; Call history and Blocked numbers open from Calls.
 4. **Caregiver mode on a family phone.**
 5. **The Porch keyboard, and About.**
 

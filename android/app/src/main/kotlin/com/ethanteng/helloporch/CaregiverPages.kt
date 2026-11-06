@@ -72,11 +72,15 @@ import kotlinx.serialization.json.JsonPrimitive
 fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, page: CaregiverPage, onBack: (() -> Unit)?,
     onScreen: (CaregiverScreen) -> Unit, onClose: () -> Unit) {
     // People opens a person, a key or an invitation in its own place, with its own bar.
-    if (page == CaregiverPage.PEOPLE) { PeoplePages(app, admin, links, onBack); return }
+    when (page) {
+        CaregiverPage.PEOPLE -> { PeoplePages(app, admin, links, onBack); return }
+        CaregiverPage.CALLS -> { CallsPages(app, admin, links, onBack); return }
+        CaregiverPage.DROP_IN -> { DropInPages(app, admin, links, onBack); return }
+        else -> {}
+    }
     FormScreen(page.title, navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
         when (page) {
-            CaregiverPage.PEOPLE -> {}
-            CaregiverPage.CALLS -> CallsPage(app, admin, links)
+            CaregiverPage.PEOPLE, CaregiverPage.CALLS, CaregiverPage.DROP_IN -> {}
             CaregiverPage.DISPLAY -> DisplayPage(app, admin, links)
             CaregiverPage.PRIVACY -> PrivacyPage(admin, links)
             CaregiverPage.CAREGIVERS -> CaregiversPage(admin, links, onScreen)
@@ -109,10 +113,25 @@ fun CaregiverScreenContent(app: PorchApplication, admin: CaregiverAdmin, links: 
 
 // MARK: Calls
 
+private enum class CallsScreen { HISTORY, BLOCKED }
+
+/** The Calls page, or call history or blocked numbers opened from it in its place. */
+@Composable
+fun CallsPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
+    var screen by rememberSaveable { mutableStateOf<CallsScreen?>(null) }
+    when (screen) {
+        null -> FormScreen(CaregiverPage.CALLS.title, navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
+            CallsPage(app, admin, links, onHistory = { screen = CallsScreen.HISTORY }, onBlocked = { screen = CallsScreen.BLOCKED })
+        }
+        CallsScreen.HISTORY -> CallHistoryScreen(app, onDone = { screen = null })
+        CallsScreen.BLOCKED -> BlockedNumbersScreen(admin, links, onDone = { screen = null })
+    }
+}
+
 /** Calls to and from the bedside, as iOS's CallSettingsViewController sets them. Ringing and screening are kept with the
  * household; phone fallback, leaving a message and hanging up after silence are the tablet's own. Changes apply at once. */
 @Composable
-private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks) {
+private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onHistory: () -> Unit, onBlocked: () -> Unit) {
     val snapshot = links.state
     val name = snapshot?.householdName ?: "your loved one"
     val screening = snapshot?.callScreening
@@ -139,12 +158,14 @@ private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
             }, enabled = screening != null && !admin.busy)
         HorizontalDivider()
         val blocked = screening?.blocked.orEmpty()
-        CaregiverRow {
+        // Who called while unknown callers were blocked, and the numbers allowed since.
+        CaregiverRow(onClick = screening?.let { onBlocked }) {
             Column(Modifier.weight(1f)) {
                 Text("Blocked numbers", style = MaterialTheme.typography.titleMedium)
                 screening?.allowed?.takeIf { it.isNotEmpty() }?.let { Text("${it.size} allowed", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             Text(if (blocked.isEmpty()) "None" else "${blocked.size}", style = MaterialTheme.typography.titleMedium)
+            if (screening != null) Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     var fallback by remember { mutableIntStateOf(CallPreferences.fallbackSeconds(settings)) }
@@ -178,6 +199,11 @@ private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
             StepperRow("After no one talks for", duration(silenceSeconds),
                 onMinus = (minutes > 1 || (partial && minutes >= 1)).then { changeSilence(if (partial) minutes else minutes - 1) },
                 onPlus = (minutes < CallPreferences.silenceRange.last / 60).then { changeSilence(minutes + 1) })
+        }
+        HorizontalDivider()
+        CaregiverRow(onClick = onHistory) {
+            Text("Call history", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         HorizontalDivider()
         SoundTests(app)
