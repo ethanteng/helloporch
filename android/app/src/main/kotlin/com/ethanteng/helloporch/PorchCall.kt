@@ -159,6 +159,9 @@ class PorchCall(
             failed = true
             ringback.stop()
             room.disconnect()
+            // The other end stops ringing now, while the explanation stays on this screen.
+            this.session?.let { app.scope.launch { it.end() } }
+            this.session = null
             tiles = emptyList()
             localTrack = null
             status = text("Couldn't start the call.")

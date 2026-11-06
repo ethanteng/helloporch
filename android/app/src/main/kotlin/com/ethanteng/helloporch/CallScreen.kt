@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
@@ -76,7 +79,7 @@ internal object CallColors {
  * CallScreenLayout lays them out. The screen stays on for the whole call.
  */
 @Composable
-fun CallScreen(app: PorchApplication, call: PorchCall) {
+fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
     KeepScreenOn()
     BackHandler { call.endCall() }
     CallKeys(app, onDigit = call::keypadDigit, onHangUp = { call.endCall(); "call end requested" })
@@ -198,6 +201,13 @@ internal fun Photo(data: ByteArray?, modifier: Modifier) {
     val bitmap = remember(data) { data?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size) }.getOrNull() } } ?: return
     Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop,
         modifier = modifier.aspectRatio(1f).clip(RoundedCornerShape(24.dp)))
+}
+
+/** Large type on the bedside and call screens. Material's text styles fix the line height for small type, so big
+ * words that wrap would overlap; here each line is as tall as its font. */
+@Composable
+internal fun LargeType(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified), content = content)
 }
 
 /** The screen stays on while it's showing, as iOS keeps it on during calls. */

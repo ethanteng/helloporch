@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 
 /** Someone calling: their photo and name, what kind of call it is, and Answer and Decline, as on iOS. */
 @Composable
-fun IncomingCallScreen(app: PorchApplication, incoming: IncomingCall) {
+fun IncomingCallScreen(app: PorchApplication, incoming: IncomingCall) = LargeType {
     KeepScreenOn()
     BackHandler { incoming.decline() }
     CallKeys(app, onDigit = { incoming.cell2jackDigit(it) }, onHangUp = { "hang-up ignored while ringing" },

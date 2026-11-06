@@ -1,23 +1,22 @@
 package com.ethanteng.helloporch
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ethanteng.helloporch.core.CallSlots
@@ -59,41 +61,45 @@ fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
     CallKeys(app, onDigit = { digit -> if (slots.contact(digit) != null) place { app.calls.bedsideKey(digit) } },
         onHangUp = { "hang-up ignored on people" })
     fun text(english: String, vararg arguments: Any?) = BedsideText.string(app, english, *arguments)
-    Surface(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.safeDrawingPadding().fillMaxSize().padding(24.dp)) {
-            val columns = if (maxWidth >= 600.dp) 2 else 1
-            // The list has to have a finite height. A lazy grid measured with an infinite height can't be laid out.
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text("Who would you like to call?"), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
-                    TextButton(onClick = onClose) { Text(text("Back to clock"), fontSize = 20.sp) }
+    // The sizes the iOS people picker uses, which the bedside is built around: large enough to read from the bed.
+    LargeType { BoxWithConstraints(Modifier.fillMaxSize().background(CallColors.night).safeDrawingPadding().padding(32.dp)) {
+        val tablet = maxWidth >= 600.dp
+        val columns = if (tablet) 2 else 1
+        val cardWidth = (maxWidth - 16.dp * (columns - 1)) / columns
+        val nameSize = (cardWidth.value * 0.18f).coerceIn(54f, 88f).sp
+        val keySize = (cardWidth.value * 0.10f).coerceIn(36f, 48f).sp
+        // The list has to have a finite height. A lazy grid measured with an infinite height can't be laid out.
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text("Who would you like to call?"), Modifier.weight(1f), color = CallColors.text,
+                    fontSize = if (tablet) 60.sp else 40.sp, fontWeight = FontWeight.SemiBold)
+                CallButton(text("Back to clock"), true, onClick = onClose, app = app, translated = true)
+            }
+            Text(text(if (keyed.isEmpty() && others.isEmpty()) "No one is on the keypad yet. A caregiver can add people in caregiver mode."
+                else "Tap a name or press their number on the keypad."), color = CallColors.text, fontSize = if (tablet) 34.sp else 28.sp)
+            LazyVerticalGrid(GridCells.Fixed(columns), Modifier.weight(1f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(keyed, key = { "key-${it.first}" }) { (digit, contact) ->
+                    PersonCard(contact.name, contact.photoData, text("Press %@", CallSlots.symbol(digit)), nameSize, keySize) {
+                        place { app.calls.bedsideKey(digit) }
+                    }
                 }
-                if (keyed.isEmpty() && others.isEmpty()) Text(text("No one is on the keypad yet. A caregiver can add people in caregiver mode."),
-                    style = MaterialTheme.typography.titleLarge)
-                LazyVerticalGrid(GridCells.Fixed(columns), Modifier.weight(1f).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(keyed, key = { "key-${it.first}" }) { (digit, contact) ->
-                        PersonCard(contact.name, contact.photoData, text("Press %@", CallSlots.symbol(digit))) { place { app.calls.bedsideKey(digit) } }
-                    }
-                    items(others, key = { "member-${it.id}" }) { person ->
-                        val photo = remember(person.photoID) { person.photoID?.let { app.photos.familyMembers.data(it) } }
-                        PersonCard(person.name, photo, text("Tap to call")) { place { app.calls.callFromBedside(person) } }
-                    }
+                items(others, key = { "member-${it.id}" }) { person ->
+                    val photo = remember(person.photoID) { person.photoID?.let { app.photos.familyMembers.data(it) } }
+                    PersonCard(person.name, photo, text("Tap to call"), nameSize, keySize) { place { app.calls.callFromBedside(person) } }
                 }
             }
         }
-    }
+    } }
 }
 
 @Composable
-private fun PersonCard(name: String, photo: ByteArray?, detail: String, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Photo(photo, Modifier.size(96.dp))
-            Column {
-                Text(name, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
-                Text(detail, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+private fun PersonCard(name: String, photo: ByteArray?, detail: String, nameSize: TextUnit, detailSize: TextUnit, onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().heightIn(min = maxOf(200f, nameSize.value * 3.5f).dp).clip(RoundedCornerShape(24.dp))
+        .background(CallColors.control).clickable(onClick = onClick).padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+        Photo(photo, Modifier.heightIn(max = 240.dp))
+        Text(name, color = CallColors.text, fontSize = nameSize, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        Text(detail, color = CallColors.secondary, fontSize = detailSize, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
     }
 }

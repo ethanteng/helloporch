@@ -1,5 +1,9 @@
 package com.ethanteng.helloporch
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,12 +33,15 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyInvitation
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyNames
+import com.ethanteng.helloporch.core.FamilyPerson
 import com.ethanteng.helloporch.core.NativeCall
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.joinFamily
@@ -98,6 +105,9 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 
+/** A call a family phone is about to place, while Android asks for the microphone and camera. */
+private class CallRequest(val family: FamilyCredential, val person: FamilyPerson, val mode: NativeCall.Mode)
+
 /** A joined family waiting to be named. Saved, so turning the phone keeps the prompt; only its device ID is, since the
  * pairing itself stays in the secret store. */
 private data class Naming(val deviceID: String, val sharedName: String, val numberedName: String)
@@ -131,6 +141,22 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // As on iOS, the microphone and, for video, the camera are asked for before the call starts. Asking after would
+    // leave the bedside ringing while the question is up, or after it's refused.
+    val context = LocalContext.current
+    var request by remember { mutableStateOf<CallRequest?>(null) }
+    val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        val call = request ?: return@rememberLauncherForActivityResult
+        request = null
+        if (results.values.all { it }) app.calls.call(call.person, call.mode, call.family)
+        else app.calls.error = "Allow Porch to use the microphone and camera in Settings before calling."
+    }
+    val calling = { call: CallRequest ->
+        val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA.takeIf { call.mode == NativeCall.Mode.VIDEO })
+            .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+        if (needed.isEmpty()) app.calls.call(call.person, call.mode, call.family)
+        else { request = call; permissions.launch(needed.toTypedArray()) }
+    }
     Text(if (families.size == 1) "Your family" else "Your families", style = MaterialTheme.typography.headlineMedium)
     for (family in families) {
         val link = links.link(family)
@@ -150,8 +176,8 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 if (bedside != null && link.accessRemoved != true) {
                     val opening = app.calls.opening
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = { app.calls.call(bedside, NativeCall.Mode.VOICE, family) }, enabled = !opening) { Text("Audio call") }
-                        Button(onClick = { app.calls.call(bedside, NativeCall.Mode.VIDEO, family) }, enabled = !opening) { Text("Video call") }
+                        Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening) { Text("Audio call") }
+                        Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening) { Text("Video call") }
                     }
                 }
                 // Anyone can call the bedside on its own number, from any phone.
