@@ -31,15 +31,17 @@ class BedsideSpeech(context: Context) {
     private val folder = File(context.cacheDir, "PorchSpeech/spoken")
     /** null while the engine starts, then whether it did. */
     private var ready: Boolean? = null
-    private var waiting: (() -> Unit)? = null
+    /** Sentences asked for while the engine starts, by ID and in order, so [stop] can take one back. */
+    private val queued = linkedMapOf<String, () -> Unit>()
     /** Sentences being written, by ID, with what to do once they are. */
     private val writing = mutableMapOf<String, (Boolean) -> Unit>()
     private val players = mutableMapOf<String, MediaPlayer>()
     private val engine: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
         main.post {
             ready = status == TextToSpeech.SUCCESS
-            waiting?.invoke()
-            waiting = null
+            val starting = queued.values.toList()
+            queued.clear()
+            starting.forEach { it() }
         }
     }
 
@@ -71,15 +73,13 @@ class BedsideSpeech(context: Context) {
             writing[id] = { ok -> if (ok) play(id, file, done) else { file.delete(); done(false) } }
             if (engine.synthesizeToFile(text, null, file, id) != TextToSpeech.SUCCESS) written(id, false)
         }
-        if (ready == null) {
-            val earlier = waiting
-            waiting = { earlier?.invoke(); start() }
-        } else start()
+        if (ready == null) queued[id] = start else start()
         return id
     }
 
-    /** Stops `id`, being written or being said. Its `done` isn't called. */
+    /** Stops `id`, waiting for the engine, being written or being said. Its `done` isn't called. */
     fun stop(id: String) {
+        queued.remove(id)
         if (writing.remove(id) != null) engine.stop()
         players.remove(id)?.let { runCatching { it.stop() }; it.release() }
         File(folder, "$id.wav").delete()
