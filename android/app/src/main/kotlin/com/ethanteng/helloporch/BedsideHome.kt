@@ -93,9 +93,6 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
 
     Box(Modifier.fillMaxSize().background(PorchColors.night)) {
         if (scene != null) ScenePictureFading(scene, Modifier.fillMaxSize())
-        // Caregiver mode, behind the PIN: a tap, or a hold of half a second, as on iOS.
-        if (paired && state != null) CaregiverButton(palette?.controlForeground ?: PorchColors.nightSecondary,
-            Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp), onOpen = setup::openGate)
         LargeType { BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 32.dp, vertical = 16.dp)) {
             // Fitted to the tablet, as on iOS, rather than capped at phone-sized text. The bottom is kept for calling.
             // iOS measures the safe area. This box is already inset by the padding on it: 32 dp on each side, 16 dp
@@ -154,6 +151,10 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
                 }
             }
         } }
+        // Above the clock, so a short landscape screen's date doesn't paint over it. A tap, or a hold of half a
+        // second, opens the PIN, as on iOS.
+        if (paired && state != null) CaregiverButton(palette?.controlForeground ?: PorchColors.nightSecondary,
+            Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp), onOpen = setup::openGate)
     }
 }
 
