@@ -76,6 +76,7 @@ import com.ethanteng.helloporch.core.KeypadAction
 import com.ethanteng.helloporch.core.NativeCall
 import com.ethanteng.helloporch.core.PhoneNumberNormalization
 import com.ethanteng.helloporch.core.PorchExperience
+import com.ethanteng.helloporch.core.RemoteCaregiverSession
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -324,6 +325,7 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
         } else if (at != null && keyed != null) admin.saveSlots { it.setContact(keyed.updatingPhoto(data), at) }
     }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        RemoteCaregiverSession.shared.answered()
         if (uri != null) scope.launch { photoChosen(FamilyPhotos.prepared(context, uri)) }
     }
     suspend fun removeFromKeypad() {
@@ -347,7 +349,7 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             Avatar(subject.name, photo, 96.dp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
-                    try { staysInCaregiverMode { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
+                    try { staysInCaregiverMode(answers = true) { pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
                     catch (_: ActivityNotFoundException) { admin.error = "No app on this device can choose a photo." }
                 }, enabled = !admin.busy) {
                     Text(if (photo == null) "Add photo" else "Change photo")

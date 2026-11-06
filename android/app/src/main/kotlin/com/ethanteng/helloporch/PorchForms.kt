@@ -128,15 +128,15 @@ fun openPrivacyPolicy(context: Context) {
 }
 
 /** Before Porch opens another app's screen for the caregiver, such as the photo picker, the share sheet or the privacy
- * policy: caregiver mode on a family phone stays open behind it. If that screen doesn't open, the next time Porch
- * leaves is still the caregiver leaving. */
-fun staysInCaregiverMode(open: () -> Unit) {
-    RemoteCaregiverSession.shared.stayThroughNextStop()
+ * policy: caregiver mode on a family phone stays open behind it. A picker `answers`, so coming back without its answer
+ * ends caregiver mode (RemoteCaregiverSession). If the screen doesn't open, the next time Porch leaves is still the
+ * caregiver leaving. */
+fun staysInCaregiverMode(answers: Boolean = false, open: () -> Unit) {
+    RemoteCaregiverSession.shared.stayThroughNextStop(answers)
     try {
         open()
     } catch (e: Exception) {
-        // The screen never opened, so the next time Porch leaves is the caregiver leaving.
-        RemoteCaregiverSession.shared.returned()
+        RemoteCaregiverSession.shared.didNotOpen()
         throw e
     }
 }

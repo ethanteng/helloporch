@@ -45,6 +45,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Opened again from outside, such as from the launcher while a photo picker it opened was up: the caregiver
+        // went elsewhere from there, so a family phone's caregiver mode ends. Porch never saw them leave.
+        RemoteCaregiverSession.shared.reopened()
         intent.dataString?.let { link.value = it }
     }
 

@@ -335,6 +335,41 @@ class FamilyCoordinatorTest {
         assertFalse(session.isActive)
     }
 
+    @Test fun caregiverModeEndsWhenPorchComesBackWithoutThePickersAnswer() {
+        val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
+        session.begin("123456")
+        session.stayThroughNextStop(answers = true)
+        session.leftForeground()
+        session.answered()
+        session.returned()
+        assertTrue(session.isActive, "a photo chosen, or none")
+
+        session.stayThroughNextStop(answers = true)
+        session.leftForeground()
+        // Home from the picker, which runs on its own, then Porch from the launcher.
+        session.returned()
+        assertFalse(session.isActive)
+
+        session.begin("123456")
+        session.stayThroughNextStop(answers = true)
+        session.didNotOpen()
+        session.returned()
+        assertTrue(session.isActive, "a picker that couldn't open")
+        session.leftForeground()
+        assertFalse(session.isActive)
+
+        // Home from a picker on Porch's own task, then Porch from the launcher, which closes the picker unanswered.
+        session.begin("123456")
+        val departed = session.departures
+        session.stayThroughNextStop(answers = true)
+        session.leftForeground()
+        session.reopened()
+        session.answered()
+        session.returned()
+        assertFalse(session.isActive)
+        assertEquals(departed + 1, session.departures)
+    }
+
     @Test fun caregiverModeForgetsTheHouseholdWithThePINAndCountsDepartures() {
         val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
         session.begin("123456")

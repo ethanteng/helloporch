@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PhoneNumberNormalization
+import com.ethanteng.helloporch.core.RemoteCaregiverSession
 import com.ethanteng.helloporch.core.ValidationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -157,6 +158,7 @@ private fun AddPhoneDropInScreen(admin: CaregiverAdmin, onDone: () -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     val pickContact = rememberLauncherForActivityResult(PickPhoneNumber()) { uri ->
+        RemoteCaregiverSession.shared.answered()
         if (uri != null) scope.launch {
             val picked = pickedNumber(context, uri) ?: run { admin.error = "That contact's number couldn't be read. Type it instead."; return@launch }
             picked.first?.let { name = it }
@@ -173,7 +175,7 @@ private fun AddPhoneDropInScreen(admin: CaregiverAdmin, onDone: () -> Unit) {
             }
             FormButton("Choose from Contacts", filled = false, onClick = {
                 // Android's picker hands Porch the one number tapped, without access to the rest of the contacts.
-                try { staysInCaregiverMode { pickContact.launch(Unit) } } catch (_: ActivityNotFoundException) { admin.error = "No contacts app is available. Type the number instead." }
+                try { staysInCaregiverMode(answers = true) { pickContact.launch(Unit) } } catch (_: ActivityNotFoundException) { admin.error = "No contacts app is available. Type the number instead." }
             })
             FormButton(if (admin.busy) "Saving…" else "Approve audio drop-in", enabled = !admin.busy, onClick = {
                 val trimmed = name.trim()
