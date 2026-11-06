@@ -84,7 +84,8 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
     BackHandler { call.endCall() }
     CallKeys(app, onDigit = call::keypadDigit, onHangUp = { call.endCall(); "call end requested" })
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        call.permissionsAnswered(results.values.all { it })
+        // Backing out of the dialog answers with no results. `all` on that empty map is true, which would count as allowed.
+        call.permissionsAnswered(results.isNotEmpty() && results.values.all { it })
     }
     val context = LocalContext.current
     val request = call.permissionRequest

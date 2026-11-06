@@ -148,7 +148,8 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         val call = request ?: return@rememberLauncherForActivityResult
         request = null
-        if (results.values.all { it }) app.calls.call(call.person, call.mode, call.family)
+        // Backing out of the dialog answers with no results. `all` on that empty map is true, which would place the call.
+        if (results.isNotEmpty() && results.values.all { it }) app.calls.call(call.person, call.mode, call.family)
         else app.calls.error = "Allow Porch to use the microphone and camera in Settings before calling."
     }
     val calling = { call: CallRequest ->
