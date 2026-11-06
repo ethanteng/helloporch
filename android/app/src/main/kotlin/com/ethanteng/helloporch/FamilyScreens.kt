@@ -2,6 +2,7 @@ package com.ethanteng.helloporch
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,6 +35,7 @@ import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyInvitation
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyNames
+import com.ethanteng.helloporch.core.NativeCall
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.joinFamily
 import kotlinx.coroutines.CancellationException
@@ -145,6 +147,13 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     bedside != null -> "${bedside.name}'s ${if (bedside.platform == "android") "tablet" else "iPad"} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
                     else -> "Checking in…"
                 })
+                if (bedside != null && link.accessRemoved != true) {
+                    val opening = app.calls.opening
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { app.calls.call(bedside, NativeCall.Mode.VOICE, family) }, enabled = !opening) { Text("Audio call") }
+                        Button(onClick = { app.calls.call(bedside, NativeCall.Mode.VIDEO, family) }, enabled = !opening) { Text("Video call") }
+                    }
+                }
                 // Anyone can call the bedside on its own number, from any phone.
                 state?.porchNumber?.takeIf { link.accessRemoved != true }?.let { PorchNumberCard(bedside?.name ?: state.householdName, it) }
                 if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
@@ -152,7 +161,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
             }
         }
     }
-    Text("This test version joins families and checks in with them. Calls, messages and caregiver mode come in later versions.",
+    Text("This test version joins families, checks in with them and calls while Porch is open. Messages and caregiver mode come in later versions.",
         style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }

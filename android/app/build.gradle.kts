@@ -46,4 +46,5 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.zxing.core)
+    implementation(libs.livekit.android)
 }

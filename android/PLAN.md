@@ -194,6 +194,7 @@ Checked 2026-11-05 with the debug build and the local server, over wireless debu
 - **Against it.**
   - It's an Android Go device (`ro.config.low_ram`, 2.8 GB). Check what Go limits once calls exist: full-screen intents, background work, and LiveKit video on 3 GB.
   - Its firmware clears the screen lock and restarts ("reboot for clean password") after a Volume Up/Down sequence and Power on the lock screen. That's fine for a bedside with no screen lock, but not for a family member's own tablet.
+  - **Its audio service crashes during calls.** On 2026-11-05, `android.hardware.audio.service-aidl.aw` crashed six times in six minutes of test calls (a null pointer in `pcm_mmap_avail`, in the maker's `libtinyalsav2.so`), each time sound started or stopped: ringback, the ring tone ending on Answer, the microphone starting and a call ending. It restarts in about a second. Porch retries the microphone once, so calls connect, but sound can drop for that second. Unless a firmware update fixes it, this rules the KB10 out as the supported tablet.
 - **Not checked yet.**
   - Charging: powering the Cell2Jack from its own port drained it from 95% to 92% in a few minutes. It needs the hub with power passthrough, and an overnight run.
   - Each connection gets no data after its first `/d` and connects on the second try, about 3 s later. Compare with the iPad's log before treating it as normal.
@@ -364,6 +365,17 @@ Exit criteria:
 - An Android phone joins an iPad bedside the same way.
 
 ## Phase 3: calling
+
+Built in five pull requests, each a working household:
+
+1. **In-app calls.** The bedside and family phones call each other while Porch is open, with the shared call engine, the call screen, ringing with Answer and Decline, and the bedside's people screen and keypad keys. Until caregiver mode (phase 4) puts people on keys, the people screen also lists family members who aren't on one. A call ends if Porch leaves the screen.
+2. **Announcements, drop-ins and the receiver.** "Calling David.", receiving a drop-in, the Cell2Jack routing table, and silence hang-up.
+3. **Phone fallback and calls to the Porch number.**
+4. **The always-on bedside.** Home app, screen on, showing over the lock screen, and the dynamic clock.
+5. **Ringing when Porch isn't open.** FCM call pushes, Core-Telecom and the call foreground service. It waits for Firebase setup.
+
+Calls can be tried locally with LiveKit's server in dev mode; see [android/README.md](README.md#calls).
+
 
 ### Shared call engine
 

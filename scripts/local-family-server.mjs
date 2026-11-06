@@ -4,19 +4,30 @@
 // whose stand-in bedside checks in every few seconds, and prints an invitation for a phone to join it and a setup link
 // for a new bedside tablet.
 //
-//   node scripts/local-family-server.mjs [port]
+//   node scripts/local-family-server.mjs [port] [--livekit]
 //
 // For the Android emulator, forward the port and open a link (android/README.md):
 //   adb reverse tcp:3010 tcp:3010
 //   adb shell am start -a android.intent.action.VIEW -d '<the porch://pair or porch://activate link>'
+//
+// --livekit makes calls connect, through a LiveKit server on this computer in dev mode, which is all test keys:
+//   livekit-server --dev --bind 127.0.0.1 --node-ip 127.0.0.1
+//   adb reverse tcp:7880 tcp:7880 && adb reverse tcp:7881 tcp:7881
+// Porch's server only hands out secure LiveKit addresses, so this one says wss:// to the handler and this script
+// changes it to ws:// on the way out. The apps take ws:// only for this device.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
+import { RoomServiceClient } from 'livekit-server-sdk';
 import { handleFamily } from '../lib/family/service.ts';
 
-const port = Number(process.argv[2] ?? 3010), origin = `http://localhost:${port}`;
+const options = process.argv.slice(2), livekit = options.includes('--livekit');
+const port = Number(options.find(option => !option.startsWith('--')) ?? 3010), origin = `http://localhost:${port}`;
+// livekit-server --dev's address and keys, which are public test values.
+const localLiveKit = { url: 'ws://localhost:7880', secure: 'wss://localhost:7880', key: 'devkey', secret: 'secret' };
 const setupCode = randomBytes(24).toString('hex'), pin = '246810';
 // What buying a Porch number needs (lib/family/numbers.ts). None of it is real: the stand-ins below are all it reaches.
-Object.assign(process.env, { LIVEKIT_URL: 'wss://local.invalid', LIVEKIT_API_KEY: 'local', LIVEKIT_API_SECRET: randomBytes(24).toString('hex'), PORCH_CONTACT_SETUP_CODE: setupCode,
+Object.assign(process.env, { LIVEKIT_URL: livekit ? localLiveKit.secure : 'wss://local.invalid', LIVEKIT_API_KEY: livekit ? localLiveKit.key : 'local',
+  LIVEKIT_API_SECRET: livekit ? localLiveKit.secret : randomBytes(24).toString('hex'), PORCH_CONTACT_SETUP_CODE: setupCode,
   TWILIO_ACCOUNT_SID: `AC${'0'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'local', PORCH_SERVER_ORIGIN: 'https://local.invalid', LIVEKIT_SIP_OUTBOUND_TRUNK_ID: 'ST_local',
   LIVEKIT_SIP_URI: 'sip:local.invalid', PORCH_MAX_PHONE_NUMBERS: '20' });
 class MemoryStore {
@@ -55,7 +66,13 @@ const numberServices = () => ({
     async createSipDispatchRule(rule, options) { const made = { sipDispatchRuleId: `SDR_${rules.length}`, rule, ...options }; rules.push(made); return made; },
   },
 });
-const dependencies = { store, numberServices };
+// Closing a call's room: the local LiveKit over plain HTTP, since the handler would use HTTPS, or nothing without one.
+const endRoom = async room => {
+  if (!livekit) return;
+  try { await new RoomServiceClient(localLiveKit.url.replace(/^ws:/, 'http:'), localLiveKit.key, localLiveKit.secret).deleteRoom(room); }
+  catch (error) { if (error?.code !== 'not_found') throw error; }
+};
+const dependencies = { store, numberServices, endRoom };
 
 const time = () => new Date().toISOString().slice(11, 19);
 const call = async (action, values = {}, credential, code) => {
@@ -88,10 +105,12 @@ const onRequest = async (request, response) => {
   const headers = new Headers(request.headers);
   for (const [name, value] of Object.entries({ 'x-vercel-ip-country': 'US', 'x-vercel-ip-latitude': '37.80', 'x-vercel-ip-longitude': '-122.27' })) if (!headers.has(name)) headers.set(name, value);
   const result = await handleFamily(new Request(`${origin}${request.url}`, { method: 'POST', headers, body }), dependencies);
-  const text = await result.text();
+  let text = await result.text();
   let input = {}, output = {};
   try { input = JSON.parse(body); } catch { /* the handler already answered it */ }
   try { output = JSON.parse(text); } catch { /* not JSON */ }
+  // A call's media goes to the LiveKit server on this computer, which has no certificate (see the top of this file).
+  if (livekit && output.serverUrl === localLiveKit.secure) text = JSON.stringify({ ...output, serverUrl: localLiveKit.url });
   if (input.action === 'poll' && result.status === 200 && output.state) {
     const me = output.state.me, seen = `${input.available}`;
     if (checkingIn.get(me.id) !== seen) console.log(`${time()} ${me.name}'s ${me.platform ?? 'ios'} ${me.role} is checking in${input.available ? ' and can take calls' : ', not ready for calls'}`);
@@ -99,7 +118,9 @@ const onRequest = async (request, response) => {
   } else console.log(`${time()} ${input.action ?? '?'} -> ${result.status}${output.error ? ` (${output.error})` : ''}`);
   // An invitation made on a bedside, such as setup's QR code, so a phone can be joined without a camera.
   if (input.action === 'createInvite' && output.code) console.log(`  Invitation it made: porch://pair?${new URLSearchParams({ server: origin, code: output.code })}`);
-  response.writeHead(result.status, Object.fromEntries(result.headers)).end(text);
+  const responseHeaders = Object.fromEntries(result.headers);
+  delete responseHeaders['content-length'];
+  response.writeHead(result.status, responseHeaders).end(text);
 };
 // `adb reverse` connects to 127.0.0.1. Binding `localhost` is often only ::1, which that forward cannot reach.
 const ipv4 = createServer(onRequest);
@@ -110,6 +131,7 @@ ipv4.listen(port, '127.0.0.1', async () => {
   });
   ipv6.listen(port, '::1');
   console.log(`Porch is running at ${origin}, with an in-memory household for "Mom". The caregiver PIN is ${pin}.`);
+  console.log(livekit ? `Calls connect through LiveKit at ${localLiveKit.url}.` : 'Calls start but never connect. Add --livekit to connect them (see the top of this file).');
   console.log(`Invitation for a phone to join (works once, for a day):\n  porch://pair?${new URLSearchParams({ server: origin, code: await invite('Ethan') })}`);
   console.log(`Setup link for a new bedside tablet (works once, for a day):\n  porch://activate?${new URLSearchParams({ server: origin, code: await activation() })}`);
 });

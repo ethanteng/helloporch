@@ -38,6 +38,26 @@ Tap **Join family**. The server prints when the phone comes online, and the phon
 
 On a tablet emulator, open the `porch://activate` link instead to set the tablet up as a bedside. The server prints each device as it starts checking in and whether it can take calls, and the link for each invitation the tablet makes, such as setup's QR code, so a phone can join without a camera.
 
+### Calls
+
+Calls start without LiveKit but never connect. To connect them, run LiveKit's open-source server on this computer in dev mode (`brew install livekit`), whose keys are public test values, and start the local server with `--livekit`:
+
+```bash
+livekit-server --dev --bind 127.0.0.1 --node-ip 127.0.0.1
+```
+
+```bash
+node scripts/local-family-server.mjs 3010 --livekit
+```
+
+Then forward LiveKit's signaling port and its TCP media port to each device, as well as the server's:
+
+```bash
+adb reverse tcp:3010 tcp:3010 && adb reverse tcp:7880 tcp:7880 && adb reverse tcp:7881 tcp:7881
+```
+
+Media goes over TCP through `adb`, because the LiveKit server offers only `127.0.0.1`. The apps accept an unencrypted `ws://` LiveKit address only for this device; Porch's server only gives out `wss://` ones. A tablet over wireless debugging works the same way.
+
 ## Keeping the apps in step
 
 `ContractFixtureTest` decodes the server responses in [tests/fixtures](../tests/fixtures), as PorchCore's `ContractFixtureTests` does. When a change to the server alters them, the server's own test fails until they're rewritten with `UPDATE_CONTRACT_FIXTURES=1 npm test`, and then both apps' tests show whether they still read them.

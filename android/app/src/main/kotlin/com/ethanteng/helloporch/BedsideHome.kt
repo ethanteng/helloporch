@@ -43,14 +43,18 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.delay
 
 /**
- * The bedside's home screen until the clock comes with calling (phase 3): the time, whether Porch is checking in, and
- * the household's number. Until the tablet is set up, Set up Porch opens setup, as the clock's caregiver button does
+ * The bedside's home screen: the time, whether Porch is checking in, the household's number, and Call, which opens the
+ * people the bedside can call. A keypad key calls whoever is on it. The full clock comes later in phase 3. Until the tablet is set up, Set up Porch opens setup, as the clock's caregiver button does
  * on iOS. A setup that stopped after its PIN goes on from here, after the PIN.
  */
 @Composable
 fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) {
     val paired = links.credential != null || app.device.credential(PorchExperience.BEDSIDE) != null
     val state = links.state
+    var picking by rememberSaveable { mutableStateOf(false) }
+    if (picking && state != null) { BedsidePeople(app, links, onClose = { picking = false }); return }
+    // A key calls whoever is on it. The receiver put back while a call is starting stops it opening.
+    if (state != null) CallKeys(app, onDigit = app.calls::bedsideKey, onHangUp = app.calls::cancelPendingCall)
     Surface(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.safeDrawingPadding().fillMaxSize()) {
             val clockSize = (minOf(maxWidth.value * 0.16f, maxHeight.value * 0.3f)).sp
@@ -76,7 +80,13 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
                     }
                     if (!paired) FormButton("Set up Porch", onClick = { setup.start() }, Modifier.widthIn(max = 420.dp))
                     else if (state != null && setup.unfinished) FormButton("Finish setting up Porch", onClick = setup::openGate, Modifier.widthIn(max = 420.dp))
-                    Text("This test version shows the clock and checks in. Calls, messages and caregiver mode come in later versions.",
+                    if (state != null && !setup.unfinished) {
+                        val calls = app.calls
+                        FormButton(BedsideText.string(app, if (calls.opening) "Calling…" else "Call"), onClick = { picking = true },
+                            Modifier.widthIn(max = 420.dp), enabled = !calls.opening)
+                        calls.notice?.let { Text(it, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) }
+                    }
+                    Text("This test version shows the clock, checks in and makes calls while Porch is open. Messages and caregiver mode come in later versions.",
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
                 }
             }
