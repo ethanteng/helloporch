@@ -46,6 +46,7 @@ internal fun CallHistoryScreen(app: PorchApplication, onDone: () -> Unit) {
     BackHandler(onBack = onDone)
     val scope = rememberCoroutineScope()
     var calls by remember { mutableStateOf<List<CallHistoryEntry>?>(null) }
+    var slots by remember { mutableStateOf<CallSlots?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     fun reload() {
@@ -56,6 +57,8 @@ internal fun CallHistoryScreen(app: PorchApplication, onDone: () -> Unit) {
         scope.launch {
             try {
                 calls = app.service(credential).send("callHistory", pin = app.caregiverPIN).calls.orEmpty()
+                // A check-in can rename a keypad contact while this list stays open, so Refresh reads those names again.
+                slots = try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { null }
                 failure = null
             } catch (e: CancellationException) {
                 throw e
@@ -78,16 +81,15 @@ internal fun CallHistoryScreen(app: PorchApplication, onDone: () -> Unit) {
             }
             shown == null -> Text("Loading calls…", style = MaterialTheme.typography.bodyLarge)
             shown.isEmpty() -> Text("No calls yet.", style = MaterialTheme.typography.bodyLarge)
-            else -> CallDays(app, shown)
+            else -> CallDays(shown, slots)
         }
     }
 }
 
 @Composable
-private fun CallDays(app: PorchApplication, calls: List<CallHistoryEntry>) {
+private fun CallDays(calls: List<CallHistoryEntry>, slots: CallSlots?) {
     Text("Last 90 days", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     // The bedside names phone numbers saved on its keypad, as it does elsewhere.
-    val slots = remember { try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { null } }
     val zone = ZoneId.systemDefault()
     val days = remember(calls) { calls.groupBy { Instant.ofEpochSecond(it.startedAt).atZone(zone).toLocalDate() }.toSortedMap(reverseOrder()) }
     // "Today", "Yesterday", then the full date, capitalized as a heading.
