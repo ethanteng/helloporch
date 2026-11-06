@@ -191,6 +191,7 @@ Checked 2026-11-05 with the debug build and the local server, over wireless debu
   - The Cell2Jack connects straight to the tablet: CH340 version `0x31`, 2 Mbaud, firmware `a06`. Porch heard 0–9, `*`, `#` and the receiver going back.
   - "Always open Porch" is remembered across unplugging, and Porch stops the Cell2Jack when it leaves the front and reconnects when it comes back.
   - After a restart, Android gives Porch the Cell2Jack again before the tablet unlocks, through a direct-boot-aware activity; see [Cell2Jack](#cell2jack).
+  - With Porch as the home screen, a restart comes back to Porch's clock by itself, with the screen kept on and the system bars hidden.
 - **Against it.**
   - It's an Android Go device (`ro.config.low_ram`, 2.8 GB). Check what Go limits once calls exist: full-screen intents, background work, and LiveKit video on 3 GB.
   - Its firmware clears the screen lock and restarts ("reboot for clean password") after a Volume Up/Down sequence and Power on the lock screen. That's fine for a bedside with no screen lock, but not for a family member's own tablet.
@@ -521,7 +522,7 @@ Page contents:
   - Test ringing, and test announcement.
 - **Privacy.** **Show family when someone is at the tablet** (`setShareAttendance`), and on the tablet, **Check with the camera**.
 - **Caregivers & PIN.** Change the PIN.
-- **This tablet.** **Use the Cell2Jack phone keypad** and **Hang up when the receiver is put back**, plus Connect the phone or USB keypad again, and Use this tablet as a family device.
+- **This tablet.** **Use the Cell2Jack phone keypad** and **Hang up when the receiver is put back**, plus Connect the phone or USB keypad again, and Use this tablet as a family device. Also **Make Porch the home screen** or **Stop using Porch as the home screen**, and **Tablet settings**, which opens Android's Settings: with Porch as the home screen and the system bars hidden, a caregiver otherwise has to know to swipe down twice from the top.
 - **About.** The open-source licenses screen.
 - **Typing with a keypad attached.** Android hides the on-screen keyboard when a hardware keyboard is attached unless the user changes that setting, which is the same problem iPadOS has.
   - Port the Porch keyboard: number pad, phone pad with `+`, and text with a symbols layer, plus Paste, Next and Done.
