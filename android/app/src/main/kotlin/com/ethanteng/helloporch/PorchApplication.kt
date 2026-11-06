@@ -53,6 +53,9 @@ class PorchApplication : Application() {
     val keypadReport by lazy { KeypadNumberReport(scope, { service(it) }, pin = { caregiverPIN }, now = SystemClock::elapsedRealtime) }
     /** The call this device is ringing for or on. */
     val calls by lazy { CallCenter(this) }
+    /** Text-to-speech for the bedside's announcements, started when the bedside first comes to the front so it's
+     * ready by the first key press. */
+    val speech by lazy { BedsideSpeech(this) }
     /** Counts mode changes, so the screens pick the new mode up. */
     var modeChanges by mutableIntStateOf(0)
         private set
@@ -94,6 +97,7 @@ class PorchApplication : Application() {
     fun bedsideCameToFront() {
         activityResumed = true
         if (device.experience != PorchExperience.BEDSIDE) return
+        speech
         if (cell2jackKeypad.isInitialized()) cell2jack.noteReturnedToFront()
         cell2jack.start()
     }
@@ -132,6 +136,8 @@ class PorchApplication : Application() {
             slots.reconcile(state, photos.familyMembers)
             if (slots != previous) slots.save(settings, photos)
             keypadReport.report(slots, coordinator)
+            // A call or a drop-in never waits for the natural voice, so its sentences are fetched ahead.
+            NaturalVoice.prefetch(this, state, slots)
         } catch (error: Exception) {
             // iOS shows this as the check-in's error, such as a saved keypad that can't be read until a caregiver saves
             // it again in caregiver mode (phase 4).

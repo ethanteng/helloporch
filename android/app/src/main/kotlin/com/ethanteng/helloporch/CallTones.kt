@@ -52,15 +52,34 @@ class Ringback {
     private val player = TonePlayer()
     var playing = false
         private set
+    /** Whether ringback is wanted, even while it waits for a sentence. */
+    private var wanted = false
+    private var holding: OutgoingAnnouncement? = null
+
+    /** Ringing waits until the bedside has said who it's calling. */
+    fun hold(until: OutgoingAnnouncement) {
+        holding = until
+        until.then {
+            if (holding !== until) return@then
+            holding = null
+            if (wanted) play()
+        }
+    }
 
     fun start() {
-        if (playing) return
-        playing = player.play(CallTone.RINGBACK, volume = 0.7f)
+        wanted = true
+        if (holding == null) play()
     }
 
     fun stop() {
+        wanted = false
         playing = false
         player.stop()
+    }
+
+    private fun play() {
+        if (playing) return
+        playing = player.play(CallTone.RINGBACK, volume = 0.7f)
     }
 }
 

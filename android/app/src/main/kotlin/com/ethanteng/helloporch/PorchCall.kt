@@ -2,12 +2,14 @@ package com.ethanteng.helloporch
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.BedsideLanguage
+import com.ethanteng.helloporch.core.CallInactivityTimer
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTone
@@ -46,6 +48,8 @@ class PorchCall(
     /** Who's on the other end, as this device shows them. */
     val name: String,
     val photo: ByteArray?,
+    /** Who the bedside is calling, which may still be being said as the call opens. Its ringing and audio wait for it. */
+    private val announcement: OutgoingAnnouncement? = null,
     /** Called once the call has ended and its screen should close. */
     private val onClosed: (PorchCall) -> Unit,
 ) {
@@ -89,6 +93,10 @@ class PorchCall(
     private var waitJob: Job? = null
     private var controlJob: Job? = null
     private var permissionAnswer: CompletableDeferred<Boolean>? = null
+    /** Hanging up after a stretch of silence, when a caregiver turned it on (off by default; 15 seconds to 30 minutes). */
+    private val inactivity = CallInactivityTimer(
+        if (CallPreferences.disconnectAfterSilence(app.settings)) CallPreferences.silenceSeconds(app.settings).toDouble() else null,
+        clock = SystemClock::elapsedRealtime)
 
     fun start() {
         scope.launch { room.events.events.collect(::handle) }
@@ -98,6 +106,10 @@ class PorchCall(
         // A family phone in several families follows the one this call is in.
         scope.launch { app.coordinator.links.collect(::familyChanged) }
         updateKeypadHint()
+        if (inactivity.timeout != null) scope.launch {
+            while (!ending && !failed) { delay(1_000); checkInactivity() }
+        }
+        announcement?.let(ringback::hold)
         if (!accepted) ringback.start()
         connectionJob = scope.launch { connect() }
     }
@@ -139,6 +151,8 @@ class PorchCall(
                 throw CallException("Allow Porch to use the microphone in Settings → Apps → Porch → Permissions to make calls.")
             if (video && !granted(Manifest.permission.CAMERA) && !ask(listOf(Manifest.permission.CAMERA))) throw CallException(
                 "Allow Porch to use the camera in Settings → Apps → Porch → Permissions, or choose Voice in this person's setup.")
+            // Joining switches the audio to a call, which cut the bedside's sentence off on iOS. Android keeps the order.
+            announcement?.finished()
             room.connect(url, token)
             enableMicrophone()
             if (video && CallPreferences.startVideoWithCamera(role, app.settings)) room.localParticipant.setCameraEnabled(true)
@@ -158,6 +172,7 @@ class PorchCall(
             if (ending) return
             failed = true
             ringback.stop()
+            announcement?.stop()
             room.disconnect()
             // The other end stops ringing now, while the explanation stays on this screen.
             this.session?.let { app.scope.launch { it.end() } }
@@ -212,6 +227,18 @@ class PorchCall(
             showingPlaceholder = !(tiles.size > 1 || tiles.firstOrNull()?.track != null)
         }
         if (hasConnectedPeer && mediaReady) playConnectionCue()
+        checkInactivity()
+    }
+
+    /** Ends the call after the chosen stretch with no one speaking. Silence counts only while connected with someone,
+     * and a phone on the call, such as a bank on hold, counts as speaking, as on iOS. */
+    private fun checkInactivity(speaking: Boolean = false) {
+        if (inactivity.timeout == null || ending || failed) return
+        val peers = room.remoteParticipants.values
+        val connected = mediaReady && room.state == Room.State.CONNECTED && peers.isNotEmpty()
+        val phone = peers.any { it.kind == Participant.Kind.SIP }
+        val speech = speaking || phone || room.localParticipant.isSpeaking || peers.any { it.isSpeaking }
+        if (inactivity.update(connected, speech)) finish(returning("Call ended."))
     }
 
     private fun videoOf(participant: Participant): VideoTrack? =
@@ -220,6 +247,7 @@ class PorchCall(
     private fun playConnectionCue() {
         if (cuePlayed) return
         cuePlayed = true
+        announcement?.stop()
         cue.play(CallTone.CONNECTED)
     }
 
@@ -228,9 +256,10 @@ class PorchCall(
         if (event.room !== room) return
         when (event) {
             is RoomEvent.ParticipantDisconnected -> participantLeft()
-            is RoomEvent.Reconnecting -> if (!ending && !failed) status = text("Reconnecting…")
+            is RoomEvent.Reconnecting -> if (!ending && !failed) { inactivity.reset(); status = text("Reconnecting…") }
             is RoomEvent.Disconnected -> if (!ending && mediaReady) finish(returning("The call disconnected."))
-            is RoomEvent.ActiveSpeakersChanged -> {}
+            // Even a word between the timer's ticks starts the silence over.
+            is RoomEvent.ActiveSpeakersChanged -> checkInactivity(speaking = event.speakers.isNotEmpty())
             else -> refresh()
         }
     }
@@ -295,6 +324,7 @@ class PorchCall(
         if (ending) return
         ending = true
         ringback.stop()
+        announcement?.stop()
         cue.stop()
         connectionJob?.cancel()
         waitJob?.cancel()
