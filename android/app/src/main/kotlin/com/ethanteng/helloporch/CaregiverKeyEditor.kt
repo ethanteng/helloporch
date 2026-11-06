@@ -72,6 +72,7 @@ import kotlinx.serialization.json.JsonPrimitive
 fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, slot: Int, contact: CallContact?, initialAction: KeypadAction, onDone: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val mediaAccess = rememberMediaAccess()
     val editingNumbers = contact != null
     val key = CallSlots.symbol(slot)
     val region = remember { homeRegion() }
@@ -217,7 +218,7 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
         phone = saved.phoneNumber.orEmpty()
         otherNumbers = saved.otherPhoneNumbers
         saving = true
-        scope.launch {
+        fun write() = scope.launch {
             try {
                 saved.phoneNumber?.let { PhoneApprovals.authorize(app, it, refresh = true) }
                 ensureActive()
@@ -230,6 +231,17 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
                 admin.error = e.message ?: "Couldn't save this number. Check your internet and try again."
             } finally {
                 saving = false
+            }
+        }
+        // A phone drop-in that moves to the new number answers on this tablet, so the tablet asks for its microphone
+        // first, as iOS does. One approved on another device, or a microphone turned off since, would otherwise stop the
+        // save until the caregiver found the setting.
+        val moving = saved.phoneNumber != null && approvedNumber.let { it != null && it != saved.phoneNumber }
+        if (!moving) { write(); return }
+        mediaAccess(false) { granted ->
+            if (granted) write() else {
+                saving = false
+                admin.error = "Allow the microphone in the tablet's settings before approving drop-in."
             }
         }
     }
