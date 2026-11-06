@@ -90,7 +90,16 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
     var photoData by remember { mutableStateOf(contact?.customPhotoData) }
     /** The number approved for phone drop-in when the editor opened. A changed primary number takes the approval with it. */
     var approvedNumber by remember { mutableStateOf(contact?.phoneNumber?.takeIf { number -> links.state?.phoneDropIns.orEmpty().any { it.number == number } }) }
+    /** This editor moved or withdrew the approval, so the household's list no longer says what it was. */
+    var approvalMoved by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // An approval that arrives, or another caregiver withdraws, while this editor is open, as iOS's refreshPhoneDropIn
+    // follows it. Not while a save is moving it.
+    val approvals = links.state?.phoneDropIns
+    LaunchedEffect(approvals, saving) {
+        if (saving || approvalMoved || approvals == null) return@LaunchedEffect
+        approvedNumber = contact?.phoneNumber?.takeIf { number -> approvals.any { it.number == number } }
+    }
     var inviting by rememberSaveable { mutableStateOf(false) }
     var choosingColor by remember { mutableStateOf(false) }
 
@@ -164,6 +173,7 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
         } else mapOf("number" to JsonPrimitive(previous), "enabled" to JsonPrimitive(false))
         if (!admin.send("setPhoneDropIn", values)) return false
         approvedNumber = number
+        approvalMoved = true
         return true
     }
     /** The person as the form says, or why they can't be saved. */

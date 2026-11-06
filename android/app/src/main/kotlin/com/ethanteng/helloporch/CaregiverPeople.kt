@@ -599,7 +599,7 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
                     if (!on) admin.perform("setPhoneDropIn", mapOf("number" to JsonPrimitive(number), "enabled" to JsonPrimitive(false)))
                     else mediaAccess(false) { granted ->
                         if (!granted) admin.error = "Allow the microphone in the tablet's settings before approving drop-in."
-                        else admin.perform("setPhoneDropIn", mapOf("number" to JsonPrimitive(number), "name" to JsonPrimitive(subject.contact?.name.orEmpty()),
+                        else admin.perform("setPhoneDropIn", mapOf("number" to JsonPrimitive(number), "name" to JsonPrimitive(subject.contact.name),
                             "enabled" to JsonPrimitive(true)))
                     }
                 })

@@ -41,7 +41,8 @@ import com.ethanteng.helloporch.core.FamilyLinks
 @Composable
 fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    val slots = remember(links) { try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() } }
+    // A photo that just downloaded shows at once, not at the next check-in.
+    val slots = remember(links, FamilyPhotos.saved) { try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() } }
     val keyed = remember(slots) { CallSlots.digits.mapNotNull { digit -> slots.contact(digit)?.let { digit to it } } }
     // One choice. A second tap would otherwise start another call and report that caregiver mode isn't set up.
     var chosen by remember { mutableStateOf(false) }
