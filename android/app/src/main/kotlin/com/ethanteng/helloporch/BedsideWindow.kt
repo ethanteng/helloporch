@@ -25,9 +25,13 @@ object BedsideHomeScreen {
 
     /** Offers Porch as a home screen in bedside mode, and stops offering it otherwise. */
     fun sync(context: Context, bedside: Boolean) {
-        val state = if (bedside) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         val packages = context.packageManager
-        if (packages.getComponentEnabledSetting(alias(context)) != state) packages.setComponentEnabledSetting(alias(context), state, PackageManager.DONT_KILL_APP)
+        val current = packages.getComponentEnabledSetting(alias(context))
+        // The manifest leaves the alias disabled, which PackageManager reports as DEFAULT until this sets it.
+        val enabled = current == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        if (enabled == bedside) return
+        val state = if (bedside) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        packages.setComponentEnabledSetting(alias(context), state, PackageManager.DONT_KILL_APP)
     }
 
     /** Whether Porch is this tablet's home screen. */
