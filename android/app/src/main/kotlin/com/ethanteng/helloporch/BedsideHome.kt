@@ -1,20 +1,30 @@
 package com.ethanteng.helloporch
 
-import android.text.format.DateFormat
+import android.animation.ValueAnimator
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,26 +36,31 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.ethanteng.helloporch.core.BedsidePreferences
+import com.ethanteng.helloporch.core.BedsideScene
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PorchExperience
-import com.ethanteng.helloporch.core.PorchNumber
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.time.temporal.ChronoUnit
-import kotlinx.coroutines.delay
+import java.time.Instant
 
 /**
- * The bedside's home screen: the time, whether Porch is checking in, the household's number, and Call, which opens the
- * people the bedside can call. A keypad key calls whoever is on it. The full clock comes later in phase 3. Until the tablet is set up, Set up Porch opens setup, as the clock's caregiver button does
- * on iOS. A setup that stopped after its PIN goes on from here, after the PIN.
+ * The bedside's clock, as iOS's clock screen lays it out: the weekday, the time and the date, fitted to the screen, on
+ * night colors, or on the dynamic clock's picture when a caregiver chose it, with Call someone beneath. A keypad key
+ * calls whoever is on it. Until the tablet is set up, Set up Porch takes Call someone's place, and a setup that stopped
+ * after its PIN goes on from here. Caregiver mode comes in phase 4.
  */
 @Composable
 fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) {
@@ -55,65 +70,102 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
     if (picking && state != null) { BedsidePeople(app, links, onClose = { picking = false }); return }
     // A key calls whoever is on it. The receiver put back while a call is starting stops it opening.
     if (state != null) CallKeys(app, onDigit = app.calls::bedsideKey, onHangUp = app.calls::cancelPendingCall)
-    Surface(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.safeDrawingPadding().fillMaxSize()) {
-            val clockSize = (minOf(maxWidth.value * 0.16f, maxHeight.value * 0.3f)).sp
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
-                Clock(clockSize)
-                Column(Modifier.widthIn(max = 760.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val name = state?.householdName
-                    Text(when {
-                        !paired -> "Porch isn't set up on this tablet yet."
-                        links.accessRemoved -> "This tablet isn't part of ${name?.let { "$it's" } ?: "its"} Porch anymore."
-                        // A failed check-in keeps the last snapshot, which is what a dropped connection looks like.
-                        links.error != null -> "Porch can't check in right now. ${links.error}"
-                        state != null -> "Porch is on and checking in."
-                        else -> "Checking in…"
-                    }, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge)
-                    val number = state?.porchNumber
-                    if (number != null && name != null) {
-                        Text("$name's Porch number", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(PorchNumber.display(number), fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                    } else if (state?.phoneSetup != null && name != null) {
-                        Text("Porch is still getting $name's phone number.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
+    val context = LocalContext.current
+    val now = rememberMinute()
+    val preferences = remember(now) { BedsidePreferences.load(app.settings) }
+    val language = remember(now) { BedsideText.language(app) }
+    val clock = remember(now, language) { ClockText(context, language, now) }
+    val scene = if (preferences.appearance == BedsidePreferences.Appearance.DYNAMIC) remember(now, preferences) {
+        BedsideScene(Instant.ofEpochMilli(now), preferences)
+    } else null
+    val palette = remember(scene) { scene?.let { ScenePalette(it) } }
+    var isHome by remember { mutableStateOf(BedsideHomeScreen.isHome(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { isHome = BedsideHomeScreen.isHome(context) }
+    val askHome = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { isHome = BedsideHomeScreen.isHome(context) }
+    fun text(english: String, vararg arguments: Any?) = BedsideText.string(app, english, *arguments)
+
+    Box(Modifier.fillMaxSize().background(PorchColors.night)) {
+        if (scene != null) ScenePictureFading(scene, Modifier.fillMaxSize())
+        LargeType { BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 32.dp, vertical = 16.dp)) {
+            // Fitted to the tablet, as on iOS, rather than capped at phone-sized text. The bottom is kept for calling.
+            val large = maxWidth >= 600.dp && maxHeight >= 500.dp
+            val callHeight = if (large) 124.dp else if (maxHeight < 500.dp) 80.dp else 96.dp
+            val width = maxOf(200f, maxWidth.value)
+            val height = maxOf(80f, maxHeight.value - callHeight.value - 116f)
+            val timeSize = minOf(width * 0.43f, height * 0.48f).sp
+            val primary = palette?.foreground ?: PorchColors.nightText
+            val secondary = palette?.foreground ?: PorchColors.nightSecondary
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(minOf(24f, height * 0.025f).dp, Alignment.CenterVertically)) {
+                    if (scene != null) Text("${text(scene.period.rawValue)} · ${text(scene.season.rawValue)}", color = primary,
+                        fontSize = maxOf(18f, minOf(32f, height * 0.07f)).sp, fontWeight = FontWeight.SemiBold)
+                    // iOS's sizes, shrunk to fit when the words are wider than the screen, as its labels do.
+                    FittedText(AnnotatedString(clock.weekday), secondary, minOf(width * 0.075f, height * 0.13f).sp, FontWeight.Medium)
+                    FittedText(clock.styledTime, primary, timeSize, FontWeight.Medium, digits = true)
+                    FittedText(AnnotatedString(clock.date), secondary, minOf(width * 0.061f, height * 0.11f).sp)
+                }
+                val calls = app.calls
+                val name = state?.householdName
+                val status = when {
+                    !paired -> "Porch isn't set up on this tablet yet."
+                    links.accessRemoved -> "This tablet isn't part of ${name?.let { "$it's" } ?: "its"} Porch anymore."
+                    // A failed check-in keeps the last snapshot, which is what a dropped connection looks like.
+                    links.error != null -> "Porch can't check in right now. ${links.error}"
+                    state == null -> "Checking in…"
+                    else -> calls.notice
+                }
+                status?.let { Text(it, Modifier.padding(bottom = 12.dp), color = palette?.controlForeground ?: PorchColors.nightSecondary,
+                    fontSize = 22.sp, textAlign = TextAlign.Center) }
+                val buttonColor = palette?.controlBackground?.copy(alpha = 0.6f) ?: PorchColors.nightSurface
+                val buttonText = palette?.controlForeground ?: PorchColors.nightText
+                when {
+                    !paired -> ClockButton("Set up Porch", callHeight, buttonColor, buttonText, large) { setup.start() }
+                    state != null && setup.unfinished -> ClockButton("Finish setting up Porch", callHeight, buttonColor, buttonText, large, onClick = setup::openGate)
+                    state != null -> ClockButton(text(if (calls.opening) "Calling…" else "Call someone"), callHeight, buttonColor, buttonText, large,
+                        enabled = !calls.opening) { picking = true }
+                }
+                // For a caregiver, until caregiver mode (phase 4) has a place for it: Porch should be the home screen, so
+                // the tablet comes back to it after a restart and Home can't leave it.
+                if (paired && !isHome) BedsideHomeScreen.request(context)?.let { ask ->
+                    TextButton(onClick = { askHome.launch(ask) }) {
+                        Text("Make Porch this tablet's home screen", color = palette?.controlForeground ?: PorchColors.nightSecondary, fontSize = 18.sp)
                     }
-                    if (!paired) FormButton("Set up Porch", onClick = { setup.start() }, Modifier.widthIn(max = 420.dp))
-                    else if (state != null && setup.unfinished) FormButton("Finish setting up Porch", onClick = setup::openGate, Modifier.widthIn(max = 420.dp))
-                    if (state != null && !setup.unfinished) {
-                        val calls = app.calls
-                        FormButton(BedsideText.string(app, if (calls.opening) "Calling…" else "Call"), onClick = { picking = true },
-                            Modifier.widthIn(max = 420.dp), enabled = !calls.opening)
-                        calls.notice?.let { Text(it, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) }
-                    }
-                    Text("This test version shows the clock, checks in and makes calls while Porch is open. Messages and caregiver mode come in later versions.",
-                        textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
                 }
             }
-        }
+        } }
     }
 }
 
-/** Weekday, time and date in the tablet's language, with AM or PM smaller, refreshed on the minute. */
+/** One line of the clock at `size`, or smaller until it fits the width. `digits` keeps the time's digits the same width,
+ * so it doesn't shift as the minutes change. */
 @Composable
-private fun Clock(size: androidx.compose.ui.unit.TextUnit) {
-    val context = LocalContext.current
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = LocalDateTime.now()
-            delay(ChronoUnit.MILLIS.between(now, now.truncatedTo(ChronoUnit.MINUTES).plusMinutes(1)).coerceAtLeast(1))
-        }
+private fun FittedText(text: AnnotatedString, color: Color, size: TextUnit, weight: FontWeight = FontWeight.Normal, digits: Boolean = false) {
+    BasicText(text, Modifier.fillMaxWidth(), maxLines = 1,
+        style = LocalTextStyle.current.merge(TextStyle(color = color, fontWeight = weight, textAlign = TextAlign.Center,
+            fontFeatureSettings = if (digits) "tnum" else null)),
+        autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = size, stepSize = 2.sp))
+}
+
+/** The clock's big button: Call someone, or setting Porch up. */
+@Composable
+private fun ClockButton(title: String, height: Dp, color: Color, text: Color, large: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    Button(onClick = onClick, enabled = enabled, modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().height(height),
+        shape = RoundedCornerShape(24.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = text, disabledContainerColor = color, disabledContentColor = text.copy(alpha = 0.6f))) {
+        Text(title, fontSize = if (large) 48.sp else 32.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
-    val twentyFour = DateFormat.is24HourFormat(context)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(now.format(DateTimeFormatter.ofPattern("EEEE")), style = MaterialTheme.typography.headlineMedium)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(now.format(DateTimeFormatter.ofPattern(if (twentyFour) "H:mm" else "h:mm")), fontSize = size, fontWeight = FontWeight.Light, maxLines = 1)
-            if (!twentyFour) Text(now.format(DateTimeFormatter.ofPattern("a")), Modifier.padding(start = 8.dp, bottom = (size.value * 0.2f).dp),
-                fontSize = size * 0.25f, fontWeight = FontWeight.Light)
-        }
-        Text(now.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)), style = MaterialTheme.typography.headlineSmall)
+}
+
+/** The dynamic clock's picture. A new minute's picture fades in over 1.5 seconds, unless animations are off. At the
+ * switch between day and night it changes at once, along with the lettering, so the clock never loses contrast. */
+@Composable
+private fun ScenePictureFading(scene: BedsideScene, modifier: Modifier) {
+    var shown by remember { mutableStateOf(scene) }
+    val sameHalf = shown.isDay == scene.isDay
+    LaunchedEffect(scene) { shown = scene }
+    Crossfade(scene, modifier, animationSpec = if (sameHalf && ValueAnimator.areAnimatorsEnabled()) tween(1_500) else snap(), label = "scene") {
+        BedsideScenePicture(it, Modifier.fillMaxSize())
     }
 }
 

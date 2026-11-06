@@ -64,13 +64,13 @@ import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
 import livekit.org.webrtc.RendererCommon
 
-/** The night colors calls use on iOS, so faces stand out. */
+/** The night colors calls use on iOS (PorchStyle), so faces stand out. */
 internal object CallColors {
-    val night = Color(0xFF101318)
-    val text = Color(0xFFF2F2F2)
-    val secondary = Color(0xFFB8BEC6)
-    val control = Color(0xFF2C3138)
-    val end = Color(0xFFAD3030)
+    val night = PorchColors.night
+    val text = PorchColors.nightText
+    val secondary = PorchColors.nightSecondary
+    val control = PorchColors.nightSurface
+    val end = Color(0.68f, 0.19f, 0.19f)
     val answer = Color(0xFF2E7D32)
 }
 

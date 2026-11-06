@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ethanteng.helloporch.core.BedsideInvitation
@@ -83,6 +84,13 @@ fun PorchRoot(
     BackHandler(enabled = joining && (welcoming || experience != PorchExperience.FAMILY)) { onLinkHandled() }
     BackHandler(enabled = !joining && welcoming && page != WelcomePage.WELCOME) { page = WelcomePage.WELCOME }
 
+    // The bedside is always on, over the lock screen, and Porch is its home screen. Setup and caregiver screens keep the
+    // system bars; the clock and calls hide them.
+    val bedside = !welcoming && experience == PorchExperience.BEDSIDE
+    val paired = links.credential != null || app.device.credential(PorchExperience.BEDSIDE) != null
+    BedsideWindow(alwaysOn = bedside, immersive = bedside && !setup.open && !setup.unlocking && replacement == null)
+    val context = LocalContext.current
+    LaunchedEffect(bedside, paired) { BedsideHomeScreen.sync(context, bedside && paired) }
     val active = calls.active
     val incoming = calls.incoming
     when {
