@@ -12,8 +12,8 @@ const brand = Bricolage_Grotesque({ subsets: ["latin"], axes: ["opsz"], variable
 // fallback, and metadataBase turns their relative URLs into helloporch.store ones.
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "HelloPorch | A video phone for people with dementia, Parkinson’s or shaky hands",
-  description: "Porch is a tablet and a big-button keypad with photos of loved ones on the buttons. One press starts a video call. Made for Parkinson’s, dementia and shaky hands.",
+  title: "HelloPorch | A video calling app for people with dementia, Parkinson’s or shaky hands",
+  description: "Porch is an app that turns your own iPad or Android tablet into a simple video phone. One press on a big-button phone starts a video call. Made for Parkinson’s, dementia and shaky hands.",
 };
 
 export const viewport: Viewport = {

@@ -33,7 +33,8 @@ export default function StoryPage() {
             </h1>
             <p className={styles.lede}>
               My mom can’t really use her phone anymore, so people who call her can’t reach her. I’m
-              building something simple enough for her to use.
+              building something simple enough for her to use. Instead of building a whole new device, I’m making
+              an app that works with a tablet and a familiar big-button phone.
             </p>
           </header>
 
