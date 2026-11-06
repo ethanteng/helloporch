@@ -190,6 +190,13 @@ internal fun BlockedNumbersScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
     if (clearing) AlertDialog(onDismissRequest = { clearing = false },
         title = { Text("Clear blocked numbers?") },
         text = { Text("This only clears the list. The numbers stay blocked.") },
-        confirmButton = { TextButton(onClick = { clearing = false; admin.perform("clearBlockedCallers") }) { Text("Clear") } },
+        confirmButton = {
+            TextButton(onClick = {
+                // Another save is still in flight. Closing now would drop the clear and look like it worked.
+                if (admin.busy) return@TextButton
+                clearing = false
+                admin.perform("clearBlockedCallers")
+            }, enabled = !admin.busy) { Text("Clear") }
+        },
         dismissButton = { TextButton(onClick = { clearing = false }) { Text("Cancel") } })
 }
