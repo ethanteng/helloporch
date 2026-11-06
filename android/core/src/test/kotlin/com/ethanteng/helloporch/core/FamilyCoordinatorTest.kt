@@ -334,4 +334,18 @@ class FamilyCoordinatorTest {
         session.leftForeground()
         assertFalse(session.isActive)
     }
+
+    @Test fun caregiverModeForgetsTheHouseholdWithThePINAndCountsDepartures() {
+        val session = RemoteCaregiverSession { Instant.parse("2026-11-06T12:00:00Z") }
+        session.begin("123456")
+        session.household = FamilyAdminState("Mom", dropInEnabled = true, people = emptyList())
+        val departed = session.departures
+        session.stayThroughNextStop()
+        session.leftForeground()
+        assertEquals(departed, session.departures, "the photo picker isn't leaving")
+        assertEquals("Mom", session.household?.householdName)
+        session.leftForeground()
+        assertEquals(departed + 1, session.departures, "a PIN check that finishes now must not open caregiver mode")
+        assertNull(session.household)
+    }
 }

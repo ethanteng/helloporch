@@ -40,8 +40,12 @@ fun RemoteCaregiverMode(app: PorchApplication, family: FamilyCredential, links: 
     val activity = LocalActivity.current
     DisposableEffect(Unit) { onDispose { if (activity?.isChangingConfigurations != true) RemoteCaregiverSession.shared.end() } }
     fun opened(state: FamilyAdminState?) = CaregiverAdmin(app, scope, remote = family, state = state, onLock = { close(it) })
-    // Turning the phone keeps caregiver mode open while its session lasts, and reads the household again.
-    var admin by remember { mutableStateOf(if (RemoteCaregiverSession.shared.isActive) opened(null) else null) }
+    // Turning the phone keeps caregiver mode open while its session lasts, with the household as it was, so a person's
+    // page or the name screen that was open comes back as it was.
+    var admin by remember {
+        val session = RemoteCaregiverSession.shared
+        mutableStateOf(if (session.isActive) opened(session.household) else null)
+    }
     val open = admin
     if (open == null) {
         CaregiverPINScreen(app, family, links, onCancel = { close(null) }, onUnlocked = { admin = opened(it) })
@@ -74,11 +78,14 @@ private fun CaregiverPINScreen(app: PorchApplication, family: FamilyCredential, 
             FormButton(if (busy) "Checking…" else "Open caregiver mode", enabled = !busy, onClick = {
                 if (!Regex("^[0-9]{6}$").matches(pin)) { error = "Enter six digits."; return@FormButton }
                 val typed = pin
+                // Porch leaving the screen while the PIN is checked means asking for it again, not opening behind it.
+                val departed = RemoteCaregiverSession.shared.departures
                 busy = true
                 scope.launch {
                     try {
                         val response = app.service(family).send("verifyPIN", pin = typed)
                         app.coordinator.update(response)
+                        if (RemoteCaregiverSession.shared.departures != departed) { pin = ""; return@launch }
                         RemoteCaregiverSession.shared.begin(typed)
                         pin = ""
                         onUnlocked(response.admin)

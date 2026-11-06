@@ -42,6 +42,15 @@ class RemoteCaregiverSession(private val clock: () -> Instant = { Instant.now() 
     private var expiresAt: Instant = Instant.MIN
     private var staying = false
 
+    /** The household as caregiver mode last read it, so the pages show it at once after the phone turns. Forgotten
+     * with the PIN. */
+    var household: FamilyAdminState? = null
+
+    /** Goes up each time Porch leaves the screen, so a PIN check still on its way then can't open caregiver mode
+     * behind it. */
+    var departures = 0
+        private set
+
     fun begin(pin: String) {
         this.pin = pin
         expiresAt = clock().plusSeconds(idleSeconds)
@@ -51,6 +60,7 @@ class RemoteCaregiverSession(private val clock: () -> Instant = { Instant.now() 
         pin = null
         expiresAt = Instant.MIN
         staying = false
+        household = null
     }
 
     /** Porch is about to open something over itself for the caregiver, such as the photo picker or the share sheet.
@@ -59,7 +69,11 @@ class RemoteCaregiverSession(private val clock: () -> Instant = { Instant.now() 
     fun stayThroughNextStop() { staying = true }
 
     /** Porch left the screen. That ends caregiver mode, unless it was for something Porch opened. */
-    fun leftForeground() { if (staying) staying = false else end() }
+    fun leftForeground() {
+        if (staying) { staying = false; return }
+        departures += 1
+        end()
+    }
 
     /** Porch is in front again, so the next time it leaves is the caregiver leaving. */
     fun returned() { staying = false }

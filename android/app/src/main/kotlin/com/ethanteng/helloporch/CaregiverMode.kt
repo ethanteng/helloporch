@@ -116,7 +116,11 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     /** The household's server, which invitation links point to. */
     val origin: String? get() = credential?.origin
 
-    init { reloadSlots() }
+    init {
+        reloadSlots()
+        // Kept with the PIN, so turning the phone shows the open page at once rather than a household of no one.
+        if (remote != null && state != null) RemoteCaregiverSession.shared.household = state
+    }
 
     /** Ends caregiver mode on a family phone, as when the caregiver taps Done. */
     fun lock(reason: String? = null) {
@@ -176,7 +180,7 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
         return try {
             app.service(credential).send(action, values, pin = code).also { response ->
                 app.coordinator.update(response)
-                if (remote != null) response.admin?.let { remoteState = it }
+                if (remote != null) response.admin?.let { remoteState = it; if (!locked) RemoteCaregiverSession.shared.household = it }
             }
         } catch (e: FamilyServiceException) {
             // A changed PIN, withdrawn approval or too many wrong PINs ends a phone's caregiver mode.
@@ -308,19 +312,18 @@ fun CaregiverModeContent(app: PorchApplication, admin: CaregiverAdmin, links: Fa
         }
         val open = { opened: CaregiverScreen -> screen = opened }
         val current = screen
-        when {
-            current != null -> CaregiverScreenContent(app, admin, links, current, onDone = { screen = null })
-            wide -> Row(Modifier.fillMaxSize()) {
-                Column(Modifier.width(listWidth).fillMaxHeight()) {
-                    CaregiverList(app, admin, links, state, page ?: CaregiverPage.PEOPLE, closeLabel, onClose, onPage = { page = it }, onScreen = open)
-                }
-                VerticalDivider()
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    CaregiverPageContent(app, admin, links, page ?: CaregiverPage.PEOPLE, onBack = null, onScreen = open, onClose = onClose)
-                }
+        if (current != null) CaregiverScreenContent(app, admin, links, current, onDone = { screen = null })
+        else Row(Modifier.fillMaxSize()) {
+            val shown = page ?: if (wide) CaregiverPage.PEOPLE else null
+            // The list and the page each have one place in both layouts, so what's open on a page, such as a person,
+            // stays open when a phone turns between one pane and two.
+            if (wide || shown == null) Column(if (wide) Modifier.width(listWidth).fillMaxHeight() else Modifier.fillMaxSize()) {
+                CaregiverList(app, admin, links, state, if (wide) shown else null, closeLabel, onClose, onPage = { page = it }, onScreen = open)
             }
-            page != null -> CaregiverPageContent(app, admin, links, page!!, onBack = { page = null }, onScreen = open, onClose = onClose)
-            else -> CaregiverList(app, admin, links, state, null, closeLabel, onClose, onPage = { page = it }, onScreen = open)
+            if (wide) VerticalDivider()
+            if (shown != null) Column(Modifier.weight(1f).fillMaxHeight()) {
+                CaregiverPageContent(app, admin, links, shown, onBack = if (wide) null else ({ page = null }), onScreen = open, onClose = onClose)
+            }
         }
     }
     PorchErrorDialog(admin.error) { admin.error = null }
