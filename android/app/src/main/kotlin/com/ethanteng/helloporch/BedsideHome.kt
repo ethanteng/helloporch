@@ -120,8 +120,13 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
                     state == null -> "Checking in…"
                     else -> calls.notice
                 }
-                status?.let { Text(it, Modifier.padding(bottom = 12.dp), color = palette?.controlForeground ?: PorchColors.nightSecondary,
-                    fontSize = 22.sp, textAlign = TextAlign.Center) }
+                // On the dynamic clock the line sits on a plate, as on iOS, so it doesn't sit on the hills.
+                status?.let {
+                    val plate = palette?.let { colors -> Modifier.background(colors.controlBackground.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp) } ?: Modifier
+                    Text(it, Modifier.padding(bottom = 12.dp).then(plate), color = palette?.controlForeground ?: PorchColors.nightSecondary,
+                        fontSize = 22.sp, textAlign = TextAlign.Center)
+                }
                 val buttonColor = palette?.controlBackground?.copy(alpha = 0.6f) ?: PorchColors.nightSurface
                 val buttonText = palette?.controlForeground ?: PorchColors.nightText
                 when {
@@ -158,7 +163,10 @@ private fun ClockButton(title: String, height: Dp, color: Color, text: Color, la
     Button(onClick = onClick, enabled = enabled, modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().height(height),
         shape = RoundedCornerShape(24.dp),
         colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = text, disabledContainerColor = color, disabledContentColor = text.copy(alpha = 0.6f))) {
-        Text(title, fontSize = if (large) 48.sp else if (narrow) 28.sp else 32.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        // A longer title, such as Finish setting up Porch or another language's, shrinks to fit rather than being cut off.
+        BasicText(title, maxLines = 1, style = LocalTextStyle.current.merge(TextStyle(color = if (enabled) text else text.copy(alpha = 0.6f),
+            fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)),
+            autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = if (large) 48.sp else if (narrow) 28.sp else 32.sp, stepSize = 2.sp))
     }
 }
 
