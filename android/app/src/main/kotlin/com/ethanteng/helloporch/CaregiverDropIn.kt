@@ -173,11 +173,14 @@ private fun AddPhoneDropInScreen(admin: CaregiverAdmin, onDone: () -> Unit) {
                 try { pickContact.launch(Unit) } catch (_: ActivityNotFoundException) { admin.error = "This tablet has no contacts app. Type the number instead." }
             })
             FormButton(if (admin.busy) "Saving…" else "Approve audio drop-in", enabled = !admin.busy, onClick = {
+                val trimmed = name.trim()
+                // The server refuses a blank or oversized name. Ask for the microphone only once this can be saved.
+                if (trimmed.isEmpty() || trimmed.length > 80) { admin.error = "Enter a name with 1–80 characters."; return@FormButton }
                 val number = try { PhoneNumberNormalization.e164(phone, region) } catch (e: ValidationException) { admin.error = e.message; return@FormButton }
                 // A drop-in answers on this tablet, so only it can grant its own microphone.
                 mediaAccess(false) { allowed ->
                     if (!allowed) admin.error = "Allow the microphone in the tablet's settings before approving drop-in."
-                    else admin.perform("setPhoneDropIn", mapOf("number" to JsonPrimitive(number), "name" to JsonPrimitive(name.trim()),
+                    else admin.perform("setPhoneDropIn", mapOf("number" to JsonPrimitive(number), "name" to JsonPrimitive(trimmed),
                         "enabled" to JsonPrimitive(true))) { saved -> if (saved) onDone() }
                 }
             })
