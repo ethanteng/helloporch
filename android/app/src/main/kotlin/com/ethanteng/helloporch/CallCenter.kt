@@ -133,11 +133,6 @@ class CallCenter(private val app: PorchApplication) {
     private fun call(contact: CallContact) =
         startBedsideCall(contact.familyMemberID, contact.name, contact.nativeCall.mode, contact.photoData, contact)
 
-    /** The bedside calls a family member who isn't on a key, from its people screen. Until caregiver mode (phase 4)
-     * can put people on keys, this is how a new household's bedside calls anyone. */
-    fun callFromBedside(person: FamilyPerson) =
-        startBedsideCall(person.id, person.name, NativeCall.Mode.VIDEO, person.photoID?.let { app.photos.familyMembers.data(it) }, null)
-
     private fun startBedsideCall(memberID: String?, name: String, mode: NativeCall.Mode, photo: ByteArray?, contact: CallContact?) {
         if (app.device.credential(PorchExperience.BEDSIDE) == null || opening) {
             error = text("Check People and Drop-in in caregiver mode, then try again.")

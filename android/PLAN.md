@@ -369,7 +369,7 @@ Exit criteria:
 
 Built in five pull requests, each a working household:
 
-1. **In-app calls.** The bedside and family phones call each other while Porch is open, with the shared call engine, the call screen, ringing with Answer and Decline, and the bedside's people screen and keypad keys. Until caregiver mode (phase 4) puts people on keys, the people screen also lists family members who aren't on one. A call ends if Porch leaves the screen.
+1. **In-app calls.** The bedside and family phones call each other while Porch is open, with the shared call engine, the call screen, ringing with Answer and Decline, and the bedside's people screen and keypad keys. A call ends if Porch leaves the screen.
 2. **Announcements, drop-ins and the receiver.** "Calling David.", receiving a drop-in, the Cell2Jack routing table, and silence hang-up. Android's text-to-speech writes each sentence to a file that Porch plays: on Android 16 the speech engine plays from its own app, in the background, which the system flags to be muted.
 3. **Phone fallback and calls to the Porch number.**
 4. **The always-on bedside.** Home app, screen on, showing over the lock screen, and the dynamic clock.
@@ -490,7 +490,7 @@ Calls can be tried locally with LiveKit's server in dev mode; see [android/READM
 Built in five pull requests:
 
 1. **The tablet's caregiver mode.** The gear and PIN on the clock, the two panes, the household's name and number, and Calls, Display & voice, Privacy, Caregivers & PIN, and This tablet.
-2. **People.** The keypad, the person page and the key editor.
+2. **People.** The keypad, the person page and the key editor, with invitations, and family members' photos downloaded to the tablet. The bedside's people screen lists only the people on keys, as iOS's does, in their button colors.
 3. **Drop-in, call history and blocked numbers.**
 4. **Caregiver mode on a family phone.**
 5. **The Porch keyboard, and About.**
@@ -514,7 +514,7 @@ Page contents:
   - Caregiver switch.
   - Remove, as Take off keypad or Remove from Porch.
 - **Key editor.** Five actions per key. Saving a number calls `contacts/authorize`. Cache the approval until 5 minutes before its 30-day expiry. Show refusals as they come, such as "Porch can't call phone numbers in X yet."
-- **Contact import.** Android's picker returns the one phone number you tap, with no permission. iOS also imports the contact's other numbers, which on Android needs `READ_CONTACTS`. See [open questions](#open-questions).
+- **Contact import.** Android's picker returns the one phone number you tap, with no permission, and that's what the key editor uses for now. iOS also imports the contact's other numbers, which on Android needs `READ_CONTACTS`. See [open questions](#open-questions).
 - **Calls.**
   - Ring before voicemail: 15–120 s in steps of 5, default 45 (`setRingSeconds`).
   - Block unknown callers.

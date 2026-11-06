@@ -71,8 +71,11 @@ import kotlinx.serialization.json.JsonPrimitive
 @Composable
 fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, page: CaregiverPage, onBack: (() -> Unit)?,
     onScreen: (CaregiverScreen) -> Unit, onClose: () -> Unit) {
+    // People opens a person, a key or an invitation in its own place, with its own bar.
+    if (page == CaregiverPage.PEOPLE) { PeoplePages(app, admin, links, onBack); return }
     FormScreen(page.title, navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
         when (page) {
+            CaregiverPage.PEOPLE -> {}
             CaregiverPage.CALLS -> CallsPage(app, admin, links)
             CaregiverPage.DISPLAY -> DisplayPage(app, admin, links)
             CaregiverPage.PRIVACY -> PrivacyPage(admin, links)
@@ -227,7 +230,7 @@ private fun DisplayPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     fun naturalVoice(of: BedsideLanguage): String? = if (of in naturalDrafts) naturalDrafts[of] else natural?.choices(of)?.selected
 
     FormSection("Clock") {
-        Choices(listOf("Dark", "Day & night"), if (draft.appearance == BedsidePreferences.Appearance.DYNAMIC) 1 else 0) {
+        Choices(listOf("Dark", "Day & night"), if (draft.appearance == BedsidePreferences.Appearance.DYNAMIC) 1 else 0, Modifier.fillMaxWidth()) {
             draft = draft.copy(appearance = if (it == 1) BedsidePreferences.Appearance.DYNAMIC else BedsidePreferences.Appearance.DEFAULT); saved = null
         }
         if (draft.appearance == BedsidePreferences.Appearance.DYNAMIC) {
@@ -269,7 +272,7 @@ private fun DisplayPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             }
         }
         FormSection("Seasons") {
-            Choices(listOf("Northern", "Southern"), if (draft.hemisphere == BedsidePreferences.Hemisphere.NORTHERN) 0 else 1) {
+            Choices(listOf("Northern", "Southern"), if (draft.hemisphere == BedsidePreferences.Hemisphere.NORTHERN) 0 else 1, Modifier.fillMaxWidth()) {
                 draft = draft.copy(hemisphere = if (it == 0) BedsidePreferences.Hemisphere.NORTHERN else BedsidePreferences.Hemisphere.SOUTHERN); saved = null
             }
         }
@@ -345,8 +348,8 @@ private fun voiceLabel(voice: android.speech.tts.Voice): String {
 
 /** Two or three choices side by side, as iOS's segmented controls are. */
 @Composable
-private fun Choices(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+fun Choices(options: List<String>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+    SingleChoiceSegmentedButtonRow(modifier) {
         options.forEachIndexed { index, option ->
             SegmentedButton(index == selected, onClick = { onSelect(index) }, shape = SegmentedButtonDefaults.itemShape(index, options.size)) { Text(option) }
         }

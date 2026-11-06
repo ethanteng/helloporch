@@ -1,6 +1,8 @@
 package com.ethanteng.helloporch
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,9 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyAdminState
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PorchExperience
@@ -47,11 +54,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 
-/** Caregiver mode's pages on the bedside, as iOS's CaregiverPage lists them. People, Drop-in and Messages come in later
- * pull requests (android/PLAN.md, phase 4). */
+/** Caregiver mode's pages on the bedside, as iOS's CaregiverPage lists them. Drop-in and Messages come in later pull
+ * requests (android/PLAN.md, phase 4). */
 enum class CaregiverPage(val title: String) {
-    CALLS("Calls"), DISPLAY("Display & voice"), PRIVACY("Privacy"), CAREGIVERS("Caregivers & PIN"), DEVICE("This tablet"),
+    PEOPLE("People"), CALLS("Calls"), DISPLAY("Display & voice"), PRIVACY("Privacy"), CAREGIVERS("Caregivers & PIN"), DEVICE("This tablet"),
 }
 
 /** Screens a caregiver opens over a page. */
@@ -65,6 +73,80 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     var busy by mutableStateOf(false); private set
     /** Why the last change didn't go through, until it's dismissed. */
     var error by mutableStateOf<String?>(null)
+    /** The keypad as it's saved on this tablet. A saved keypad that can't be read shows empty, and saving a key starts
+     * it again. */
+    var slots by mutableStateOf(CallSlots()); private set
+    var slotsUnreadable by mutableStateOf(false); private set
+
+    init { reloadSlots() }
+
+    /** Reads the keypad again, as after a check-in, which can change who a key shows. */
+    fun reloadSlots() {
+        try {
+            slots = CallSlots.load(app.settings, app.photos)
+            slotsUnreadable = false
+        } catch (_: Exception) {
+            slotsUnreadable = true
+        }
+    }
+
+    /**
+     * Changes the keypad and saves it, as iOS's `saveSlots` does: a key whose invitation was accepted meanwhile follows
+     * its family member first, and the server hears the keypad's numbers. False, with the reason shown, when it can't
+     * be saved.
+     */
+    fun saveSlots(change: (CallSlots) -> Unit): Boolean = try {
+        val updated = slots.copy()
+        change(updated)
+        app.coordinator.links.value.state?.let { updated.reconcile(it, app.photos.familyMembers) }
+        updated.save(app.settings, app.photos)
+        slots = updated
+        slotsUnreadable = false
+        app.keypadReport.report(updated, app.coordinator)
+        true
+    } catch (e: Exception) {
+        error = e.message ?: "Couldn't save the keypad. Try again."
+        false
+    }
+
+    /** Runs changes that go one after another, such as removing someone and then emptying their key. */
+    fun launch(block: suspend CaregiverAdmin.() -> Unit) { scope.launch { block() } }
+
+    /** Makes `action` with the caregiver PIN, and says whether it went through. The reason it didn't is shown. */
+    suspend fun send(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null): Boolean {
+        val credential = app.device.credential(PorchExperience.BEDSIDE)
+        if (busy || credential == null) return false
+        busy = true
+        return try {
+            app.coordinator.update(app.service(credential).send(action, values, pin = pin ?: app.caregiverPIN))
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "Couldn't reach Porch. Check the connection and try again."
+            false
+        } finally {
+            busy = false
+        }
+    }
+
+    /** Uploads a photo a caregiver chose for a family member, then shows it for them everywhere. */
+    suspend fun chooseOverridePhoto(data: ByteArray, memberID: String): Boolean {
+        val credential = app.device.credential(PorchExperience.BEDSIDE)
+        if (busy || credential == null) return false
+        busy = true
+        val photo = try {
+            FamilyPhotos.upload(app, data, "overridePhotoUpload", mapOf("memberID" to JsonPrimitive(memberID)), credential, app.caregiverPIN)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "Couldn't upload the photo. Try again."
+            null
+        } finally {
+            busy = false
+        }
+        return photo != null && send("setMemberOverride", mapOf("memberID" to JsonPrimitive(memberID), "photo" to photo))
+    }
 
     /** The household as caregiver mode sees it: who's in the family and how the household is set. */
     fun state(links: FamilyLinks): FamilyAdminState? = links.state?.let {
@@ -74,23 +156,8 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
 
     /** Makes `action` with the caregiver PIN, then calls `done` with whether it went through. */
     fun perform(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null, done: (Boolean) -> Unit = {}) {
-        val credential = app.device.credential(PorchExperience.BEDSIDE)
-        if (busy || credential == null) { done(false); return }
-        busy = true
-        scope.launch {
-            val succeeded = try {
-                app.coordinator.update(app.service(credential).send(action, values, pin = pin ?: app.caregiverPIN))
-                true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                error = e.message ?: "Couldn't reach Porch. Check the connection and try again."
-                false
-            } finally {
-                busy = false
-            }
-            done(succeeded)
-        }
+        if (busy || app.device.credential(PorchExperience.BEDSIDE) == null) { done(false); return }
+        scope.launch { done(send(action, values, pin)) }
     }
 }
 
@@ -105,6 +172,8 @@ fun CaregiverMode(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
     var page by rememberSaveable { mutableStateOf<CaregiverPage?>(null) }
     var screen by rememberSaveable { mutableStateOf<CaregiverScreen?>(null) }
     val state = admin.state(links)
+    // A check-in can change who a key shows, such as an invitation accepted, and so can a photo arriving.
+    LaunchedEffect(links, FamilyPhotos.saved) { admin.reloadSlots() }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 720.dp
         val listWidth = (maxWidth * 0.34f).coerceIn(280.dp, 360.dp)
@@ -121,11 +190,11 @@ fun CaregiverMode(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
             current != null -> CaregiverScreenContent(app, admin, links, current, onDone = { screen = null })
             wide -> Row(Modifier.fillMaxSize()) {
                 Column(Modifier.width(listWidth).fillMaxHeight()) {
-                    CaregiverList(app, links, state, page ?: CaregiverPage.CALLS, onClose, onPage = { page = it }, onScreen = open)
+                    CaregiverList(app, links, state, page ?: CaregiverPage.PEOPLE, onClose, onPage = { page = it }, onScreen = open)
                 }
                 VerticalDivider()
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    CaregiverPageContent(app, admin, links, page ?: CaregiverPage.CALLS, onBack = null, onScreen = open, onClose = onClose)
+                    CaregiverPageContent(app, admin, links, page ?: CaregiverPage.PEOPLE, onBack = null, onScreen = open, onClose = onClose)
                 }
             }
             page != null -> CaregiverPageContent(app, admin, links, page!!, onBack = { page = null }, onScreen = open, onClose = onClose)
@@ -144,7 +213,7 @@ private fun CaregiverList(app: PorchApplication, links: FamilyLinks, state: Fami
         val snapshot = links.state
         CaregiverGroup {
             CaregiverRow(onClick = { onScreen(CaregiverScreen.NAME) }) {
-                Initials(name)
+                Avatar(name)
                 Column(Modifier.weight(1f)) {
                     Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text("Change the name family see", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -237,12 +306,18 @@ fun ActionRow(title: String, detail: String? = null, onClick: () -> Unit) {
     }
 }
 
+/** Someone's photo in a circle, or their initials where there's none. */
 @Composable
-private fun Initials(name: String) {
+fun Avatar(name: String, photo: ByteArray? = null, size: Dp = 52.dp) {
+    val bitmap = remember(photo) { photo?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }.getOrNull() } }
+    if (bitmap != null) {
+        Image(bitmap, contentDescription = null, Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
+        return
+    }
     val initials = name.split(" ").filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }
-    Surface(Modifier.size(52.dp).clip(CircleShape), color = MaterialTheme.colorScheme.primaryContainer) {
+    Surface(Modifier.size(size).clip(CircleShape), color = MaterialTheme.colorScheme.primaryContainer) {
         Box(contentAlignment = Alignment.Center) {
-            Text(initials, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(initials, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }

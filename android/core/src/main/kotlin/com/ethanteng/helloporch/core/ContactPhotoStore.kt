@@ -70,7 +70,8 @@ class ContactPhotoStore(val directory: File, private val clock: Clock = Clock.sy
 
         internal fun validID(id: String) = id.length == 64 && id.all { it in '0'..'9' || it in 'a'..'f' }
 
-        internal const val maximumBytes = 1_000_000L
+        /** The largest photo Porch keeps, in bytes. */
+        const val maximumBytes = 1_000_000L
     }
 }
 

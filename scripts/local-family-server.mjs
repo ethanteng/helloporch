@@ -1,6 +1,7 @@
 // A Porch server on this computer for trying the apps without real families: the real POST /api/family handler with
 // the in-memory store the server tests use. Nothing is kept, and nothing leaves this process: no Redis, no LiveKit
-// calls, no push, and phone numbers come from a stand-in for Twilio that makes them up. It sets up a household, "Mom",
+// calls, no push, and phone numbers come from a stand-in for Twilio that makes them up. Photos and messages are kept in
+// memory too and served from /media/, and /api/calls/contacts/authorize has a stand-in that approves keypad numbers. It sets up a household, "Mom",
 // whose stand-in bedside checks in every few seconds, and prints an invitation for a phone to join it and a setup link
 // for a new bedside tablet.
 //
@@ -72,7 +73,20 @@ const endRoom = async room => {
   try { await new RoomServiceClient(localLiveKit.url.replace(/^ws:/, 'http:'), localLiveKit.key, localLiveKit.secret).deleteRoom(room); }
   catch (error) { if (error?.code !== 'not_found') throw error; }
 };
-const dependencies = { store, numberServices, endRoom };
+// Photos and messages, kept in memory and served from /media/ on this server, where Porch's server keeps them in Vercel
+// Blob. Each upload is allowed once, for the type and size the handler signed.
+const blobs = new Map(), uploads = new Map();
+const media = {
+  async uploadTarget(pathname, contentType, maximumSizeInBytes, validUntil) {
+    uploads.set(pathname, { contentType, maximumSizeInBytes });
+    return { url: `${origin}/media/${pathname}`, method: 'PUT', headers: { 'Content-Type': contentType }, expiresAt: validUntil };
+  },
+  async downloadURL(pathname) { return `${origin}/media/${pathname}`; },
+  async stat(pathname) { const blob = blobs.get(pathname); return blob ? { size: blob.body.length, contentType: blob.contentType } : null; },
+  async remove(pathnames) { for (const pathname of pathnames) blobs.delete(pathname); },
+  async put(pathname, body, contentType) { blobs.set(pathname, { body: Buffer.from(body), contentType }); },
+};
+const dependencies = { store, numberServices, endRoom, media };
 
 const time = () => new Date().toISOString().slice(11, 19);
 const call = async (action, values = {}, credential, code) => {
@@ -97,9 +111,43 @@ const activation = async () => (await call('createBedsideInvite', {}, undefined,
 
 // Each device's last check-in, so the log shows when one starts checking in or can take calls, not every poll.
 const checkingIn = new Map();
+const serveMedia = (request, response, raw) => {
+  const pathname = decodeURIComponent(request.url.slice('/media/'.length));
+  if (request.method === 'PUT') {
+    const allowed = uploads.get(pathname), type = request.headers['content-type'];
+    if (!allowed || blobs.has(pathname) || type !== allowed.contentType || raw.length > allowed.maximumSizeInBytes) { response.writeHead(400).end(); return; }
+    uploads.delete(pathname);
+    blobs.set(pathname, { body: raw, contentType: type });
+    console.log(`${time()} stored ${pathname} (${raw.length} bytes)`);
+    response.writeHead(200).end();
+    return;
+  }
+  const blob = request.method === 'GET' ? blobs.get(pathname) : undefined;
+  if (!blob) { response.writeHead(404).end(); return; }
+  response.writeHead(200, { 'Content-Type': blob.contentType, 'Content-Length': blob.body.length }).end(blob.body);
+};
+// A stand-in for /api/calls/contacts/authorize, which reads Redis: the real PIN check, then a made-up approval for 30
+// days. Numbers starting +44 are refused, to try a country Porch can't call.
+const authorizeContact = async (request, response, body) => {
+  const reply = (status, value) => {
+    console.log(`${time()} contacts/authorize -> ${status}${value.error ? ` (${value.error})` : ''}`);
+    response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(value));
+  };
+  let input = {};
+  try { input = JSON.parse(body); } catch { /* answered below */ }
+  try { await call('verifyPIN', {}, (request.headers.authorization ?? '').replace(/^Bearer /, ''), request.headers['x-porch-setup-code']); }
+  catch (error) { return reply(403, { error: error.message.replace(/^verifyPIN: /, '') }); }
+  if (typeof input.phoneNumber !== 'string' || !/^\+[1-9][0-9]{6,14}$/.test(input.phoneNumber)) return reply(400, { error: 'Enter a phone number with + and its country code.' });
+  if (input.phoneNumber.startsWith('+44')) return reply(400, { error: "Porch can't call phone numbers in United Kingdom yet." });
+  const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+  reply(200, { authorization: `local.${Buffer.from(JSON.stringify({ phoneNumber: input.phoneNumber, exp: expiresAt })).toString('base64url')}`, expiresAt });
+};
 const onRequest = async (request, response) => {
-  let body = '';
-  for await (const chunk of request) body += chunk;
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  const raw = Buffer.concat(chunks), body = raw.toString();
+  if (request.url.startsWith('/media/')) { serveMedia(request, response, raw); return; }
+  if (request.method === 'POST' && request.url === '/api/calls/contacts/authorize') { await authorizeContact(request, response, body); return; }
   if (request.method !== 'POST' || request.url !== '/api/family') { response.writeHead(404).end(); return; }
   // Where Vercel says the request came from, as it does in production, so phoneNumberOptions has a suggestion: Oakland.
   const headers = new Headers(request.headers);

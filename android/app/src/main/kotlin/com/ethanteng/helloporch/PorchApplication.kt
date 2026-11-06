@@ -19,6 +19,7 @@ import com.ethanteng.helloporch.core.FamilyCoordinator
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyService
+import com.ethanteng.helloporch.core.FamilySnapshot
 import com.ethanteng.helloporch.core.KeypadNumberReport
 import com.ethanteng.helloporch.core.MessageAutoplay
 import com.ethanteng.helloporch.core.PollOrder
@@ -123,26 +124,38 @@ class PorchApplication : Application() {
         })
     }
 
-    /** The bedside's work after each snapshot, as `FamilyCoordinator.changed()` does on iOS: keypad contacts follow their
-     * family members, and the server hears the keypad's numbers. Photo sync and speech-clip prefetch come with the
-     * clock's contact grid and calls (phase 3). */
+    /** The bedside's work after each snapshot, as `FamilyCoordinator.changed()` does on iOS: family members' photos
+     * download, keypad contacts follow their family members, the server hears the keypad's numbers, and the natural
+     * voice's sentences are fetched ahead. */
     private fun afterSnapshot(links: FamilyLinks) {
         // A call to this device rings, on the bedside and on family phones.
         calls.noteLinks(links)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
         try {
             val slots = CallSlots.load(settings, photos)
-            val previous = slots.copy()
-            slots.reconcile(state, photos.familyMembers)
-            if (slots != previous) slots.save(settings, photos)
+            device.credential(PorchExperience.BEDSIDE)?.let { FamilyPhotos.sync(this, state, it, slots) }
+            followFamily(state, slots)
             keypadReport.report(slots, coordinator)
             // A call or a drop-in never waits for the natural voice, so its sentences are fetched ahead.
             NaturalVoice.prefetch(this, state, slots)
         } catch (error: Exception) {
             // iOS shows this as the check-in's error, such as a saved keypad that can't be read until a caregiver saves
-            // it again in caregiver mode (phase 4).
+            // it again in caregiver mode.
             Log.w("Porch", "Couldn't update the keypad: ${error.message}")
         }
+    }
+
+    /** Keys show their family members' current names and photos, and keep following an invitation once it's accepted. */
+    private fun followFamily(state: FamilySnapshot, slots: CallSlots) {
+        val previous = slots.copy()
+        slots.reconcile(state, photos.familyMembers)
+        if (slots != previous) slots.save(settings, photos)
+    }
+
+    /** A family member's photo downloaded: keys showing them pick it up now, not at the next check-in. */
+    fun photoSaved() {
+        val state = coordinator.links.value.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
+        try { followFamily(state, CallSlots.load(settings, photos)) } catch (error: Exception) { Log.w("Porch", "Couldn't update the keypad: ${error.message}") }
     }
 
     /** What a tablet set up as a new Porch leaves behind of the household it was: its keypad, photos, call, display and

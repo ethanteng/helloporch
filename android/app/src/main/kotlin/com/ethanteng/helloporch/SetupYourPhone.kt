@@ -215,11 +215,11 @@ fun SetupYourPhoneScreen(yourPhone: SetupYourPhone, lovedOne: String, onContinue
 
 /** Black on white, whatever the theme, so any camera reads it: drawn a pixel to a module and scaled up without smoothing. */
 @Composable
-private fun InvitationCode(link: String) {
+fun InvitationCode(link: String, description: String = "QR code for your phone's invitation") {
     val bitmap = remember(link) { qrCode(link) }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Box(Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp)) {
-            Image(bitmap.asImageBitmap(), "QR code for your phone's invitation", Modifier.size(240.dp), filterQuality = FilterQuality.None)
+            Image(bitmap.asImageBitmap(), description, Modifier.size(240.dp), filterQuality = FilterQuality.None)
         }
     }
 }

@@ -143,7 +143,7 @@ class BedsideSetup(application: Application) : AndroidViewModel(application) {
         app.switchExperience(PorchExperience.FAMILY)
     }
 
-    /** Done. Putting people on the keypad comes with caregiver mode (phase 4). */
+    /** Done. A caregiver puts people on the keypad in caregiver mode. */
     fun finish() {
         leaveSteps()
         open = false
