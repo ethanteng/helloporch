@@ -450,10 +450,11 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
     var isHome by remember { mutableStateOf(BedsideHomeScreen.isHome(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { isHome = BedsideHomeScreen.isHome(context) }
     val askHome = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { isHome = BedsideHomeScreen.isHome(context) }
+    val makeHome = if (isHome) null else BedsideHomeScreen.request(context)
     CaregiverGroup("Home screen", if (isHome) "Porch comes back after a restart, and Home returns to it." else "Make Porch the home screen so it comes back after a restart.") {
         if (isHome) ActionRow("Choose another home screen") { open(context, Intent(Settings.ACTION_HOME_SETTINGS)) }
-        else BedsideHomeScreen.request(context)?.let { ask -> ActionRow("Make Porch the home screen") { askHome.launch(ask) } }
-        HorizontalDivider()
+        else makeHome?.let { ask -> ActionRow("Make Porch the home screen") { askHome.launch(ask) } }
+        if (isHome || makeHome != null) HorizontalDivider()
         ActionRow("Tablet settings", "Android's own settings, such as Wi-Fi and the volume.") { open(context, Intent(Settings.ACTION_SETTINGS)) }
     }
     var confirming by remember { mutableStateOf(false) }
