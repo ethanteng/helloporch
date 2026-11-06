@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 
@@ -42,9 +43,11 @@ import androidx.core.net.toUri
 fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
-            Box(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp)) {
-                Row(Modifier.align(Alignment.CenterStart)) { navigation?.invoke() }
-                Text(title, Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleLarge)
+            // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them.
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                navigation?.invoke()
+                Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, textAlign = if (navigation == null) TextAlign.Center else TextAlign.Start)
             }
             HorizontalDivider()
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {

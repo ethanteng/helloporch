@@ -52,7 +52,7 @@ fun PorchRoot(
     val setupLink = link != null && runCatching { BedsideInvitation(link, defaultOrigin) }.isSuccess
     val familyLink = link != null && !setupLink && runCatching { FamilyInvitation(link, defaultOrigin) }.isSuccess
     val calls = app.calls
-    val busy = setup.open || setup.unlocking || replacement != null || calls.busy
+    val busy = setup.open || setup.unlocking || setup.caregiver || replacement != null || calls.busy
 
     fun setUpBedside(url: String, replacing: Boolean) {
         app.device.saveActivation(url)
@@ -88,7 +88,7 @@ fun PorchRoot(
     // system bars; the clock and calls hide them.
     val bedside = !welcoming && experience == PorchExperience.BEDSIDE
     val paired = links.credential != null || app.device.credential(PorchExperience.BEDSIDE) != null
-    BedsideWindow(alwaysOn = bedside, immersive = bedside && !setup.open && !setup.unlocking && replacement == null)
+    BedsideWindow(alwaysOn = bedside, immersive = bedside && !setup.open && !setup.unlocking && !setup.caregiver && replacement == null)
     val context = LocalContext.current
     LaunchedEffect(bedside, paired) { BedsideHomeScreen.sync(context, bedside && paired) }
     val active = calls.active
@@ -106,6 +106,7 @@ fun PorchRoot(
             onJoin = { page = WelcomePage.JOINING })
         setup.open -> BedsideSetupFlow(app, setup, cordedPhoneSetup)
         setup.unlocking -> CaregiverGate(setup)
+        setup.caregiver -> CaregiverMode(app, links, onClose = setup::closeCaregiver)
         else -> BedsideHome(app, links, setup)
     }
     // Only the bedside's home and a family phone's list of families can take a call, with nothing open over them.

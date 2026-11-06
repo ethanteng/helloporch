@@ -487,6 +487,14 @@ Calls can be tried locally with LiveKit's server in dev mode; see [android/READM
 
 ## Phase 4: caregiver mode
 
+Built in five pull requests:
+
+1. **The tablet's caregiver mode.** The gear and PIN on the clock, the two panes, the household's name and number, and Calls, Display & voice, Privacy, Caregivers & PIN, and This tablet.
+2. **People.** The keypad, the person page and the key editor.
+3. **Drop-in, call history and blocked numbers.**
+4. **Caregiver mode on a family phone.**
+5. **The Porch keyboard, and About.**
+
 The pages follow [CaregiverSettings.swift](../ios/Porch/CaregiverSettings.swift):
 
 - **On the tablet:** People, Calls, Drop-in, Messages, Display & voice, Privacy, Caregivers & PIN, and This tablet. It uses two panes, with the list beside the page.

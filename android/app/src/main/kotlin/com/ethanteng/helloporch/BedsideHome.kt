@@ -34,6 +34,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -86,6 +95,9 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
 
     Box(Modifier.fillMaxSize().background(PorchColors.night)) {
         if (scene != null) ScenePictureFading(scene, Modifier.fillMaxSize())
+        // Caregiver mode, behind the PIN: a tap, or a hold of half a second, as on iOS.
+        if (paired && state != null) CaregiverButton(palette?.controlForeground ?: PorchColors.nightSecondary,
+            Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp), onOpen = setup::openGate)
         LargeType { BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 32.dp, vertical = 16.dp)) {
             // Fitted to the tablet, as on iOS, rather than capped at phone-sized text. The bottom is kept for calling.
             // iOS measures the safe area. This box is already inset by the padding on it: 32 dp on each side, 16 dp
@@ -155,6 +167,16 @@ private fun FittedText(text: AnnotatedString, color: Color, size: TextUnit, weig
         style = LocalTextStyle.current.merge(TextStyle(color = color, fontWeight = weight, textAlign = TextAlign.Center,
             fontFeatureSettings = if (digits) "tnum" else null)),
         autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = size, stepSize = 2.sp))
+}
+
+/** The gear in the clock's corner that opens caregiver mode, after the PIN. */
+@Composable
+private fun CaregiverButton(color: Color, modifier: Modifier, onOpen: () -> Unit) {
+    Box(modifier.size(64.dp).clip(CircleShape).pointerInput(Unit) {
+        detectTapGestures(onTap = { onOpen() }, onLongPress = { onOpen() })
+    }.clearAndSetSemantics { contentDescription = "Caregiver mode"; role = Role.Button }, contentAlignment = Alignment.Center) {
+        Text("\u2699\uFE0E", color = color, fontSize = 32.sp)
+    }
 }
 
 /** The clock's big button: Call someone, or setting Porch up. */

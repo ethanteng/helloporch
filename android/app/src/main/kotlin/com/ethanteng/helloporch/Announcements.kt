@@ -77,6 +77,11 @@ class BedsideSpeech(context: Context) {
         return id
     }
 
+    /** The engine's voices for `language`, by name, for caregiver settings. Empty until the engine has started. */
+    fun voices(language: BedsideLanguage): List<android.speech.tts.Voice> =
+        if (ready != true) emptyList()
+        else engine.voices.orEmpty().filter { language.supportsSpeechVoice(it.locale.toLanguageTag()) }.sortedBy { it.name }
+
     /** Stops `id`, waiting for the engine, being written or being said. Its `done` isn't called. */
     fun stop(id: String) {
         queued.remove(id)
@@ -126,29 +131,32 @@ class Announcer(private val app: PorchApplication) {
     private var watchdog: Job? = null
     private var completion: ((Boolean) -> Unit)? = null
 
-    /** The chime, then `message`. `done` gets whether it was said, and isn't called after [stop]. */
-    fun speak(message: String, done: (Boolean) -> Unit) {
+    /**
+     * The chime, then `message`. `done` gets whether it was said, and isn't called after [stop]. The voices are the
+     * saved ones unless caregiver settings pass the ones being chosen, to preview them.
+     */
+    fun speak(message: String, language: BedsideLanguage = BedsideText.language(app),
+        voiceName: String? = BedsidePreferences.load(app.settings).announcementVoiceIdentifier(language),
+        naturalVoice: String? = NaturalVoice.selected(app, language), done: (Boolean) -> Unit) {
         stop()
         completion = done
-        val language = BedsideText.language(app)
         if (!chime.play(CallTone.ANNOUNCEMENT)) { finish(false); return }
         startJob = scope.launch {
             delay((CallTone.ANNOUNCEMENT.duration * 1_000).toLong())
-            val voice = NaturalVoice.selected(app, language)
-            val ready = voice?.let { NaturalVoice.cached(app, message, language, it) }
-            if (ready != null && playClip(ready) { said -> if (said) finish(true) else { ready.delete(); speakBuiltIn(message, language) } }) {
+            val ready = naturalVoice?.let { NaturalVoice.cached(app, message, language, it) }
+            if (ready != null && playClip(ready) { said -> if (said) finish(true) else { ready.delete(); speakBuiltIn(message, language, voiceName) } }) {
                 armWatchdog()
                 return@launch
             }
             ready?.delete()
-            speakBuiltIn(message, language)
+            speakBuiltIn(message, language, voiceName)
         }
         // Until speech starts, so a stuck engine can't hold the call either.
         armWatchdog()
     }
 
     /** "Ethan is dropping in with video. Connecting in five seconds." */
-    fun announceDropIn(name: String, video: Boolean, done: (Boolean) -> Unit) = speak(dropInMessage(app, name, video), done)
+    fun announceDropIn(name: String, video: Boolean, done: (Boolean) -> Unit) = speak(dropInMessage(app, name, video), done = done)
 
     fun stop() {
         completion = null
@@ -159,10 +167,9 @@ class Announcer(private val app: PorchApplication) {
         chime.stop()
     }
 
-    private fun speakBuiltIn(message: String, language: BedsideLanguage) {
+    private fun speakBuiltIn(message: String, language: BedsideLanguage, voiceName: String?) {
         armWatchdog()
-        val voice = BedsidePreferences.load(app.settings).announcementVoiceIdentifier(language)
-        speaking = app.speech.speak(message, language, voice) { said -> speaking = null; finish(said) }
+        speaking = app.speech.speak(message, language, voiceName) { said -> speaking = null; finish(said) }
     }
 
     private fun playClip(file: File, done: (Boolean) -> Unit): Boolean = try {
@@ -210,7 +217,7 @@ class OutgoingAnnouncement(app: PorchApplication, name: String) {
         private set
 
     init {
-        announcer.speak(Announcer.callingMessage(app, name)) { said -> end(if (said) "said" else "not said") }
+        announcer.speak(Announcer.callingMessage(app, name), done = { said -> end(if (said) "said" else "not said") })
     }
 
     /** Runs `next` once the sentence is over: said, couldn't be said, or stopped. */
