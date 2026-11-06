@@ -129,7 +129,7 @@ private fun SetupDone(lovedOne: String, number: String?, onFinish: () -> Unit) {
         }
         Text("Only people on the keypad and numbers you allow can call this number. Anyone else is turned away and listed under Blocked numbers, where you can allow them.",
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        // Putting people on the keypad comes with caregiver mode (phase 4).
+        // A caregiver puts people on the keypad in caregiver mode.
         FormButton("Back to the clock", onClick = onFinish)
     }
 }

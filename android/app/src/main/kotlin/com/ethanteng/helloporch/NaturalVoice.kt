@@ -75,8 +75,6 @@ object NaturalVoice {
             }
         }
         contacts.forEach { texts += Announcer.callingMessage(app, it.name) }
-        // Until caregiver mode puts people on keys, the people screen calls family members who aren't on one too.
-        state.people.filter { it.role == PorchExperience.FAMILY }.forEach { texts += Announcer.callingMessage(app, it.name) }
         val now = SystemClock.elapsedRealtime()
         val pending = texts.distinct().filter { text ->
             val key = file(app, text, language, voiceID).name

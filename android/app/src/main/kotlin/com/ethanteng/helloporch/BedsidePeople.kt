@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -32,23 +33,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyLinks
-import com.ethanteng.helloporch.core.PorchExperience
 
 /**
  * Who the bedside can call, as iOS's people picker shows the keypad: a card for each person on a key, with the key to
- * press. Pressing the key here calls them too. Until caregiver mode (phase 4) can put people on keys, family members who
- * aren't on one are listed after them, and a tap calls them.
+ * press. Pressing the key here calls them too. A caregiver puts people on keys in caregiver mode's People page.
  */
 @Composable
 fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
-    val slots = remember(links) { try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() } }
+    // A photo that just downloaded shows at once, not at the next check-in.
+    val slots = remember(links, FamilyPhotos.saved) { try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() } }
     val keyed = remember(slots) { CallSlots.digits.mapNotNull { digit -> slots.contact(digit)?.let { digit to it } } }
-    val others = remember(links, keyed) {
-        links.state?.people.orEmpty().filter { person ->
-            person.role == PorchExperience.FAMILY && person.canReceiveCalls != false && keyed.none { it.second.familyMemberID == person.id }
-        }
-    }
     // One choice. A second tap would otherwise start another call and report that caregiver mode isn't set up.
     var chosen by remember { mutableStateOf(false) }
     fun place(call: () -> Unit) {
@@ -75,18 +70,14 @@ fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
                     fontSize = if (tablet) 60.sp else 40.sp, fontWeight = FontWeight.SemiBold)
                 CallButton(text("Back to clock"), true, onClick = onClose, app = app, translated = true)
             }
-            Text(text(if (keyed.isEmpty() && others.isEmpty()) "No one is on the keypad yet. A caregiver can add people in caregiver mode."
+            Text(text(if (keyed.isEmpty()) "Your caregiver can add people using the settings icon on the clock screen."
                 else "Tap a name or press their number on the keypad."), color = CallColors.text, fontSize = if (tablet) 34.sp else 28.sp)
             LazyVerticalGrid(GridCells.Fixed(columns), Modifier.weight(1f).fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(keyed, key = { "key-${it.first}" }) { (digit, contact) ->
-                    PersonCard(contact.name, contact.photoData, text("Press %@", CallSlots.symbol(digit)), nameSize, keySize) {
+                    PersonCard(contact.name, contact.photoData, text("Press %@", CallSlots.symbol(digit)), nameSize, keySize, buttonColor(contact.buttonColorHex)) {
                         place { app.calls.bedsideKey(digit) }
                     }
-                }
-                items(others, key = { "member-${it.id}" }) { person ->
-                    val photo = remember(person.photoID) { person.photoID?.let { app.photos.familyMembers.data(it) } }
-                    PersonCard(person.name, photo, text("Tap to call"), nameSize, keySize) { place { app.calls.callFromBedside(person) } }
                 }
             }
         }
@@ -94,12 +85,14 @@ fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
 }
 
 @Composable
-private fun PersonCard(name: String, photo: ByteArray?, detail: String, nameSize: TextUnit, detailSize: TextUnit, onClick: () -> Unit) {
+private fun PersonCard(name: String, photo: ByteArray?, detail: String, nameSize: TextUnit, detailSize: TextUnit, color: Color? = null, onClick: () -> Unit) {
+    // A key's button color, chosen in caregiver mode, with lettering that reads on it.
+    val text = color?.let(::foreground) ?: CallColors.text
     Column(Modifier.fillMaxWidth().heightIn(min = maxOf(200f, nameSize.value * 3.5f).dp).clip(RoundedCornerShape(24.dp))
-        .background(CallColors.control).clickable(onClick = onClick).padding(20.dp),
+        .background(color ?: CallColors.control).clickable(onClick = onClick).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
         Photo(photo, Modifier.heightIn(max = 240.dp))
-        Text(name, color = CallColors.text, fontSize = nameSize, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-        Text(detail, color = CallColors.secondary, fontSize = detailSize, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+        Text(name, color = text, fontSize = nameSize, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        Text(detail, color = if (color == null) CallColors.secondary else text.copy(alpha = 0.8f), fontSize = detailSize, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
     }
 }
