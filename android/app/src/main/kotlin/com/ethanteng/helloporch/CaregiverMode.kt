@@ -70,6 +70,8 @@ import com.ethanteng.helloporch.core.RemoteCaregiverSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -112,6 +114,9 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     val myID: String? get() = remote?.deviceID
     private var remoteState by mutableStateOf(state)
     private var locked = false
+    /** One caregiver request at a time. A page refresh and a change can otherwise finish out of order, and the older
+     * household would replace the one the change just saved. A family phone keeps that copy: its check-ins don't. */
+    private val requests = Mutex()
     private val credential: FamilyCredential? get() = remote ?: app.device.credential(PorchExperience.BEDSIDE)
     /** The household's server, which invitation links point to. */
     val origin: String? get() = credential?.origin
@@ -174,10 +179,10 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
      * Makes `action` with the caregiver PIN (or `pin`, such as the current one when changing it) and takes the household
      * it returns. Throws with the reason it didn't go through. On a family phone, a refused PIN or approval locks.
      */
-    suspend fun request(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null): FamilyResponse {
+    suspend fun request(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null): FamilyResponse = requests.withLock {
         val credential = credential ?: throw FamilyServiceException("Go back to the clock and open caregiver mode to finish setup.", 409)
         val code = pin ?: pin() ?: throw FamilyServiceException("Caregiver mode has ended. Open it again with the PIN.", 401)
-        return try {
+        try {
             app.service(credential).send(action, values, pin = code).also { response ->
                 app.coordinator.update(response)
                 if (remote != null) response.admin?.let { remoteState = it; if (!locked) RemoteCaregiverSession.shared.household = it }
