@@ -162,12 +162,14 @@ class CallCenter(private val app: PorchApplication) {
         }
     }
 
-    /** The call-control key or the receiver while a bedside call is still starting: it doesn't open. */
+    /** The call-control key or the receiver while a bedside call is still starting: it doesn't open. As on iOS, the
+     * bedside stays opening until that request is answered and the call ended, so no new call can start meanwhile and
+     * pick the cancelled one back up. */
     fun cancelPendingCall(): String {
         if (!opening) return "no call"
         cancelOpening = true
-        opening = false
-        return "pending call cancelled"
+        note(text("Ending call…"))
+        return "cancel pending call requested"
     }
 
     /** Porch left the screen. Calls end, as on iOS, until Android's calling system keeps them going (later in phase 3). */

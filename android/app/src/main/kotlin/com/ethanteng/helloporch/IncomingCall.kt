@@ -12,6 +12,8 @@ import com.ethanteng.helloporch.core.FamilyCallRecord
 import com.ethanteng.helloporch.core.FamilyCallSession
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyLinks
+import com.ethanteng.helloporch.core.FamilyResponse
+import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.IncomingCallKey
 import com.ethanteng.helloporch.core.KeypadAction
 import com.ethanteng.helloporch.core.NativeCall
@@ -61,6 +63,10 @@ class IncomingCall(
     private val key = IncomingCallKey()
     private var holdJob: Job? = null
     private var closed = false
+    /** The call as the latest snapshot has it, for a drop-in's announcement time. */
+    private var latest = call
+    /** The server's clock minus this device's, in seconds, from the latest snapshot. */
+    private var skew = 0L
 
     fun start() {
         if (!ring.play(CallTone.INCOMING)) status = text("The sound couldn't play. Tap Answer to connect.")
@@ -72,10 +78,11 @@ class IncomingCall(
         answering = true
         ring.stop()
         holdJob?.cancel()
+        status = text("Connecting…")
         val session = session()
         scope.launch {
             try {
-                val result = session.service.send("acceptCall", mapOf("callID" to JsonPrimitive(call.id), "available" to JsonPrimitive(true)))
+                val result = accept(session)
                 if (!app.onScreen) { app.scope.launch { session.end() }; close(); return@launch }
                 app.coordinator.update(result)
                 close()
@@ -85,6 +92,27 @@ class IncomingCall(
             } catch (_: Exception) {
                 app.scope.launch { session.end() }
                 close()
+            }
+        }
+    }
+
+    /**
+     * Accepts the call. The server takes a drop-in only 5 seconds after it was announced, which iOS's countdown always
+     * waits out. Answer tapped sooner waits for the rest, and a refusal for that reason is tried again shortly, such as
+     * when this device's clock is behind the server's.
+     */
+    private suspend fun accept(session: FamilyCallSession): FamilyResponse {
+        var attempts = 0
+        while (true) {
+            if (dropIn) latest.announcedAt?.let { announced ->
+                val wait = announced + 5 - (nowSeconds() + skew)
+                if (wait > 0) delay(wait * 1_000 + 250)
+            }
+            try {
+                return session.service.send("acceptCall", mapOf("callID" to JsonPrimitive(call.id), "available" to JsonPrimitive(true)))
+            } catch (e: FamilyServiceException) {
+                if (!dropIn || e.status != 409 || !e.message.contains("announcement") || ++attempts > 5) throw e
+                delay(1_000)
             }
         }
     }
@@ -137,9 +165,13 @@ class IncomingCall(
 
     /** The call ended or went away, such as when the caller hung up. */
     private fun check(links: FamilyLinks) {
+        val state = links.state(credential)
+        state?.let { skew = it.serverTime - nowSeconds() }
+        val current = state?.call?.takeIf { it.id == call.id }
+        current?.let { latest = it }
+        // Once answering, acceptCall says whether the call is still there.
         if (answering) return
-        val current = links.state(credential)?.call
-        if (current != null && current.id == call.id && current.state != "ended") return
+        if (current != null && current.state != "ended") return
         close()
     }
 
@@ -153,6 +185,8 @@ class IncomingCall(
         onClosed(this)
         scope.cancel()
     }
+
+    private fun nowSeconds() = System.currentTimeMillis() / 1_000
 
     private fun session() = FamilyCallSession(credential, call, name, app.service(credential), peerContact = contact)
     private fun slots(): CallSlots = try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() }
