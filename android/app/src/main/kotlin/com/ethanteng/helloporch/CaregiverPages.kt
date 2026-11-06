@@ -92,10 +92,15 @@ fun CaregiverScreenContent(app: PorchApplication, admin: CaregiverAdmin, links: 
         CaregiverScreen.NUMBER -> {
             val scope = rememberCoroutineScope()
             val number = remember { SetupNumber(app, scope, { lovedOne }, onError = { admin.error = it }).also { it.load() } }
-            SetupNumberScreen(number, lovedOne, onContinue = onDone)
+            // Setup puts this in its own bar. Without one here, the page has no Back and draws under the status bar.
+            FormScreen("Porch number", navigation = { TextButton(onClick = onDone) { Text("Back") } }) {
+                SetupNumberScreen(number, lovedOne, onContinue = onDone)
+            }
         }
         CaregiverScreen.CONNECT_PHONE -> CordedPhoneSetup(app.cell2jack, onDone = onDone, onBack = onDone)
-        CaregiverScreen.CONNECT_KEYPAD -> SetupUSBKeypadScreen(lovedOne, onContinue = onDone)
+        CaregiverScreen.CONNECT_KEYPAD -> FormScreen("Connect the USB keypad", navigation = { TextButton(onClick = onDone) { Text("Back") } }) {
+            SetupUSBKeypadScreen(lovedOne, onContinue = onDone)
+        }
     }
 }
 
