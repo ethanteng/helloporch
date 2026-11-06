@@ -35,9 +35,9 @@ export default function PilotSignup() {
   if (joined) {
     return (
       <div className={styles.thanks} role="status">
-        <p className={styles.thanksTitle}>Thank you. You’re in the pilot.</p>
+        <p className={styles.thanksTitle}>Thank you. Your request is in.</p>
         <p>
-          I’ll email you at <strong>{joined}</strong> with an invitation and everything you need to set it up.
+          I’ll email you at <strong>{joined}</strong> with next steps.
         </p>
       </div>
     );

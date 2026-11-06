@@ -17,7 +17,7 @@ export const metadata: Metadata = pageMetadata({
   path: "/features",
   title: "See How It Works | HelloPorch",
   description:
-    "Watch how Porch works: they press a face to call, Porch answers approved family for them, messages play on their own, and it speaks their language.",
+    "See how the Porch video calling app works on an iPad or Android tablet: one press starts a call, Porch answers family for them, messages play on their own, and it speaks their language.",
   shareTitle: "Video calls, at the press of a button.",
   image: { url: "/og/features.jpg", alt: "HelloPorch: Video calls, at the press of a button. Beside the Porch prototype, a tablet and a big-button phone." },
 });
@@ -34,11 +34,15 @@ export default function FeaturesPage() {
               <h1 className={story.title}>
                 Video calls, <em>at the press of a button.</em>
               </h1>
-              <p className={story.lede}>
-                Porch makes video calling easy for people who struggle with phones. It’s a tablet and big-button phone with
-                photos of loved ones on the buttons. <strong>One press starts a video call.</strong> And when you call them,
-                Porch can answer for them.
-              </p>
+              <div className={story.lede}>
+                <p>
+                  Porch is a video calling app that runs on your own iPad or Android tablet, paired with a big-button phone.
+                  Each button has a photo of someone they love. <strong>One press starts a video call.</strong>
+                </p>
+                <p>
+                  Family and friends use the Porch app on their iPhones or Android phones to call, answer, and send messages.
+                </p>
+              </div>
               <ul className={story.forList} aria-label="Who Porch is for">
                 <li>Parkinson’s &amp; limited dexterity</li>
                 <li>Dementia &amp; memory loss</li>
@@ -58,11 +62,11 @@ export default function FeaturesPage() {
                   sizes="(max-width: 900px) min(100vw, 480px), 520px"
                 />
                 <figcaption className={story.callouts}>
-                  <span className={story.callout} style={{ left: "47%", top: "16%" }}>
-                    Always on, never locked
+                  <span className={story.callout} style={{ right: "4%", top: "16%" }}>
+                    Your tablet, running Porch
                   </span>
                   <span className={story.callout} style={{ left: "6%", top: "86%" }}>
-                    Real buttons with faces and names
+                    Big-button phone with family photos
                   </span>
                 </figcaption>
               </figure>

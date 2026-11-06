@@ -431,6 +431,46 @@
   color: var(--muted-2);
 }
 
+/* ---------- What runs where: the family's own devices, with the Porch app ---------- */
+.devices {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 0 40px 96px;
+}
+
+.devicesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.devicesGrid article {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 28px;
+  border-radius: 32px;
+  background: var(--paper);
+}
+
+/* The icon tile is paper elsewhere; on a paper card it's honey so it still reads as a tile. */
+.devicesGrid .moreIcon {
+  background: var(--honey);
+}
+
+.devicesGrid h3 {
+  font: 400 24px/1.2 var(--serif);
+}
+
+.devicesGrid p {
+  font: 400 17px/1.5 var(--sans);
+  color: var(--muted-2);
+}
+
 /* ---------- Founder note ---------- */
 .founder {
   display: flex;
@@ -498,6 +538,32 @@
   }
 }
 
+/* Stacked on narrow screens, each card puts its icon beside the text so the section stays short. */
+@media (max-width: 900px) {
+  .devicesGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .devicesGrid article {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    column-gap: 18px;
+    row-gap: 4px;
+    align-items: start;
+    padding: 22px;
+    border-radius: 28px;
+  }
+  .devicesGrid .moreIcon {
+    grid-row: span 2;
+  }
+  .devicesGrid h3 {
+    font-size: 22px;
+  }
+  .devicesGrid p {
+    font-size: 16px;
+  }
+}
+
 @media (max-width: 900px) {
   .splitHero,
   .safety {
@@ -516,6 +582,7 @@
   }
   .needs,
   .more,
+  .devices,
   .next,
   .founder {
     padding-left: 16px;

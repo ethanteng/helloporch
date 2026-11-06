@@ -39,8 +39,8 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          Every button has a photo and a name. They press yours, and your Porch app rings with a video call. If you
-          don’t answer, Porch calls your regular phone instead, so you can still talk.
+          Every button has a photo and a name. They press yours, and the Porch app rings on your iPhone or Android
+          phone. If you don’t answer, Porch calls your regular number instead.
         </p>
       </>
     ),
