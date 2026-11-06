@@ -1,7 +1,10 @@
 // A Porch server on this computer for trying the apps without real families: the real POST /api/family handler with
 // the in-memory store the server tests use. Nothing is kept, and nothing leaves this process: no Redis, no LiveKit
 // calls, no push, and phone numbers come from a stand-in for Twilio that makes them up. Photos and messages are kept in
-// memory too and served from /media/, and /api/calls/contacts/authorize has a stand-in that approves keypad numbers. It sets up a household, "Mom",
+// memory too and served from /media/, and /api/calls/contacts/authorize has a stand-in that approves keypad numbers.
+// Nothing here takes real phone calls, so a call that Block unknown callers turned away is made up:
+//   curl -X POST 'http://localhost:3010/local/blocked-call?number=%2B14155550100'
+// It's listed on every household that blocks unknown callers, as the phone webhooks would list it. It sets up a household, "Mom",
 // whose stand-in bedside checks in every few seconds, and prints an invitation for a phone to join it and a setup link
 // for a new bedside tablet.
 //
@@ -20,6 +23,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { handleFamily } from '../lib/family/service.ts';
+import { blockCall } from '../lib/family/screening.ts';
 
 const options = process.argv.slice(2), livekit = options.includes('--livekit');
 const port = Number(options.find(option => !option.startsWith('--')) ?? 3010), origin = `http://localhost:${port}`;
@@ -142,11 +146,35 @@ const authorizeContact = async (request, response, body) => {
   const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
   reply(200, { authorization: `local.${Buffer.from(JSON.stringify({ phoneNumber: input.phoneNumber, exp: expiresAt })).toString('base64url')}`, expiresAt });
 };
+const blockedCall = async (request, response) => {
+  try {
+    const number = new URL(request.url, origin).searchParams.get('number') ?? '';
+    if (!/^\+[1-9][0-9]{6,14}$/.test(number)) { response.writeHead(400).end('Pass ?number= with + and the country code.\n'); return; }
+    let listed = 0;
+    // Snapshot the households first. Recording the call writes into the store while this loop is walking it.
+    for (const [key, raw] of [...store.values].filter(([key]) => key.startsWith('house:'))) {
+      const house = JSON.parse(raw);
+      if (!house.blockUnknownCallers) continue;
+      // A number already on the keypad, allowed, or approved for drop-in is not turned away.
+      const before = house.blockedCallers?.find(caller => caller.number === number)?.calls ?? 0;
+      await blockCall(store, key.slice('house:'.length), randomUUID(), number, Math.floor(Date.now() / 1000));
+      const saved = JSON.parse(store.values.get(key));
+      const after = saved.blockedCallers?.find(caller => caller.number === number)?.calls ?? 0;
+      if (after > before) listed += 1;
+    }
+    console.log(`${time()} a call from ${number} was blocked by ${listed} household${listed === 1 ? '' : 's'}`);
+    response.writeHead(200).end(`Blocked by ${listed} household${listed === 1 ? '' : 's'}.\n`);
+  } catch (error) {
+    console.log(`${time()} blocked-call failed: ${error.message}`);
+    if (!response.headersSent) response.writeHead(500).end(`${error.message}\n`);
+  }
+};
 const onRequest = async (request, response) => {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   const raw = Buffer.concat(chunks), body = raw.toString();
   if (request.url.startsWith('/media/')) { serveMedia(request, response, raw); return; }
+  if (request.method === 'POST' && request.url.startsWith('/local/blocked-call')) { await blockedCall(request, response); return; }
   if (request.method === 'POST' && request.url === '/api/calls/contacts/authorize') { await authorizeContact(request, response, body); return; }
   if (request.method !== 'POST' || request.url !== '/api/family') { response.writeHead(404).end(); return; }
   // Where Vercel says the request came from, as it does in production, so phoneNumberOptions has a suggestion: Oakland.

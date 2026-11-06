@@ -364,13 +364,13 @@ fun KeyEditor(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, 
 }
 
 /** Android's contact picker, showing only contacts' phone numbers. Porch may read the one number tapped. */
-private class PickPhoneNumber : ActivityResultContract<Unit, Uri?>() {
+internal class PickPhoneNumber : ActivityResultContract<Unit, Uri?>() {
     override fun createIntent(context: Context, input: Unit) = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
     override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent?.data?.takeIf { resultCode == Activity.RESULT_OK }
 }
 
 /** The picked contact's name and the number tapped. */
-private suspend fun pickedNumber(context: Context, uri: Uri): Pair<String?, String>? = withContext(Dispatchers.IO) {
+internal suspend fun pickedNumber(context: Context, uri: Uri): Pair<String?, String>? = withContext(Dispatchers.IO) {
     try {
         val columns = arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER)
         context.contentResolver.query(uri, columns, null, null, null)?.use { row ->

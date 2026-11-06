@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -35,19 +36,25 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 
 /** A screen of Porch's forms, as iOS's caregiver forms are: a bar with its title and a way back, and one column, at most
  * 760 dp wide like the iOS card, that scrolls. `navigation` is the bar's button, such as Cancel or Back. */
 @Composable
-fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, actions: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
-            // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them.
+            // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them. It gets
+            // smaller before it's cut short, as beside Back to clock in caregiver mode's list on a 10-inch tablet.
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 navigation?.invoke()
-                Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, textAlign = if (navigation == null) TextAlign.Center else TextAlign.Start)
+                val style = MaterialTheme.typography.titleLarge
+                Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = style, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, textAlign = if (navigation == null) TextAlign.Center else TextAlign.Start,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = style.fontSize))
+                actions?.invoke()
             }
             HorizontalDivider()
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {

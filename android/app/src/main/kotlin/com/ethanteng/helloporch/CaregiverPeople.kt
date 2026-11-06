@@ -173,7 +173,7 @@ private fun KeyTile(app: PorchApplication, digit: Int, slots: CallSlots, state: 
 
 /** A key's symbol in a circle: filled for what the key does, outlined for an empty key. */
 @Composable
-private fun GlyphBadge(glyph: String, empty: Boolean) {
+internal fun GlyphBadge(glyph: String, empty: Boolean) {
     val colors = MaterialTheme.colorScheme
     Box(Modifier.size(48.dp).clip(CircleShape).then(if (empty) Modifier.border(1.5.dp, colors.outlineVariant, CircleShape) else Modifier.background(colors.primaryContainer)),
         contentAlignment = Alignment.Center) {
@@ -260,7 +260,7 @@ private enum class PersonScreen { PHONE, INVITE }
  * key.
  */
 @Composable
-private fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, initialMemberID: String?, initialSlot: Int?, onDone: () -> Unit) {
+internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, initialMemberID: String?, initialSlot: Int?, onDone: () -> Unit) {
     var memberID by rememberSaveable { mutableStateOf(initialMemberID) }
     var slot by rememberSaveable { mutableStateOf(initialSlot) }
     var screen by rememberSaveable { mutableStateOf<PersonScreen?>(null) }
@@ -728,7 +728,7 @@ fun rememberMediaAccess(): MediaAccess {
 internal val FamilyPerson.shortStatus: String
     get() = if (online) "Porch is open" else if (canReceiveCalls == true) "Can ring while locked" else "Offline"
 
-private val FamilyPerson.dropInModes: String?
+internal val FamilyPerson.dropInModes: String?
     get() = when {
         permissions.audio && permissions.video -> "Audio and video"
         permissions.audio -> "Audio"
