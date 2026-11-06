@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
   path: "/pilot",
   title: "Join the Porch Pilot | HelloPorch",
   description:
-    "Try the Porch prototype at home on an iPad or Android tablet with a big-button corded phone. See what you’ll need, then sign up with your email.",
+    "Try the Porch video calling app at home on your own iPad or Android tablet, with a big-button corded phone. See what you’ll need, then request an invite.",
   shareTitle: "Join the Porch pilot",
   image: { url: "/og/pilot.jpg", alt: "HelloPorch: Join the Porch pilot. Beside the Porch prototype, a tablet and a big-button phone." },
 });
@@ -33,13 +33,13 @@ const STEPS: { title: string; text: string[] }[] = [
     text: ["I’ll reach out with an invitation and instructions for getting started."],
   },
   {
-    title: "Install Porch.",
+    title: "Install Porch on your tablet and family phones.",
     text: ["Porch isn’t in the app stores yet. You’ll get it through Apple’s TestFlight or Google Play’s testing program."],
   },
   {
     title: "Set it up for your family.",
     text: [
-      "Connect the tablet and phone, add the people your loved one calls most, and have family members install the Porch app.",
+      "Connect the tablet and phone, and add the people your loved one calls most.",
     ],
   },
   {
@@ -52,6 +52,10 @@ const STEPS: { title: string; text: string[] }[] = [
 ];
 
 const QUESTIONS: { q: string; a: ReactNode }[] = [
+  {
+    q: "Do I need to buy a tablet from HelloPorch?",
+    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone and a couple of adapters.",
+  },
   {
     q: "Can I use a tablet I already own?",
     a: "Most recent iPads and Android tablets should work, but compatibility depends on the model and accessories.",
@@ -83,12 +87,15 @@ export default function PilotPage() {
               Join the <em>Porch pilot.</em>
             </h1>
             <div className={styles.lede}>
-              <p>I’m inviting families to try Porch at home with their loved ones.</p>
+              <p>I’m inviting families to try the HelloPorch app at home with their loved ones.</p>
               <p>
-                The prototype runs on an iPad or Android tablet, paired with a big-button corded phone. Family and friends use
-                the Porch app on their own phones to make video calls.
+                You’ll install Porch on your own compatible iPad or Android tablet and connect a big-button corded phone.
+                Family and friends install the Porch app on their iPhones or Android phones to stay connected.
               </p>
-              <p>All I ask in return is your honest feedback. What’s working, what’s confusing, and what could be better.</p>
+              <p>
+                I’ll provide access to the app and setup instructions. All I ask in return is your honest feedback on what
+                works, what doesn’t, and what could be better.
+              </p>
             </div>
             <div className={styles.signup}>
               <h2 className={styles.srOnly}>Sign up for the pilot</h2>
@@ -109,10 +116,14 @@ export default function PilotPage() {
         <section className={styles.glance} aria-label="The pilot at a glance">
           <article className={styles.glanceCard}>
             <h2 className={styles.glanceLabel}>What you’ll need.</h2>
-            <h3>A tablet, a phone, and a couple of adapters.</h3>
+            <h3>You’ll provide the hardware. I’ll provide the app.</h3>
             <p className={styles.glanceText}>
               Porch works with a compatible iPad or Android tablet and a big-button corded phone. You’ll also need a Cell2Jack
               adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
+            </p>
+            <p className={styles.glanceText}>
+              You may already have some of what you need. Here’s the hardware for the current pilot. I’ll help you check
+              compatibility before you buy anything.
             </p>
             <ul className={styles.kitList}>
               {KIT.map((part) => (

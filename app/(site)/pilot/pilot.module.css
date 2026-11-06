@@ -289,6 +289,7 @@
   margin-bottom: 6px;
   font: 400 30px/1.12 var(--serif);
   letter-spacing: -0.015em;
+  text-wrap: balance;
 }
 
 .glanceLabel {

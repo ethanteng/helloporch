@@ -65,7 +65,7 @@ export default function PricingPage() {
           <section className={styles.included} aria-labelledby="included-title">
             <h2 id="included-title">Calling and <em>privacy.</em></h2>
             <div className={styles.promises}>
-              <div><span className={styles.promiseNumber} aria-hidden="true">1</span><h3>One-press calling</h3><p>They lift the receiver of a big-button corded phone and press a photo to call.</p></div>
+              <div><span className={styles.promiseNumber} aria-hidden="true">1</span><h3>One-press calling</h3><p>They press a photo on a big-button corded phone to call.</p></div>
               <div><span className={styles.promiseNumber} aria-hidden="true">2</span><h3>Control who can connect</h3><p>Manage contacts and choose who may start an audio or video drop-in.</p></div>
               <div><span className={styles.promiseNumber} aria-hidden="true">3</span><h3>No call-length limits</h3><p>Talk for as long as you like, with no monthly minute allowance or automatic cutoff.</p></div>
             </div>

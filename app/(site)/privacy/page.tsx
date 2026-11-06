@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 2, 2026";
+const updated = "November 5, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -36,28 +36,29 @@ const providers: [name: string, role: string, receives: string][] = [
   ["Twilio", "Phone service for a household’s Porch number, for calling a regular phone, for adding a phone number to a call, and for receiving text messages sent to that number.", "Phone numbers, call audio as it happens, voicemail recordings, and the text messages sent to the Porch number. We delete Twilio’s copy of each voicemail recording once we’ve saved it."],
   ["Vercel", "Hosts the website and our server, and keeps messages, photos, announcement audio and readings of text messages in private storage.", "Everything our server handles, including request logs with IP addresses."],
   ["Upstash", "Database for household details, settings, the list of waiting messages, and the words of text messages sent to a Porch number.", "The household details described above, including those text messages."],
-  ["Apple", "Delivers call and message notifications through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
-  ["ElevenLabs", "Turns short announcements, and text messages sent to a Porch number, into natural speech, when a household uses a natural voice.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the iPad reads, which are the message or its translation."],
-  ["Anthropic", "Translates a text message into the language set on the iPad, when the message isn’t already in that language.", "The words of that text. Not the sender’s number or name."],
-  ["MailerLite", "Sends waitlist emails.", "Your email address and your waitlist answer."],
-  ["Google", "Google Analytics counts visits to the website, so we can see which pages help people. It isn’t used in the Porch app.", "The pages you visit, the site that sent you, browser and device details, and your IP address, which it uses to estimate your general location."],
+  ["Apple", "Delivers call and message notifications to iPhones and iPads through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
+  ["Google Firebase", "Delivers call and message notifications to Android phones and tablets through Firebase Cloud Messaging.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
+  ["ElevenLabs", "Turns short announcements, and text messages sent to a Porch number, into natural speech, when a household uses a natural voice.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation."],
+  ["Anthropic", "Translates a text message into the language set on the tablet, when the message isn’t already in that language.", "The words of that text. Not the sender’s number or name."],
+  ["MailerLite", "Sends waitlist and pilot emails.", "Your email address, and your waitlist answer if you give one."],
+  ["Google Analytics", "Counts visits to the website, so we can see which pages help people. It isn’t used in the Porch app.", "The pages you visit, the site that sent you, browser and device details, and your IP address, which it uses to estimate your general location."],
 ];
 
 const retention: [what: string, howLong: string][] = [
   ["Messages waiting for your loved one", "Until they’re played. Deleted after 7 days if nobody plays them."],
   ["Played messages", "Kept 90 days so they can be replayed, then deleted."],
-  ["Messages sent from your loved one’s iPad to family", "90 days from when they were left."],
+  ["Messages sent from your loved one’s tablet to family", "90 days from when they were left."],
   ["Unsent or removed messages", "Deleted right away."],
   ["Voicemail from phone callers", "The same as other messages. Twilio’s copy is deleted as soon as we’ve saved it."],
   ["Text messages to a Porch number", "Until they’re read, or a caregiver removes them. Deleted after 7 days if nobody reads them. A natural-voice reading is deleted with the text. We don’t keep the pictures or other attachments."],
   ["Someone who leaves or is removed", "Their profile, photos, notification tokens and messages are deleted. We keep a small record that their device was removed, so it can’t reconnect."],
   ["Photos that are never saved", "Deleted shortly after the upload expires."],
   ["Blocked callers", "Up to the 30 most recent numbers, until a caregiver clears the list."],
-  ["When someone was last at the iPad", "Only the most recent time, which replaces the one before."],
+  ["When someone was last at the tablet", "Only the most recent time, which replaces the one before."],
   ["Call history", "The 100 most recent calls, for up to 90 days, including calls with someone who was later removed."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
-  ["Waitlist email", "Until you unsubscribe or ask us to remove it."],
+  ["Waitlist and pilot email", "Until you unsubscribe or ask us to remove it."],
   ["Website analytics", "Up to 14 months in Google Analytics, then deleted."],
   ["Website and server request logs", "A short time, for security and troubleshooting."],
 ];
@@ -76,7 +77,7 @@ export default function PrivacyPage() {
           <p className={styles.lede}>
             Porch connects someone at home with the people they love. This policy explains what information that
             takes, who helps us carry it, and how long we keep it. It covers the HelloPorch website and the Porch
-            app for iPhone and iPad.
+            app for iPhone, iPad, Android phones, and Android tablets.
           </p>
           <p className={styles.updated}>Last updated {updated}</p>
         </header>
@@ -87,8 +88,8 @@ export default function PrivacyPage() {
             <li>We don’t sell your information, show ads, or track you across other apps and websites.</li>
             <li>Calls go live between devices and aren’t recorded. Messages and voicemail are saved only when someone chooses to leave one. Text messages sent to a Porch number are saved until they’re read or removed.</li>
             <li>Unplayed messages, and unread text messages to a Porch number, are deleted after 7 days. Played messages are deleted after 90 days.</li>
-            <li>When Porch notices someone in front of the iPad, detection happens on the device. No image leaves it. Family see only when someone was last there.</li>
-            <li>A few service providers help us run calls, phone service, storage, notifications, translation and website analytics. They get only what they need.</li>
+            <li>When Porch notices someone in front of an iPad, detection happens on the device. No image leaves it. Family see only when someone was last there.</li>
+            <li>A few service providers help us run calls, phone service, storage, notifications, speech, translation, email and website analytics. They get only what they need.</li>
             <li>
               Email <a href={`mailto:${contact}`}>{contact}</a> any time to see or delete your family’s information.
             </li>
@@ -112,13 +113,15 @@ export default function PrivacyPage() {
 
             <h3>On the website</h3>
             <p>
-              If you join the waitlist, we collect your email address and, if you answer, who would use Porch (for
-              example, “My mom”). We use it to email you about Porch.
+              If you join the waitlist or request a pilot invite, we collect your email address. On the waitlist, we
+              also ask who would use Porch (for example, “My mom”), if you want to answer. We use it to email you
+              about Porch.
             </p>
             <p>
               Like any website, our hosting provider receives your IP address and browser details when you visit, and
-              keeps request logs for a short time. Our social media icons are plain links, and those sites have their
-              own policies.
+              keeps request logs for a short time. When you send the waitlist or pilot form, it also checks that the
+              request came from a person using a real browser, using details about that browser. Our social media
+              icons are plain links, and those sites have their own policies.
             </p>
             <p>
               The website uses Google Analytics to count visits and see which pages are useful. It sets cookies in your
@@ -130,13 +133,15 @@ export default function PrivacyPage() {
             <h3>In the Porch app</h3>
             <p>
               Porch has no usernames or passwords. A caregiver sets up a household with a private invitation, chooses a
-              six-digit caregiver PIN, and invites family members. To make that work, our server keeps:
+              six-digit caregiver PIN, and invites family members. Your loved one’s Porch runs on an iPad or Android
+              tablet, called their tablet below. To make that work, our server keeps:
             </p>
             <ul>
               <li>
-                <strong>Household details.</strong> The household’s name, the name used for your loved one’s iPad,
-                each person’s name as it’s entered, who is a caregiver, and the settings you choose, such as drop-in
-                permissions, ring time, and the language and announcement voice on your loved one’s iPad.
+                <strong>Household details.</strong> The household’s name, the name used for your loved one’s tablet,
+                each person’s name as it’s entered, who is a caregiver, whether each device runs iOS or Android, and the
+                settings you choose, such as drop-in permissions, ring time, and the language and announcement voice on
+                your loved one’s tablet.
               </li>
               <li>
                 <strong>Profile photos.</strong> A photo each person adds for themselves, or that a caregiver adds for
@@ -152,14 +157,15 @@ export default function PrivacyPage() {
                 Porch can show who is reachable.
               </li>
               <li>
-                <strong>When someone was last at the iPad.</strong> Unless a caregiver turns this off, the last time
-                someone pressed a key or touched your loved one’s iPad and, if a caregiver turns it on, the last time its
-                camera saw a face close by. We keep only the latest time. Family members see “Someone is at the iPad” or how long ago someone was, so they
-                know whether to call. It doesn’t say who it was or how Porch noticed.
+                <strong>When someone was last at the tablet.</strong> Unless a caregiver turns this off, the last time
+                someone pressed a key or touched your loved one’s tablet and, on an iPad, if a caregiver turns it on, the
+                last time its camera saw a face close by. We keep only the latest time. Family members see that someone
+                is at the tablet, or how long ago someone was, so they know whether to call. It doesn’t say who it was or
+                how Porch noticed.
               </li>
               <li>
-                <strong>Notification tokens.</strong> Addresses from Apple that let us ring a family phone or tell it a
-                message has arrived.
+                <strong>Notification tokens.</strong> Addresses from Apple, or from Google for Android devices, that let
+                us ring a family phone or tell it a message has arrived.
               </li>
               <li>
                 <strong>Phone numbers.</strong> Numbers saved on the Porch keypad or for calling a regular phone,
@@ -167,14 +173,14 @@ export default function PrivacyPage() {
                 they give it.
               </li>
               <li>
-                <strong>Call history.</strong> For each call to or from your loved one’s iPad: who it was with (their
+                <strong>Call history.</strong> For each call to or from your loved one’s tablet: who it was with (their
                 name, or the phone number for a regular phone), voice or video, when it started, whether it was
                 answered, missed or declined, and how long it lasted. Caregivers can see it with the caregiver PIN. We
                 don’t record what was said.
               </li>
               <li>
                 <strong>Messages.</strong> Audio and video messages that family members record for each other,
-                including on your loved one’s iPad, with who sent them, when, and whether they’ve been played.
+                including on your loved one’s tablet, with who sent them, when, and whether they’ve been played.
               </li>
               <li>
                 <strong>Text messages to a Porch number.</strong> The sender’s number, the words, when it arrived, and
@@ -198,24 +204,26 @@ export default function PrivacyPage() {
             <p>
               The same phone number can receive text messages. We keep the sender’s number, the words, and how many
               pictures or other attachments came with it. A text from a number saved on the keypad, approved for phone
-              drop-in, or allowed by a caregiver is shown on your loved one’s iPad and read aloud. A text from any
+              drop-in, or allowed by a caregiver is shown on your loved one’s tablet and read aloud. A text from any
               other number waits until a caregiver reads it and lets it through or removes it. The sender’s number on
               a text isn’t checked with the phone company, so it can be faked.
             </p>
             <p>
-              If the words aren’t already in the language set on the iPad, we send them to Anthropic to translate
-              them. The iPad then shows the translation, with the original underneath, and reads the translation
-              aloud. A household that uses a natural voice also sends what the iPad reads, up to a short length, to
-              ElevenLabs. Longer readings, a reading in another language’s own voice, and every reading when the
-              iPad’s built-in voice is chosen, stay on the iPad.
+              If the words aren’t already in the language set on the tablet, we send them to Anthropic to translate
+              them. The tablet then shows the translation, with the original underneath, and reads the translation
+              aloud. A household that uses a natural voice also sends what the tablet reads, up to a short length, to
+              ElevenLabs. On an iPad, longer readings, a reading in another language’s own voice, and every reading
+              when the built-in voice is chosen, stay on the iPad.
             </p>
 
             <h3>If you join the pilot</h3>
             <p>
-              Pilot families send us the Apple Account email address for each device, so Apple can send it a
-              TestFlight invitation. We use those addresses only for the pilot. TestFlight may also share with us
-              information such as your name, the version you installed, and any feedback or crash reports, according
-              to your TestFlight settings and Apple’s privacy policy.
+              Pilot families get Porch through Apple’s TestFlight or Google Play’s testing program. On iPhone and iPad,
+              you send us the Apple Account email address for each device, so Apple can send it a TestFlight
+              invitation. We use those addresses only for the pilot. TestFlight may also share with us information
+              such as your name, the version you installed, and any feedback or crash reports, according to your
+              TestFlight settings and Apple’s privacy policy. On Android, you join the test on Google Play, and Google’s
+              privacy policy applies to what Google Play collects.
             </p>
           </section>
 
@@ -223,7 +231,7 @@ export default function PrivacyPage() {
             <h2 id="device-title">What stays on your device</h2>
             <ul>
               <li>
-                <strong>Noticing someone in front of the iPad.</strong> If a caregiver turns this on, your loved one’s
+                <strong>Noticing someone in front of an iPad.</strong> If a caregiver turns this on, your loved one’s
                 iPad uses its camera to notice that a face is in view, so it can start waiting messages or let family
                 know someone is there. This happens on the iPad. It doesn’t recognize who the person is, and no image is
                 saved or sent anywhere. For family, only the time it last saw someone is sent.
@@ -241,7 +249,7 @@ export default function PrivacyPage() {
                 so calls from those numbers are recognized.
               </li>
               <li>
-                <strong>Built-in voices.</strong> When a household uses the iPad’s built-in voice, announcements and
+                <strong>Built-in voices.</strong> When a household uses an iPad’s built-in voice, announcements and
                 text messages are spoken on the iPad and nothing is sent to a speech service. A text in another
                 language can still be sent for translation, as described above.
               </li>
@@ -275,9 +283,9 @@ export default function PrivacyPage() {
             <h3>People in your household</h3>
             <p>
               People in a household see each other’s names, photos and whether they’re available. A message goes to
-              the person it’s for, and a message for your loved one can be heard by whoever is near their iPad.
+              the person it’s for, and a message for your loved one can be heard by whoever is near their tablet.
               Caregivers can see household settings and approved numbers, and can review messages, voicemail and text
-              messages waiting for your loved one. A text for your loved one is read aloud, so anyone near the iPad can
+              messages waiting for your loved one. A text for your loved one is read aloud, so anyone near the tablet can
               hear it.
               When Porch calls a regular phone, the person who answers sees a Porch phone number as the caller ID.
             </p>
@@ -339,16 +347,16 @@ export default function PrivacyPage() {
             <h2 id="choices-title">Your choices</h2>
             <ul>
               <li>
-                <strong>Camera and microphone.</strong> Turn access on or off in your iPhone or iPad’s Settings. Voice
-                calls never turn on the camera.
+                <strong>Camera and microphone.</strong> Turn access on or off in your device’s Settings. On iPhone and
+                iPad, voice calls never turn on the camera.
               </li>
               <li>
-                <strong>Noticing someone in front of the iPad</strong> is off unless a caregiver turns it on, separately
+                <strong>Noticing someone in front of an iPad</strong> is off unless a caregiver turns it on, separately
                 for starting messages and for telling family.
               </li>
               <li>
-                <strong>Showing family when someone is at the iPad</strong> can be turned off by a caregiver. That
-                deletes the last time we kept, and the iPad stops sending it.
+                <strong>Showing family when someone is at the tablet</strong> can be turned off by a caregiver. That
+                deletes the last time we kept, and the tablet stops sending it.
               </li>
               <li>
                 <strong>Drop-in</strong> works only for people a caregiver approves, and can be turned off at any time.
@@ -358,7 +366,7 @@ export default function PrivacyPage() {
                 a caregiver.
               </li>
               <li>
-                <strong>Announcements and text messages</strong> can use the iPad’s built-in voice, so nothing is sent to a
+                <strong>Announcements and text messages</strong> can use an iPad’s built-in voice, so nothing is sent to a
                 speech service. A text in another language can still be sent for translation.
               </li>
               <li>
@@ -392,7 +400,7 @@ export default function PrivacyPage() {
               themselves. If you set up Porch for someone, please make sure you’re entitled to make these choices for
               them, and explain Porch to them in a way they can understand, including that people they approve can
               drop in, and that anyone with the Porch number can text it. A text from a number they haven’t allowed
-              waits for a caregiver. Others are shown and read on the iPad.
+              waits for a caregiver. Others are shown and read on the tablet.
               When you add other people’s phone numbers or photos, please add only what they’d be comfortable
               with.
             </p>

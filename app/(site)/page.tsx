@@ -9,14 +9,15 @@ import { Arrow, JoinSection, PilotButton } from "@/components/PilotJoin";
 import { CallLog, Compare, DeviceIllustration, FounderNote, KeysCloseUp, SafetySection } from "./_home/parts";
 import styles from "./_home/home.module.css";
 import { clip } from "./features/clips";
-import { AddPersonIcon, PhoneIcon, TextIcon } from "./features/icons";
+import { AddPersonIcon, PhoneIcon, SmartphoneIcon, TabletIcon, TextIcon } from "./features/icons";
 import WatchClip from "./features/WatchClip";
 import { pageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata({
   path: "/",
-  title: "HelloPorch | A video phone for people with dementia, Parkinson’s or shaky hands",
-  description: "Porch is a tablet and a big-button keypad with photos of loved ones on the buttons. One press starts a video call. Made for Parkinson’s, dementia and shaky hands.",
+  title: "HelloPorch | A video calling app for people with dementia, Parkinson’s or shaky hands",
+  description:
+    "Turn your own iPad or Android tablet into a simple video phone for loved ones with Parkinson’s, dementia, or limited dexterity. One button starts a call.",
   shareTitle: "Video calling for people who struggle with phones",
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones, beside Ethan’s mom on her first Porch call." },
 });
@@ -36,12 +37,12 @@ export default function Home() {
             </h1>
             <div className={styles.ledeGroup}>
               <p className={styles.splitLede}>
-                Porch pairs a tablet with a big-button keypad, with photos of friends and loved ones on each button.{" "}
-                <strong>One press starts a video call.</strong>
+                Porch is an app that turns your own iPad or Android tablet into a simple video phone. Connect a big-button
+                phone with photos of loved ones on the buttons, and <strong>one press starts a video call.</strong>
               </p>
               <p className={styles.splitLede}>
-                It’s made for people with Parkinson’s, dementia, unsteady hands, or anyone who finds today’s phones too
-                difficult to use.
+                It’s made for people with Parkinson’s, dementia, unsteady hands, or anyone who finds today’s phones difficult
+                to use.
               </p>
             </div>
             <div className={styles.heroActions}>
@@ -175,6 +176,39 @@ export default function Home() {
           </div>
           <Link href="/features" className={styles.textLink}>
             Watch each one in action <Arrow />
+          </Link>
+        </section>
+
+        <section className={styles.devices} aria-labelledby="devices-title">
+          <h2 id="devices-title" className={styles.centerTitle}>
+            Your devices. <em>The Porch app.</em>
+          </h2>
+          <p className={styles.centerBody}>No special tablet to buy. Porch works with devices your family provides.</p>
+          <div className={styles.devicesGrid}>
+            <article>
+              <span className={styles.moreIcon}>
+                <TabletIcon />
+              </span>
+              <h3>Your tablet</h3>
+              <p>Install Porch on a compatible iPad or Android tablet.</p>
+            </article>
+            <article>
+              <span className={styles.moreIcon}>
+                <PhoneIcon />
+              </span>
+              <h3>A big-button phone</h3>
+              <p>Connect a familiar corded phone with photos on the buttons.</p>
+            </article>
+            <article>
+              <span className={styles.moreIcon}>
+                <SmartphoneIcon />
+              </span>
+              <h3>Family phones</h3>
+              <p>Family and friends use Porch on their iPhones or Android phones.</p>
+            </article>
+          </div>
+          <Link href="/pilot" className={styles.textLink}>
+            See what you’ll need for the pilot <Arrow />
           </Link>
         </section>
 

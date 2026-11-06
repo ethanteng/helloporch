@@ -113,6 +113,24 @@ export function TextIcon({ className }: IconProps) {
   );
 }
 
+export function TabletIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="4" y="2.5" width="16" height="19" rx="2.5" />
+      <path d="M10.5 18.5h3" />
+    </Icon>
+  );
+}
+
+export function SmartphoneIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="7" y="2" width="10" height="20" rx="2.5" />
+      <path d="M11 18.5h2" />
+    </Icon>
+  );
+}
+
 export function ShieldIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

@@ -27,7 +27,11 @@
   color: var(--tomato);
 }
 
+/* The hero's description, in one or two paragraphs. */
 .lede {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   max-width: 540px;
   font: 400 clamp(18px, 1.9vw, 21px) / 1.55 var(--sans);
   color: var(--muted);
@@ -93,6 +97,7 @@
   background: oklch(0.99 0.008 85 / 0.95);
   color: var(--ink);
   font: 600 14px/1.25 var(--sans);
+  text-align: left;
   box-shadow: 0 8px 20px -10px oklch(0.2 0.03 50 / 0.6);
 }
 

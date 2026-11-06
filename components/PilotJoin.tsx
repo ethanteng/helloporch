@@ -19,11 +19,11 @@ export function JoinSection() {
       <div className="join__copy">
         <p className={styles.pilotKicker}>The Porch pilot</p>
         <h2 className="join__title">
-          Try Porch <em>now.</em>
+          Help us test <em>Porch.</em>
         </h2>
         <p className="join__body">
-          The prototype runs on an iPad or Android tablet, with a big-button corded phone. Set it up for your family, and
-          tell us what works and what doesn’t.
+          The Porch app runs on your own compatible iPad or Android tablet, connected to a big-button phone. We’re inviting
+          families to try it and tell us what works and what doesn’t.
         </p>
         <div className={styles.joinActions}>
           <Link href="/pilot" className={styles.ctaHoney}>
