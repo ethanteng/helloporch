@@ -97,7 +97,7 @@ private fun DropInPage(app: PorchApplication, admin: CaregiverAdmin, links: Fami
         can.forEachIndexed { index, person ->
             if (index > 0) HorizontalDivider()
             val photo = remember(person.photoID, FamilyPhotos.saved) { FamilyPhotos.data(app, person.photoID) }
-            CaregiverRow(onClick = { onPerson(person.id) }) {
+            CaregiverRow(onClick = { onPerson(person.id) }, label = "${person.name}, Porch app, ${person.dropInModes.orEmpty()}") {
                 Avatar(person.name, photo, 40.dp)
                 Column(Modifier.weight(1f)) {
                     Text(person.name, style = MaterialTheme.typography.titleMedium, color = ink)
@@ -132,7 +132,7 @@ private fun DropInPage(app: PorchApplication, admin: CaregiverAdmin, links: Fami
         cannot.forEachIndexed { index, person ->
             if (index > 0) HorizontalDivider()
             val photo = remember(person.photoID, FamilyPhotos.saved) { FamilyPhotos.data(app, person.photoID) }
-            CaregiverRow(onClick = { onPerson(person.id) }) {
+            CaregiverRow(onClick = { onPerson(person.id) }, label = "${person.name}, can't drop in") {
                 Avatar(person.name, photo, 40.dp)
                 Text(person.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Text("Off", color = MaterialTheme.colorScheme.onSurfaceVariant)

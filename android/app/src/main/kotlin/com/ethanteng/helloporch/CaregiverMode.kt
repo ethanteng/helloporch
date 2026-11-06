@@ -42,6 +42,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -235,6 +240,8 @@ private fun CaregiverList(app: PorchApplication, links: FamilyLinks, state: Fami
                 if (index > 0) HorizontalDivider()
                 val value = when (page) {
                     CaregiverPage.CAREGIVERS -> state?.people?.count { it.caregiver == true }?.takeIf { it > 0 }?.toString()
+                    // As iOS's list shows it, so a household with drop-ins paused can tell without opening the page.
+                    CaregiverPage.DROP_IN -> state?.let { if (it.dropInEnabled) "On" else "Off" }
                     else -> null
                 }
                 CaregiverRow(onClick = { onPage(page) }, selected = page == selected) {
@@ -260,12 +267,18 @@ fun CaregiverGroup(title: String? = null, detail: String? = null, content: @Comp
     }
 }
 
-/** One row of a group: tappable when it opens something, and marked when its page is open beside the list. */
+/** One row of a group: tappable when it opens something, and marked when its page is open beside the list. `label` is
+ * what a screen reader says for the whole row, in place of its pieces one after another. */
 @Composable
-fun CaregiverRow(onClick: (() -> Unit)? = null, selected: Boolean = false, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+fun CaregiverRow(onClick: (() -> Unit)? = null, selected: Boolean = false, label: String? = null,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     var modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
     if (selected) modifier = modifier.background(MaterialTheme.colorScheme.secondaryContainer)
     if (onClick != null) modifier = modifier.clickable(onClick = onClick)
+    if (label != null) modifier = modifier.clearAndSetSemantics {
+        contentDescription = label
+        if (onClick != null) { role = Role.Button; onClick { onClick(); true } }
+    }
     Row(modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp), content = content)
 }
