@@ -371,7 +371,7 @@ final class CaregiverInputTests: XCTestCase {
         for choice in BedsideLanguage.allCases {
             let settings = BedsideDisplaySettingsViewController(); settings.loadViewIfNeeded()
             let options = buttons(in: settings.view).filter { $0.accessibilityIdentifier?.hasPrefix("bedside.language.") == true }
-            XCTAssertEqual(options.count, 5)
+            XCTAssertEqual(options.count, BedsideLanguage.allCases.count)
             let language = options.first { $0.accessibilityIdentifier == "bedside.language.\(choice.rawValue)" }!
             XCTAssertEqual(language.configuration?.title, choice.choiceLabel)
             language.sendActions(for: .touchUpInside)
@@ -452,7 +452,8 @@ final class CaregiverInputTests: XCTestCase {
         }
         let save = try XCTUnwrap(settings.navigationItem.rightBarButtonItem)
         UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
-        preferences.language = .spanish
+        // The last language chosen above is the one saved.
+        preferences.language = try XCTUnwrap(BedsideLanguage.allCases.last)
         XCTAssertEqual(BedsidePreferences.load(from: defaults), preferences)
         let reopened = BedsideDisplaySettingsViewController(defaults: defaults)
         reopened.loadViewIfNeeded()
