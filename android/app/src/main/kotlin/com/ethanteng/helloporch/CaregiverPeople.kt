@@ -375,7 +375,7 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
                 // No floating label, so the name they go by shows in the empty field, as iOS's placeholder does.
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Name", style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(editedName ?: saved.orEmpty(), { editedName = it }, Modifier.fillMaxWidth(), enabled = !admin.busy, singleLine = true,
+                    PorchTextField(editedName ?: saved.orEmpty(), { editedName = it }, "Name", Modifier.fillMaxWidth(), enabled = !admin.busy,
                         placeholder = { Text(placeholder) }, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
                 }
                 OutlinedButton(onClick = {

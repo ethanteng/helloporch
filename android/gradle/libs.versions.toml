@@ -15,6 +15,8 @@ zxing = "3.5.4"
 livekit = "2.29.1"
 # 35.1.0 came out 2026-10-21, the newest release at least two weeks old when ringing a closed Porch began.
 firebaseBom = "35.1.0"
+# 15.3.0 came out 2026-10-13, the newest release at least two weeks old when the About page began.
+aboutLibraries = "15.3.0"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
@@ -36,9 +38,11 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 livekit-android = { module = "io.livekit:livekit-android", version.ref = "livekit" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+aboutlibraries-compose-m3 = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutLibraries" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+aboutlibraries-android = { id = "com.mikepenz.aboutlibraries.plugin.android", version.ref = "aboutLibraries" }
