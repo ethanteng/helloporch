@@ -134,8 +134,9 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
 }
 
 /**
- * What this phone needs to ring while Porch is closed, when it doesn't have it: notifications and the microphone, then
- * on Android 14 and later, permission to show a call over the lock screen. Asked again after a trip to Settings.
+ * What this phone needs to ring while Porch is closed, when it doesn't have it: notifications and the microphone, with
+ * the camera asked alongside, then on Android 14 and later, permission to show a call over the lock screen. Asked again
+ * after a trip to Settings.
  */
 @Composable
 internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
@@ -152,11 +153,16 @@ internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
         refused = !app.push.canRing()
         app.push.register()
     }
+    // A phone asks for the camera too, which ringing doesn't need, so a first video call answered from the lock screen
+    // doesn't wait on a camera prompt. The bedside asked for it during setup, and a phone without one isn't asked.
+    val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+    val askCamera = !bedside && hasCamera
     // The bedside is normally always in front, so it rings this way only when it isn't, such as in Android's settings.
     val device = if (bedside) "tablet" else "phone"
     val (title, detail, button) = when {
         !canRing -> Triple(if (bedside) "Ring when Porch isn't in front" else "Ring when Porch is closed",
             if (bedside) "Allow notifications and the microphone, so calls still ring this tablet when Porch isn't in front."
+            else if (askCamera) "Allow notifications, the microphone and the camera, so calls ring this phone even when Porch isn't open, and video calls start right away."
             else "Allow notifications and the microphone, so calls ring this phone even when Porch isn't open.",
             if (refused) "Open settings" else "Allow")
         !fullScreen -> Triple("Show calls on the lock screen", "Allow full-screen notifications for Porch, so a call shows when this $device is locked.",
@@ -177,7 +183,9 @@ internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
                     refused -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
                     else -> null
                 }
-                if (settings == null) ask.launch(needed.toTypedArray())
+                val camera = listOf(Manifest.permission.CAMERA).takeIf { askCamera }.orEmpty()
+                    .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+                if (settings == null) ask.launch((needed + camera).toTypedArray())
                 else try { context.startActivity(settings) } catch (_: ActivityNotFoundException) {}
             }) { Text(button) }
         }

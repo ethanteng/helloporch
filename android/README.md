@@ -76,7 +76,7 @@ A family phone rings through Firebase Cloud Messaging when Porch isn't open. The
 node scripts/local-family-server.mjs 3010 --livekit --fcm ../firebase-adminsdk.json
 ```
 
-On the phone, allow notifications and the microphone from the card on the family screen, then press Home or turn the screen off and call it from the bedside. The server prints `FCM push -> 200` when a push goes out.
+On the phone, allow notifications, the microphone and the camera from the card on the family screen, then press Home or turn the screen off and call it from the bedside. The server prints `FCM push -> 200` when a push goes out.
 
 ## Keeping the apps in step
 
