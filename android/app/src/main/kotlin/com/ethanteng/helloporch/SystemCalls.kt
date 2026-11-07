@@ -316,14 +316,23 @@ class CallService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val shown = pending
-        if (shown == null) { stopSelf(); return START_NOT_STICKY }
-        try {
-            ServiceCompat.startForeground(this, shown.id, shown.notification, shown.types)
-        } catch (e: Exception) {
-            Log.w("Porch", "The call's service couldn't start", e)
-            stopSelf()
-        }
+        if (shown != null && promote(shown.id, shown.notification, shown.types)) return START_NOT_STICKY
+        // The microphone type can be refused once Porch is in the background. A phone-call service still keeps the call.
+        val phoneCall = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+        if (shown != null && shown.types != phoneCall && promote(shown.id, shown.notification, phoneCall)) return START_NOT_STICKY
+        // startForegroundService crashes the process unless startForeground runs, including when the call ended first.
+        promote(CallNotifications.MISSED, CallNotifications.passing(this), phoneCall)
+        stopSelf()
         return START_NOT_STICKY
+    }
+
+    /** Android requires this for every startForegroundService, or it kills the process a few seconds later. */
+    private fun promote(id: Int, notification: Notification, types: Int): Boolean = try {
+        ServiceCompat.startForeground(this, id, notification, types)
+        true
+    } catch (e: Exception) {
+        Log.w("Porch", "The call's service couldn't start", e)
+        false
     }
 
     override fun onDestroy() {
