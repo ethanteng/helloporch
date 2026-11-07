@@ -541,6 +541,14 @@ Page contents:
 
 ## Phase 5: messages, voicemail and texts
 
+Built in five pull requests, each a working household:
+
+1. **The bedside plays waiting messages.** They download as they arrive (`messageMedia`, then `messageDelivered`), and Play N messages on the clock or the messages key plays them: the chime and who each is from, then the audio, or the video with that in a banner. Played to the end sends `messagePlayed`; Stop, the messages key or the call key leave the rest waiting, and a call takes over. Phone voicemail from a verified caller saved on the keypad is released here (`releaseKnownCaller`). Media3 ExoPlayer plays them.
+2. **Texts on the bedside.**
+3. **The bedside's voicemail recorder and outbox.**
+4. **Messages on a family phone:** the thread, the composer, alerts and the profile.
+5. **Presence autoplay and someone at the bedside.**
+
 ### Media formats both platforms play
 
 - **Audio.** `.m4a`, AAC-LC, 44.1 kHz mono, 64 kbps, sent as `audio/mp4`.

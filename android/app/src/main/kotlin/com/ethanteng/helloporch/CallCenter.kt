@@ -205,7 +205,10 @@ class CallCenter(private val app: PorchApplication) {
         if (busy || !app.screenReady) return
         val slots = slots()
         val action = slots.action(digit)
-        if (action == KeypadAction.MESSAGES) return
+        if (action == KeypadAction.MESSAGES) {
+            if (!app.messages.play()) note(text("No new messages."))
+            return
+        }
         if (action == KeypadAction.CALL_CONTROL || action == KeypadAction.TOGGLE_VIDEO) {
             note(text(if (action == KeypadAction.CALL_CONTROL) "Use this key to answer or end a call."
                 else "Use this key to turn your camera off or on during a video call."))
