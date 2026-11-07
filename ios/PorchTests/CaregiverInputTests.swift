@@ -1453,6 +1453,19 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(MessagePlayerViewController.announcement(forTextFrom: "72975", sentAt: 1, slots: CallSlots()).hasPrefix("72975嘅短訊"), "a short code is named as it is")
     }
 
+    /// iPadOS has no Filipino voice to download, so Tagalog's note never sends a caregiver to iPad Settings for one.
+    @MainActor func testMissingVoiceNoteOnlyOffersSettingsWhereAVoiceCanBeAdded() {
+        for offered in [true, false] {
+            let tagalog = PorchAnnouncementVoice.missingVoiceNote(for: .tagalog, naturalVoicesOffered: offered)
+            XCTAssertFalse(tagalog.contains("iPad Settings"), tagalog)
+            XCTAssertTrue(tagalog.contains("drop-ins must be answered"), tagalog)
+            XCTAssertEqual(tagalog.contains("natural voice"), offered, tagalog)
+            let cantonese = PorchAnnouncementVoice.missingVoiceNote(for: .cantonese, naturalVoicesOffered: offered)
+            XCTAssertTrue(cantonese.contains("iPad Settings → Accessibility → Spoken Content → Voices"), cantonese)
+            XCTAssertEqual(cantonese.contains("natural voice"), offered, cantonese)
+        }
+    }
+
     @MainActor func testTagalogTextsGoByTheLanguageTheServerNamed() {
         let restore = localizedBedside(.tagalog); defer { restore() }
         func text(_ words: String, source: String? = nil) -> ReceivedText {
