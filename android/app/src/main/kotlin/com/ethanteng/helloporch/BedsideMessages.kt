@@ -68,7 +68,8 @@ class BedsideMessages(private val app: PorchApplication) {
         if (playback != null) return true
         if (app.calls.busy) return false
         val messages = ready.takeIf { it.isNotEmpty() } ?: return false
-        val slots = runCatching { CallSlots.load(app.settings, app.photos) }.getOrNull() ?: return false
+        // A keypad that can't be read still plays. Names fall back to the family member's, or the caller's number.
+        val slots = runCatching { CallSlots.load(app.settings, app.photos) }.getOrElse { CallSlots() }
         val created = MessagePlayback(app, messages, slots) { if (playback === it) playback = null }
         playback = created
         created.start()

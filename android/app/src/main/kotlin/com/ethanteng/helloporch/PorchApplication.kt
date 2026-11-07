@@ -150,13 +150,17 @@ class PorchApplication : Application() {
         // Photos caregiver mode downloaded on a family phone don't stay.
         if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
+        // Messages download, and played ones are reported, even when the saved keypad can't be read.
+        try {
+            messages.sync(state)
+        } catch (error: Exception) {
+            Log.w("Porch", "Couldn't update messages: ${error.message}")
+        }
         try {
             val slots = CallSlots.load(settings, photos)
             device.credential(PorchExperience.BEDSIDE)?.let { FamilyPhotos.sync(this, state, it, slots) }
             followFamily(state, slots)
             keypadReport.report(slots, coordinator)
-            // Messages download as they arrive, and the server hears when they did.
-            messages.sync(state)
             // A call or a drop-in never waits for the natural voice, so its sentences are fetched ahead.
             NaturalVoice.prefetch(this, state, slots)
         } catch (error: Exception) {
