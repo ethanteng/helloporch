@@ -495,7 +495,9 @@ class PorchCall(
     }
 
     private fun changeMedia(camera: Boolean) {
-        if (controlJob != null || !mediaReady || ending || (camera && !video)) return
+        // Mute and camera apply to the current room. While the call is moving to a phone, that room is about to be
+        // replaced, so a tap here would change the room being left and could report a failure over the phone call.
+        if (controlJob != null || !mediaReady || ending || switchingToPhone || (camera && !video)) return
         controlsEnabled = false
         controlJob = scope.launch {
             try {
