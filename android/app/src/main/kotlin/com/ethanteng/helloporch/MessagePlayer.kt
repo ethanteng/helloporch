@@ -1,6 +1,7 @@
 package com.ethanteng.helloporch
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -154,8 +155,10 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
 fun MessagePlayerScreen(app: PorchApplication, playback: MessagePlayback) = LargeType {
     KeepScreenOn()
     BackHandler { playback.stop() }
-    // Leaving the screen stops it, as iOS stops when the iPad goes to the background.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.stop() }
+    // Leaving the screen stops it, as iOS stops when the iPad goes to the background. Turning the tablet, or plugging
+    // the keypad in, recreates this activity and is still the same screen.
+    val activity = LocalActivity.current
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (activity?.isChangingConfigurations != true) playback.stop() }
     // The messages key stops it, and so does the call key people already know.
     CallKeys(app, onDigit = { digit ->
         val action = runCatching { CallSlots.load(app.settings, app.photos).action(digit) }.getOrNull()
