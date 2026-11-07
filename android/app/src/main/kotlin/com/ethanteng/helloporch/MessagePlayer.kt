@@ -23,6 +23,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -173,11 +174,20 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
             val other = runCatching { foreign?.await() }.getOrNull()
             if (ended || currentText?.id != text.id) return@launch
             // A long text's natural reading gets longer to arrive than an announcement.
-            announcer.speak(text.text, chime = false, textID = text.id, voiceLocale = other?.let(Locale::forLanguageTag), naturalWait = 8_000) {
-                readAttachments(text)
+            announcer.speak(text.text, chime = false, textID = text.id, voiceLocale = other?.let(Locale::forLanguageTag), naturalWait = 8_000) { said ->
+                when {
+                    said -> readAttachments(text)
+                    // No voice for its own language: the bedside's voice reads it, with an accent, rather than not at all.
+                    other != null -> announcer.speak(text.text, chime = false, textID = text.id) { again -> if (again) readAttachments(text) else unread(text) }
+                    else -> unread(text)
+                }
             }
         }
     }
+
+    /** Its words couldn't be read aloud. It stays on screen a moment, then waits for another time, as a message that can't
+     * play does: only a text read to the end leaves the queue, and reading it deletes its words on the server. */
+    private fun unread(text: ReceivedText) = finishText(text, read = false)
 
     private fun readAttachments(text: ReceivedText) {
         if (ended || currentText?.id != text.id) return
@@ -186,9 +196,9 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
     }
 
     /** Read to the end, so it won't show again. It stays on screen a moment before the next one. */
-    private fun finishText(text: ReceivedText) {
+    private fun finishText(text: ReceivedText, read: Boolean = true) {
         if (ended || currentText?.id != text.id) return
-        app.messages.markRead(text)
+        if (read) app.messages.markRead(text)
         hold = app.scope.launch {
             delay(TEXT_HOLD)
             if (!ended && currentText?.id == text.id) playNext()
@@ -281,7 +291,8 @@ fun MessagePlayerScreen(app: PorchApplication, playback: MessagePlayback) = Larg
                     color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                if (text != null) TextShowing(playback, text)
+                // Each text starts at its top, however far the one before was scrolled.
+                if (text != null) key(text.id) { TextShowing(playback, text) }
                 if (message != null && video == null) Column(Modifier.offset(y = (-30).dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Photo(playback.photo(message), Modifier.size(240.dp))
