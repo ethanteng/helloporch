@@ -1256,6 +1256,11 @@
     border-radius: 22px;
   }
 
+  /* An odd language out takes the whole last row. */
+  .langOption:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
   .langBody {
     flex-direction: column;
     width: 100%;

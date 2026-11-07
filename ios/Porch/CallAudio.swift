@@ -74,6 +74,17 @@ import PorchCore
               language.supportsSpeechVoice(language: fallback.language) else { return nil }
         return fallback
     }
+    /// What voice settings say when no voice on this iPad speaks the language. iPadOS has no Filipino voice to
+    /// download, so Tagalog's only way to a voice is a natural one.
+    static func missingVoiceNote(for language: BedsideLanguage, naturalVoicesOffered: Bool) -> String {
+        let name = language.displayName, settings = "iPad Settings → Accessibility → Spoken Content → Voices"
+        switch (naturalVoicesOffered, language == .tagalog) {
+        case (true, true): return "No voice on this iPad speaks \(name). Choose a natural voice. Until then, drop-ins must be answered."
+        case (true, false): return "No voice on this iPad speaks \(name). Choose a natural voice, or add one in \(settings). Until then, drop-ins must be answered."
+        case (false, true): return "No voice on this iPad speaks \(name), so drop-ins must be answered."
+        case (false, false): return "No voice is available for \(name). Add one in \(settings). Until then, drop-ins must be answered."
+        }
+    }
 }
 
 /// Natural announcement voices: the server reads each sentence in the household's chosen voice

@@ -371,7 +371,7 @@ final class CaregiverInputTests: XCTestCase {
         for choice in BedsideLanguage.allCases {
             let settings = BedsideDisplaySettingsViewController(); settings.loadViewIfNeeded()
             let options = buttons(in: settings.view).filter { $0.accessibilityIdentifier?.hasPrefix("bedside.language.") == true }
-            XCTAssertEqual(options.count, 5)
+            XCTAssertEqual(options.count, BedsideLanguage.allCases.count)
             let language = options.first { $0.accessibilityIdentifier == "bedside.language.\(choice.rawValue)" }!
             XCTAssertEqual(language.configuration?.title, choice.choiceLabel)
             language.sendActions(for: .touchUpInside)
@@ -452,7 +452,8 @@ final class CaregiverInputTests: XCTestCase {
         }
         let save = try XCTUnwrap(settings.navigationItem.rightBarButtonItem)
         UIApplication.shared.sendAction(save.action!, to: save.target, from: save, for: nil)
-        preferences.language = .spanish
+        // The last language chosen above is the one saved.
+        preferences.language = try XCTUnwrap(BedsideLanguage.allCases.last)
         XCTAssertEqual(BedsidePreferences.load(from: defaults), preferences)
         let reopened = BedsideDisplaySettingsViewController(defaults: defaults)
         reopened.loadViewIfNeeded()
@@ -1450,6 +1451,33 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(MessagePlayerViewController.translatedNote("en")?.hasPrefix("譯自") == true)
         XCTAssertNil(MessagePlayerViewController.translatedNote(nil))
         XCTAssertTrue(MessagePlayerViewController.announcement(forTextFrom: "72975", sentAt: 1, slots: CallSlots()).hasPrefix("72975嘅短訊"), "a short code is named as it is")
+    }
+
+    /// iPadOS has no Filipino voice to download, so Tagalog's note never sends a caregiver to iPad Settings for one.
+    @MainActor func testMissingVoiceNoteOnlyOffersSettingsWhereAVoiceCanBeAdded() {
+        for offered in [true, false] {
+            let tagalog = PorchAnnouncementVoice.missingVoiceNote(for: .tagalog, naturalVoicesOffered: offered)
+            XCTAssertFalse(tagalog.contains("iPad Settings"), tagalog)
+            XCTAssertTrue(tagalog.contains("drop-ins must be answered"), tagalog)
+            XCTAssertEqual(tagalog.contains("natural voice"), offered, tagalog)
+            let cantonese = PorchAnnouncementVoice.missingVoiceNote(for: .cantonese, naturalVoicesOffered: offered)
+            XCTAssertTrue(cantonese.contains("iPad Settings → Accessibility → Spoken Content → Voices"), cantonese)
+            XCTAssertEqual(cantonese.contains("natural voice"), offered, cantonese)
+        }
+    }
+
+    @MainActor func testTagalogTextsGoByTheLanguageTheServerNamed() {
+        let restore = localizedBedside(.tagalog); defer { restore() }
+        func text(_ words: String, source: String? = nil) -> ReceivedText {
+            ReceivedText(id: "t", from: "+14155550123", sentAt: 1, body: words, language: "tl", text: words, translated: false, sourceLanguage: source)
+        }
+        let words = "Ma, darating ako mamayang alas-sais. Tatawagan kita pagdating ko."
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text(words, source: "tl")))
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text(words, source: "fil")), "Filipino is Tagalog")
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text(words)), "Apple's recognizer doesn't know Tagalog, so it isn't asked")
+        XCTAssertEqual(MessagePlayerViewController.otherLanguage(of: text("Hi Mom, I land at six.", source: "en")), "en")
+        XCTAssertEqual(MessagePlayerViewController.translatedNote("en"), "Isinalin mula sa Ingles")
+        XCTAssertEqual(MessagePlayerViewController.pictureNote(2), "May kasama itong 2 litrato na hindi pa maipakita ng Porch.")
     }
 
     func testCaregiverPhonesSayWhatNeedsTheirReview() {

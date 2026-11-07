@@ -103,6 +103,7 @@ export default function Home() {
                   <span>普通话</span>
                   <span>廣東話</span>
                   <span>Español</span>
+                  <span>Tagalog</span>
                   <span>English</span>
                   <span data-soon>More soon</span>
                 </div>
@@ -110,7 +111,7 @@ export default function Home() {
               <p className={styles.needIf}>If English isn’t their first language</p>
               <h3>Speak their language.</h3>
               <p>
-                Porch supports Mandarin, Cantonese, and Spanish, and can translate and read your text messages aloud in their
+                Porch supports Mandarin, Cantonese, Spanish, and Tagalog, and can translate and read your text messages aloud in their
                 language. More languages coming soon.
               </p>
             </article>

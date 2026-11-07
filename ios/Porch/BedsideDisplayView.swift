@@ -294,7 +294,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         if let naturalChoice {
             voiceStatus.text = choices?.selected == naturalChoice.id ? nil : "Tap Save to use \(naturalChoice.name)."
         } else if PorchAnnouncementVoice.resolve(for: language, identifier: identifier) == nil {
-            voiceStatus.text = "No voice is available for \(language.displayName). Add one in iPad Settings → Accessibility → Spoken Content → Voices. Until then, drop-ins must be answered."
+            voiceStatus.text = PorchAnnouncementVoice.missingVoiceNote(for: language, naturalVoicesOffered: choices != nil)
         } else if identifier != nil && selected == nil {
             voiceStatus.text = "The saved voice isn't available, so the iPad's own voice is used for now."
         } else {

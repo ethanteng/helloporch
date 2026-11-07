@@ -81,6 +81,7 @@ final class CallViewController: UIViewController {
             case .traditionalChinese, .cantonese: names = ["家人", "陳先生", "林小姐", "王阿姨", "李叔叔", "朋友"]
             case .simplifiedChinese: names = ["家人", "陈先生", "林小姐", "王阿姨", "李叔叔", "朋友"]
             case .spanish: names = ["María", "José", "Ana", "Carlos", "Isabel", "David"]
+            case .tagalog: names = ["Anak", "Ate Rosa", "Kuya Jun", "Tita Linda", "Tito Ben", "Lola Nena"]
             case .english: names = ProcessInfo.processInfo.arguments.contains("--preview-six") ? ["David", "Maria", "James", "Sarah", "Michael", "Anna"] : ["David"]
             }
             for (index, name) in names.enumerated() {
@@ -285,7 +286,8 @@ final class CallViewController: UIViewController {
             let body = long ? String(repeating: "Hi Mom! The doctor moved your appointment to Tuesday at 10, so I'll pick you up at 9:15. ", count: 12)
                 : "Hi Mom! I'll come by on Sunday at 2 with the kids. Love you."
             let translations: [BedsideLanguage: String] = [.traditionalChinese: "媽，妳好！我星期天下午兩點會帶孩子們過去看妳。愛妳。", .simplifiedChinese: "妈，你好！我星期天下午两点会带孩子们过去看你。爱你。",
-                .cantonese: "媽，你好！我星期日下晝兩點會帶埋啲細路過嚟探你。愛你。", .spanish: "¡Hola, mamá! Paso el domingo a las 2 con los niños. Te quiero."]
+                .cantonese: "媽，你好！我星期日下晝兩點會帶埋啲細路過嚟探你。愛你。", .spanish: "¡Hola, mamá! Paso el domingo a las 2 con los niños. Te quiero.",
+                .tagalog: "Hi Ma! Dadaan ako sa Linggo nang alas-dos kasama ang mga bata. Mahal kita."]
             let language = BedsideText.language, translation = long ? nil : translations[language]
             let text = ReceivedText(id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", from: slots.contact(for: 1)?.phoneNumbers.first ?? "+14155550123", sentAt: Date().timeIntervalSince1970 - 600, body: body,
                                     pictures: args.contains("--preview-picture") ? 1 : nil, attachments: args.contains("--preview-attachment") ? 1 : nil, language: language.rawValue, text: translation ?? body, translated: translation != nil, sourceLanguage: "en")

@@ -603,12 +603,18 @@ final class MessagePlayerViewController: UIViewController {
         return BedsideText.string("Translated from %@", name)
     }
     /// Words Porch couldn't translate, written in a language other than the bedside's: read in that language's
-    /// built-in voice rather than with the bedside voice's accent. Every written Chinese counts as the Chinese choices' language.
+    /// built-in voice rather than with the bedside voice's accent. Every written Chinese counts as the Chinese choices' language,
+    /// and Filipino (`fil`) as Tagalog.
     static func otherLanguage(of text: ReceivedText) -> String? {
-        guard !text.translated, let tag = text.sourceLanguage ?? NLLanguageRecognizer.dominantLanguage(for: text.text)?.rawValue else { return nil }
+        guard !text.translated else { return nil }
+        // Apple's recognizer doesn't know Tagalog and would call a Tagalog text Indonesian or English, so a Tagalog
+        // bedside goes only by the language the server named.
+        let guess = BedsideText.language == .tagalog ? nil : NLLanguageRecognizer.dominantLanguage(for: text.text)?.rawValue
+        guard let tag = text.sourceLanguage ?? guess else { return nil }
         func family(_ tag: String) -> String {
             let base = tag.split(separator: "-").first.map { String($0).lowercased() } ?? ""
-            return ["zh", "yue", "cmn"].contains(base) ? "zh" : base
+            if ["zh", "yue", "cmn"].contains(base) { return "zh" }
+            return base == "fil" ? "tl" : base
         }
         return family(tag) == family(BedsideText.language.rawValue) ? nil : tag
     }
