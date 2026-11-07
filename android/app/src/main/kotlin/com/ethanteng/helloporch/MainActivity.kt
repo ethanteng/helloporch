@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
         // A link not yet handled survives the activity being recreated, such as when the phone turns.
         link.value = if (savedInstanceState == null) intent?.dataString else savedInstanceState.getString(linkKey)
         val app = application as PorchApplication
+        if (savedInstanceState == null) openedForCall(intent)
         // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
         // Switching to the bedside while this activity is already resumed starts it too (PorchApplication.switchExperience).
         lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -48,7 +49,20 @@ class MainActivity : ComponentActivity() {
         // Opened again from outside, such as from the launcher while a photo picker it opened was up: the caregiver
         // went elsewhere from there, so a family phone's caregiver mode ends. Porch never saw them leave.
         RemoteCaregiverSession.shared.reopened()
+        openedForCall(intent)
         intent.dataString?.let { link.value = it }
+    }
+
+    /** Opened from a call's notification: over the lock screen, turning the screen on, as Android shows a phone call.
+     * Answer on the notification answers as Porch shows the call. */
+    private fun openedForCall(intent: Intent?) {
+        val action = intent?.action
+        if (action != CallNotifications.ACTION_INCOMING && action != CallNotifications.ACTION_ANSWER) return
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        val app = application as PorchApplication
+        app.calls.openForCall()
+        if (action == CallNotifications.ACTION_ANSWER) intent.getStringExtra(CallNotifications.EXTRA_CALL)?.let(app.systemCalls::answerWhenShown)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

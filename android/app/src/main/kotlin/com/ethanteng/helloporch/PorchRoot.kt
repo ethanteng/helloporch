@@ -88,7 +88,9 @@ fun PorchRoot(
     // system bars; the clock and calls hide them.
     val bedside = !welcoming && experience == PorchExperience.BEDSIDE
     val paired = links.credential != null || app.device.credential(PorchExperience.BEDSIDE) != null
-    BedsideWindow(alwaysOn = bedside, immersive = bedside && !setup.open && !setup.unlocking && !setup.caregiver && replacement == null)
+    // A family phone's call shows over the lock screen too, while it rings or goes on.
+    BedsideWindow(alwaysOn = bedside, immersive = bedside && !setup.open && !setup.unlocking && !setup.caregiver && replacement == null,
+        overLock = bedside || calls.incoming != null || calls.active != null || calls.openedForCall)
     val context = LocalContext.current
     LaunchedEffect(bedside, paired) { BedsideHomeScreen.sync(context, bedside && paired) }
     val active = calls.active

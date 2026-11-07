@@ -3,10 +3,12 @@ package com.ethanteng.helloporch
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.os.PowerManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.core.content.getSystemService
 import com.ethanteng.helloporch.core.CallContact
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTone
@@ -31,8 +33,8 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * A call ringing on this device while Porch is open, with Answer and Decline: the Android counterpart of iOS's
- * IncomingFamilyCallViewController. On iOS a family phone rings through CallKit instead; Android's calling system and
- * push come at the end of phase 3, and until then a family phone rings here while Porch is open.
+ * IncomingFamilyCallViewController. While Porch is closed, a family phone rings through a notification instead
+ * ([SystemCalls]), which hands the call to this screen once Porch is on screen, and takes it back if Porch leaves.
  *
  * A drop-in, which only the bedside takes, says who is dropping in and connects after counting down from 5, unless
  * someone taps Don't connect or presses the call-control key. One whose announcement can't play waits for Answer
@@ -50,6 +52,8 @@ class IncomingCall(
 ) {
     val video = call.mode == NativeCall.Mode.VIDEO
     val dropIn = call.kind == "dropIn"
+    /** A family phone, which goes on ringing through a notification if Porch leaves the screen. */
+    val familyPhone = credential.role == PorchExperience.FAMILY
     var answering by mutableStateOf(false); private set
     var status by mutableStateOf(text(when {
         dropIn -> if (video) "Announcing video drop-in…" else "Announcing audio drop-in…"
@@ -123,7 +127,8 @@ class IncomingCall(
         scope.launch {
             try {
                 val result = accept(session)
-                if (!app.onScreen) { app.scope.launch { session.end() }; close(); return@launch }
+                // Porch left the screen while this was being answered. A family phone's call goes on with the phone locked.
+                if (!app.onScreen && !familyPhone) { app.scope.launch { session.end() }; close(); return@launch }
                 app.coordinator.update(result)
                 close()
                 onAnswered(session.copy(call = result.state?.call ?: call))
@@ -171,8 +176,23 @@ class IncomingCall(
         close()
     }
 
-    /** Porch left the screen while this rang. A call Porch isn't showing can't be answered, so it's declined. */
-    fun leftScreen() { if (!answering) decline() }
+    /**
+     * Porch left the screen while this rang. A family phone goes on ringing through a notification, which can still be
+     * answered: quietly if the screen went off, as a phone's power button silences a call. Anywhere else, a call Porch
+     * isn't showing can't be answered, so it's declined.
+     */
+    fun leftScreen() {
+        if (answering) return
+        if (familyPhone && app.push.canRing()) {
+            val quiet = app.getSystemService<PowerManager>()?.isInteractive == false
+            // The notification first, so Porch's call service goes straight from this screen's call to it.
+            app.systemCalls.ring(call.id, credential, name, video, latest.expiresAt, quiet)
+            answering = true
+            close()
+            return
+        }
+        decline()
+    }
 
     /** A keypad key, pressed: the call-control key answers when it's let go, and declines when it's held a second. */
     fun keyDown(digit: Int, keyCode: Int): Boolean {

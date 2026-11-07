@@ -44,17 +44,21 @@ object BedsideHomeScreen {
 
 /**
  * The bedside's window: always on, so the clock stays lit and calls can ring, and shown over the lock screen, turning
- * the screen on when Porch comes to the front, as for an incoming call. `immersive` also hides the status and
- * navigation bars, which a swipe brings back for a moment; setup and caregiver screens keep them.
+ * the screen on when Porch comes to the front, as for an incoming call. `overLock` shows a family phone's call over the
+ * lock screen too, while it rings or goes on. `immersive` also hides the status and navigation bars, which a swipe
+ * brings back for a moment; setup and caregiver screens keep them.
  */
 @Composable
-fun BedsideWindow(alwaysOn: Boolean, immersive: Boolean) {
+fun BedsideWindow(alwaysOn: Boolean, immersive: Boolean, overLock: Boolean = alwaysOn) {
     val activity = LocalActivity.current ?: return
     DisposableEffect(activity, alwaysOn) {
-        activity.setShowWhenLocked(alwaysOn)
-        activity.setTurnScreenOn(alwaysOn)
         if (alwaysOn) activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {}
+    }
+    DisposableEffect(activity, alwaysOn || overLock) {
+        activity.setShowWhenLocked(alwaysOn || overLock)
+        activity.setTurnScreenOn(alwaysOn || overLock)
         onDispose {}
     }
     DisposableEffect(activity, immersive) {

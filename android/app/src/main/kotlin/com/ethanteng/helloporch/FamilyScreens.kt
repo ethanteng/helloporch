@@ -1,7 +1,12 @@
 package com.ethanteng.helloporch
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyInvitation
@@ -126,6 +133,57 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 
+/**
+ * What this phone needs to ring while Porch is closed, when it doesn't have it: notifications and the microphone, then
+ * on Android 14 and later, permission to show a call over the lock screen. Asked again after a trip to Settings.
+ */
+@Composable
+internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
+    if (!app.push.configured) return
+    val context = LocalContext.current
+    var checks by remember { mutableIntStateOf(0) }
+    // Android stops asking after a refusal or two, so Allow then opens Porch's settings instead.
+    var refused by rememberSaveable { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { checks++; app.push.register() }
+    val canRing = remember(checks) { app.push.canRing() }
+    val fullScreen = remember(checks) { app.push.canShowFullScreen() }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        checks++
+        refused = !app.push.canRing()
+        app.push.register()
+    }
+    // The bedside is normally always in front, so it rings this way only when it isn't, such as in Android's settings.
+    val device = if (bedside) "tablet" else "phone"
+    val (title, detail, button) = when {
+        !canRing -> Triple(if (bedside) "Ring when Porch isn't in front" else "Ring when Porch is closed",
+            if (bedside) "Allow notifications and the microphone, so calls still ring this tablet when Porch isn't in front."
+            else "Allow notifications and the microphone, so calls ring this phone even when Porch isn't open.",
+            if (refused) "Open settings" else "Allow")
+        !fullScreen -> Triple("Show calls on the lock screen", "Allow full-screen notifications for Porch, so a call shows when this $device is locked.",
+            "Open settings")
+        else -> return
+    }
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(detail)
+            Button(onClick = {
+                val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null)
+                    .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+                val settings = when {
+                    canRing && Build.VERSION.SDK_INT >= 34 ->
+                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", context.packageName, null))
+                    !canRing && needed.isEmpty() -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    refused -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    else -> null
+                }
+                if (settings == null) ask.launch(needed.toTypedArray())
+                else try { context.startActivity(settings) } catch (_: ActivityNotFoundException) {}
+            }) { Text(button) }
+        }
+    }
+}
+
 /** A call a family phone is about to place, while Android asks for the microphone and camera. */
 private class CallRequest(val family: FamilyCredential, val person: FamilyPerson, val mode: NativeCall.Mode)
 
@@ -181,6 +239,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
         else { request = call; permissions.launch(needed.toTypedArray()) }
     }
     Text(if (families.size == 1) "Your family" else "Your families", style = MaterialTheme.typography.headlineMedium)
+    RingWhenClosed(app)
     for (family in families) {
         val link = links.link(family)
         val state = link?.state
@@ -214,7 +273,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
             }
         }
     }
-    Text("This test version joins families, checks in with them and calls while Porch is open. Messages come in a later version.",
+    Text("This test version joins families, checks in with them, calls while Porch is open, and rings while it's closed. Messages come in a later version.",
         style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }
