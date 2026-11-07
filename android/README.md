@@ -58,6 +58,16 @@ adb reverse tcp:3010 tcp:3010 && adb reverse tcp:7880 tcp:7880 && adb reverse tc
 
 Media goes over TCP through `adb`, because the LiveKit server offers only `127.0.0.1`. The apps accept an unencrypted `ws://` LiveKit address only for this device; Porch's server only gives out `wss://` ones. A tablet over wireless debugging works the same way.
 
+### Phone fallback
+
+When someone on the bedside's keypad doesn't answer Porch, the bedside calls their regular phone. LiveKit's dev server can't call phones, so `--phone` makes those calls real: through LiveKit Cloud's phone trunk and Twilio, which ring a real phone and cost money. It takes LiveKit Cloud's address, key and secret and the outbound trunk ID from an env file, and nothing else, so it never reaches Redis. `--phone-from` is the caller ID. It must be a number the Twilio account owns, since the local household's own number is made up.
+
+```bash
+node scripts/local-family-server.mjs 3010 --livekit --phone .env.local --phone-from +15105550123
+```
+
+On the bedside, give a key a family member and your own phone number. Press it, leave the family phone ringing, and your phone rings after the fallback wait (20 seconds unless a caregiver changed it). A key with only a phone number calls it straight away. Only put your own numbers on the keypad. Calls to the household's Porch number need Twilio to reach the server, so they can't be tried locally.
+
 ## Keeping the apps in step
 
 `ContractFixtureTest` decodes the server responses in [tests/fixtures](../tests/fixtures), as PorchCore's `ContractFixtureTests` does. When a change to the server alters them, the server's own test fails until they're rewritten with `UPDATE_CONTRACT_FIXTURES=1 npm test`, and then both apps' tests show whether they still read them.

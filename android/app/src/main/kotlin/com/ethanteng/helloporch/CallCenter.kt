@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ethanteng.helloporch.core.CallContact
+import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTrigger
 import com.ethanteng.helloporch.core.FamilyCallRecord
@@ -147,8 +148,9 @@ class CallCenter(private val app: PorchApplication) {
         this.announcement = announcement
         app.scope.launch {
             try {
-                // Phone fallback comes later in phase 3. Until then a Porch call rings for the full wait, phone number or not.
-                val session = app.coordinator.startCall(memberID, name, mode, dropIn = false, waitSeconds = 45)
+                // Someone with a phone number rings on Porch for the fallback wait, then on their phone (PorchCall).
+                val wait = if (contact?.phoneNumber == null) 45 else CallPreferences.fallbackSeconds(app.settings)
+                val session = app.coordinator.startCall(memberID, name, mode, dropIn = false, waitSeconds = wait)
                 if (cancelOpening || !app.onScreen) {
                     announcement.stop()
                     session.end()
@@ -156,13 +158,21 @@ class CallCenter(private val app: PorchApplication) {
                     return@launch
                 }
                 app.cell2jack.record("callSessionCreated")
-                show(session.copy(peerContact = contact), name, photo, announcement)
+                show(session.copy(peerContact = contact), name, photo, announcement, contact)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                announcement.stop()
-                if (cancelOpening) return@launch
+                if (cancelOpening) { announcement.stop(); return@launch }
                 app.cell2jack.record("callStartFailed", "error" to e.message)
+                // Their Porch app can't ring, or they have no Porch app, so their phone can. Only a confirmed "offline":
+                // a lost answer may still have started a Porch call.
+                if (contact?.phoneNumber != null && (e as? FamilyServiceException)?.code == "offline" && app.onScreen && active == null) {
+                    val call = PorchCall(app, null, name, photo, announcement, contact, phoneOnly = true, onClosed = { if (active === it) active = null })
+                    active = call
+                    call.start()
+                    return@launch
+                }
+                announcement.stop()
                 error = text("Couldn't call %@", name) + "\n\n" + BedsideText.error(app, e.message ?: "Couldn't start the call.")
             } finally {
                 opening = false
@@ -182,15 +192,17 @@ class CallCenter(private val app: PorchApplication) {
         return "cancel pending call requested"
     }
 
-    /** Porch left the screen. Calls end, as on iOS, until Android's calling system keeps them going (later in phase 3). */
+    /** Porch left the screen. Calls end, as on iOS, until Android's calling system keeps them going (ringing when Porch
+     * isn't open, phase 3). */
     fun leftScreen() {
         incoming?.leftScreen()
         active?.endCall()
         cancelPendingCall()
     }
 
-    private fun show(session: FamilyCallSession, name: String, photo: ByteArray?, announcement: OutgoingAnnouncement? = null) {
-        val call = PorchCall(app, session, name, photo, announcement, onClosed = { if (active === it) active = null })
+    private fun show(session: FamilyCallSession, name: String, photo: ByteArray?, announcement: OutgoingAnnouncement? = null,
+        contact: CallContact? = null) {
+        val call = PorchCall(app, session, name, photo, announcement, contact, onClosed = { if (active === it) active = null })
         active = call
         call.start()
     }

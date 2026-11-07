@@ -371,7 +371,7 @@ Built in five pull requests, each a working household:
 
 1. **In-app calls.** The bedside and family phones call each other while Porch is open, with the shared call engine, the call screen, ringing with Answer and Decline, and the bedside's people screen and keypad keys. A call ends if Porch leaves the screen.
 2. **Announcements, drop-ins and the receiver.** "Calling David.", receiving a drop-in, the Cell2Jack routing table, and silence hang-up. Android's text-to-speech writes each sentence to a file that Porch plays: on Android 16 the speech engine plays from its own app, in the background, which the system flags to be muted.
-3. **Phone fallback and calls to the Porch number.**
+3. **Phone fallback and calls to the Porch number.** When Porch isn't answered within the fallback wait, the bedside calls the person's phone (`fallback`, then `/api/calls/phone`), and a key with only a phone number calls it straight away. Tried on the KB10 with a real phone through the local server's `--phone` mode ([README](README.md#phone-fallback)). Calls to the household's Porch number are answered and hung up as on iOS, but need a pass on the production server to try.
 4. **The always-on bedside.** Home app, screen on, showing over the lock screen, and the dynamic clock.
 5. **Ringing when Porch isn't open.** FCM call pushes, Core-Telecom and the call foreground service. It waits for Firebase setup.
 
