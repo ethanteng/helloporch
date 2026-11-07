@@ -68,6 +68,16 @@ node scripts/local-family-server.mjs 3010 --livekit --phone .env.local --phone-f
 
 On the bedside, give a key a family member and your own phone number. Press it, leave the family phone ringing, and your phone rings after the fallback wait (20 seconds unless a caregiver changed it). A key with only a phone number calls it straight away. Only put your own numbers on the keypad. Calls to the household's Porch number need Twilio to reach the server, so they can't be tried locally.
 
+### Ringing while Porch is closed
+
+A family phone rings through Firebase Cloud Messaging when Porch isn't open. The app reads Firebase's settings from `android/app/google-services.json`, which the Firebase console gives for the app `com.ethanteng.helloporch`. The repo is public, so that file stays out of git, and a build without it has push turned off. `--fcm` makes the local server send real pushes, with the Firebase project's service account key, which belongs outside the repo:
+
+```bash
+node scripts/local-family-server.mjs 3010 --livekit --fcm ../firebase-adminsdk.json
+```
+
+On the phone, allow notifications and the microphone from the card on the family screen, then press Home or turn the screen off and call it from the bedside. The server prints `FCM push -> 200` when a push goes out.
+
 ## Keeping the apps in step
 
 `ContractFixtureTest` decodes the server responses in [tests/fixtures](../tests/fixtures), as PorchCore's `ContractFixtureTests` does. When a change to the server alters them, the server's own test fails until they're rewritten with `UPDATE_CONTRACT_FIXTURES=1 npm test`, and then both apps' tests show whether they still read them.

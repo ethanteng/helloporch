@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Calls, asked for in the bedside's setup so the first call doesn't stop at a prompt. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Ringing while Porch is closed (SystemCalls): a call notification that can show over the lock screen, and a
+         phone-call foreground service that keeps the call going with the phone locked. MANAGE_OWN_CALLS is what lets a
+         calling app that isn't the phone's dialer run that service. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- A family phone without them still joins and gets messages. Which tablets the bedside supports is listed, not filtered. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -80,6 +90,25 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+        <!-- A call ringing or going on while Porch isn't in front. -->
+        <service
+            android:name=".CallService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone" />
+        <!-- Decline and Hang up on Porch's call notifications. -->
+        <receiver android:name=".CallActionReceiver" android:exported="false" />
+        <!-- Call pushes from Firebase. -->
+        <service android:name=".PorchMessagingService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- Firebase is set up by PorchPush from the build's settings, so its automatic setup, which reads settings the
+             Google Services plugin would make, isn't used. -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
         <!-- The Porch number's contact card, shared with the app that sends it. -->
         <provider
             android:name="androidx.core.content.FileProvider"

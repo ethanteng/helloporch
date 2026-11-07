@@ -65,6 +65,9 @@ class PorchCall(
 
     private var session: FamilyCallSession? = session
     private val callID = session?.call?.id
+
+    /** Whether this is that Porch call. A call straight to a phone has no Porch call id. */
+    fun owns(id: String) = callID?.equals(id, ignoreCase = true) == true
     /** A video call. A call that moves to someone's phone becomes a voice call. */
     var video by mutableStateOf(session?.call?.mode == NativeCall.Mode.VIDEO && !phoneOnly); private set
     val role = session?.credential?.role ?: PorchExperience.BEDSIDE
@@ -103,6 +106,8 @@ class PorchCall(
     private var switchingToPhone = false
     /** Hangs their phone up. Kept until the server confirms it has. */
     private var phoneControlToken: String? = null
+    /** Porch turned the camera off when it left the screen, and turns it back on when it's back. */
+    private var cameraWhenBack = false
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
@@ -141,6 +146,21 @@ class PorchCall(
             scope.launch { room.localParticipant::isMicrophoneEnabled.flow.collect { microphoneOn = it } },
             scope.launch { room.localParticipant::isCameraEnabled.flow.collect { cameraOn = it } },
         )
+    }
+
+    /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
+    fun leftForeground() {
+        // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
+        if (!video || !room.localParticipant.isCameraEnabled || ending) return
+        cameraWhenBack = true
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
+    }
+
+    /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
+    fun returnedToForeground() {
+        if (!cameraWhenBack || ending) return
+        cameraWhenBack = false
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(true) } }
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
@@ -184,7 +204,12 @@ class PorchCall(
             announcement?.finished()
             room.connect(url, token)
             enableMicrophone()
-            if (video && CallPreferences.startVideoWithCamera(role, app.settings)) room.localParticipant.setCameraEnabled(true)
+            // Allowed just now, on a first call: the call's service needs the microphone named to keep recording locked.
+            app.calls.updateService()
+            // The camera works only while Porch is in front. A call answered just as the phone locked starts it on return.
+            if (video && CallPreferences.startVideoWithCamera(role, app.settings)) {
+                if (app.onScreen) room.localParticipant.setCameraEnabled(true) else cameraWhenBack = true
+            }
             mediaReady = true
             controlsEnabled = true
             refresh()
@@ -415,6 +440,7 @@ class PorchCall(
             announcement?.finished()
             room.connect(prepared.serverUrl, prepared.token)
             if (microphone) enableMicrophone() else room.localParticipant.setMicrophoneEnabled(false)
+            app.calls.updateService()
             ringback.start()
             PhoneCalling.start(app, prepared.controlToken)
             switchingToPhone = false
