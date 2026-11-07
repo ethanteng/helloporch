@@ -118,6 +118,8 @@ class IncomingCall(
         // A drop-in connects only with the microphone and, for video, the camera already allowed. It never stops to ask.
         if (dropIn && (!granted(Manifest.permission.RECORD_AUDIO) || (video && !granted(Manifest.permission.CAMERA)))) { decline(); return }
         answering = true
+        // Still in front. A lock during accept must find the microphone already named on the call's service.
+        if (familyPhone) app.calls.noteAnswering()
         ring.stop()
         announcer?.stop()
         countdown?.cancel()

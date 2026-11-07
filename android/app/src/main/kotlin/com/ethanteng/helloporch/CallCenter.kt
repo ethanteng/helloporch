@@ -87,11 +87,7 @@ class CallCenter(private val app: PorchApplication) {
             call != null && call.role == PorchExperience.FAMILY -> {
                 NotificationManagerCompat.from(app).cancel(CallNotifications.INCOMING)
                 // Android 11 and later need the microphone named for it to keep recording with the phone locked.
-                val microphone = Build.VERSION.SDK_INT >= 30 &&
-                    ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                val types = if (microphone) ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                    else ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-                CallService.show(app, CallNotifications.ONGOING, CallNotifications.ongoing(app, call.name), types)
+                CallService.show(app, CallNotifications.ONGOING, CallNotifications.ongoing(app, call.name), serviceTypes(withMicrophone = true))
             }
             system != null -> CallService.show(app, CallNotifications.INCOMING, system, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
             ringing != null && ringing.familyPhone -> CallService.show(app, CallNotifications.INCOMING,
@@ -99,6 +95,23 @@ class CallCenter(private val app: PorchApplication) {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
             else -> CallService.stop(app)
         }
+    }
+
+    /** Answer was tapped on a family phone. Accept can still be in flight when the screen locks, and Android 14 will not
+     * add the microphone to a call's service from the background, so name it now while Porch is in front. */
+    fun noteAnswering() {
+        val ringing = incoming?.takeIf { it.familyPhone } ?: return
+        CallService.show(app, CallNotifications.INCOMING,
+            CallNotifications.incoming(app, ringing.call.id, ringing.name, ringing.video, ringing.call.expiresAt, quiet = true),
+            serviceTypes(withMicrophone = true))
+    }
+
+    /** Android 11 and later keep the microphone only while the call's service names it. */
+    private fun serviceTypes(withMicrophone: Boolean): Int {
+        val microphone = withMicrophone && Build.VERSION.SDK_INT >= 30 &&
+            ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        return if (microphone) ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            else ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
     }
 
     /** Each snapshot, from the coordinator: rings for a call to this device, as iOS's familyChanged does. */
