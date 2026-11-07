@@ -141,9 +141,10 @@ class SystemCalls(private val app: PorchApplication) {
         ringing = call
         deferred.removeAll { it.callID.equals(id, ignoreCase = true) }
         remember(id)
-        // Posted before anything else, so it rings even if the service can't start.
-        CallNotifications.post(app, CallNotifications.INCOMING, notification)
+        // Posted once, by the call's service. Posting it here as well would update it as the service starts, and Samsung
+        // phones stop the ringtone for that update. It's posted here only if the service didn't take it.
         app.calls.updateService()
+        if (!CallService.showing(CallNotifications.INCOMING, notification)) CallNotifications.post(app, CallNotifications.INCOMING, notification)
         call.job = app.scope.launch { poll(call) }
     }
 
@@ -391,8 +392,12 @@ class CallService : Service() {
         // The microphone type can be refused once Porch is in the background. A phone-call service still keeps the call.
         val phoneCall = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
         if (shown != null && shown.types != phoneCall && promote(shown.id, shown.notification, phoneCall)) return START_NOT_STICKY
+        // A call the service couldn't show still shows, and rings, as an ordinary notification.
+        if (shown != null) CallNotifications.post(this, shown.id, shown.notification)
         // startForegroundService crashes the process unless startForeground runs, including when the call ended first.
         promote(CallNotifications.MISSED, CallNotifications.passing(this), phoneCall)
+        // Stopped, so the next show starts it again rather than taking it as already showing.
+        running = false
         stopSelf()
         return START_NOT_STICKY
     }
@@ -422,6 +427,8 @@ class CallService : Service() {
          * already in the foreground is updated with [startService]: [startForegroundService] from the background is
          * refused once the high-priority push's moment has passed, which is when a call is answered as the phone locks. */
         fun show(context: Context, id: Int, notification: Notification, types: Int) {
+            // Already showing it. Showing it again posts it again, and Samsung phones stop a ringtone for that.
+            if (showing(id, notification) && pending?.types == types) return
             pending = Shown(id, notification, types)
             val intent = Intent(context, CallService::class.java)
             try {
@@ -442,6 +449,10 @@ class CallService : Service() {
                 }
             }
         }
+
+        /** Whether the service is running to show this notification. */
+        fun showing(id: Int, notification: Notification): Boolean =
+            running && pending?.let { it.id == id && it.notification === notification } == true
 
         fun stop(context: Context) {
             pending = null
