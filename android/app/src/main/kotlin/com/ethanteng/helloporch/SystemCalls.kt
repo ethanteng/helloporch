@@ -64,7 +64,9 @@ class SystemCalls(private val app: PorchApplication) {
         val expiresAt = data["expiresAt"]?.toDoubleOrNull()?.toLong() ?: 0
         // Porch on screen rings in its own screen from its next check-in, a second or two away.
         if (app.onScreen && app.screenReady) return
-        if (callID != null && ringing?.callID == callID) return
+        // Porch's own screen may already be showing this call: the server pushes even when Porch is open, and that
+        // push can arrive after the check-in that rang. Ending it here would hang up the call on screen.
+        if (callID != null && (ringing?.callID == callID || app.calls.owns(callID))) return
         val credential = recipient(data["recipientID"])
         if (callID == null || !idPattern.matches(callID) || credential == null || expiresAt <= nowSeconds() || callID in recent) {
             // Every call push shows a call before anything else, even one that's stale or a repeat, which then ends at

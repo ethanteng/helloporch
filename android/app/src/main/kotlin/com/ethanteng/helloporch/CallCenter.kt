@@ -57,6 +57,9 @@ class CallCenter(private val app: PorchApplication) {
     /** Whether a call screen is showing, so nothing else may ring or open. */
     val busy: Boolean get() = incoming != null || active != null || opening
 
+    /** Already ringing for this call, or on it. A push for it must not be ended as a missed call. */
+    fun owns(callID: String) = incoming?.call?.id?.equals(callID, ignoreCase = true) == true || active?.owns(callID) == true
+
     /** A call in progress on a family phone, which goes on while Porch isn't in front (decision 8 in android/PLAN.md). */
     val continuing: Boolean get() = active?.role == PorchExperience.FAMILY
 

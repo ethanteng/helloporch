@@ -65,6 +65,9 @@ class PorchCall(
 
     private var session: FamilyCallSession? = session
     private val callID = session?.call?.id
+
+    /** Whether this is that Porch call. A call straight to a phone has no Porch call id. */
+    fun owns(id: String) = callID?.equals(id, ignoreCase = true) == true
     /** A video call. A call that moves to someone's phone becomes a voice call. */
     var video by mutableStateOf(session?.call?.mode == NativeCall.Mode.VIDEO && !phoneOnly); private set
     val role = session?.credential?.role ?: PorchExperience.BEDSIDE
