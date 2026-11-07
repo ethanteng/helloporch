@@ -49,6 +49,10 @@ const languages = [
     native: v => v.language === "fil" && v.locale === "fil-PH",
     sentences: [`Tumatawag po si ${name} sa video call. Kokonekta ito sa loob ng limang segundo.`, `Mensahe mula kay ${name}. Ipinadala ngayong araw, 3:15 PM.`,
       `Hindi po sumagot si ${name}. Mag-iwan po kayo ng mensahe pagkatapos ng beep.`] },
+  { id: "ko", label: "한국어 · Korean", code: "ko", library: ["ko"], say: "Yuna",
+    native: v => v.language === "ko" && (!v.locale || v.locale === "ko-KR"),
+    sentences: [`${name}에게서 영상통화가 왔어요. 5초 후에 연결돼요.`, `${name}의 메시지예요. 오늘 오후 3:15에 보냈어요.`,
+      `${name}에게서 응답이 없어요. 삐 소리가 나면 메시지를 남겨 주세요.`] },
 ];
 const script = language => language.sentences.join("\n\n");
 

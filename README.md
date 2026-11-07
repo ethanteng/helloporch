@@ -28,7 +28,7 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 - **Calling out.** Pressing a key says who it's calling ("Calling David.") and rings that person's Porch app. If nobody answers and the person has a phone number saved, Porch rings that number instead, by default after 20 seconds.
 - **Answering.** Ordinary calls ring and wait for someone to answer. Family the caregiver approves can drop in with audio or video. The bedside announces them and counts down for five seconds, with a **Don't connect** button. Their Audio call and Video call drop in the same way while the bedside is open, so nobody has to answer them.
 - **Messages.** Family send audio and video messages, which wait until they're played. They can play on their own when someone sits down, using on-device face detection. When a call from the bedside isn't answered, the bedside records a message for that person.
-- **Languages.** English, Traditional Chinese, Simplified Chinese, Cantonese, Spanish and Tagalog, spoken with the iPad's own voices or natural ElevenLabs voices.
+- **Languages.** English, Traditional Chinese, Simplified Chinese, Cantonese, Spanish, Tagalog and Korean, spoken with the iPad's own voices or natural ElevenLabs voices.
 
 **For family**, on an iPhone or iPad in family mode:
 
