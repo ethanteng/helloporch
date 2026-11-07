@@ -56,6 +56,7 @@ class BedsideLanguageTest {
             "zh-CN" to BedsideLanguage.SIMPLIFIED_CHINESE, "zh-Hans-CN" to BedsideLanguage.SIMPLIFIED_CHINESE, "cmn-CN" to BedsideLanguage.SIMPLIFIED_CHINESE,
             "zh-HK" to BedsideLanguage.CANTONESE, "zh-Hant-HK" to BedsideLanguage.CANTONESE, "yue-HK" to BedsideLanguage.CANTONESE, "yue-Hant-HK" to BedsideLanguage.CANTONESE,
             "fil-PH" to BedsideLanguage.TAGALOG, "fil_PH" to BedsideLanguage.TAGALOG, "tl-PH" to BedsideLanguage.TAGALOG, "fil" to BedsideLanguage.TAGALOG,
+            "ko-KR" to BedsideLanguage.KOREAN, "ko_KR" to BedsideLanguage.KOREAN, "ko" to BedsideLanguage.KOREAN,
         )
         for ((tag, expected) in cases) {
             for (language in BedsideLanguage.entries) {
@@ -97,6 +98,10 @@ class BedsideLanguageTest {
         assertEquals("End call", BedsideLanguage.ENGLISH.text("End call"))
         assertEquals("打緊畀陳先生。", BedsideLanguage.CANTONESE.format("Calling %@.", "陳先生"))
         assertEquals("Ibaba ang tawag", BedsideLanguage.TAGALOG.text("End call"))
+        assertEquals("통화 종료", BedsideLanguage.KOREAN.text("End call"))
+        assertEquals("ko-KR", BedsideLanguage.KOREAN.speechLanguage)
+        assertEquals("가족에게서 영상통화가 왔어요. 5초 후에 연결돼요.", BedsideLanguage.KOREAN.format("%@ is dropping in with video. Connecting in five seconds.", BedsideLanguage.KOREAN.text("A family member")))
+        assertEquals("영상 자동 연결\n5초 후 연결…", BedsideLanguage.KOREAN.format("Video drop-in\nConnecting in %d…", 5))
         assertEquals("fil-PH", BedsideLanguage.TAGALOG.speechLanguage)
         assertEquals("Tumatawag po si Ate Rosa sa video call. Kokonekta ito sa loob ng limang segundo.", BedsideLanguage.TAGALOG.format("%@ is dropping in with video. Connecting in five seconds.", "Ate Rosa"))
         assertEquals("Awtomatikong video call\nKokonekta sa loob ng 5…", BedsideLanguage.TAGALOG.format("Video drop-in\nConnecting in %d…", 5))
@@ -152,6 +157,6 @@ class BedsideLanguageTest {
 
     /** Caregiver settings say which language each Chinese choice speaks. */
     @Test fun choiceLabelsNameTheSpokenLanguage() {
-        assertEquals(listOf("English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog"), BedsideLanguage.entries.map { it.choiceLabel })
+        assertEquals(listOf("English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog", "한국어 · Korean"), BedsideLanguage.entries.map { it.choiceLabel })
     }
 }

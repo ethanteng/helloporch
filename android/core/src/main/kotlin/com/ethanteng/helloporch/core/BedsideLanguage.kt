@@ -14,7 +14,8 @@ enum class BedsideLanguage(val code: String) {
     @SerialName("yue-Hant") CANTONESE("yue-Hant"),
     @SerialName("es") SPANISH("es"),
     /** Tagalog as spoken in the Philippines. Android, Apple and ElevenLabs call it Filipino (`fil`). */
-    @SerialName("tl") TAGALOG("tl");
+    @SerialName("tl") TAGALOG("tl"),
+    @SerialName("ko") KOREAN("ko");
 
     val displayName: String get() = when (this) {
         ENGLISH -> "English"
@@ -23,11 +24,14 @@ enum class BedsideLanguage(val code: String) {
         CANTONESE -> "廣東話"
         SPANISH -> "Español"
         TAGALOG -> "Tagalog"
+        KOREAN -> "한국어"
     }
-    /** The name in caregiver settings, which also says which language the Chinese choices speak. */
+    /** The name in caregiver settings, which also says which language the Chinese choices speak, and names Korean for
+     * caregivers who don't read Hangul. */
     val choiceLabel: String get() = when (this) {
         TRADITIONAL_CHINESE, SIMPLIFIED_CHINESE -> "$displayName · Mandarin"
         CANTONESE -> "$displayName · Cantonese"
+        KOREAN -> "$displayName · Korean"
         ENGLISH, SPANISH, TAGALOG -> displayName
     }
     val locale: Locale get() = when (this) {
@@ -37,6 +41,7 @@ enum class BedsideLanguage(val code: String) {
         CANTONESE -> Locale.forLanguageTag("zh-Hant-HK")
         SPANISH -> Locale.forLanguageTag("es-ES")
         TAGALOG -> Locale.forLanguageTag("fil-PH")
+        KOREAN -> Locale.forLanguageTag("ko-KR")
     }
     val speechLanguage: String get() = when (this) {
         ENGLISH -> "en-US"
@@ -45,8 +50,9 @@ enum class BedsideLanguage(val code: String) {
         CANTONESE -> "zh-HK"
         SPANISH -> "es-ES"
         TAGALOG -> "fil-PH"
+        KOREAN -> "ko-KR"
     }
-    /** English/Spanish allow regional accents. Chinese choices retain their dialect/region. Tagalog takes either of its codes. */
+    /** English/Spanish/Korean allow regional accents. Chinese choices retain their dialect/region. Tagalog takes either of its codes. */
     fun supportsSpeechVoice(language: String): Boolean {
         val tag = language.replace("_", "-").lowercase()
         val base = tag.split("-").firstOrNull { it.isNotEmpty() }
@@ -54,6 +60,7 @@ enum class BedsideLanguage(val code: String) {
             ENGLISH -> base == "en"
             SPANISH -> base == "es"
             TAGALOG -> base == "fil" || base == "tl"
+            KOREAN -> base == "ko"
             TRADITIONAL_CHINESE -> tag in setOf("zh-tw", "zh-hant-tw", "cmn-tw", "cmn-hant-tw")
             SIMPLIFIED_CHINESE -> tag in setOf("zh-cn", "zh-hans-cn", "cmn-cn", "cmn-hans-cn")
             CANTONESE -> tag in setOf("zh-hk", "zh-hant-hk", "yue-hk", "yue-hant-hk")
@@ -66,6 +73,7 @@ enum class BedsideLanguage(val code: String) {
         CANTONESE -> cantoneseStrings
         SPANISH -> spanishStrings
         TAGALOG -> tagalogStrings
+        KOREAN -> koreanStrings
     }
     fun text(english: String): String = translations[english] ?: english
     /** The strings keep iOS's `%@`, so both apps share them word for word; it formats as `%s`. */
@@ -368,6 +376,80 @@ enum class BedsideLanguage(val code: String) {
             "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls." to "Ipakisuyo sa tagapag-alaga na payagan ang mikropono sa Settings ng iPad → Privacy & Security → Microphone.",
             "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup." to "Ipakisuyo sa tagapag-alaga na payagan ang kamera sa Settings ng iPad, o piliin ang voice call para sa taong ito.",
             "A family member" to "Kapamilya"
+        )
+
+        private val koreanStrings = mapOf(
+            "%@ didn't answer." to "%@에게서 응답이 없어요.", "%@ isn't available right now." to "지금은 %@에게 연결할 수 없어요.",
+            "Leave a message for %@" to "%@에게 메시지 남기기", "Speak after the beep." to "삐 소리가 나면 말씀하세요.", "Recording your message…" to "메시지 녹음 중…",
+            "Send message" to "메시지 보내기", "Don't send" to "보내지 않기", "Press %@ when you're finished." to "다 말씀하시면 %@ 키를 누르세요.",
+            "Your message is on its way to %@." to "%@에게 메시지를 보내고 있어요.", "No message was recorded." to "녹음된 메시지가 없어요.", "Message not sent." to "메시지를 보내지 않았어요.",
+            "%@ didn't answer. Please leave a message after the beep." to "%@에게서 응답이 없어요. 삐 소리가 나면 메시지를 남겨 주세요.",
+            "%@ isn't available right now. Please leave a message after the beep." to "지금은 %@에게 연결할 수 없어요. 삐 소리가 나면 메시지를 남겨 주세요.",
+            "Couldn't record a message." to "메시지를 녹음할 수 없어요.",
+            "Play 1 message" to "메시지 1개 재생", "Play %d messages" to "메시지 %d개 재생",
+            "Message from %@" to "%@의 메시지", "Voicemail from %@" to "%@의 음성 메시지",
+            "Message from %@. Sent %@." to "%@의 메시지예요. %@에 보냈어요.", "Voicemail from %@. Sent %@." to "%@의 음성 메시지예요. %@에 보냈어요.",
+            "Text from %@" to "%@의 문자", "Text from %@. Sent %@." to "%@의 문자예요. %@에 보냈어요.", "Translated from %@" to "%@에서 번역됨",
+            "It came with a picture, which Porch can't show yet." to "사진 한 장이 함께 왔지만 Porch에서는 아직 보여 드릴 수 없어요.",
+            "It came with %d pictures, which Porch can't show yet." to "사진 %d장이 함께 왔지만 Porch에서는 아직 보여 드릴 수 없어요.",
+            "It came with something Porch can't show yet." to "Porch에서 아직 보여 드릴 수 없는 내용이 함께 왔어요.",
+            "Sent %@" to "%@에 보냄", "Stop" to "중지", "No new messages." to "새 메시지가 없어요.", "Unknown caller" to "알 수 없는 발신자", "You have 1 new message." to "새 메시지가 1개 있어요.", "You have %d new messages." to "새 메시지가 %d개 있어요.", "Not now" to "나중에",
+            "Morning" to "아침", "Afternoon" to "오후", "Evening" to "저녁", "Night" to "밤",
+            "Spring" to "봄", "Summer" to "여름", "Fall" to "가을", "Winter" to "겨울",
+            "Call someone" to "전화 걸기", "Caregiver mode" to "보호자 설정",
+            "Tap or hold to manage contacts and settings." to "탭하거나 길게 눌러 연락처와 설정을 관리하세요.",
+            "Who would you like to call?" to "누구에게 전화하시겠어요?",
+            "Tap a name or press their number on the keypad." to "이름을 누르거나 키패드에서 번호를 누르세요.",
+            "Back to clock" to "시계로 돌아가기", "Press %@" to "%@ 누르기",
+            "Call %@, key %@" to "%@에게 전화, %@ 키",
+            "Your caregiver can add people using the settings icon on the clock screen." to "보호자가 시계 화면의 설정 아이콘에서 연락처를 추가할 수 있어요.",
+            "Use this key to answer or end a call." to "이 키로 전화를 받거나 끊을 수 있어요.",
+            "Use this key to turn your camera off or on during a video call." to "영상통화 중에 이 키로 카메라를 끄거나 켤 수 있어요.",
+            "No one is assigned to %@.\nPlease choose another number." to "%@번에는 연락처가 없어요.\n다른 번호를 골라 주세요.",
+            "Finish Porch setup" to "Porch 설정을 마쳐 주세요",
+            "Open caregiver mode and invite this person to Porch or add their phone number." to "보호자에게 이분을 Porch에 초대하거나 전화번호를 추가해 달라고 하세요.",
+            "Porch isn't ready" to "Porch가 아직 준비되지 않았어요",
+            "Check People and Drop-in in caregiver mode, then try again." to "보호자에게 가족과 자동 연결 설정을 확인해 달라고 한 뒤 다시 시도하세요.",
+            "Couldn't call %@" to "%@에게 전화할 수 없어요", "Please ask your caregiver for help, then try again." to "보호자에게 도움을 요청한 뒤 다시 시도하세요.",
+            "OK" to "확인", "Connecting…" to "연결 중…", "Your camera preview" to "내 카메라 화면",
+            "Voice call\nCamera is off" to "음성 통화\n카메라 꺼짐", "Waiting for video" to "영상 기다리는 중",
+            "Mute" to "마이크 끄기", "Unmute" to "마이크 켜기", "Camera off" to "카메라 끄기", "Camera on" to "카메라 켜기", "End call" to "통화 종료",
+            "Couldn't start the call." to "통화를 시작할 수 없어요.", "Key %@: hang up" to "%@ 키: 전화 끊기",
+            "Key %@: video off / on" to "%@ 키: 카메라 끄기 / 켜기", "Phone call connected" to "전화가 연결됐어요",
+            "Reconnecting phone call…" to "전화 다시 연결 중…", "Calling %@'s phone…" to "%@의 휴대전화로 거는 중…",
+            "Voice call connected" to "음성 통화가 연결됐어요", "Video call connected" to "영상통화가 연결됐어요", "Connecting audio…" to "소리 연결 중…",
+            "Waiting for %@…" to "%@ 기다리는 중…", "Connecting with %@…" to "%@에게 연결 중…", "Calling %@ on Porch…" to "Porch로 %@에게 거는 중…",
+            "Calling %@…" to "%@에게 거는 중…", "Calling %@." to "%@에게 전화를 걸고 있어요.", "%@ joined the call" to "%@님이 통화에 참여했어요", "%@ left the call" to "%@님이 통화에서 나갔어요",
+            "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered." to "Porch로 %@에게 거는 중…\nPorch로 받지 않으면 휴대전화로 걸어요.",
+            "Couldn't connect the call. Please try again." to "통화를 연결할 수 없어요. 다시 시도해 주세요.",
+            "Couldn't change camera. Try again." to "카메라 설정을 바꿀 수 없어요. 다시 시도해 주세요.", "Couldn't change microphone. Try again." to "마이크 설정을 바꿀 수 없어요. 다시 시도해 주세요.",
+            "Ending call…" to "통화 종료 중…", "Reconnecting…" to "다시 연결 중…",
+            "Retry ending phone call" to "전화 끊기 다시 시도",
+            "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again." to "Porch 연결이 끊겼어요. 전화가 끊겼는지 확인할 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
+            "Call ended. Returning to the clock…" to "통화가 끝났어요. 시계로 돌아가는 중…", "Call ended. Returning to Porch…" to "통화가 끝났어요. Porch로 돌아가는 중…",
+            "No one joined. Returning to the clock…" to "아무도 받지 않았어요. 시계로 돌아가는 중…",
+            "The call disconnected. Returning to the clock…" to "통화가 끊겼어요. 시계로 돌아가는 중…",
+            "The phone call ended before it was answered." to "전화를 받기 전에 끊겼어요.",
+            "Microphone access is required." to "마이크 권한이 필요해요.",
+            "Allow Porch's microphone in Settings to make a phone call." to "보호자에게 iPad 설정에서 Porch의 마이크 사용을 허용해 달라고 하세요.",
+            "Couldn't switch to their phone." to "휴대전화로 전환할 수 없어요.", "Couldn't finish connecting the Porch call." to "Porch 통화 연결을 마치지 못했어요.",
+            "They answered Porch, but this device couldn't connect. Please try again." to "상대방이 Porch로 받았지만 이 기기가 연결되지 않았어요. 다시 시도해 주세요.",
+            "Porch wasn't answered. Trying %@'s phone…" to "Porch로 받지 않아 %@의 휴대전화로 거는 중…",
+            "Phone call\nCamera is off" to "전화 통화\n카메라 꺼짐", "Couldn't connect their phone." to "휴대전화로 연결할 수 없어요.",
+            "Their phone didn't answer. Returning to the clock…" to "휴대전화로도 받지 않았어요. 시계로 돌아가는 중…",
+            "Answer" to "받기", "Answer video call" to "영상통화 받기", "Answer audio call" to "음성 통화 받기", "Don't connect" to "연결하지 않기", "Decline" to "거절",
+            "Press %@ to stop this drop-in." to "자동 연결을 멈추려면 %@ 키를 누르세요.",
+            "Tap %@ to answer. Hold %@ to decline." to "받으려면 %@ 키를 누르고, 거절하려면 %@ 키를 길게 누르세요.",
+            "Video drop-in\nConnecting in %d…" to "영상 자동 연결\n%d초 후 연결…",
+            "Audio drop-in\nConnecting in %d…" to "음성 자동 연결\n%d초 후 연결…",
+            "Incoming video call" to "영상통화가 왔어요", "Incoming audio call" to "음성 통화가 왔어요",
+            "Announcing video drop-in…" to "영상 자동 연결 안내 중…", "Announcing audio drop-in…" to "음성 자동 연결 안내 중…",
+            "%@ is dropping in with video. Connecting in five seconds." to "%@에게서 영상통화가 왔어요. 5초 후에 연결돼요.",
+            "%@ is dropping in with audio. Connecting in five seconds." to "%@에게서 음성 통화가 왔어요. 5초 후에 연결돼요.",
+            "The sound couldn't play. Tap Answer to connect." to "안내 소리를 재생할 수 없어요. 받기를 눌러 연결하세요.",
+            "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls." to "보호자에게 iPad 설정 → 개인정보 보호 및 보안 → 마이크에서 Porch를 허용해 달라고 하세요.",
+            "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup." to "보호자에게 iPad 설정에서 카메라 사용을 허용하거나 음성 통화로 바꿔 달라고 하세요.",
+            "A family member" to "가족"
         )
 
         private val traditionalStrings = mapOf(

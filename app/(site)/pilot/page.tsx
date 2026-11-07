@@ -70,7 +70,7 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Can Porch speak another language?",
-    a: "Yes! Porch supports English, Mandarin, Cantonese, Spanish, and Tagalog, with more languages on the way. Let me know if there’s another language your family needs.",
+    a: "Yes! Porch supports English, Mandarin, Cantonese, Spanish, Tagalog, and Korean, with more languages on the way. Let me know if there’s another language your family needs.",
   },
 ];
 

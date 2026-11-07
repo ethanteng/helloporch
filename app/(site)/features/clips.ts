@@ -91,7 +91,7 @@ export const accessibility: Clip[] = [
     id: "multi-language",
     title: "In the language they grew up with",
     description:
-      "Choose English, Mandarin, Cantonese, Spanish, or Tagalog. Porch displays its screens and speaks its announcements in their language, so they don’t have to figure things out in English.",
+      "Choose English, Mandarin, Cantonese, Spanish, Tagalog, or Korean. Porch displays its screens and speaks its announcements in their language, so they don’t have to figure things out in English.",
     duration: "17 sec",
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Multi-language%20support%20compressed.mp4",
     poster: "/features/multi-language.jpg",

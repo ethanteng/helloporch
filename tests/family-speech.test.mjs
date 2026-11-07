@@ -23,7 +23,7 @@ let previous;
 beforeEach(() => { previous = Object.fromEntries(Object.keys(env).map(k => [k,process.env[k]])); Object.assign(process.env,env); });
 afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefined) delete process.env[k]; else process.env[k]=v; } });
 
-const voices = { hope:'OYTbf65OHHFELVut7v2H', sukYee:'7rrBp44bogxpbQBDkenR', luckyChan:'R5E9sH7cGUEbuu7YE7K7', sage:'APSIkVZudNbPAwyPoeVO', maria:'4RLeKvASM0Zt73Htf5GF' };
+const voices = { hope:'OYTbf65OHHFELVut7v2H', sukYee:'7rrBp44bogxpbQBDkenR', luckyChan:'R5E9sH7cGUEbuu7YE7K7', sage:'APSIkVZudNbPAwyPoeVO', maria:'4RLeKvASM0Zt73Htf5GF', annaKim:'uyVNoMrnUku1dZyVEXwD' };
 const dropIn = 'Ethan想同您視像通話，五秒後接通。';
 
 async function fixture({ failing = false } = {}) {
@@ -48,10 +48,11 @@ async function fixture({ failing = false } = {}) {
 test('the bedside offers each language the voices the family listened to, starting with their picks',async()=>{
   const f=await fixture();
   const { languages } = await f.speech(f.bedside.credential);
-  assert.deepEqual(Object.keys(languages).sort(),['en','es','tl','yue-Hant','zh-Hans','zh-Hant']);
+  assert.deepEqual(Object.keys(languages).sort(),['en','es','ko','tl','yue-Hant','zh-Hans','zh-Hant']);
   assert.equal(languages.en.selected,voices.hope); assert.equal(languages['yue-Hant'].selected,voices.sukYee); assert.equal(languages['zh-Hans'].selected,voices.sage);
   assert.equal(languages['yue-Hant'].voices.length,4); assert.equal(languages.en.voices.length,3);
   assert.equal(languages.tl.selected,voices.maria); assert.equal(languages.tl.voices.length,3);
+  assert.equal(languages.ko.selected,voices.annaKim); assert.equal(languages.ko.voices.length,3);
   for (const language of Object.values(languages)) {
     assert.equal(language.defaultVoice,language.voices[0].id);
     for (const voice of language.voices) assert.ok(voice.name && voice.detail);

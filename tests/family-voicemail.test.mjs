@@ -309,7 +309,7 @@ function speaker() {
   const synthesize = async (voiceID, code, text, format) => { spoken.push({ voiceID, code, text, format }); return new Uint8Array(2000); };
   return { spoken, synthesize };
 }
-const voices = { hope: 'OYTbf65OHHFELVut7v2H', sukYee: '7rrBp44bogxpbQBDkenR', luckyChan: 'R5E9sH7cGUEbuu7YE7K7', eva: 'RgXx32WYOGrd7gFNifSf', maria: '4RLeKvASM0Zt73Htf5GF' };
+const voices = { hope: 'OYTbf65OHHFELVut7v2H', sukYee: '7rrBp44bogxpbQBDkenR', luckyChan: 'R5E9sH7cGUEbuu7YE7K7', eva: 'RgXx32WYOGrd7gFNifSf', maria: '4RLeKvASM0Zt73Htf5GF', annaKim: 'uyVNoMrnUku1dZyVEXwD' };
 const plays = body => [...body.matchAll(/<Play>([^<]*)<\/Play>/g)].map(m => m[1]);
 const english = (body, sentence) => body.includes(`<Say language="en-US" voice="Google.en-US-Chirp3-HD-Aoede">${greetings.en[sentence]}</Say>`);
 
@@ -359,8 +359,11 @@ test('callers hear the household\'s natural voice in the bedside\'s language', a
   await f.json('setBedsideLanguage', { language: 'tl' }, f.bedside.credential, '123456');
   await f.voicemail('+15559990003');
   assert.deepEqual(spoken.slice(-2).map(s => [s.voiceID, s.code, s.text]), [[voices.maria, 'fil', greetings.tl.leaveMessage], [voices.maria, 'fil', greetings.tl.noMessage]]);
+  await f.json('setBedsideLanguage', { language: 'ko' }, f.bedside.credential, '123456');
+  await f.voicemail('+15559990004');
+  assert.deepEqual(spoken.slice(-2).map(s => [s.voiceID, s.code, s.text]), [[voices.annaKim, 'ko', greetings.ko.leaveMessage], [voices.annaKim, 'ko', greetings.ko.noMessage]]);
   // Every language has every sentence.
-  for (const language of ['en', 'zh-Hant', 'zh-Hans', 'yue-Hant', 'es', 'tl']) {
+  for (const language of ['en', 'zh-Hant', 'zh-Hans', 'yue-Hant', 'es', 'tl', 'ko']) {
     assert.deepEqual(Object.keys(greetings[language]).sort(), ['leaveMessage', 'noMessage', 'thanks', 'unavailable']);
     assert.ok(Object.values(greetings[language]).every(text => text.trim().length > 0 && text.length <= 300));
   }
