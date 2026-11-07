@@ -108,11 +108,6 @@ class PorchCall(
     private var phoneControlToken: String? = null
     /** Porch turned the camera off when it left the screen, and turns it back on when it's back. */
     private var cameraWhenBack = false
-    /** The camera change still on its way. A later lock or return replaces it, so only the latest one lands. */
-    private var cameraTarget: Boolean? = null
-    /** What the latest camera change in [changeCamera] actually applied, when it did. */
-    private var cameraApplied: Boolean? = null
-    private var cameraJob: Job? = null
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
@@ -155,45 +150,17 @@ class PorchCall(
 
     /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
     fun leftForeground() {
-        if (!video || ending) return
-        // Already on its way off, such as Camera off tapped just before the lock: it stays off, and isn't remembered for
-        // turning back on when Porch is back.
-        if (cameraTarget == false) return
-        // LiveKit's own state lags a change still on its way, so an enable that hasn't landed still counts as on.
-        // Otherwise a quick lock after coming back would leave that enable to finish with the phone locked.
-        if (!room.localParticipant.isCameraEnabled && cameraTarget != true) return
+        // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
+        if (!video || !room.localParticipant.isCameraEnabled || ending) return
         cameraWhenBack = true
-        changeCamera(false)
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
     }
 
     /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
     fun returnedToForeground() {
         if (!cameraWhenBack || ending) return
         cameraWhenBack = false
-        changeCamera(true)
-    }
-
-    /** Turns the camera off or on. A change already on its way finishes first, then only the latest request is applied. */
-    private fun changeCamera(on: Boolean) {
-        cameraTarget = on
-        if (cameraJob?.isActive == true) return
-        cameraJob = scope.launch {
-            while (!ending) {
-                val target = cameraTarget ?: return@launch
-                val applied = try {
-                    room.localParticipant.setCameraEnabled(target)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Throwable) {
-                    false
-                }
-                if (ending) return@launch
-                if (cameraTarget != target) continue
-                cameraApplied = if (applied) target else null
-                cameraTarget = null
-                return@launch
-            }
-        }
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(true) } }
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
@@ -239,19 +206,9 @@ class PorchCall(
             enableMicrophone()
             // Allowed just now, on a first call: the call's service needs the microphone named to keep recording locked.
             app.calls.updateService()
-            // The camera works only while Porch is in front. A call answered or placed just as the phone locked starts it
-            // on return. Turning it on goes through the same queue as locking, so a lock while it starts still ends off.
+            // The camera works only while Porch is in front. A call answered just as the phone locked starts it on return.
             if (video && CallPreferences.startVideoWithCamera(role, app.settings)) {
-                if (!app.onScreen) cameraWhenBack = true
-                else {
-                    changeCamera(true)
-                    cameraJob?.join()
-                    if (!app.onScreen) {
-                        cameraWhenBack = true
-                        changeCamera(false)
-                        cameraJob?.join()
-                    }
-                }
+                if (app.onScreen) room.localParticipant.setCameraEnabled(true) else cameraWhenBack = true
             }
             mediaReady = true
             controlsEnabled = true
@@ -553,27 +510,11 @@ class PorchCall(
             try {
                 val local = room.localParticipant
                 val on = !(if (camera) cameraOn else microphoneOn)
-                if (camera) {
-                    // Same queue as leaving the screen, so the two can't turn the camera opposite ways at once.
-                    changeCamera(on)
-                    cameraJob?.join()
-                    if (ending) return@launch
-                    if (on && !app.onScreen) {
-                        cameraWhenBack = true
-                        changeCamera(false)
-                        cameraJob?.join()
-                        if (!ending) refresh()
-                        return@launch
-                    }
-                    if (local.isCameraEnabled != on && cameraApplied != on) throw IllegalStateException("not changed")
-                    // A chime plays when the camera turns on, as on iOS.
-                    if (on && cameraApplied == true) cue.play(CallTone.CONNECTED)
-                    refresh()
-                    return@launch
-                }
-                val changed = local.setMicrophoneEnabled(on)
+                val changed = if (camera) local.setCameraEnabled(on) else local.setMicrophoneEnabled(on)
                 if (ending) return@launch
                 if (!changed) throw IllegalStateException("not changed")
+                // A chime plays when the camera turns on, as on iOS.
+                if (camera && on) cue.play(CallTone.CONNECTED)
                 refresh()
             } catch (e: CancellationException) {
                 throw e
