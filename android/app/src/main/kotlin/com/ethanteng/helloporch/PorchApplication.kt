@@ -58,6 +58,8 @@ class PorchApplication : Application() {
     val push by lazy { PorchPush(this) }
     /** A call ringing through a notification while Porch isn't on screen. */
     val systemCalls by lazy { SystemCalls(this) }
+    /** The family's messages waiting on the bedside, kept downloaded so they play at once. */
+    val messages by lazy { BedsideMessages(this) }
     /** Text-to-speech for the bedside's announcements, started when the bedside first comes to the front so it's
      * ready by the first key press. */
     val speech by lazy { BedsideSpeech(this) }
@@ -148,6 +150,12 @@ class PorchApplication : Application() {
         // Photos caregiver mode downloaded on a family phone don't stay.
         if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
+        // Messages download, and played ones are reported, even when the saved keypad can't be read.
+        try {
+            messages.sync(state)
+        } catch (error: Exception) {
+            Log.w("Porch", "Couldn't update messages: ${error.message}")
+        }
         try {
             val slots = CallSlots.load(settings, photos)
             device.credential(PorchExperience.BEDSIDE)?.let { FamilyPhotos.sync(this, state, it, slots) }
@@ -176,9 +184,10 @@ class PorchApplication : Application() {
     }
 
     /** What a tablet set up as a new Porch leaves behind of the household it was: its keypad, photos, call, display and
-     * message settings, and the camera's part in attendance, as `PorchDevice.forgetBedsideHousehold` does on iOS. The
-     * unsent outbox comes with messages (phase 5). Family pairings stay. */
+     * message settings, its waiting messages, and the camera's part in attendance, as `PorchDevice.forgetBedsideHousehold`
+     * does on iOS. The voicemail outbox comes with phase 5's third part. Family pairings stay. */
     fun forgetBedsideHousehold() {
+        messages.forget()
         CallSlots.forget(settings, photos)
         photos.familyMembers.prune(keeping = emptySet(), olderThan = Instant.MAX)
         CallPreferences.forget(settings)

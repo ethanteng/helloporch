@@ -54,7 +54,8 @@ object NaturalVoice {
 
     /**
      * Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone who may drop
-     * in, and who it's calling for everyone it can call. Messages' sentences come with messages (phase 5).
+     * in, who it's calling for everyone it can call, and who each waiting message is from. Texts and the voicemail
+     * recorder's prompts come with their parts of phase 5.
      */
     fun prefetch(app: PorchApplication, state: FamilySnapshot, slots: CallSlots) {
         val language = BedsideText.language(app)
@@ -75,6 +76,9 @@ object NaturalVoice {
             }
         }
         contacts.forEach { texts += Announcer.callingMessage(app, it.name) }
+        if (state.messagesEnabled != false) {
+            for (message in state.messages.orEmpty().filter { it.held != true }) texts += BedsideMessages.announcement(app, message, slots)
+        }
         val now = SystemClock.elapsedRealtime()
         val pending = texts.distinct().filter { text ->
             val key = file(app, text, language, voiceID).name

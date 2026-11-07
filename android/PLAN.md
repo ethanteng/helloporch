@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is merged (#116, #117) and checked in the emulator. On 2026-11-05 a real tablet (a MUISOO KB10) set up against the local server and passed the Cell2Jack key test, and the Cell2Jack now keeps working after the tablet restarts; see [first tablet](#first-tablet-muisoo-kb10). What's left of phase 2 is QR joining from a real phone, once a signed build is in assetlinks.json. Phase 3 is merged (#123, #124, #125, #130, #131 through #133, #134). On 2026-11-07 a Samsung Galaxy A17 on Android 16, joined to a household on the production server, rang with Porch closed and with the phone locked, answered over the lock screen and kept the call going while locked; phone fallback reached a real phone from the KB10 through the local server. Phase 4's first four parts are merged (#126, #127, #128, #129), and its last, the Porch keyboard and About, is in #136.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is merged (#116, #117) and checked in the emulator. On 2026-11-05 a real tablet (a MUISOO KB10) set up against the local server and passed the Cell2Jack key test, and the Cell2Jack now keeps working after the tablet restarts; see [first tablet](#first-tablet-muisoo-kb10). What's left of phase 2 is QR joining from a real phone, once a signed build is in assetlinks.json. Phase 3 is merged (#123, #124, #125, #130, #131 through #133, #134). On 2026-11-07 a Samsung Galaxy A17 on Android 16, joined to a household on the production server, rang with Porch closed and with the phone locked, answered over the lock screen and kept the call going while locked; phone fallback reached a real phone from the KB10 through the local server. Phase 4's first four parts are merged (#126, #127, #128, #129), and its last, the Porch keyboard and About, is in #136. Phase 5's first part, the bedside playing waiting messages, is in #137.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
@@ -540,6 +540,14 @@ Page contents:
   - Seen on the KB10 with a Macally UCNUMKEY22 USB number keypad: Android counts it as a full keyboard, and Gboard then shows only a small toolbar for text fields, though it still shows its number pad for a PIN. Porch keyboard typed the name there.
 
 ## Phase 5: messages, voicemail and texts
+
+Built in five pull requests, each a working household:
+
+1. **The bedside plays waiting messages.** They download as they arrive (`messageMedia`, then `messageDelivered`), and Play N messages on the clock or the messages key plays them: the chime and who each is from, then the audio, or the video with that in a banner. Played to the end sends `messagePlayed`; Stop, the messages key or the call key leave the rest waiting, and a call takes over. Phone voicemail from a verified caller saved on the keypad is released here (`releaseKnownCaller`). Media3 ExoPlayer plays them.
+2. **Texts on the bedside, and caregiver mode's Messages page.** The page was planned for phase 4 but not built there: messages on or off, autoplay hours, the waiting queue, and review of held voicemail and texts. It's also where a caregiver removes a message that won't play, which the bedside skips and keeps, as iOS does.
+3. **The bedside's voicemail recorder and outbox.**
+4. **Messages on a family phone:** the thread, the composer, alerts and the profile.
+5. **Presence autoplay and someone at the bedside.**
 
 ### Media formats both platforms play
 

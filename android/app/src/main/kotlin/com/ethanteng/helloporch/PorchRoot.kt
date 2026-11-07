@@ -95,10 +95,15 @@ fun PorchRoot(
     LaunchedEffect(bedside, paired) { BedsideHomeScreen.sync(context, bedside && paired) }
     val active = calls.active
     val incoming = calls.incoming
+    // A call takes over from messages playing, and isn't Stop.
+    val callShowing = active != null || incoming != null
+    LaunchedEffect(callShowing) { if (callShowing) app.messages.interrupt() }
+    val playback = app.messages.playback
     when {
         // A call takes over from whatever is showing, as on iOS.
         active != null -> CallScreen(app, active)
         incoming != null -> IncomingCallScreen(app, incoming)
+        bedside && playback != null -> MessagePlayerScreen(app, playback)
         family -> FamilyScreens(app, if (joining) link else null, onLinkHandled, onReady = { familyReady = it })
         welcoming && page == WelcomePage.ON_TABLET -> BedsideOnTablet(onJoin = { page = WelcomePage.JOINING }, onBack = { page = WelcomePage.WELCOME })
         welcoming -> Welcome(

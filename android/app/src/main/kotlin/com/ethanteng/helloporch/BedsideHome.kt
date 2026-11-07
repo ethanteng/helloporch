@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
@@ -103,11 +105,14 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
             val narrow = safeWidth < 400.dp
             val callHeight = if (large) 124.dp else if (safeHeight < 500.dp) 80.dp else 96.dp
             val width = maxOf(200f, maxWidth.value)
-            val height = maxOf(80f, maxHeight.value - callHeight.value - 116f)
+            // Play messages takes the top left, so the clock moves down below it, as on iOS.
+            val messagesShown = state != null && app.messages.waitingCount > 0
+            val messagesRoom = if (messagesShown) 76f else 0f
+            val height = maxOf(80f, maxHeight.value - callHeight.value - 116f - messagesRoom)
             val timeSize = minOf(width * 0.43f, height * 0.48f).sp
             val primary = palette?.foreground ?: PorchColors.nightText
             val secondary = palette?.foreground ?: PorchColors.nightSecondary
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.fillMaxSize().padding(top = messagesRoom.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(minOf(24f, height * 0.025f).dp, Alignment.CenterVertically)) {
                     if (scene != null) Text("${text(scene.period.rawValue)} · ${text(scene.season.rawValue)}", color = primary,
@@ -155,6 +160,22 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
         // second, opens the PIN, as on iOS.
         if (paired && state != null) CaregiverButton(text("Caregiver mode"), palette?.controlForeground ?: PorchColors.nightSecondary,
             Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp), onOpen = setup::openGate)
+        val waiting = app.messages.waitingCount
+        if (state != null && waiting > 0) MessagesButton(text(if (waiting == 1) "Play 1 message" else "Play %d messages", waiting),
+            palette?.controlBackground?.copy(alpha = 0.6f) ?: PorchColors.nightSurface, palette?.controlForeground ?: PorchColors.nightText,
+            Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 16.dp, top = 12.dp, end = 88.dp)) { app.messages.play() }
+    }
+}
+
+/** Play messages, in the clock's top left while any are waiting, as iOS shows it: texts count with them in phase 5's
+ * second part. */
+@Composable
+private fun MessagesButton(title: String, color: Color, text: Color, modifier: Modifier, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = modifier.heightIn(min = 64.dp), shape = CircleShape,
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = text)) {
+        Text("\u2709\uFE0E", Modifier.padding(end = 12.dp).clearAndSetSemantics {}, fontSize = 26.sp)
+        Text(title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
