@@ -150,7 +150,8 @@ class PorchCall(
 
     /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
     fun leftForeground() {
-        if (!video || !cameraOn || ending) return
+        // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
+        if (!video || !room.localParticipant.isCameraEnabled || ending) return
         cameraWhenBack = true
         scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
     }
@@ -205,7 +206,10 @@ class PorchCall(
             enableMicrophone()
             // Allowed just now, on a first call: the call's service needs the microphone named to keep recording locked.
             app.calls.updateService()
-            if (video && CallPreferences.startVideoWithCamera(role, app.settings)) room.localParticipant.setCameraEnabled(true)
+            // The camera works only while Porch is in front. A call answered just as the phone locked starts it on return.
+            if (video && CallPreferences.startVideoWithCamera(role, app.settings)) {
+                if (app.onScreen) room.localParticipant.setCameraEnabled(true) else cameraWhenBack = true
+            }
             mediaReady = true
             controlsEnabled = true
             refresh()

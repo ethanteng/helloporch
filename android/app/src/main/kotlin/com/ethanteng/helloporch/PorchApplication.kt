@@ -142,6 +142,7 @@ class PorchApplication : Application() {
     private fun afterSnapshot(links: FamilyLinks) {
         // A call to this device rings, on the bedside and on family phones.
         calls.noteLinks(links)
+        systemCalls.noteLinks(links)
         // A family joined or left, or a bedside set up: the households that ring this device change with it.
         push.register()
         // Photos caregiver mode downloaded on a family phone don't stay.

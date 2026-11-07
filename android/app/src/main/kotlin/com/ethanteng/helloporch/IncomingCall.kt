@@ -127,7 +127,8 @@ class IncomingCall(
         scope.launch {
             try {
                 val result = accept(session)
-                if (!app.onScreen) { app.scope.launch { session.end() }; close(); return@launch }
+                // Porch left the screen while this was being answered. A family phone's call goes on with the phone locked.
+                if (!app.onScreen && !familyPhone) { app.scope.launch { session.end() }; close(); return@launch }
                 app.coordinator.update(result)
                 close()
                 onAnswered(session.copy(call = result.state?.call ?: call))

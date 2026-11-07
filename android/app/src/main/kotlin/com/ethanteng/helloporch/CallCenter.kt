@@ -260,6 +260,8 @@ class CallCenter(private val app: PorchApplication) {
         incoming?.leftScreen()
         active?.let { if (continuing) it.leftForeground() else it.endCall() }
         cancelPendingCall()
+        // A push announced a call Porch's screen hadn't shown yet.
+        app.systemCalls.leftScreen()
     }
 
     /** Porch is back on screen: a call in progress turns its camera back on if Porch turned it off, and a call whose
@@ -275,6 +277,8 @@ class CallCenter(private val app: PorchApplication) {
         active = call
         openedForCall = false
         updateService()
+        // Answered just as Porch left the screen, which stopped its check-ins: a family phone's call needs them to go on.
+        if (!app.onScreen && continuing) app.coordinator.start()
         call.start()
     }
 

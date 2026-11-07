@@ -138,7 +138,7 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
  * on Android 14 and later, permission to show a call over the lock screen. Asked again after a trip to Settings.
  */
 @Composable
-private fun RingWhenClosed(app: PorchApplication) {
+internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
     if (!app.push.configured) return
     val context = LocalContext.current
     var checks by remember { mutableIntStateOf(0) }
@@ -152,10 +152,14 @@ private fun RingWhenClosed(app: PorchApplication) {
         refused = !app.push.canRing()
         app.push.register()
     }
+    // The bedside is normally always in front, so it rings this way only when it isn't, such as in Android's settings.
+    val device = if (bedside) "tablet" else "phone"
     val (title, detail, button) = when {
-        !canRing -> Triple("Ring when Porch is closed", "Allow notifications and the microphone, so calls ring this phone even when Porch isn't open.",
+        !canRing -> Triple(if (bedside) "Ring when Porch isn't in front" else "Ring when Porch is closed",
+            if (bedside) "Allow notifications and the microphone, so calls still ring this tablet when Porch isn't in front."
+            else "Allow notifications and the microphone, so calls ring this phone even when Porch isn't open.",
             if (refused) "Open settings" else "Allow")
-        !fullScreen -> Triple("Show calls on the lock screen", "Allow full-screen notifications for Porch, so a call shows when this phone is locked.",
+        !fullScreen -> Triple("Show calls on the lock screen", "Allow full-screen notifications for Porch, so a call shows when this $device is locked.",
             "Open settings")
         else -> return
     }

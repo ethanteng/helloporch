@@ -502,6 +502,9 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
         if (isHome || makeHome != null) HorizontalDivider()
         ActionRow("Tablet settings", "Android's own settings, such as Wi-Fi and the volume.") { open(context, Intent(Settings.ACTION_SETTINGS)) }
     }
+    // Ringing while Porch isn't in front needs notifications, which a tablet set up before Porch could ring that way
+    // was never asked for.
+    RingWhenClosed(app, bedside = true)
     var confirming by remember { mutableStateOf(false) }
     CaregiverGroup { ActionRow("Use this tablet as a family device") { confirming = true } }
     PrivacyPolicyLink()

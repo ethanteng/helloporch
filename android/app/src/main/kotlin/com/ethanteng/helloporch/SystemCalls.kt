@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -21,9 +22,12 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.ethanteng.helloporch.core.FamilyCredential
+import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyNames
 import com.ethanteng.helloporch.core.FamilyServiceException
+import com.ethanteng.helloporch.core.IncomingCallRinging
 import com.ethanteng.helloporch.core.PorchExperience
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,9 +49,16 @@ class SystemCalls(private val app: PorchApplication) {
         var job: Job? = null
     }
 
+    private class Pending(val callID: String, val credential: FamilyCredential, val name: String, val video: Boolean, val expiresAt: Long)
+
     private var ringing: Ringing? = null
     /** Calls that rang here or were turned away, newest last, so a repeated push doesn't ring again. */
     private val recent = ArrayDeque<String>()
+    /** A push that came while Porch was on screen, left to its next check-in. It rings here if Porch leaves first. */
+    private var deferred: Pending? = null
+    /** Pushes that came during another call, until a check-in shows whether each is a call to end as missed or an
+     * invitation into a call, which runs out on its own, as iOS's `finishBusyCall` waits to tell. */
+    private val awaitingMissed = ArrayDeque<Pair<String, FamilyCredential>>()
     /** A call answered from its notification, which Porch answers as it opens. */
     private var answering: String? = null
 
@@ -62,26 +73,55 @@ class SystemCalls(private val app: PorchApplication) {
         val callID = data["callID"]?.lowercase()
         val name = data["callerName"]?.take(80)?.ifBlank { null } ?: "Family"
         val expiresAt = data["expiresAt"]?.toDoubleOrNull()?.toLong() ?: 0
-        // Porch on screen rings in its own screen from its next check-in, a second or two away.
-        if (app.onScreen && app.screenReady) return
         // Porch's own screen may already be showing this call: the server pushes even when Porch is open, and that
         // push can arrive after the check-in that rang. Ending it here would hang up the call on screen.
         if (callID != null && (ringing?.callID == callID || app.calls.owns(callID))) return
         val credential = recipient(data["recipientID"])
-        if (callID == null || !idPattern.matches(callID) || credential == null || expiresAt <= nowSeconds() || callID in recent) {
+        val valid = callID != null && idPattern.matches(callID) && credential != null && expiresAt > nowSeconds() && callID !in recent
+        // Porch on screen rings in its own screen from its next check-in, a second or two away, unless it leaves first.
+        if (app.onScreen && app.screenReady) {
+            if (valid) deferred = Pending(callID!!, credential!!, name, data["mode"] == "video", expiresAt)
+            return
+        }
+        if (!valid) {
             // Every call push shows a call before anything else, even one that's stale or a repeat, which then ends at
             // once, as iOS must with PushKit. Firebase also stops trusting high-priority messages that show nothing.
             acknowledge()
             return
         }
         if (app.calls.busy || ringing != null) {
-            // On another call: it shows and ends, and the caller hears it was missed.
+            // On another call: it shows and goes, and a check-in then tells whether to end it as missed (noteLinks).
             acknowledge()
-            remember(callID)
-            app.scope.launch { endMissed(callID, credential) }
+            remember(callID!!)
+            awaitingMissed.addLast(callID to credential!!)
+            while (awaitingMissed.size > 32) awaitingMissed.removeFirst()
             return
         }
-        ring(callID, credential, name, data["mode"] == "video", expiresAt)
+        ring(callID!!, credential!!, name, data["mode"] == "video", expiresAt)
+    }
+
+    /**
+     * Each check-in: a push turned away during another call is ended as missed once a check-in lists it, unless it's
+     * an invitation into a call. Ending one of those while it rings counts as a decline, so it runs out on its own.
+     */
+    fun noteLinks(links: FamilyLinks) {
+        for (waiting in awaitingMissed.toList()) {
+            val (callID, credential) = waiting
+            val call = links.state(credential)?.call?.takeIf { it.id.equals(callID, ignoreCase = true) } ?: continue
+            awaitingMissed.remove(waiting)
+            if (call.state == "pending" && IncomingCallRinging.endAsMissed(UUID.fromString(callID), call.id, call.guest == true)) {
+                app.scope.launch { endMissed(callID, credential) }
+            }
+        }
+    }
+
+    /** Porch left the screen before a check-in showed a call its push announced: that call rings here instead. */
+    fun leftScreen() {
+        val pending = deferred ?: return
+        deferred = null
+        if (pending.callID in recent || app.calls.owns(pending.callID) || app.calls.busy) return
+        val quiet = app.getSystemService<PowerManager>()?.isInteractive == false
+        ring(pending.callID, pending.credential, pending.name, pending.video, pending.expiresAt, quiet)
     }
 
     /**
@@ -94,6 +134,7 @@ class SystemCalls(private val app: PorchApplication) {
         val notification = CallNotifications.incoming(app, callID, caller, video, expiresAt, quiet)
         val call = Ringing(callID, credential, notification, expiresAt)
         ringing = call
+        if (deferred?.callID == callID) deferred = null
         remember(callID)
         // Posted before anything else, so it rings even if the service can't start.
         CallNotifications.post(app, CallNotifications.INCOMING, notification)
@@ -142,6 +183,7 @@ class SystemCalls(private val app: PorchApplication) {
 
     /** Porch's own incoming screen took this call over, now that Porch is on screen. */
     fun handOver(callID: String) {
+        if (deferred?.callID == callID) deferred = null
         val call = ringing?.takeIf { it.callID == callID } ?: return
         stop(call)
     }
@@ -265,7 +307,9 @@ object CallNotifications {
             .setOngoing(true)
             .setContentIntent(open)
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer).setIsVideo(video))
-            .setTimeoutAfter(((expiresAt - System.currentTimeMillis() / 1_000).coerceAtLeast(1)) * 1_000)
+            // Checking in takes it away when the call runs out. This is in case that stopped, so it comes a little later,
+            // not while the service may still be showing it.
+            .setTimeoutAfter(((expiresAt - System.currentTimeMillis() / 1_000).coerceAtLeast(1) + 10) * 1_000)
         if (quiet) return builder.build()
         // Rings again and again, like a phone, rather than once.
         return builder.setFullScreenIntent(open, true).build().apply { flags = flags or Notification.FLAG_INSISTENT }
