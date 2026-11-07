@@ -85,14 +85,16 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
         RemoteCaregiverMode(app, caregiverFamily, links, onClose = { reason -> caregiving = null; caregiverNotice = reason })
         return
     }
-    if (about && listing) {
+    // From the families, or the join screen, as long as no invitation is waiting.
+    if (about && link == null) {
         BackHandler { about = false }
         AboutScreen(navigation = { TextButton(onClick = { about = false }) { Text("Back") } })
         return
     }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done)
+            if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done,
+                onAbout = { about = true })
             else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ }, onAbout = { about = true },
                 onCaregiver = { family ->
                     // Every visit starts with the PIN.
@@ -105,7 +107,8 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
 }
 
 @Composable
-private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boolean, onJoined: () -> Unit, onCancel: (() -> Unit)?) {
+private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boolean, onJoined: () -> Unit, onCancel: (() -> Unit)?,
+    onAbout: () -> Unit) {
     var text by rememberSaveable(initialLink) { mutableStateOf(initialLink) }
     var nickname by rememberSaveable { mutableStateOf("") }
     // Saved, so turning the phone doesn't hide why a join failed.
@@ -137,6 +140,8 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         }
     }) { Text(if (busy) "Joining…" else "Join family") }
     onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
+    // The licenses, before a phone has joined any family.
+    if (!adding) TextButton(onClick = onAbout) { Text("About Porch") }
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 

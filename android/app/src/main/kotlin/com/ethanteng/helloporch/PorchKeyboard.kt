@@ -152,13 +152,13 @@ private fun PorchKeyboardChoice(keyboard: PorchKeyboard) {
     val hardware = hardwareKeyboardAttached()
     val device = deviceName()
     val switcher = rememberKeyboardSwitcher(keyboard)
-    var helping by remember { mutableStateOf(false) }
+    var help by remember { mutableStateOf<HelpOpen?>(null) }
     // As wide as the form above it, at most.
     Column(Modifier.fillMaxWidth().wrapContentWidth().widthIn(max = 760.dp).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ChoiceButton(if (hardware) "Keyboard help" else "${device.replaceFirstChar(Char::uppercase)} keyboard") {
-                if (hardware) helping = true else switcher.useSystem()
+                if (hardware) help = HelpOpen(keyboard.active) else switcher.useSystem()
             }
             ChoiceButton("Porch keyboard") { switcher.usePorch() }
         }
@@ -168,9 +168,15 @@ private fun PorchKeyboardChoice(keyboard: PorchKeyboard) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    if (helping) KeyboardHelp(device, onDismiss = { helping = false }, onPorch = { helping = false; switcher.usePorch() },
-        onSystem = { helping = false; switcher.useSystem() })
+    help?.let { open ->
+        KeyboardHelp(device, onDismiss = { help = null; open.field?.focus?.requestFocus() },
+            onPorch = { help = null; switcher.usePorch(open.field) }, onSystem = { help = null; switcher.useSystem(open.field) })
+    }
 }
+
+/** Keyboard help is open. A dialog takes the focus from the form, so `field`, the one being typed in when it opened, gets
+ * the cursor back after it, as on iOS. */
+private class HelpOpen(val field: PorchKeyboardField?)
 
 /** Neither button takes focus from the field being typed in. */
 @Composable
@@ -199,15 +205,16 @@ private fun KeyboardHelp(device: String, onDismiss: () -> Unit, onPorch: () -> U
 }
 
 /** Switches between the keyboards, keeping the field being typed in, or starting in the first one. */
-private class KeyboardSwitcher(private val keyboard: PorchKeyboard, private val restart: () -> Unit, private val showSystem: () -> Unit) {
-    fun usePorch() {
+private class KeyboardSwitcher(private val keyboard: PorchKeyboard, private val restart: (PorchKeyboardField?) -> Unit,
+    private val showSystem: () -> Unit) {
+    fun usePorch(field: PorchKeyboardField? = null) {
         PorchKeyboard.inUse = true
-        restart()
+        restart(field)
     }
 
-    fun useSystem() {
+    fun useSystem(field: PorchKeyboardField? = null) {
         PorchKeyboard.inUse = false
-        restart()
+        restart(field)
         showSystem()
     }
 
@@ -221,9 +228,9 @@ private fun rememberKeyboardSwitcher(keyboard: PorchKeyboard): KeyboardSwitcher 
     return remember(keyboard, focusManager, systemKeyboard) {
         lateinit var switcher: KeyboardSwitcher
         switcher = KeyboardSwitcher(keyboard,
-            restart = {
+            restart = { field ->
                 // Focusing again starts typing again, through the keyboard now chosen.
-                val target = switcher.target()
+                val target = field ?: switcher.target()
                 if (keyboard.active != null) { systemKeyboard?.hide(); focusManager.clearFocus() }
                 target?.focus?.requestFocus()
             },
@@ -256,8 +263,9 @@ private fun PorchKeyboardKeys(keyboard: PorchKeyboard, field: PorchKeyboardField
             KeyRow(PorchKeyLayout.controls(field.keys, keyboard.uppercase, keyboard.symbols), keyboard.uppercase, size.height, press)
         }
     }
-    if (helping) KeyboardHelp(device, onDismiss = { helping = false }, onPorch = { helping = false },
-        onSystem = { helping = false; switcher.useSystem() })
+    // The dialog takes the focus, so the field gets it back after, unless the system keyboard was chosen for it.
+    if (helping) KeyboardHelp(device, onDismiss = { helping = false; field.focus.requestFocus() },
+        onPorch = { helping = false; field.focus.requestFocus() }, onSystem = { helping = false; switcher.useSystem(field) })
 }
 
 private fun pressKey(key: String, keyboard: PorchKeyboard, field: PorchKeyboardField, context: Context, done: () -> Unit) {
@@ -284,16 +292,21 @@ private fun pressKey(key: String, keyboard: PorchKeyboard, field: PorchKeyboardF
 private const val KEY_GAP = 7
 private const val HEADING_HEIGHT = 40
 private const val PADDING = 20
+/** What the form needs above the keyboard: the status bar, the screen's bar and one field. */
+private const val FORM_ROOM = 160
 
 /** How tall keys are, and whether the heading shows. The keyboard takes at most half the window, so a phone turned
  * sideways still has room for the field: its keys get shorter, down to 32 dp, and it leaves out the heading, whose
- * switch to the system keyboard is still under the form after Done. */
+ * switch to the system keyboard is still under the form after Done. Keys go below 32 dp only in a window so short that
+ * otherwise Done would leave the screen. */
 private class KeySize(val height: Int, val heading: Boolean)
 
 private fun keySize(windowHeight: Int, rows: Int): KeySize {
     val heading = windowHeight >= 480
     val fixed = PADDING + KEY_GAP * (rows - 1) + if (heading) HEADING_HEIGHT + KEY_GAP else 0
-    return KeySize(((windowHeight / 2 - fixed) / rows).coerceIn(32, 52), heading)
+    val half = (windowHeight / 2 - fixed) / rows
+    if (half >= 32) return KeySize(half.coerceAtMost(52), heading)
+    return KeySize(minOf(32, (windowHeight - FORM_ROOM - fixed) / rows).coerceAtLeast(20), heading)
 }
 
 /** A row of equal keys, `height` dp tall, 52 unless the window is short. Keys never take focus, so the field keeps it. */
