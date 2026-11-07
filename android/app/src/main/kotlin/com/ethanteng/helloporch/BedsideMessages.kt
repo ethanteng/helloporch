@@ -41,10 +41,16 @@ class BedsideMessages(private val app: PorchApplication) {
     private val downloading = mutableSetOf<String>()
     /** When a failed download may be tried again, in elapsed real time. */
     private val retryAfter = mutableMapOf<String, Long>()
-    /** Played here, and hidden at once, before the server confirms. */
-    private val played = mutableSetOf<String>()
-    /** Played here, but the server hasn't heard yet. */
-    private val unreported = mutableSetOf<String>()
+    /** Played here, and hidden at once, until the server drops them. Kept across restarts, so a message played without a
+     * connection isn't offered again as new after the tablet restarts. */
+    private val played: MutableSet<String> by lazy {
+        app.settings.getString(PLAYED_KEY)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty().toMutableSet()
+    }
+    /** Played here, but the server hasn't heard yet. After a restart that's all of [played]: telling it again is harmless. */
+    private val unreported: MutableSet<String> by lazy { played.toMutableSet() }
+    /** The server heard these arrived, though a check-in may not show it yet. */
+    private val delivered = mutableSetOf<String>()
+    private val delivering = mutableSetOf<String>()
     private val releasing = mutableSetOf<String>()
     private val folder get() = File(app.filesDir, "Porch/Messages")
     /** A video message can be 100 MB. */
@@ -76,7 +82,8 @@ class BedsideMessages(private val app: PorchApplication) {
         val credential = app.device.credential(PorchExperience.BEDSIDE) ?: return
         val all = state.messages.orEmpty()
         val ids = all.map { it.id }.toSet()
-        played.retainAll(ids); unreported.retainAll(ids); releasing.retainAll(ids)
+        if (played.retainAll(ids)) savePlayed()
+        unreported.retainAll(ids); delivered.retainAll(ids); releasing.retainAll(ids)
         val slots = if (all.any { it.held == true }) runCatching { CallSlots.load(app.settings, app.photos) }.getOrNull() else null
         for (message in BedsideMessageQueue.releasable(all, slots, releasing)) releaseKnownCaller(message, credential)
         val queue = BedsideMessageQueue.waiting(all, played)
@@ -86,6 +93,9 @@ class BedsideMessages(private val app: PorchApplication) {
         folder.listFiles()?.filter { it.name !in keep && it.name.substringBefore('.') !in partial }?.forEach { it.delete() }
         val nowReady = queue.filter { file(it).exists() }
         if (nowReady != ready) ready = nowReady
+        // The sender sees it arrived. Asked again each check-in until the server shows it, so a dropped connection right
+        // after a download doesn't leave it undelivered.
+        for (message in nowReady) if (!message.delivered && message.id !in delivered && message.id !in delivering) deliver(message, credential)
         for (id in unreported.toList()) report(id, credential)
         // Don't compete with a call for bandwidth.
         if (state.busy) return
@@ -99,6 +109,7 @@ class BedsideMessages(private val app: PorchApplication) {
     /** Played to the end: it leaves the queue for good, and the sender sees it was played. */
     fun markPlayed(message: FamilyMessage) {
         played += message.id
+        savePlayed()
         app.device.credential(PorchExperience.BEDSIDE)?.let { report(message.id, it) }
         sync()
     }
@@ -107,7 +118,8 @@ class BedsideMessages(private val app: PorchApplication) {
     fun forget() {
         playback?.stop()
         ready = emptyList()
-        downloading.clear(); retryAfter.clear(); played.clear(); unreported.clear(); releasing.clear()
+        downloading.clear(); retryAfter.clear(); played.clear(); unreported.clear(); delivered.clear(); releasing.clear()
+        savePlayed()
         folder.deleteRecursively()
     }
 
@@ -130,9 +142,8 @@ class BedsideMessages(private val app: PorchApplication) {
                     if (!part.renameTo(destination)) { part.delete(); throw IOException("Couldn't keep the message.") }
                 }
                 downloading -= message.id
-                if (!stillPaired(credential)) return@launch
-                runCatching { app.service(credential).send("messageDelivered", mapOf("messageID" to JsonPrimitive(message.id))) }
-                sync()
+                // Then the sync tells the server it arrived.
+                if (stillPaired(credential)) sync()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -142,6 +153,19 @@ class BedsideMessages(private val app: PorchApplication) {
             }
         }
     }
+
+    private fun deliver(message: FamilyMessage, credential: FamilyCredential) {
+        delivering += message.id
+        app.scope.launch {
+            try {
+                app.service(credential).send("messageDelivered", mapOf("messageID" to JsonPrimitive(message.id)))
+                delivered += message.id
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            } finally { delivering -= message.id }
+        }
+    }
+
+    private fun savePlayed() = if (played.isEmpty()) app.settings.remove(PLAYED_KEY) else app.settings.putString(PLAYED_KEY, played.joinToString("\n"))
 
     private fun stillPaired(credential: FamilyCredential) = app.device.credential(PorchExperience.BEDSIDE)?.credential == credential.credential
 
@@ -164,6 +188,7 @@ class BedsideMessages(private val app: PorchApplication) {
 
     companion object {
         private const val PART = ".part"
+        private const val PLAYED_KEY = "porch.messages.played.v1"
 
         /** Who it's from, as the bedside shows and says it, in its own language for an unknown caller. */
         fun sender(app: PorchApplication, message: FamilyMessage, slots: CallSlots): Pair<String, MessageSender> {
