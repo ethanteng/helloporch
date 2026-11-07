@@ -445,6 +445,11 @@ class CallService : Service() {
 
         fun stop(context: Context) {
             pending = null
+            // The foreground notification goes with the service. The other id would not: starting again with a new id
+            // leaves the previous one, including one posted before the service was running.
+            val notifications = NotificationManagerCompat.from(context)
+            notifications.cancel(CallNotifications.ONGOING)
+            notifications.cancel(CallNotifications.INCOMING)
             if (!running) return
             running = false
             context.stopService(Intent(context, CallService::class.java))

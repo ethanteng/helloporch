@@ -89,10 +89,17 @@ class CallCenter(private val app: PorchApplication) {
                 // Android 11 and later need the microphone named for it to keep recording with the phone locked.
                 CallService.show(app, CallNotifications.ONGOING, CallNotifications.ongoing(app, call.name), serviceTypes(withMicrophone = true))
             }
-            system != null -> CallService.show(app, CallNotifications.INCOMING, system, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
-            ringing != null && ringing.familyPhone -> CallService.show(app, CallNotifications.INCOMING,
-                CallNotifications.incoming(app, ringing.call.id, ringing.name, ringing.video, ringing.call.expiresAt, quiet = true),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+            system != null -> {
+                // The service may already be showing the in-progress notification. A new foreground id leaves the old one.
+                NotificationManagerCompat.from(app).cancel(CallNotifications.ONGOING)
+                CallService.show(app, CallNotifications.INCOMING, system, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+            }
+            ringing != null && ringing.familyPhone -> {
+                NotificationManagerCompat.from(app).cancel(CallNotifications.ONGOING)
+                CallService.show(app, CallNotifications.INCOMING,
+                    CallNotifications.incoming(app, ringing.call.id, ringing.name, ringing.video, ringing.call.expiresAt, quiet = true),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL)
+            }
             else -> CallService.stop(app)
         }
     }
@@ -101,6 +108,7 @@ class CallCenter(private val app: PorchApplication) {
      * add the microphone to a call's service from the background, so name it now while Porch is in front. */
     fun noteAnswering() {
         val ringing = incoming?.takeIf { it.familyPhone } ?: return
+        NotificationManagerCompat.from(app).cancel(CallNotifications.ONGOING)
         CallService.show(app, CallNotifications.INCOMING,
             CallNotifications.incoming(app, ringing.call.id, ringing.name, ringing.video, ringing.call.expiresAt, quiet = true),
             serviceTypes(withMicrophone = true))
@@ -161,7 +169,9 @@ class CallCenter(private val app: PorchApplication) {
 
     /** A family phone calls the bedside person. */
     fun call(person: FamilyPerson, mode: NativeCall.Mode, family: FamilyCredential) {
-        if (busy) return
+        // A call ringing through a notification is not [busy] until its screen is up. Starting this one would take that
+        // call's service, and a failed start would leave its in-progress notification behind.
+        if (busy || app.systemCalls.notification != null) return
         opening = true
         error = null
         // Still in front: the call's service names the microphone now, as for Answer (noteAnswering). The call then goes
@@ -276,7 +286,8 @@ class CallCenter(private val app: PorchApplication) {
     fun leftScreen() {
         incoming?.leftScreen()
         active?.let { if (continuing) it.leftForeground() else it.endCall() }
-        cancelPendingCall()
+        // A family call still being placed goes on with the phone locked, as one already up does. The bedside's ends.
+        if (!opening || app.device.experience != PorchExperience.FAMILY) cancelPendingCall()
         // A push announced a call Porch's screen hadn't shown yet.
         app.systemCalls.leftScreen()
     }
