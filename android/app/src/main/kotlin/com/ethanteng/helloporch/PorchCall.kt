@@ -156,6 +156,9 @@ class PorchCall(
     /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
     fun leftForeground() {
         if (!video || ending) return
+        // Already on its way off, such as Camera off tapped just before the lock: it stays off, and isn't remembered for
+        // turning back on when Porch is back.
+        if (cameraTarget == false) return
         // LiveKit's own state lags a change still on its way, so an enable that hasn't landed still counts as on.
         // Otherwise a quick lock after coming back would leave that enable to finish with the phone locked.
         if (!room.localParticipant.isCameraEnabled && cameraTarget != true) return
