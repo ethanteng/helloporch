@@ -54,6 +54,10 @@ class PorchApplication : Application() {
     val keypadReport by lazy { KeypadNumberReport(scope, { service(it) }, pin = { caregiverPIN }, now = SystemClock::elapsedRealtime) }
     /** The call this device is ringing for or on. */
     val calls by lazy { CallCenter(this) }
+    /** Ringing when Porch isn't open, from Firebase. */
+    val push by lazy { PorchPush(this) }
+    /** A call ringing through a notification while Porch isn't on screen. */
+    val systemCalls by lazy { SystemCalls(this) }
     /** Text-to-speech for the bedside's announcements, started when the bedside first comes to the front so it's
      * ready by the first key press. */
     val speech by lazy { BedsideSpeech(this) }
@@ -70,7 +74,7 @@ class PorchApplication : Application() {
         get() = secrets.read(caregiverPINAccount)?.decodeToString() ?: ""
         set(value) = secrets.write(caregiverPINAccount, value.encodeToByteArray(), SecretStore.Access.WHEN_UNLOCKED)
 
-    /** Shows the other mode and checks in as it. Push, which the old mode unregisters first, comes with calls (phase 3). */
+    /** Shows the other mode and checks in as it. Push moves to the new mode's households (PorchPush.register). */
     private val cell2jackKeypad = lazy { Cell2JackKeypad(this, settings) }
     /** The Cell2Jack, the bedside's corded-phone keypad. It runs only while the bedside is in front (MainActivity), and
      * is never made on a family phone. */
@@ -83,6 +87,7 @@ class PorchApplication : Application() {
         device.experience = experience
         modeChanges++
         if (onScreen) coordinator.start()
+        push.register()
         if (experience == PorchExperience.BEDSIDE) {
             // Already in front: onResume ran while this tablet was still a family phone, so it never started the keypad.
             if (activityResumed) cell2jack.start()
@@ -117,11 +122,18 @@ class PorchApplication : Application() {
         super.onCreate()
         // Cell2JackAttachedActivity's process can start before the tablet is unlocked, when nothing here can be read.
         if (Application.getProcessName().endsWith(Cell2JackAttachedActivity.processSuffix)) return
-        // Porch checks in while it's open and tells each family when it closes. Push wakes it for calls (phase 3).
+        CallNotifications.createChannels(this)
+        // Porch checks in while it's open and tells each family when it closes. Push rings it for calls while it's
+        // closed. A call in progress on a family phone keeps it checking in, so the call goes on with the phone locked.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) { onScreen = true; coordinator.start() }
-            override fun onStop(owner: LifecycleOwner) { onScreen = false; coordinator.pause(); calls.leftScreen() }
+            override fun onStart(owner: LifecycleOwner) { onScreen = true; coordinator.start(); calls.cameOnScreen(); push.register() }
+            override fun onStop(owner: LifecycleOwner) {
+                onScreen = false
+                calls.leftScreen()
+                if (!calls.continuing) coordinator.pause()
+            }
         })
+        push.start()
     }
 
     /** The bedside's work after each snapshot, as `FamilyCoordinator.changed()` does on iOS: family members' photos
@@ -130,6 +142,8 @@ class PorchApplication : Application() {
     private fun afterSnapshot(links: FamilyLinks) {
         // A call to this device rings, on the bedside and on family phones.
         calls.noteLinks(links)
+        // A family joined or left, or a bedside set up: the households that ring this device change with it.
+        push.register()
         // Photos caregiver mode downloaded on a family phone don't stay.
         if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return

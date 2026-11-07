@@ -103,6 +103,8 @@ class PorchCall(
     private var switchingToPhone = false
     /** Hangs their phone up. Kept until the server confirms it has. */
     private var phoneControlToken: String? = null
+    /** Porch turned the camera off when it left the screen, and turns it back on when it's back. */
+    private var cameraWhenBack = false
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
@@ -141,6 +143,20 @@ class PorchCall(
             scope.launch { room.localParticipant::isMicrophoneEnabled.flow.collect { microphoneOn = it } },
             scope.launch { room.localParticipant::isCameraEnabled.flow.collect { cameraOn = it } },
         )
+    }
+
+    /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
+    fun leftForeground() {
+        if (!video || !cameraOn || ending) return
+        cameraWhenBack = true
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
+    }
+
+    /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
+    fun returnedToForeground() {
+        if (!cameraWhenBack || ending) return
+        cameraWhenBack = false
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(true) } }
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
