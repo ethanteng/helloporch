@@ -2246,7 +2246,9 @@ final class BedsideSetupTests: XCTestCase {
         window.rootViewController = device; window.makeKeyAndVisible()
         defer { window.isHidden = true }
         try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectKeypad" }).sendActions(for: .touchUpInside)
-        XCTAssertTrue((device.presentedViewController as? UINavigationController)?.viewControllers.first is SetupUSBKeypadViewController)
+        let keypadNav = try XCTUnwrap(device.presentedViewController as? UINavigationController)
+        XCTAssertTrue(keypadNav.viewControllers.first is SetupUSBKeypadViewController)
+        XCTAssertEqual(keypadNav.viewControllers.first?.title, "Connect the USB keypad", "The view loads before onContinue is set")
     }
 
     /// A key, then hanging up, as the driver's screen checks the phone. Returns the screen in a window on the app's scene.
@@ -2334,8 +2336,16 @@ final class BedsideSetupTests: XCTestCase {
         receiver.isOn = false; receiver.sendActions(for: .valueChanged)
         XCTAssertFalse(keypad.receiverHangUp)
         try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectPhone" }).sendActions(for: .touchUpInside)
-        XCTAssertTrue((device.presentedViewController as? UINavigationController)?.viewControllers.first is SetupAdapterPhoneViewController)
+        let phoneNav = try XCTUnwrap(device.presentedViewController as? UINavigationController)
+        XCTAssertTrue(phoneNav.viewControllers.first is SetupAdapterPhoneViewController)
+        XCTAssertEqual(phoneNav.viewControllers.first?.title, "Connect the phone", "The view loads before onContinue is set")
         XCTAssertEqual(buttons(in: device.view).contains { $0.accessibilityIdentifier == "device.connectCell2Jack" }, SetupPhoneViewController.offered)
+        // Same order as Connect the Cell2Jack: the navigation loads the view, then onContinue is set.
+        let driver = SetupPhoneViewController(BedsideSetup())
+        _ = PorchStyle.navigation(driver)
+        XCTAssertEqual(driver.title, "Set up Porch")
+        driver.onContinue = {}
+        XCTAssertEqual(driver.title, "Connect the phone")
     }
 
     @MainActor func testAddYourPhoneAsksForTheirNameAndItsCodeReadsAsTheInvitation() throws {

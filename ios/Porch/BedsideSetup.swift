@@ -461,7 +461,9 @@ final class SetupCallingViewController: BedsideSetupStep {
 /// mode opens this screen again.
 final class SetupAdapterPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving {
     /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
-    var onContinue: (() -> Void)?
+    /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
+    /// can't wait for `viewDidLoad`.
+    var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = "Connect the phone" } } }
     private enum Progress: Equatable { case waiting, connected, heard(String), done(String) }
     private var progress = Progress.waiting
     private var checked: Bool { if case .done = progress { return true } else { return false } }
@@ -605,7 +607,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// Builds without the Cell2Jack driver, and iPhones, never offer the Cell2Jack plugged straight into the iPad.
     static var offered: Bool { Cell2JackKeypad.supportsDriverPlatform }
     /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
-    var onContinue: (() -> Void)?
+    /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
+    /// can't wait for `viewDidLoad`.
+    var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = "Connect the phone" } } }
     private enum Progress: Equatable { case waiting, connected, heard(String), done(String) }
     private var progress = Progress.waiting
     private var checked: Bool { if case .done = progress { return true } else { return false } }
@@ -750,7 +754,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
 /// acting on it. Do this later goes on all the same; This iPad in caregiver mode opens this screen again.
 final class SetupUSBKeypadViewController: BedsideSetupStep {
     /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
-    var onContinue: (() -> Void)?
+    /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
+    /// can't wait for `viewDidLoad`.
+    var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = "Connect the USB keypad" } } }
     private enum Progress: Equatable { case waiting, connected, heard(String) }
     private var progress = Progress.waiting
     private var checked: Bool { if case .heard = progress { return true } else { return false } }
