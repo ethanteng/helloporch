@@ -78,13 +78,13 @@ import kotlinx.serialization.json.JsonPrimitive
 /** Caregiver mode's pages, as iOS's CaregiverPage lists them. Messages comes with messages (android/PLAN.md, phase 5). */
 enum class CaregiverPage(private val bedsideTitle: String, private val phoneTitle: String = bedsideTitle) {
     PEOPLE("People", "Family"), CALLS("Calls"), DROP_IN("Drop-in"), DISPLAY("Display & voice"), PRIVACY("Privacy"),
-    CAREGIVERS("Caregivers & PIN", "Caregivers"), DEVICE("This tablet");
+    CAREGIVERS("Caregivers & PIN", "Caregivers"), DEVICE("This tablet"), ABOUT("About");
 
     fun title(onBedside: Boolean): String = if (onBedside) bedsideTitle else phoneTitle
 
     companion object {
         /** A family phone can't change the keypad, the clock or the tablet itself, so those pages stay on the bedside. */
-        fun pages(onBedside: Boolean): List<CaregiverPage> = if (onBedside) entries else listOf(PEOPLE, CALLS, DROP_IN, PRIVACY, CAREGIVERS)
+        fun pages(onBedside: Boolean): List<CaregiverPage> = if (onBedside) entries else listOf(PEOPLE, CALLS, DROP_IN, PRIVACY, CAREGIVERS, ABOUT)
     }
 }
 

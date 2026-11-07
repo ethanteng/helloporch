@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    // The open-source licenses on the About page, gathered from the dependencies at build time.
+    alias(libs.plugins.aboutlibraries.android)
 }
 
 // Firebase, which rings a phone when Porch isn't open, from the app's google-services.json in this folder. The repo is
@@ -72,4 +74,5 @@ dependencies {
     implementation(libs.livekit.android)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.aboutlibraries.compose.m3)
 }

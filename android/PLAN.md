@@ -1,6 +1,6 @@
 # Porch for Android: port plan
 
-Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is merged (#116, #117) and checked in the emulator. On 2026-11-05 a real tablet (a MUISOO KB10) set up against the local server and passed the Cell2Jack key test, and the Cell2Jack now keeps working after the tablet restarts; see [first tablet](#first-tablet-muisoo-kb10). What's left of phase 2 is QR joining from a real phone, once a signed build is in assetlinks.json.
+Status: in progress. First written 2026-10-22 against `8c5cd8f`, and revised 2026-11-02 against `eeabf43` to cover the bedside device and family devices together. Phase 0's server changes are merged (#111, #112); the spikes wait for devices. Phase 1 is merged (#113, #114): an Android phone joins a household from an invitation and shows as online. Phase 2 is merged (#116, #117) and checked in the emulator. On 2026-11-05 a real tablet (a MUISOO KB10) set up against the local server and passed the Cell2Jack key test, and the Cell2Jack now keeps working after the tablet restarts; see [first tablet](#first-tablet-muisoo-kb10). What's left of phase 2 is QR joining from a real phone, once a signed build is in assetlinks.json. Phase 3 is merged (#123, #124, #125, #130, #131 through #133, #134). On 2026-11-07 a Samsung Galaxy A17 on Android 16, joined to a household on the production server, rang with Porch closed and with the phone locked, answered over the lock screen and kept the call going while locked; phone fallback reached a real phone from the KB10 through the local server. Phase 4's first four parts are merged (#126, #127, #128, #129), and its last, the Porch keyboard and About, is in #136.
 
 The goal is Android versions of **both** Porch devices, working with the existing iOS devices in any mix:
 
@@ -493,7 +493,7 @@ Built in five pull requests:
 2. **People.** The keypad, the person page and the key editor, with invitations, and family members' photos downloaded to the tablet. The bedside's people screen lists only the people on keys, as iOS's does, in their button colors.
 3. **Drop-in, call history and blocked numbers.** The Drop-in page with its switch, who can and can't drop in, and adding a phone number; Call history and Blocked numbers open from Calls.
 4. **Caregiver mode on a family phone.** Caregiver mode on a caregiver's family card, the PIN, and the pages a phone can change, with what only the bedside can change listed apart. Pages read the household again as they open, since a phone's check-ins leave out caregiver details. Calls still ring while it's open, which closes it.
-5. **The Porch keyboard, and About.**
+5. **The Porch keyboard, and About.** Every form's fields can use Porch keyboard, chosen under the form; About lists the open-source licenses, from caregiver mode and from a family phone's families.
 
 The pages follow [CaregiverSettings.swift](../ios/Porch/CaregiverSettings.swift):
 
@@ -531,10 +531,13 @@ Page contents:
 - **Privacy.** **Show family when someone is at the tablet** (`setShareAttendance`), and on the tablet, **Check with the camera**.
 - **Caregivers & PIN.** Change the PIN.
 - **This tablet.** **Use the Cell2Jack phone keypad** and **Hang up when the receiver is put back**, plus Connect the phone or USB keypad again, and Use this tablet as a family device. Also **Make Porch the home screen** or **Stop using Porch as the home screen**, and **Tablet settings**, which opens Android's Settings: with Porch as the home screen and the system bars hidden, a caregiver otherwise has to know to swipe down twice from the top.
-- **About.** The open-source licenses screen.
+- **About.** Porch's version and the open-source licenses, gathered from the dependencies at build time by AboutLibraries (iOS lists its own in Settings, from Settings.bundle). A tap shows a license in a dialog, never a browser, which on a family phone would end caregiver mode. A family phone also has About Porch under its families, since not everyone with Porch is a caregiver.
 - **Typing with a keypad attached.** Android hides the on-screen keyboard when a hardware keyboard is attached unless the user changes that setting, which is the same problem iPadOS has.
-  - Port the Porch keyboard: number pad, phone pad with `+`, and text with a symbols layer, plus Paste, Next and Done.
-  - Hide the system keyboard for fields that use it.
+  - Port the Porch keyboard: number pad, phone pad with `+`, and text with a symbols layer, plus Paste, Next and Done. Built in `PorchKeyboard.kt`, with the layouts and editing in `:core` (`PorchKeyboardKeys.kt`).
+  - Hide the system keyboard for fields that use it. While Porch keyboard is in use, `InterceptPlatformTextInput` keeps the system keyboard from opening.
+  - As on iOS, the system keyboard is the default, and two buttons under a form with fields switch between it and Porch keyboard. With a keypad attached, the first is Keyboard help, which also names Android's setting for showing the on-screen keyboard with a physical one. Unlike iOS, where each form starts over with the system keyboard, the choice lasts while Porch runs, since a keypad stays attached from one form to the next.
+  - The button color dialog's hex field still uses the system keyboard: its color swatches cover the usual choices.
+  - Seen on the KB10 with a Macally UCNUMKEY22 USB number keypad: Android counts it as a full keyboard, and Gboard then shows only a small toolbar for text fields, though it still shows its number pad for a PIN. Porch keyboard typed the name there.
 
 ## Phase 5: messages, voicemail and texts
 

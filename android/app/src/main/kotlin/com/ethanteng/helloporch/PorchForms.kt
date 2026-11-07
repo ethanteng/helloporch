@@ -24,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,7 +43,7 @@ import com.ethanteng.helloporch.core.RemoteCaregiverSession
  * 760 dp wide like the iOS card, that scrolls. `navigation` is the bar's button, such as Cancel or Back. */
 @Composable
 fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, actions: (@Composable () -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit) {
+    scrolls: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
             // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them. It gets
@@ -58,8 +57,14 @@ fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, acti
                 actions?.invoke()
             }
             HorizontalDivider()
-            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
-                Column(Modifier.widthIn(max = 760.dp).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+            // Porch keyboard, once chosen, types in the fields here (PorchKeyboard.kt).
+            PorchKeyboardHost {
+                // A page that scrolls a list of its own, such as About's licenses, fills the screen instead.
+                val scrolling = if (scrolls) Modifier.verticalScroll(rememberScrollState()) else Modifier
+                Box(Modifier.fillMaxSize().then(scrolling), contentAlignment = Alignment.TopCenter) {
+                    val size = if (scrolls) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+                    Column(Modifier.widthIn(max = 760.dp).then(size).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+                }
             }
         }
     }
@@ -101,8 +106,8 @@ fun FormField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
-    OutlinedTextField(value, onValueChange, modifier.fillMaxWidth(), enabled = enabled, singleLine = true, label = { Text(title) },
-        placeholder = { Text(placeholder) }, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions, visualTransformation = visualTransformation)
+    PorchTextField(value, onValueChange, title, modifier, enabled = enabled, label = { Text(title) }, placeholder = { Text(placeholder) },
+        keyboardOptions = keyboardOptions, keyboardActions = keyboardActions, visualTransformation = visualTransformation)
 }
 
 /** What went wrong, as iOS's `showPorchError` shows it. Null shows nothing. */

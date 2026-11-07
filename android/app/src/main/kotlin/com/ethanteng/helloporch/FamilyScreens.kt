@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +69,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     // The family caregiver mode is open for, by device ID, and why it last ended on its own, such as a changed PIN.
     var caregiving by rememberSaveable { mutableStateOf<String?>(null) }
     var caregiverNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var about by rememberSaveable { mutableStateOf(false) }
     // Joining or removing a family changes the list before any family has checked in.
     var changes by remember { mutableIntStateOf(0) }
     val families = remember(links, changes) { app.device.families }
@@ -83,10 +85,17 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
         RemoteCaregiverMode(app, caregiverFamily, links, onClose = { reason -> caregiving = null; caregiverNotice = reason })
         return
     }
+    // From the families, or the join screen, as long as no invitation is waiting.
+    if (about && link == null) {
+        BackHandler { about = false }
+        AboutScreen(navigation = { TextButton(onClick = { about = false }) { Text("Back") } })
+        return
+    }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done)
-            else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ },
+            if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done,
+                onAbout = { about = true })
+            else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ }, onAbout = { about = true },
                 onCaregiver = { family ->
                     // Every visit starts with the PIN.
                     RemoteCaregiverSession.shared.end()
@@ -98,7 +107,8 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
 }
 
 @Composable
-private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boolean, onJoined: () -> Unit, onCancel: (() -> Unit)?) {
+private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boolean, onJoined: () -> Unit, onCancel: (() -> Unit)?,
+    onAbout: () -> Unit) {
     var text by rememberSaveable(initialLink) { mutableStateOf(initialLink) }
     var nickname by rememberSaveable { mutableStateOf("") }
     // Saved, so turning the phone doesn't hide why a join failed.
@@ -130,6 +140,8 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         }
     }) { Text(if (busy) "Joining…" else "Join family") }
     onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
+    // The licenses, before a phone has joined any family.
+    if (!adding) TextButton(onClick = onAbout) { Text("About Porch") }
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 
@@ -224,7 +236,7 @@ private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit
 
 @Composable
 private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit,
-    onCaregiver: (FamilyCredential) -> Unit) {
+    onAbout: () -> Unit, onCaregiver: (FamilyCredential) -> Unit) {
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -285,6 +297,8 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
         style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }
+    // The open-source licenses, for anyone, not only a family's caregivers.
+    TextButton(onClick = onAbout) { Text("About Porch") }
     families.firstOrNull { it.deviceID == leaving }?.let { family ->
         val name = app.device.familyName(family) ?: links.state(family)?.householdName ?: "this family"
         // As on iOS (FamilyProfiles.swift): the phone leaves on the server, then forgets the family.
