@@ -54,8 +54,8 @@ class SystemCalls(private val app: PorchApplication) {
     private var ringing: Ringing? = null
     /** Calls that rang here or were turned away, newest last, so a repeated push doesn't ring again. */
     private val recent = ArrayDeque<String>()
-    /** A push that came while Porch was on screen, left to its next check-in. It rings here if Porch leaves first. */
-    private var deferred: Pending? = null
+    /** Pushes that came while Porch was on screen, left to its next check-in. The newest rings here if Porch leaves first. */
+    private val deferred = ArrayDeque<Pending>()
     /** Pushes that came during another call, until a check-in shows whether each is a call to end as missed or an
      * invitation into a call, which runs out on its own, as iOS's `finishBusyCall` waits to tell. */
     private val awaitingMissed = ArrayDeque<Pair<String, FamilyCredential>>()
@@ -63,7 +63,7 @@ class SystemCalls(private val app: PorchApplication) {
     private var answering: String? = null
 
     /** Whether this call rings here now. */
-    fun isRinging(callID: String) = ringing?.callID == callID
+    fun isRinging(callID: String) = ringing?.callID?.equals(callID, ignoreCase = true) == true
 
     /** What Porch's call service shows while a call rings here. */
     val notification: Notification? get() = ringing?.notification
@@ -80,7 +80,7 @@ class SystemCalls(private val app: PorchApplication) {
         val valid = callID != null && idPattern.matches(callID) && credential != null && expiresAt > nowSeconds() && callID !in recent
         // Porch on screen rings in its own screen from its next check-in, a second or two away, unless it leaves first.
         if (app.onScreen && app.screenReady) {
-            if (valid) deferred = Pending(callID!!, credential!!, name, data["mode"] == "video", expiresAt)
+            if (valid) defer(Pending(callID!!, credential!!, name, data["mode"] == "video", expiresAt))
             return
         }
         if (!valid) {
@@ -92,9 +92,7 @@ class SystemCalls(private val app: PorchApplication) {
         if (app.calls.busy || ringing != null) {
             // On another call: it shows and goes, and a check-in then tells whether to end it as missed (noteLinks).
             acknowledge()
-            remember(callID!!)
-            awaitingMissed.addLast(callID to credential!!)
-            while (awaitingMissed.size > 32) awaitingMissed.removeFirst()
+            holdMissed(Pending(callID!!, credential!!, name, data["mode"] == "video", expiresAt))
             return
         }
         ring(callID!!, credential!!, name, data["mode"] == "video", expiresAt)
@@ -107,6 +105,8 @@ class SystemCalls(private val app: PorchApplication) {
     fun noteLinks(links: FamilyLinks) {
         for (waiting in awaitingMissed.toList()) {
             val (callID, credential) = waiting
+            // The check-in just put this call on screen, or it is already ringing here. Ending it would hang that up.
+            if (app.calls.owns(callID) || isRinging(callID)) { awaitingMissed.remove(waiting); continue }
             val call = links.state(credential)?.call?.takeIf { it.id.equals(callID, ignoreCase = true) } ?: continue
             awaitingMissed.remove(waiting)
             if (call.state == "pending" && IncomingCallRinging.endAsMissed(UUID.fromString(callID), call.id, call.guest == true)) {
@@ -115,13 +115,17 @@ class SystemCalls(private val app: PorchApplication) {
         }
     }
 
-    /** Porch left the screen before a check-in showed a call its push announced: that call rings here instead. */
+    /** Porch left the screen before a check-in showed a call its push announced: that call rings here instead.
+     * One it can't ring, because another call is up, waits for a check-in and is ended as missed unless it's an invitation. */
     fun leftScreen() {
-        val pending = deferred ?: return
-        deferred = null
-        if (pending.callID in recent || app.calls.owns(pending.callID) || app.calls.busy) return
+        val calls = deferred.toList()
+        deferred.clear()
+        val candidate = calls.lastOrNull { it.callID !in recent && !app.calls.owns(it.callID) && it.expiresAt > nowSeconds() }
+        for (pending in calls) if (pending !== candidate) holdMissed(pending)
+        if (candidate == null) return
+        if (ringing != null || app.calls.busy) { holdMissed(candidate); return }
         val quiet = app.getSystemService<PowerManager>()?.isInteractive == false
-        ring(pending.callID, pending.credential, pending.name, pending.video, pending.expiresAt, quiet)
+        ring(candidate.callID, candidate.credential, candidate.name, candidate.video, candidate.expiresAt, quiet)
     }
 
     /**
@@ -129,13 +133,14 @@ class SystemCalls(private val app: PorchApplication) {
      * `quiet` keeps it showing without ringing, as after the power button, which silences a phone's call.
      */
     fun ring(callID: String, credential: FamilyCredential, name: String, video: Boolean, expiresAt: Long, quiet: Boolean = false) {
+        val id = callID.lowercase()
         if (ringing != null || expiresAt <= nowSeconds()) return
         val caller = if (credential.role == PorchExperience.FAMILY) FamilyNames.caller(name, app.device.familyName(credential)) else name
-        val notification = CallNotifications.incoming(app, callID, caller, video, expiresAt, quiet)
-        val call = Ringing(callID, credential, notification, expiresAt)
+        val notification = CallNotifications.incoming(app, id, caller, video, expiresAt, quiet)
+        val call = Ringing(id, credential, notification, expiresAt)
         ringing = call
-        if (deferred?.callID == callID) deferred = null
-        remember(callID)
+        deferred.removeAll { it.callID.equals(id, ignoreCase = true) }
+        remember(id)
         // Posted before anything else, so it rings even if the service can't start.
         CallNotifications.post(app, CallNotifications.INCOMING, notification)
         app.calls.updateService()
@@ -183,8 +188,8 @@ class SystemCalls(private val app: PorchApplication) {
 
     /** Porch's own incoming screen took this call over, now that Porch is on screen. */
     fun handOver(callID: String) {
-        if (deferred?.callID == callID) deferred = null
-        val call = ringing?.takeIf { it.callID == callID } ?: return
+        deferred.removeAll { it.callID.equals(callID, ignoreCase = true) }
+        val call = ringing?.takeIf { it.callID.equals(callID, ignoreCase = true) } ?: return
         stop(call)
     }
 
@@ -244,6 +249,20 @@ class SystemCalls(private val app: PorchApplication) {
             PorchExperience.FAMILY -> app.device.families.firstOrNull { it.deviceID == memberID }
             else -> null
         }
+    }
+
+    private fun defer(pending: Pending) {
+        deferred.removeAll { it.callID == pending.callID }
+        deferred.addLast(pending)
+        while (deferred.size > 32) deferred.removeFirst()
+    }
+
+    /** A push this device can't ring. A later check-in ends it as missed, unless the screen took it or it's an invitation. */
+    private fun holdMissed(pending: Pending) {
+        if (pending.expiresAt <= nowSeconds() || pending.callID in recent || app.calls.owns(pending.callID)) return
+        remember(pending.callID)
+        awaitingMissed.addLast(pending.callID to pending.credential)
+        while (awaitingMissed.size > 32) awaitingMissed.removeFirst()
     }
 
     private fun remember(callID: String) {
@@ -358,9 +377,17 @@ object CallNotifications {
 class CallService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Types this service is already in the foreground with. Adding the microphone from the background is refused. */
+    private var foregroundTypes = 0
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val shown = pending
         if (shown != null && promote(shown.id, shown.notification, shown.types)) return START_NOT_STICKY
+        // Already showing a call. Keep those types: falling back to a phone call here would drop the microphone.
+        if (foregroundTypes != 0) {
+            if (shown != null) promote(shown.id, shown.notification, foregroundTypes)
+            return START_NOT_STICKY
+        }
         // The microphone type can be refused once Porch is in the background. A phone-call service still keeps the call.
         val phoneCall = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
         if (shown != null && shown.types != phoneCall && promote(shown.id, shown.notification, phoneCall)) return START_NOT_STICKY
@@ -373,6 +400,7 @@ class CallService : Service() {
     /** Android requires this for every startForegroundService, or it kills the process a few seconds later. */
     private fun promote(id: Int, notification: Notification, types: Int): Boolean = try {
         ServiceCompat.startForeground(this, id, notification, types)
+        foregroundTypes = types
         true
     } catch (e: Exception) {
         Log.w("Porch", "The call's service couldn't start", e)
@@ -390,15 +418,28 @@ class CallService : Service() {
         private var pending: Shown? = null
         private var running = false
 
-        /** Starts the service, or changes what it shows, such as from ringing to a call in progress. */
+        /** Starts the service, or changes what it shows, such as from ringing to a call in progress. A service that is
+         * already in the foreground is updated with [startService]: [startForegroundService] from the background is
+         * refused once the high-priority push's moment has passed, which is when a call is answered as the phone locks. */
         fun show(context: Context, id: Int, notification: Notification, types: Int) {
             pending = Shown(id, notification, types)
+            val intent = Intent(context, CallService::class.java)
             try {
-                ContextCompat.startForegroundService(context, Intent(context, CallService::class.java))
+                if (running) context.startService(intent) else ContextCompat.startForegroundService(context, intent)
                 running = true
             } catch (e: Exception) {
-                // Android can refuse to start it from the background. The notification still rings.
-                Log.w("Porch", "The call's service couldn't start", e)
+                if (!running) {
+                    // Android can refuse to start it from the background. The notification still rings.
+                    Log.w("Porch", "The call's service couldn't start", e)
+                    return
+                }
+                running = false
+                try {
+                    ContextCompat.startForegroundService(context, intent)
+                    running = true
+                } catch (again: Exception) {
+                    Log.w("Porch", "The call's service couldn't start", again)
+                }
             }
         }
 
