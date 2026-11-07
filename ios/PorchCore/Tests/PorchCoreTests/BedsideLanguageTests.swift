@@ -47,6 +47,7 @@ final class BedsideLanguageTests: XCTestCase {
             ("zh-TW", .traditionalChinese), ("zh-Hant-TW", .traditionalChinese), ("cmn-TW", .traditionalChinese),
             ("zh-CN", .simplifiedChinese), ("zh-Hans-CN", .simplifiedChinese), ("cmn-CN", .simplifiedChinese),
             ("zh-HK", .cantonese), ("zh-Hant-HK", .cantonese), ("yue-HK", .cantonese), ("yue-Hant-HK", .cantonese),
+            ("fil-PH", .tagalog), ("fil_PH", .tagalog), ("tl-PH", .tagalog), ("fil", .tagalog),
         ]
         for (tag, expected) in cases {
             for language in BedsideLanguage.allCases {
@@ -87,6 +88,11 @@ final class BedsideLanguageTests: XCTestCase {
         XCTAssertEqual(BedsideLanguage.spanish.format("Tap %@ to answer. Hold %@ to decline.", arguments: ["#", "#"]), "Pulse # para contestar. Mantenga pulsado # para rechazar.")
         XCTAssertEqual(BedsideLanguage.english.text("End call"), "End call")
         XCTAssertEqual(BedsideLanguage.cantonese.format("Calling %@.", arguments: ["陳先生"]), "打緊畀陳先生。")
+        XCTAssertEqual(BedsideLanguage.tagalog.text("End call"), "Ibaba ang tawag")
+        XCTAssertEqual(BedsideLanguage.tagalog.speechLanguage, "fil-PH")
+        XCTAssertEqual(BedsideLanguage.tagalog.format("%@ is dropping in with video. Connecting in five seconds.", arguments: ["Ate Rosa"]), "Tumatawag po si Ate Rosa sa video call. Kokonekta ito sa loob ng limang segundo.")
+        XCTAssertEqual(BedsideLanguage.tagalog.format("Video drop-in\nConnecting in %d…", arguments: [5]), "Awtomatikong video call\nKokonekta sa loob ng 5…")
+        XCTAssertEqual(BedsideLanguage.tagalog.format("Tap %@ to answer. Hold %@ to decline.", arguments: ["#", "#"]), "I-tap ang # para sumagot. Pindutin nang matagal ang # para tumanggi.")
         XCTAssertEqual(BedsideLanguage.english.format("Calling %@.", arguments: ["David"]), "Calling David.")
     }
     func testNewLanguageDatesKeepTheLocalDateAndWeekday() {
@@ -102,6 +108,16 @@ final class BedsideLanguageTests: XCTestCase {
             XCTAssertTrue(text.contains("2026")); XCTAssertTrue(text.contains("16"))
             XCTAssertTrue(text.contains(language == .spanish ? "octubre" : "10月"))
         }
+    }
+    func testTagalogDatesUseFilipinoNames() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 23, minute: 35))!
+        let formatter = DateFormatter(); formatter.locale = BedsideLanguage.tagalog.locale
+        formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("EEEE")
+        XCTAssertEqual(formatter.string(from: date), "Biyernes")
+        formatter.setLocalizedDateFormatFromTemplate("yyyyMMMMd")
+        XCTAssertEqual(formatter.string(from: date), "Oktubre 16, 2026")
     }
     func testTraditionalChineseCoversOrientationAndCallActions() {
         let language = BedsideLanguage.traditionalChinese
@@ -141,6 +157,6 @@ final class BedsideLanguageTests: XCTestCase {
 
     /// Caregiver settings say which language each Chinese choice speaks.
     func testChoiceLabelsNameTheSpokenLanguage() {
-        XCTAssertEqual(BedsideLanguage.allCases.map(\.choiceLabel), ["English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español"])
+        XCTAssertEqual(BedsideLanguage.allCases.map(\.choiceLabel), ["English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog"])
     }
 }

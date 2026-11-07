@@ -63,6 +63,12 @@ export const greetings: Record<BedsideLanguage, Record<Greeting, string>> = {
     noMessage: "No se ha grabado ningún mensaje. Adiós.",
     thanks: "Gracias. Adiós.",
   },
+  tl: {
+    unavailable: "Pasensya na po, walang makakasagot ngayon. Pakisubukang tumawag ulit mamaya. Paalam po.",
+    leaveMessage: "Pasensya na po, walang makakasagot ng telepono ngayon. Mag-iwan po kayo ng mensahe pagkatapos ng beep, saka ibaba ang telepono.",
+    noMessage: "Walang na-record na mensahe. Paalam po.",
+    thanks: "Salamat po. Paalam.",
+  },
 };
 // Twilio waits 15 seconds for an answer. A greeting heard for the first time is recorded meanwhile;
 // if it takes longer than this, the caller hears Twilio's voice and the next caller hears the natural one.

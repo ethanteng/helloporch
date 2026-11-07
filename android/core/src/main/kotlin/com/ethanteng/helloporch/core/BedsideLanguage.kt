@@ -12,7 +12,9 @@ enum class BedsideLanguage(val code: String) {
     @SerialName("zh-Hant") TRADITIONAL_CHINESE("zh-Hant"),
     @SerialName("zh-Hans") SIMPLIFIED_CHINESE("zh-Hans"),
     @SerialName("yue-Hant") CANTONESE("yue-Hant"),
-    @SerialName("es") SPANISH("es");
+    @SerialName("es") SPANISH("es"),
+    /** Tagalog as spoken in the Philippines. Android, Apple and ElevenLabs call it Filipino (`fil`). */
+    @SerialName("tl") TAGALOG("tl");
 
     val displayName: String get() = when (this) {
         ENGLISH -> "English"
@@ -20,12 +22,13 @@ enum class BedsideLanguage(val code: String) {
         SIMPLIFIED_CHINESE -> "简体中文"
         CANTONESE -> "廣東話"
         SPANISH -> "Español"
+        TAGALOG -> "Tagalog"
     }
     /** The name in caregiver settings, which also says which language the Chinese choices speak. */
     val choiceLabel: String get() = when (this) {
         TRADITIONAL_CHINESE, SIMPLIFIED_CHINESE -> "$displayName · Mandarin"
         CANTONESE -> "$displayName · Cantonese"
-        ENGLISH, SPANISH -> displayName
+        ENGLISH, SPANISH, TAGALOG -> displayName
     }
     val locale: Locale get() = when (this) {
         ENGLISH -> Locale.forLanguageTag("en-US")
@@ -33,6 +36,7 @@ enum class BedsideLanguage(val code: String) {
         SIMPLIFIED_CHINESE -> Locale.forLanguageTag("zh-Hans-CN")
         CANTONESE -> Locale.forLanguageTag("zh-Hant-HK")
         SPANISH -> Locale.forLanguageTag("es-ES")
+        TAGALOG -> Locale.forLanguageTag("fil-PH")
     }
     val speechLanguage: String get() = when (this) {
         ENGLISH -> "en-US"
@@ -40,14 +44,16 @@ enum class BedsideLanguage(val code: String) {
         SIMPLIFIED_CHINESE -> "zh-CN"
         CANTONESE -> "zh-HK"
         SPANISH -> "es-ES"
+        TAGALOG -> "fil-PH"
     }
-    /** English/Spanish allow regional accents. Chinese choices retain their dialect/region. */
+    /** English/Spanish allow regional accents. Chinese choices retain their dialect/region. Tagalog takes either of its codes. */
     fun supportsSpeechVoice(language: String): Boolean {
         val tag = language.replace("_", "-").lowercase()
         val base = tag.split("-").firstOrNull { it.isNotEmpty() }
         return when (this) {
             ENGLISH -> base == "en"
             SPANISH -> base == "es"
+            TAGALOG -> base == "fil" || base == "tl"
             TRADITIONAL_CHINESE -> tag in setOf("zh-tw", "zh-hant-tw", "cmn-tw", "cmn-hant-tw")
             SIMPLIFIED_CHINESE -> tag in setOf("zh-cn", "zh-hans-cn", "cmn-cn", "cmn-hans-cn")
             CANTONESE -> tag in setOf("zh-hk", "zh-hant-hk", "yue-hk", "yue-hant-hk")
@@ -59,6 +65,7 @@ enum class BedsideLanguage(val code: String) {
         SIMPLIFIED_CHINESE -> simplifiedStrings
         CANTONESE -> cantoneseStrings
         SPANISH -> spanishStrings
+        TAGALOG -> tagalogStrings
     }
     fun text(english: String): String = translations[english] ?: english
     /** The strings keep iOS's `%@`, so both apps share them word for word; it formats as `%s`. */
@@ -287,6 +294,80 @@ enum class BedsideLanguage(val code: String) {
             "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls." to "Pida a su cuidador que permita el acceso al micrófono en Ajustes del iPad → Privacidad y seguridad → Micrófono.",
             "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup." to "Pida a su cuidador que permita el acceso a la cámara en los ajustes del iPad o que elija una llamada de voz.",
             "A family member" to "Un familiar"
+        )
+
+        private val tagalogStrings = mapOf(
+            "%@ didn't answer." to "Hindi po sumagot si %@.", "%@ isn't available right now." to "Hindi po makasagot si %@ ngayon.",
+            "Leave a message for %@" to "Mag-iwan ng mensahe para kay %@", "Speak after the beep." to "Magsalita po pagkatapos ng beep.", "Recording your message…" to "Nire-record ang inyong mensahe…",
+            "Send message" to "Ipadala ang mensahe", "Don't send" to "Huwag ipadala", "Press %@ when you're finished." to "Pindutin po ang %@ kapag tapos na kayo.",
+            "Your message is on its way to %@." to "Ipinapadala na po ang inyong mensahe kay %@.", "No message was recorded." to "Walang na-record na mensahe.", "Message not sent." to "Hindi naipadala ang mensahe.",
+            "%@ didn't answer. Please leave a message after the beep." to "Hindi po sumagot si %@. Mag-iwan po kayo ng mensahe pagkatapos ng beep.",
+            "%@ isn't available right now. Please leave a message after the beep." to "Hindi po makasagot si %@ ngayon. Mag-iwan po kayo ng mensahe pagkatapos ng beep.",
+            "Couldn't record a message." to "Hindi ma-record ang mensahe.",
+            "Play 1 message" to "I-play ang 1 mensahe", "Play %d messages" to "I-play ang %d mensahe",
+            "Message from %@" to "Mensahe mula kay %@", "Voicemail from %@" to "Voicemail mula kay %@",
+            "Message from %@. Sent %@." to "Mensahe mula kay %@. Ipinadala %@.", "Voicemail from %@. Sent %@." to "Voicemail mula kay %@. Ipinadala %@.",
+            "Text from %@" to "Text mula kay %@", "Text from %@. Sent %@." to "Text mula kay %@. Ipinadala %@.", "Translated from %@" to "Isinalin mula sa %@",
+            "It came with a picture, which Porch can't show yet." to "May kasama itong litrato na hindi pa maipakita ng Porch.",
+            "It came with %d pictures, which Porch can't show yet." to "May kasama itong %d litrato na hindi pa maipakita ng Porch.",
+            "It came with something Porch can't show yet." to "May kasama itong hindi pa maipakita ng Porch.",
+            "Sent %@" to "Ipinadala %@", "Stop" to "Itigil", "No new messages." to "Walang bagong mensahe.", "Unknown caller" to "Hindi kilalang tumatawag", "You have 1 new message." to "May 1 po kayong bagong mensahe.", "You have %d new messages." to "May %d po kayong bagong mensahe.", "Not now" to "Mamaya na",
+            "Morning" to "Umaga", "Afternoon" to "Hapon", "Evening" to "Dapithapon", "Night" to "Gabi",
+            "Spring" to "Tagsibol", "Summer" to "Tag-init", "Fall" to "Taglagas", "Winter" to "Taglamig",
+            "Call someone" to "Tumawag", "Caregiver mode" to "Mga setting ng tagapag-alaga",
+            "Tap or hold to manage contacts and settings." to "I-tap o pindutin nang matagal para ayusin ang mga contact at setting.",
+            "Who would you like to call?" to "Sino po ang gusto ninyong tawagan?",
+            "Tap a name or press their number on the keypad." to "I-tap po ang pangalan, o pindutin ang numero nila sa keypad.",
+            "Back to clock" to "Bumalik sa orasan", "Press %@" to "Pindutin ang %@",
+            "Call %@, key %@" to "Tawagan si %@, pindutin ang %@",
+            "Your caregiver can add people using the settings icon on the clock screen." to "Makakapagdagdag ng mga tao ang inyong tagapag-alaga gamit ang icon ng setting sa screen ng orasan.",
+            "Use this key to answer or end a call." to "Gamitin ang pindutang ito para sumagot o magbaba ng tawag.",
+            "Use this key to turn your camera off or on during a video call." to "Gamitin ang pindutang ito para patayin o buksan ang kamera habang naka-video call.",
+            "No one is assigned to %@.\nPlease choose another number." to "Wala pang nakatalaga sa %@.\nPumili po ng ibang numero.",
+            "Finish Porch setup" to "Tapusin ang setup ng Porch",
+            "Open caregiver mode and invite this person to Porch or add their phone number." to "Ipakisuyo sa tagapag-alaga na imbitahan ang taong ito sa Porch o idagdag ang kanyang numero ng telepono.",
+            "Porch isn't ready" to "Hindi pa handa ang Porch",
+            "Check People and Drop-in in caregiver mode, then try again." to "Ipakisuyo sa tagapag-alaga na tingnan ang mga setting ng pamilya at awtomatikong pagsagot, saka subukang muli.",
+            "Couldn't call %@" to "Hindi matawagan si %@", "Please ask your caregiver for help, then try again." to "Humingi po ng tulong sa inyong tagapag-alaga, saka subukang muli.",
+            "OK" to "Sige", "Connecting…" to "Kumokonekta…", "Your camera preview" to "Ang nakikita ng inyong kamera",
+            "Voice call\nCamera is off" to "Voice call\nNakapatay ang kamera", "Waiting for video" to "Hinihintay ang video",
+            "Mute" to "Patayin ang mikropono", "Unmute" to "Buksan ang mikropono", "Camera off" to "Patayin ang kamera", "Camera on" to "Buksan ang kamera", "End call" to "Ibaba ang tawag",
+            "Couldn't start the call." to "Hindi masimulan ang tawag.", "Key %@: hang up" to "Pindutan %@: ibaba ang tawag",
+            "Key %@: video off / on" to "Pindutan %@: patayin / buksan ang kamera", "Phone call connected" to "Nakakonekta na ang tawag sa telepono",
+            "Reconnecting phone call…" to "Ikinokonekta muli ang tawag sa telepono…", "Calling %@'s phone…" to "Tinatawagan ang telepono ni %@…",
+            "Voice call connected" to "Nakakonekta na ang voice call", "Video call connected" to "Nakakonekta na ang video call", "Connecting audio…" to "Ikinokonekta ang tunog…",
+            "Waiting for %@…" to "Hinihintay si %@…", "Connecting with %@…" to "Kumokonekta kay %@…", "Calling %@ on Porch…" to "Tinatawagan si %@ sa Porch…",
+            "Calling %@…" to "Tinatawagan si %@…", "Calling %@." to "Tinatawagan si %@.", "%@ joined the call" to "Sumali si %@ sa tawag", "%@ left the call" to "Umalis si %@ sa tawag",
+            "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered." to "Tinatawagan si %@ sa Porch…\nTatawagan ang kanyang telepono kung walang sumagot sa Porch.",
+            "Couldn't connect the call. Please try again." to "Hindi maikonekta ang tawag. Pakisubukang muli.",
+            "Couldn't change camera. Try again." to "Hindi mabago ang kamera. Subukang muli.", "Couldn't change microphone. Try again." to "Hindi mabago ang mikropono. Subukang muli.",
+            "Ending call…" to "Tinatapos ang tawag…", "Reconnecting…" to "Kumokonekta muli…",
+            "Retry ending phone call" to "Subukang ibaba muli ang tawag",
+            "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again." to "Nawalan ng koneksyon ang Porch. Hindi matiyak kung natapos na ang tawag sa telepono. Tingnan ang koneksyon sa internet at subukang muli.",
+            "Call ended. Returning to the clock…" to "Tapos na ang tawag. Bumabalik sa orasan…", "Call ended. Returning to Porch…" to "Tapos na ang tawag. Bumabalik sa Porch…",
+            "No one joined. Returning to the clock…" to "Walang sumagot. Bumabalik sa orasan…",
+            "The call disconnected. Returning to the clock…" to "Naputol ang tawag. Bumabalik sa orasan…",
+            "The phone call ended before it was answered." to "Natapos ang tawag bago ito nasagot.",
+            "Microphone access is required." to "Kailangan ng pahintulot sa mikropono.",
+            "Allow Porch's microphone in Settings to make a phone call." to "Ipakisuyo sa tagapag-alaga na payagan ang Porch na gumamit ng mikropono sa Settings ng iPad.",
+            "Couldn't switch to their phone." to "Hindi matawagan ang kanyang telepono.", "Couldn't finish connecting the Porch call." to "Hindi natapos ang pagkonekta ng tawag sa Porch.",
+            "They answered Porch, but this device couldn't connect. Please try again." to "Sumagot sila sa Porch, pero hindi makakonekta ang device na ito. Pakisubukang muli.",
+            "Porch wasn't answered. Trying %@'s phone…" to "Walang sumagot sa Porch. Tinatawagan ang telepono ni %@…",
+            "Phone call\nCamera is off" to "Tawag sa telepono\nNakapatay ang kamera", "Couldn't connect their phone." to "Hindi maikonekta ang kanyang telepono.",
+            "Their phone didn't answer. Returning to the clock…" to "Walang sumagot sa telepono. Bumabalik sa orasan…",
+            "Answer" to "Sagutin", "Answer video call" to "Sagutin ang video call", "Answer audio call" to "Sagutin ang voice call", "Don't connect" to "Huwag ikonekta", "Decline" to "Tanggihan",
+            "Press %@ to stop this drop-in." to "Pindutin po ang %@ para kanselahin ang awtomatikong pagsagot.",
+            "Tap %@ to answer. Hold %@ to decline." to "I-tap ang %@ para sumagot. Pindutin nang matagal ang %@ para tumanggi.",
+            "Video drop-in\nConnecting in %d…" to "Awtomatikong video call\nKokonekta sa loob ng %d…",
+            "Audio drop-in\nConnecting in %d…" to "Awtomatikong voice call\nKokonekta sa loob ng %d…",
+            "Incoming video call" to "Papasok na video call", "Incoming audio call" to "Papasok na voice call",
+            "Announcing video drop-in…" to "Ipinapaalam ang awtomatikong video call…", "Announcing audio drop-in…" to "Ipinapaalam ang awtomatikong voice call…",
+            "%@ is dropping in with video. Connecting in five seconds." to "Tumatawag po si %@ sa video call. Kokonekta ito sa loob ng limang segundo.",
+            "%@ is dropping in with audio. Connecting in five seconds." to "Tumatawag po si %@ sa voice call. Kokonekta ito sa loob ng limang segundo.",
+            "The sound couldn't play. Tap Answer to connect." to "Hindi ma-play ang tunog. I-tap ang Sagutin para kumonekta.",
+            "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls." to "Ipakisuyo sa tagapag-alaga na payagan ang mikropono sa Settings ng iPad → Privacy & Security → Microphone.",
+            "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup." to "Ipakisuyo sa tagapag-alaga na payagan ang kamera sa Settings ng iPad, o piliin ang voice call para sa taong ito.",
+            "A family member" to "Kapamilya"
         )
 
         private val traditionalStrings = mapOf(

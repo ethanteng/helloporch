@@ -44,6 +44,11 @@ const languages = [
     native: v => v.language === "es" && v.locale === "es-ES",
     sentences: [`${name} quiere hablar con usted por vídeo. La llamada se conectará en cinco segundos.`, `Mensaje de ${name}. Enviado hoy, 15:15.`,
       `${name} no ha contestado. Deje un mensaje después del pitido.`] },
+  // Neither the Mac nor the iPad has a Filipino voice, so Tagalog has no built-in sample.
+  { id: "tl", label: "Tagalog", code: "fil", library: ["fil"], say: null,
+    native: v => v.language === "fil" && v.locale === "fil-PH",
+    sentences: [`Tumatawag po si ${name} sa video call. Kokonekta ito sa loob ng limang segundo.`, `Mensahe mula kay ${name}. Ipinadala ngayong araw, 3:15 PM.`,
+      `Hindi po sumagot si ${name}. Mag-iwan po kayo ng mensahe pagkatapos ng beep.`] },
 ];
 const script = language => language.sentences.join("\n\n");
 
@@ -116,7 +121,7 @@ for (const language of languages) {
   mkdirSync(join(out, language.id), { recursive: true });
   // The Mac's compact voice for each locale is the same family the iPad falls back to by default.
   const builtIn = join(out, language.id, "built-in.m4a");
-  if (!existsSync(builtIn)) {
+  if (language.say && !existsSync(builtIn)) {
     const aiff = join(out, language.id, "built-in.aiff");
     try {
       execFileSync("say", ["-v", language.say, "-o", aiff, script(language)]);

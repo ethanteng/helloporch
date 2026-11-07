@@ -66,7 +66,7 @@ export type PhoneSetup = { areaCode: string; attempts: number; retryAt: number; 
 /** Characters sent to the speech service on one UTC day (days since 1970), to cap what a household spends. */
 export type SpeechUsage = { day: number; characters: number };
 /** The bedside's languages: `BedsideLanguage` raw values in the iPad app. */
-export const bedsideLanguages = ["en", "zh-Hant", "zh-Hans", "yue-Hant", "es"] as const;
+export const bedsideLanguages = ["en", "zh-Hant", "zh-Hans", "yue-Hant", "es", "tl"] as const;
 export type BedsideLanguage = (typeof bedsideLanguages)[number];
 /** `speechVoices`: the caregiver's natural voice per bedside language, or null for the iPad's built-in voice; unset is the language's default.
  * `bedsideLanguage`: the language chosen on the iPad, as it last reported it; unset is English.

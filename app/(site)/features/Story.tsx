@@ -113,7 +113,7 @@ const CHAPTERS: Chapter[] = [
     body: (
       <>
         <p>
-          Porch shows and speaks English, Mandarin, Cantonese, or Spanish, including its screens and announcements. It
+          Porch shows and speaks English, Mandarin, Cantonese, Spanish, or Tagalog, including its screens and announcements. It
           can also translate incoming texts into their language before reading them aloud. More languages are coming.
         </p>
       </>

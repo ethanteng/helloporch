@@ -1452,6 +1452,20 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(MessagePlayerViewController.announcement(forTextFrom: "72975", sentAt: 1, slots: CallSlots()).hasPrefix("72975嘅短訊"), "a short code is named as it is")
     }
 
+    @MainActor func testTagalogTextsGoByTheLanguageTheServerNamed() {
+        let restore = localizedBedside(.tagalog); defer { restore() }
+        func text(_ words: String, source: String? = nil) -> ReceivedText {
+            ReceivedText(id: "t", from: "+14155550123", sentAt: 1, body: words, language: "tl", text: words, translated: false, sourceLanguage: source)
+        }
+        let words = "Ma, darating ako mamayang alas-sais. Tatawagan kita pagdating ko."
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text(words, source: "tl")))
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text(words, source: "fil")), "Filipino is Tagalog")
+        XCTAssertNil(MessagePlayerViewController.otherLanguage(of: text(words)), "Apple's recognizer doesn't know Tagalog, so it isn't asked")
+        XCTAssertEqual(MessagePlayerViewController.otherLanguage(of: text("Hi Mom, I land at six.", source: "en")), "en")
+        XCTAssertEqual(MessagePlayerViewController.translatedNote("en"), "Isinalin mula sa Ingles")
+        XCTAssertEqual(MessagePlayerViewController.pictureNote(2), "May kasama itong 2 litrato na hindi pa maipakita ng Porch.")
+    }
+
     func testCaregiverPhonesSayWhatNeedsTheirReview() {
         XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 1, texts: 0), "1 phone voicemail needs your review")
         XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 0, texts: 1), "1 text needs your review")

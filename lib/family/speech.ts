@@ -38,6 +38,12 @@ export const speechCatalog: Record<string, { code: string; voices: SpeechVoice[]
     { id: "UOIqAnmS11Reiei1Ytkc", name: "Carolina", detail: "Natural, neutral and clear · female" },
     { id: "y6WtESLj18d0diFRruBs", name: "David Martin", detail: "Clear, calm and elegant · male" },
   ] },
+  // ElevenLabs calls Tagalog Filipino.
+  tl: { code: "fil", voices: [
+    { id: "4RLeKvASM0Zt73Htf5GF", name: "Maria", detail: "Soothing, gentle and clear · female" },
+    { id: "mOYuoC0AAGM3erLKflvc", name: "Nanay Pilar", detail: "Calm, warm host · female" },
+    { id: "MUVOVB3VWCo7pumU3SIO", name: "Kuya Manny", detail: "Soothing, fatherly narrator · male" },
+  ] },
 };
 export const speechModel = "eleven_v4";
 // Announcements are a sentence or two. The daily allowance covers a new household's first clips
