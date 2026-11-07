@@ -537,6 +537,7 @@ Page contents:
   - Hide the system keyboard for fields that use it. While Porch keyboard is in use, `InterceptPlatformTextInput` keeps the system keyboard from opening.
   - As on iOS, the system keyboard is the default, and two buttons under a form with fields switch between it and Porch keyboard. With a keypad attached, the first is Keyboard help, which also names Android's setting for showing the on-screen keyboard with a physical one. Unlike iOS, where each form starts over with the system keyboard, the choice lasts while Porch runs, since a keypad stays attached from one form to the next.
   - The button color dialog's hex field still uses the system keyboard: its color swatches cover the usual choices.
+  - Seen on the KB10 with a Macally UCNUMKEY22 USB number keypad: Android counts it as a full keyboard, and Gboard then shows only a small toolbar for text fields, though it still shows its number pad for a PIN. Porch keyboard typed the name there.
 
 ## Phase 5: messages, voicemail and texts
 
