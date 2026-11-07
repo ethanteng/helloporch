@@ -22,6 +22,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.getSystemService
@@ -308,12 +310,17 @@ private fun KeyRow(keys: List<String>, uppercase: Boolean, height: Int, press: (
                 .clickable(role = Role.Button) { press(key) }
                 .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center) {
-                Text(title, Modifier.clearAndSetSemantics {}, maxLines = 1,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = when {
-                        key.length > 1 -> 15.sp
-                        height < 44 -> 18.sp
-                        else -> 22.sp
-                    }))
+                // Seven controls share a phone-width row, so "Symbols" and "Letters" are wider than a key at 15sp.
+                // Shrink to fit, as iOS scales a key's title down, rather than drawing past the key.
+                val maxSize = when {
+                    key.length > 1 -> 15.sp
+                    height < 44 -> 18.sp
+                    else -> 22.sp
+                }
+                Text(title, Modifier.fillMaxWidth().padding(horizontal = 2.dp).clearAndSetSemantics {}, maxLines = 1,
+                    softWrap = false, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = maxSize),
+                    style = MaterialTheme.typography.titleMedium)
             }
         }
     }
