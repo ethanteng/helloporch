@@ -544,7 +544,7 @@ Page contents:
 Built in five pull requests, each a working household:
 
 1. **The bedside plays waiting messages.** They download as they arrive (`messageMedia`, then `messageDelivered`), and Play N messages on the clock or the messages key plays them: the chime and who each is from, then the audio, or the video with that in a banner. Played to the end sends `messagePlayed`; Stop, the messages key or the call key leave the rest waiting, and a call takes over. Phone voicemail from a verified caller saved on the keypad is released here (`releaseKnownCaller`). Media3 ExoPlayer plays them.
-2. **Texts on the bedside.**
+2. **Texts on the bedside, and caregiver mode's Messages page.** The page was planned for phase 4 but not built there: messages on or off, autoplay hours, the waiting queue, and review of held voicemail and texts. It's also where a caregiver removes a message that won't play, which the bedside skips and keeps, as iOS does.
 3. **The bedside's voicemail recorder and outbox.**
 4. **Messages on a family phone:** the thread, the composer, alerts and the profile.
 5. **Presence autoplay and someone at the bedside.**
