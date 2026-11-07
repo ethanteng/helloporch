@@ -4,7 +4,7 @@ A family you invite should be able to go from your private link to a working Por
 
 ## Requirements
 
-- **No families beyond ours until Apple approves the Cell2Jack driver** for distribution (requested 2026-10-18). Everything else can be built and tried on our own family before then. Inviting other families waits for the approval.
+- **iPad families connect the phone through the Porch phone adapter** ([phone-adapter/README.md](phone-adapter/README.md)) until Apple approves the Cell2Jack driver for distribution (requested 2026-10-18). The adapter needs no driver and works with any iPad, so inviting families doesn't wait for the approval. You provide each iPad family's adapter, flashed and tested, by mail or in person. Decided 2026-11-07, after the adapter passed its Mac and iPad tests. Android tablets read the Cell2Jack directly and need no adapter.
 - **Families are invited privately.** You invite each one; nobody signs up on the website. Open sign-up is a possible later step, not part of this plan's first phase.
 - Little to no manual work for you per family: making an invitation takes a few clicks on the admin page. No scripts, consoles or per-family configuration.
 - Families never create accounts with Twilio or any other service.
@@ -63,8 +63,8 @@ Problems that appear as soon as there's a second real family:
 **The family's caregiver**, usually an adult child, opens the link on the iPad.
 
 1. The page lists what they need:
-   - an iPad with an M-series chip (M1 or later)
-   - a Cell2Jack
+   - an iPad with iPadOS 15 or later
+   - a Cell2Jack, and the Porch phone adapter you send them
    - a corded phone set to tone dialing, such as a big-button picture phone
    - Wi-Fi
 
@@ -74,13 +74,12 @@ Problems that appear as soon as there's a second real family:
    2. **Choose a caregiver PIN**, entered twice.
    3. **Mom's Porch phone number.** "People can call Mom's Porch from any phone." The area code is suggested from where the iPad is and can be changed. **Get number** shows the number.
    4. **Allow the microphone and camera**, with one Continue.
-   5. **How will Mom call?** **Corded phone** (the Cell2Jack works only with an iPad with an M chip), **USB keypad**, or **Just the touchscreen**. The first two each open a screen with **Do this later**:
+   5. **How will Mom call?** **Corded phone** (through a Cell2Jack and the Porch phone adapter), **USB keypad**, or **Just the touchscreen**. The first two each open a screen with **Do this later**:
       - **Connect the phone:**
-        - Plug the phone into the Cell2Jack and the Cell2Jack into the iPad.
-        - Turn on Porch's driver in Settings.
-        - Unplug the Cell2Jack for ten seconds and plug it back in.
+        - Plug the phone into the Cell2Jack, the Cell2Jack into the adapter, and the adapter into the iPad's hub.
         - Lift the receiver and press a key: "Porch heard 3."
         - Put the receiver back: "Porch heard you hang up."
+        - Builds with the driver also link to the driver's steps, for a Cell2Jack plugged straight into an M-series iPad.
       - **Connect the USB keypad:** plug it in and press a number key: "Porch heard 3. The keypad is ready."
    6. **Add your phone.** A QR code to scan with their iPhone camera, or **Send an invite instead**. This first invite has caregiver access on.
    7. **Done**, showing the number and how calls to it work: "Only people on the keypad and numbers you allow can call this number. Anyone else is turned away and listed under Blocked numbers, where you can allow them." Then **Put people on the keypad**.
@@ -99,7 +98,7 @@ TestFlight's public link appears on these pages, but on its own it gives an app 
 
 None of this repeats per family.
 
-**Apple, when the driver is approved** (blocks inviting other families)
+**Apple, when the driver is approved** (no longer blocks inviting families: iPads use the phone adapter until then)
 - Regenerate the driver's App Store profile with the approved DriverKit and USB entitlements and save it as `IOS_DRIVER_APPSTORE_PROFILE`, as [CELL2JACK-CALLS.md](ios/CELL2JACK-CALLS.md#distribution-verification-2026-10-18) describes.
 - Add **Associated Domains** to the `com.ethanteng.helloporch` App ID, regenerate the app's App Store profile, and replace the `IOS_APPSTORE_PROFILE` GitHub secret. Doing both profile changes at the same time avoids regenerating twice. Development profiles update through automatic signing.
 - In App Store Connect: an external TestFlight group, a public link with a tester limit, and Beta App Review for the first build. Each later version needs review again, and builds expire after 90 days.
@@ -129,7 +128,7 @@ None of this repeats per family.
 
 ## Phase 0: the Cell2Jack build for everyone (when Apple approves)
 
-Size: small, but it blocks inviting other families. Everything else can be built first.
+Size: small. It no longer blocks inviting families, since iPads connect the phone through the Porch phone adapter until then.
 
 - Run **Upload Porch to TestFlight** with `variant=cell2jack` and `verify_only=true`, then upload once it passes. Its existing checks cover the driver's approved USB grant and signatures ([BUILD-VARIANTS.md](ios/BUILD-VARIANTS.md)).
 - **One build for every device.** Apple DTS says the same app runs on iOS, with DriverKit used only on iPadOS ([CELL2JACK-CALLS.md](ios/CELL2JACK-CALLS.md)). Confirm the `Porch` TestFlight build installs and works on an iPhone. Then:
@@ -334,7 +333,7 @@ Size: large. Depends on phases 1, 2 and 4.
 - **5.2 Bedside setup.** The steps above replace the creation form in `CaregiverPINViewController` ([PorchContainerViewController.swift:182](ios/Porch/PorchContainerViewController.swift:182)).
   - The number step can't be skipped. Call `assignPhoneNumber` with a longer timeout than the usual 12 seconds, such as 45, since the first number also makes the shared trunk. If buying is still pending because Twilio failed, **Continue** is allowed with "Porch will keep trying and let you know", so pairing family isn't blocked. The checklist shows the pending number.
   - The **Done** screen explains that unknown callers are blocked (1.6).
-- **5.3 How Mom calls.** As changed after 6b, setup asks rather than guessing from the iPad's model: **Corded phone**, **USB keypad**, or, as the fallback, **Just the touchscreen**, which goes straight on. The corded phone says the Cell2Jack works only with an iPad with an M chip, and so does its first tip. Builds without the Cell2Jack leave it out. Each of the first two opens a screen that can go back to choose again. Going back before the phone's check finishes turns off the phone keypad if that screen turned it on, as **Do this later** does; a cancelled back swipe leaves it on.
+- **5.3 How Mom calls.** As changed after 6b, setup asks rather than guessing from the iPad's model: **Corded phone**, **USB keypad**, or, as the fallback, **Just the touchscreen**, which goes straight on. Since 2026-11-07 the corded phone goes through the Porch phone adapter, which needs no driver, so every build offers it (5.3b). Each of the first two opens a screen that can go back to choose again. Going back before the phone's check finishes turns off the phone keypad if that screen turned it on, as **Do this later** does; a cancelled back swipe leaves it on.
   - **Connect the USB keypad:** a USB keypad is a keyboard to the iPad and needs no setting. The screen shows "A keypad or keyboard is connected. Press a number key." when the iPad sees any keyboard (`GCKeyboard`, which a keyboard case also counts as), so the key is the check: it shows the key Porch heard without acting on it. Tips after about 30 seconds: replug it, and press Num Lock if it has one. **This iPad → Connect the USB keypad** opens it again.
 - **5.3a Connect the phone** (Cell2Jack):
   - **Turn on the driver:** a button opens Porch's page in Settings (`UIApplication.openSettingsURLString`) to turn on the driver, then "Unplug the Cell2Jack for ten seconds, then plug it back in." Confirm the exact Settings wording on a device with the distribution build.
@@ -347,6 +346,7 @@ Size: large. Depends on phases 1, 2 and 4.
     - the Cell2Jack may say the phone isn't connected when the receiver is lifted; pressing a key stops it
   - **Do this later** leaves **Connect the phone** on the checklist, which opens the same steps. The touchscreen works meanwhile. Until the checklist, **This iPad → Connect the phone** in caregiver mode opens them.
   - **Phone guide:** write how Mom's picture phone is set up, including tone dialing and whatever its photo keys needed, for the `/setup` page and help.
+- **5.3b Connect the phone** (Porch phone adapter): the adapter types the phone's keys as keypad keys and F24 when the receiver goes back (`SetupAdapterPhoneViewController`). The screen waits for a keyboard, then checks a key and the receiver going back, as 5.3a does, without the driver steps. Tips after about 30 seconds add the hub's charger and replugging the Cell2Jack into the adapter. Builds with the driver link to 5.3a for a Cell2Jack plugged straight into the iPad. **This iPad → Desk phone** has **Connect the phone** and **Hang up when the receiver is put back** in every build; driver builds keep **Cell2Jack plugged into this iPad** below it.
 - **5.4 Add your phone.** A QR code (`CIQRCodeGenerator`) for one invite with caregiver access, shown only in caregiver mode behind the PIN. It refreshes after it's used or expires. **Send an invite instead** opens the share sheet.
   - As built, it first asks for their name: an invitation needs one, and it's who Mom's Porch says is calling. Drop-in is approved as on other invitations once the iPad can use its microphone and camera. A used code shows "Your phone joined"; one that expired while Porch was away is replaced. Setup skips the screen when a caregiver's phone has already joined.
 - **5.5 Checklist** at the top of caregiver mode on the bedside and caregiver phones. Items can be dismissed.
@@ -448,9 +448,10 @@ Size: small.
 | 7 | Delete this Porch, by a caregiver or on the admin page | 1, 4, 5 |
 | 8 | Replace the bedside with restore from backup, including the `/bedside` link and page; forgotten PIN | 3, 4, 5 |
 | 9 | Daily check for offline and unfinished Porches | 5 |
-| 10 | When the driver is approved: the Cell2Jack TestFlight build for everyone, `PorchFamily` retired, docs, privacy, first invitations | all, and Apple |
+| 10 | When the driver is approved: the Cell2Jack TestFlight build for everyone, `PorchFamily` retired, docs, privacy | all, and Apple |
+| — | The Porch phone adapter: firmware and the hang-up key (PR #109), then setup, This iPad and the website for iPad families. **Built** | 6b |
 
-PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; they can be tried with development builds and TestFlight family builds on our own devices.
+PRs 1 to 4 can be worked on at the same time. Invitations don't wait for PR 10: the phone adapter covers iPads. PRs 1 to 9 don't wait for Apple; they can be tried with development builds and TestFlight family builds on our own devices.
 
 ## Check early, before building on it
 
@@ -466,13 +467,13 @@ PRs 1 to 4 can be worked on at the same time. PRs 1 to 9 don't wait for Apple; t
 
 ## Device checks before inviting other families
 
-- **A fresh M-series iPad from a `/setup` link through TestFlight:**
+- **A fresh iPad from a `/setup` link through TestFlight:**
   - setup, number and permissions
-  - Connect the phone: driver, replug, key test, hang-up
+  - Connect the phone through the adapter: key test, hang-up
   - Connect the USB keypad: a real number keypad, with and without Num Lock
   - QR pairing of an iPhone that doesn't have Porch yet
 - **The same setup choosing Do this later,** then connecting the phone from the checklist.
-- **The same setup on a non-M iPad:** choosing the corded phone waits and its first tip says the Cell2Jack needs an M chip; going back to the USB keypad or the touchscreen works.
+- **The same setup on a non-M iPad:** the corded phone works the same through the adapter.
 - **Calling the new number from a regular phone:** an unknown number is blocked and listed; after **Allow** it rings and can leave voicemail.
 - **Outgoing caller ID:** phone fallback and **Add someone → A phone number** show the new household's own number, and a callback rings the new bedside, not Mom's.
 - **A relative's invite** opened in Messages, with and without Porch installed.

@@ -6,7 +6,7 @@ A small board between the Cell2Jack and the iPad that makes the big-button phone
 - **Any iPad works,** not only M-series ones, because the iPad sees a keyboard.
 - **Putting the receiver back still hangs up.** The adapter types F24 for it, which Porch treats like the driver's hang-up.
 
-**Status:** prototype. The firmware compiles and its parser, keys and timing pass host tests, but it hasn't run on hardware yet. Start with [Testing it](#testing-it).
+**Status:** tested on hardware on 2026-11-07, on a Mac and on an iPad with the TestFlight build: connecting, all twelve keys, hanging up with the receiver, and recovering after the Cell2Jack or the adapter is unplugged. For the pilot I flash and test each family's adapter, then mail it or drop it off. An overnight run is the one check still to do.
 
 ## Parts
 
@@ -47,21 +47,23 @@ The red LED is off with no Cell2Jack, blinks while connecting, and stays on once
 
 ## In Porch
 
-The digits work with any Porch build, the same as a number pad: in setup choose **USB keypad**, or use **This iPad → Connect the USB keypad**. Leave **Use Cell2Jack phone keypad** off, since that switch is for the driver.
+In setup, **How will Mom call? → Corded phone** opens **Connect the phone**, which checks a key and the receiver going back. **This iPad → Desk phone** opens it again and has **Hang up when the receiver is put back**, which is on by default. Both are in every build. Leave **Use Cell2Jack phone keypad** off in builds that have it, since that switch is for the driver.
 
-Hanging up with the receiver needs a build that reads F24 ([CallTrigger.receiverHangUpKey](../ios/PorchCore/Sources/PorchCore/CallTrigger.swift), routed in `PorchWindow` and [Cell2JackKeypad.receiveAdapterHangUp](../ios/Porch/Cell2JackKeypad.swift)). It follows **Hang up when the receiver is put back**, which is on by default. The family build doesn't show that switch yet. From the adapter's first hang-up on, Porch keeps its usual trace in `Documents/cell2jack-call-actions.json`, with `rawLine` set to `phone adapter`, even though the driver is off.
+The digits work like any number pad's. Hanging up needs the Porch build of 2026-11-04 or later, which reads F24 ([CallTrigger.receiverHangUpKey](../ios/PorchCore/Sources/PorchCore/CallTrigger.swift), routed in `PorchWindow` and [Cell2JackKeypad.receiveAdapterHangUp](../ios/Porch/Cell2JackKeypad.swift)). From the adapter's first hang-up on, Porch keeps its usual trace in `Documents/cell2jack-call-actions.json`, with `rawLine` set to `phone adapter`, even though the driver is off.
 
 ## Testing it
 
 1. **On a Mac first.** Flash the Feather, plug the Cell2Jack into it, and plug the Feather into the Mac. Open the serial port, for example with `arduino-cli monitor -p /dev/cu.usbmodem…`. Expect "connecting to the Cell2Jack", then the `CJ Version = a06` reply and log lines, then "ready" with the LED on.
 2. Lift the receiver and press `1 2 3 4 5 6 7 8 9 0 * #`. Each should print "typed key". With TextEdit in front, the digits appear there too. Put the receiver back and look for `typed key 0x73`.
 3. Unplug and replug the Cell2Jack, and the Feather. Each time the adapter should reach "ready" again by itself.
-4. **On an iPad,** through the hub with its charger. Run Porch's **Connect the USB keypad** check, then call someone with a key, and end the call by putting the receiver back. Also try # on a key that has an action, an incoming call answered with the call-control key, and a call that rings while a screen is opening.
+4. **On an iPad,** through the hub with its charger. Run Porch's **This iPad → Connect the phone** check, then call someone with a key, and end the call by putting the receiver back. Also try # on a key that has an action, an incoming call answered with the call-control key, and a call that rings while a screen is opening.
 5. Leave it connected overnight and check that it still works in the morning.
 
-## Not yet known
+## What the hardware tests showed
 
-- **DTR and RTS at plug-in.** TinyUSB turns DTR and RTS on while it sets up a CH340, and the adapter turns them off a few milliseconds later. The driver never turned them on, though a Mac does when it opens the port, and the Cell2Jack worked with both. Watch for a Cell2Jack that resets or stops answering after it's plugged in.
-- **Power.** The Cell2Jack runs from the Feather's USB-A port: a 5 V boost converter behind a 500 mA fuse, fed from the hub. Check the phone still gets dial tone and the keys still register with a call running.
-- **iPadOS and the keys.** Keypad # (0xCC) and F24 are standard keyboard keys, but whether iPadOS passes them to Porch is only known once it's tried. If # doesn't arrive, Shift+3 is the fallback. If F24 doesn't, choose another F key in `porch_keys.h` and `CallTrigger`.
-- **Serial port on iPad.** iPadOS should ignore the USB serial interface and use the keyboard.
+- **Connecting** takes about 3 seconds. The first `/d` gets no reply and the second works, as with the iPad driver, so the retry matters.
+- **DTR and RTS at plug-in:** the brief pulse while TinyUSB sets up the CH340 did no harm.
+- **Power:** the Cell2Jack runs from the Feather's USB-A port and plays its dial tone.
+- **Keys on iPadOS:** keypad # (0xCC) and F24 both reach Porch. A Mac's TextEdit shows nothing for keypad #, because macOS has no character for it, so check # on the iPad.
+- **Serial port:** the iPad ignores it and uses the keyboard.
+- **Noise in the log:** the Cell2Jack goes into Bluetooth pairing mode and warns about a missing microphone. That's the Cell2Jack's own chatter and doesn't affect the keys.

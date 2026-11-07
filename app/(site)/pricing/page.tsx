@@ -32,7 +32,7 @@ const questions = [
   },
   {
     question: "Does the price include the tablet or the phone?",
-    answer: "No. This is a software subscription. You’ll need an iPad or Android tablet, home Wi-Fi, a big-button corded phone and a Cell2Jack to connect it. Our pilot page lists the equipment, with links to the ones we use.",
+    answer: "No. This is a software subscription. You’ll need an iPad or Android tablet, home Wi-Fi, a big-button corded phone and a Cell2Jack to connect it. With an iPad, the phone also goes through a small Porch phone adapter, which we provide. Our pilot page lists the equipment, with links to the ones we use.",
   },
   {
     question: "What happens if we replace the tablet?",

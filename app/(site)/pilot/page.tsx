@@ -16,12 +16,14 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/pilot.jpg", alt: "HelloPorch: Join the Porch pilot. Beside the Porch prototype, a tablet and a big-button phone." },
 });
 
-// What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call.
-// The links are the ones I use, on Amazon, and the prices are roughly what they cost there.
+// What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call. On an iPad it
+// also goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop off, so it
+// has no link. The links are the ones I use, on Amazon, and the prices are roughly what they cost there.
 const KIT: { name: string; rule: string; price: string; optional?: boolean; photo: string; href?: string }[] = [
   { name: "A tablet", rule: "iPad or Android", price: "About $150 to $350 new", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Any brand", price: "About $28", photo: "/pilot/phone.jpg", href: "https://www.amazon.com/dp/B0FZ99J2QG" },
   { name: "A Cell2Jack", rule: "Must be a Cell2Jack", price: "About $37", photo: "/pilot/cell2jack.jpg", href: "https://www.amazon.com/dp/B089984QRT" },
+  { name: "A Porch phone adapter", rule: "For an iPad only", price: "I’ll provide it", photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", rule: "Any brand, with a charging port", price: "About $19", photo: "/pilot/hub.jpg", href: "https://www.amazon.com/dp/B0BQLLB61B" },
   { name: "A sturdy stand", rule: "Any brand", price: "About $30", optional: true, photo: "/pilot/stand.jpg", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
 ];
@@ -54,7 +56,7 @@ const STEPS: { title: string; text: string[] }[] = [
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Do I need to buy a tablet from HelloPorch?",
-    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone and a couple of adapters.",
+    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack and a USB-C hub. With an iPad, I’ll provide one more small adapter.",
   },
   {
     q: "Can I use a tablet I already own?",
@@ -63,6 +65,10 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Do I need a special phone?",
     a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it.",
+  },
+  {
+    q: "What is the Porch phone adapter?",
+    a: "A small board that lets an iPad read the buttons on the phone through the Cell2Jack. I’ll provide it, already set up and tested. I’ll mail it to you, or drop it off if you live nearby. Android tablets don’t need it.",
   },
   {
     q: "How do family members call?",
@@ -117,10 +123,14 @@ export default function PilotPage() {
           <article className={`${styles.glanceCard} ${styles.kitCard}`}>
             <div className={styles.kitIntro}>
               <h2 className={styles.glanceLabel}>What you’ll need.</h2>
-              <h3>You’ll provide the hardware. I’ll provide the app.</h3>
+              <h3>You’ll provide most of the hardware. I’ll provide the app.</h3>
               <p className={styles.glanceText}>
                 Porch works with a compatible iPad or Android tablet and a big-button corded phone. You’ll also need a
                 Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
+              </p>
+              <p className={styles.glanceText}>
+                With an iPad, the phone also needs a Porch phone adapter. I’ll provide it, already set up and tested,
+                and mail it to you, or drop it off if you live nearby.
               </p>
               <p className={styles.glanceText}>
                 You may already have some of what you need. Here’s the hardware for the current pilot.

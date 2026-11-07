@@ -17,25 +17,32 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
         super.viewDidLoad()
         title = CaregiverPage.device.title(onBedside: true)
         hideKeyboardControl()
+        // The desk phone through the Porch phone adapter, which needs no driver: every build, any iPad. Hanging up with
+        // the receiver also applies to a Cell2Jack on the driver.
+        receiverSwitch.isOn = phoneKeypad.receiverHangUp
+        receiverSwitch.accessibilityIdentifier = "device.cell2jackReceiverHangUp"
+        receiverSwitch.addTarget(self, action: #selector(changeReceiverHangUp), for: .valueChanged)
+        // The same steps as setup, with a test of a key and hanging up.
+        let phone = actionRow("Connect the phone", symbol: "phone.connection") { [weak self] in self?.connectPhone() }
+        phone.accessibilityIdentifier = "device.connectPhone"
+        form.addArrangedSubview(group("Desk phone", detail: "A desk phone, through a Cell2Jack and the Porch phone adapter.",
+            rows: [phone, toggleRow("Hang up when the receiver is put back", receiverSwitch)]))
         #if !PORCH_NO_CELL2JACK
         if Cell2JackKeypad.supportsDriverPlatform {
             phoneSwitch.isOn = phoneKeypad.enabled
             phoneSwitch.accessibilityIdentifier = "device.cell2jack"
             phoneSwitch.addTarget(self, action: #selector(changePhoneKeypad), for: .valueChanged)
-            receiverSwitch.isOn = phoneKeypad.receiverHangUp
-            receiverSwitch.accessibilityIdentifier = "device.cell2jackReceiverHangUp"
-            receiverSwitch.addTarget(self, action: #selector(changeReceiverHangUp), for: .valueChanged)
-            // The same steps as setup, with a test of the phone. It turns the phone keypad on once the Cell2Jack answers.
-            let connect = actionRow("Connect the phone", symbol: "phone.connection") { [weak self] in self?.connectPhone() }
-            connect.accessibilityIdentifier = "device.connectPhone"
+            // Setup's driver steps, with a test of the phone. It turns the phone keypad on once the Cell2Jack answers.
+            let connect = actionRow("Connect the Cell2Jack", symbol: "cable.connector") { [weak self] in self?.connectCell2Jack() }
+            connect.accessibilityIdentifier = "device.connectCell2Jack"
             let retry = actionRow("Retry phone connection", symbol: "arrow.clockwise") { [weak self] in self?.phoneKeypad.refresh() }
             let settings = actionRow("Open app settings", symbol: "gearshape") {
                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
             }
-            form.addArrangedSubview(group("Cell2Jack phone keypad", detail: "Needs an iPad with an M chip and the USB driver on in Settings → Porch.",
-                rows: [connect, toggleRow("Use Cell2Jack phone keypad", phoneSwitch), toggleRow("Hang up when the receiver is put back", receiverSwitch), retry, settings]))
+            form.addArrangedSubview(group("Cell2Jack plugged into this iPad", detail: "Needs an iPad with an M chip and the USB driver on in Settings → Porch.",
+                rows: [connect, toggleRow("Use Cell2Jack phone keypad", phoneSwitch), retry, settings]))
         } else {
-            let unsupported = UIStackView(arrangedSubviews: heading("Cell2Jack phone keypad", detail: "Needs an iPad with an M chip."))
+            let unsupported = UIStackView(arrangedSubviews: heading("Cell2Jack plugged into this iPad", detail: "Needs an iPad with an M chip."))
             unsupported.axis = .vertical; unsupported.spacing = 4
             form.addArrangedSubview(unsupported)
         }
@@ -54,6 +61,12 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
         phoneSwitch.isOn = phoneKeypad.enabled
     }
     private func connectPhone() {
+        let screen = SetupAdapterPhoneViewController(BedsideSetup(), keypad: phoneKeypad)
+        let navigation = PorchStyle.navigation(screen)
+        screen.onContinue = { [weak navigation] in navigation?.dismiss(animated: true) }
+        present(navigation, animated: true)
+    }
+    private func connectCell2Jack() {
         let screen = SetupPhoneViewController(BedsideSetup(), keypad: phoneKeypad)
         let navigation = PorchStyle.navigation(screen)
         screen.onContinue = { [weak navigation] in navigation?.dismiss(animated: true) }
