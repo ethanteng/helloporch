@@ -9,12 +9,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.BedsideLanguage
+import com.ethanteng.helloporch.core.CallContact
 import com.ethanteng.helloporch.core.CallInactivityTimer
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTone
 import com.ethanteng.helloporch.core.FamilyCallSession
 import com.ethanteng.helloporch.core.FamilyLinks
+import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.KeypadAction
 import com.ethanteng.helloporch.core.LiveKitAddress
 import com.ethanteng.helloporch.core.NativeCall
@@ -35,33 +37,46 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * A call between Porch devices, with LiveKit's media: the Android counterpart of iOS's NativeCallViewController for
- * paired calls. The bedside and family phones both use it, calling out or answering.
+ * A call, with LiveKit's media: the Android counterpart of iOS's NativeCallViewController. The bedside and family phones
+ * both use it, calling out or answering. The bedside also uses it for phone calls: when someone on its keypad doesn't
+ * answer Porch, it calls their regular phone instead (phone fallback), and it answers calls to the household's Porch
+ * number from regular phones.
  *
- * It lives in [CallCenter], not in the screen, so turning the device keeps the call. [CallScreen] shows it. Phone
- * fallback, drop-ins, people added to the call, and hanging up after silence come later in phase 3 (android/PLAN.md).
- * Main thread only.
+ * It lives in [CallCenter], not in the screen, so turning the device keeps the call. [CallScreen] shows it. Main thread
+ * only.
  */
 class PorchCall(
     private val app: PorchApplication,
-    session: FamilyCallSession,
+    /** The Porch call, or null for a bedside calling a phone straight away. */
+    session: FamilyCallSession?,
     /** Who's on the other end, as this device shows them. */
     val name: String,
     val photo: ByteArray?,
     /** Who the bedside is calling, which may still be being said as the call opens. Its ringing and audio wait for it. */
     private val announcement: OutgoingAnnouncement? = null,
+    /** The keypad contact the bedside is calling. If it has a phone number, Porch calls that when Porch isn't answered. */
+    private val contact: CallContact? = null,
+    /** Their phone straight away: their Porch app couldn't ring. */
+    private val phoneOnly: Boolean = false,
     /** Called once the call has ended and its screen should close. */
     private val onClosed: (PorchCall) -> Unit,
 ) {
     data class Tile(val identity: String, val name: String, val track: VideoTrack?)
 
     private var session: FamilyCallSession? = session
-    val callID = session.call.id
-    val video = session.call.mode == NativeCall.Mode.VIDEO
-    val role = session.credential.role
-    private val peerID = session.peerID
+    private val callID = session?.call?.id
+    /** A video call. A call that moves to someone's phone becomes a voice call. */
+    var video by mutableStateOf(session?.call?.mode == NativeCall.Mode.VIDEO && !phoneOnly); private set
+    val role = session?.credential?.role ?: PorchExperience.BEDSIDE
+    private val peerID = session?.peerID
+    /** Someone calling the household's Porch number from a regular phone, which the bedside answered. */
+    private val inboundPhone = session?.call?.source == "phone"
+    /** The number the bedside tries when Porch isn't answered. */
+    private val phoneNumber = contact?.phoneNumber?.takeIf { role == PorchExperience.BEDSIDE && !inboundPhone }
     private val scope = MainScope()
-    val room: Room = LiveKit.create(app)
+    /** Replaced by a room of its own when the call moves to their phone, so a late Porch answer can't join it. */
+    var room: Room by mutableStateOf(LiveKit.create(app)); private set
+    private var roomJobs: List<Job> = emptyList()
 
     var status by mutableStateOf(text("Connecting…")); private set
     var placeholder by mutableStateOf(text(if (video) "Waiting for video" else "Voice call\nCamera is off")); private set
@@ -81,8 +96,14 @@ class PorchCall(
     /** Permissions the call needs and doesn't have yet. The screen asks for them and answers [permissionsAnswered]. */
     var permissionRequest by mutableStateOf<List<String>?>(null); private set
 
-    private var accepted = session.call.state == "accepted"
+    private var accepted = session?.call?.state == "accepted"
     private var hasConnectedPeer = false
+    /** On the call to their phone, from fallback or straight away. */
+    private var onPhone = phoneOnly
+    private var switchingToPhone = false
+    /** Hangs their phone up. Kept until the server confirms it has. */
+    private var phoneControlToken: String? = null
+    private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
     private var failed = false
@@ -99,10 +120,7 @@ class PorchCall(
         clock = SystemClock::elapsedRealtime)
 
     fun start() {
-        scope.launch { room.events.events.collect(::handle) }
-        // LiveKit updates these a moment after each change, so the buttons follow them rather than reading them once.
-        scope.launch { room.localParticipant::isMicrophoneEnabled.flow.collect { microphoneOn = it } }
-        scope.launch { room.localParticipant::isCameraEnabled.flow.collect { cameraOn = it } }
+        watch(room)
         // A family phone in several families follows the one this call is in.
         scope.launch { app.coordinator.links.collect(::familyChanged) }
         updateKeypadHint()
@@ -111,7 +129,18 @@ class PorchCall(
         }
         announcement?.let(ringback::hold)
         if (!accepted) ringback.start()
-        connectionJob = scope.launch { connect() }
+        connectionJob = scope.launch { if (phoneOnly) switchToPhone() else connect() }
+    }
+
+    /** Follows a room's events, and its microphone and camera, which LiveKit updates a moment after each change, so the
+     * buttons follow them rather than reading them once. */
+    private fun watch(room: Room) {
+        roomJobs.forEach { it.cancel() }
+        roomJobs = listOf(
+            scope.launch { room.events.events.collect(::handle) },
+            scope.launch { room.localParticipant::isMicrophoneEnabled.flow.collect { microphoneOn = it } },
+            scope.launch { room.localParticipant::isCameraEnabled.flow.collect { cameraOn = it } },
+        )
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
@@ -142,7 +171,7 @@ class PorchCall(
     private suspend fun connect() {
         val session = session ?: return
         try {
-            val join = session.service.send("joinCall", mapOf("callID" to JsonPrimitive(callID)))
+            val join = session.service.send("joinCall", mapOf("callID" to JsonPrimitive(session.call.id)))
             val token = join.token
             val url = join.serverUrl
             if (token == null || url == null) throw CallException("The call invitation is no longer valid.")
@@ -161,15 +190,27 @@ class PorchCall(
             refresh()
             waitJob?.cancel()
             waitJob = scope.launch {
-                // Until phone fallback (later in phase 3), every unanswered call rings for its full wait.
-                delay((if (accepted) 30 else session.waitSeconds) * 1_000L)
-                if (!hasConnectedPeer) finish(returning("No one joined."))
+                // Someone with a phone number gets the fallback wait, then a call to their phone.
+                val seconds = when {
+                    accepted -> 30
+                    phoneNumber == null -> session.waitSeconds
+                    else -> CallPreferences.fallbackSeconds(app.settings)
+                }
+                delay(seconds * 1_000L)
+                if (hasConnectedPeer) return@launch
+                if (phoneNumber != null && !accepted) fallbackJob = scope.launch { switchToPhone() }
+                else finish(returning("No one joined."))
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             // WebRTC reports a microphone that won't record with an AssertionError, not an exception.
             if (ending) return
+            // Porch couldn't ring them here, so their phone can.
+            if (phoneNumber != null && !hasConnectedPeer && !accepted) {
+                fallbackJob = scope.launch { switchToPhone() }
+                return
+            }
             failed = true
             ringback.stop()
             announcement?.stop()
@@ -208,14 +249,38 @@ class PorchCall(
         if (ending || failed) return
         updateKeypadHint()
         val peers = room.remoteParticipants.values.toList()
+        // A regular phone's leg says how its call is going: connected once it's "active" (or "automation", such as a
+        // menu that answers), and gone at "hangup".
+        if (inboundPhone || onPhone) {
+            val leg = if (inboundPhone) peers.firstOrNull() else peers.firstOrNull { it.identity?.value == PHONE_IDENTITY }
+            val sip = leg?.attributes?.get("sip.callStatus")
+            when {
+                sip == "hangup" -> { finishPhoneCall(); return }
+                sip == "active" || (onPhone && sip == "automation") -> {
+                    hasConnectedPeer = true
+                    waitJob?.cancel()
+                    ringback.stop()
+                    playConnectionCue()
+                    status = text("Phone call connected")
+                }
+                inboundPhone -> status = text("Connecting audio…")
+                else -> {
+                    if (mediaReady && !hasConnectedPeer) ringback.start()
+                    status = if (hasConnectedPeer) text("Reconnecting phone call…") else text("Calling %@'s phone…", name)
+                }
+            }
+            checkInactivity()
+            return
+        }
         if (peers.isNotEmpty()) {
             hasConnectedPeer = true
             waitJob?.cancel()
             ringback.stop()
-        } else if (mediaReady && !hasConnectedPeer && !accepted) ringback.start()
+        } else if (mediaReady && !hasConnectedPeer && !accepted && !switchingToPhone) ringback.start()
         status = when {
             peers.isNotEmpty() -> text(if (!mediaReady) "Connecting audio…" else if (video) "Video call connected" else "Voice call connected")
             accepted -> text("Connecting with %@…", name)
+            phoneNumber != null -> text("Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered.", name)
             else -> text("Calling %@ on Porch…", name)
         }
         if (video) {
@@ -235,9 +300,14 @@ class PorchCall(
     private fun checkInactivity(speaking: Boolean = false) {
         if (inactivity.timeout == null || ending || failed) return
         val peers = room.remoteParticipants.values
-        val connected = mediaReady && room.state == Room.State.CONNECTED && peers.isNotEmpty()
-        val phone = peers.any { it.kind == Participant.Kind.SIP }
-        val speech = speaking || phone || room.localParticipant.isSpeaking || peers.any { it.isSpeaking }
+        val leg = if (inboundPhone) peers.firstOrNull() else peers.firstOrNull { it.identity?.value == PHONE_IDENTITY }
+        val sip = leg?.attributes?.get("sip.callStatus")
+        // A call with a regular phone counts as connected once that phone has answered.
+        val connected = mediaReady && !switchingToPhone && room.state == Room.State.CONNECTED && peers.isNotEmpty() &&
+            (!(onPhone || inboundPhone) || sip == "active" || sip == "automation")
+        // A phone a family caregiver added to a Porch call, such as a bank's hold music, keeps it from ending as quiet.
+        val phoneGuest = !onPhone && !inboundPhone && peers.any { it.kind == Participant.Kind.SIP }
+        val speech = speaking || phoneGuest || room.localParticipant.isSpeaking || peers.any { it.isSpeaking }
         if (inactivity.update(connected, speech)) finish(returning("Call ended."))
     }
 
@@ -255,26 +325,136 @@ class PorchCall(
         // A replaced room's late events don't belong to this call.
         if (event.room !== room) return
         when (event) {
-            is RoomEvent.ParticipantDisconnected -> participantLeft()
+            is RoomEvent.ParticipantDisconnected -> participantLeft(event.participant)
             is RoomEvent.Reconnecting -> if (!ending && !failed) { inactivity.reset(); status = text("Reconnecting…") }
-            is RoomEvent.Disconnected -> if (!ending && mediaReady) finish(returning("The call disconnected."))
+            is RoomEvent.Disconnected -> if (!ending && !switchingToPhone && mediaReady) finish(returning("The call disconnected."))
             // Even a word between the timer's ticks starts the silence over.
             is RoomEvent.ActiveSpeakersChanged -> checkInactivity(speaking = event.speakers.isNotEmpty())
             else -> refresh()
         }
     }
 
-    private fun participantLeft() {
+    private fun participantLeft(participant: Participant) {
         if (ending) return
+        if (onPhone && participant.identity?.value == PHONE_IDENTITY) { finishPhoneCall(); return }
+        if (switchingToPhone || onPhone) return
         // The bedside is never left on with only a phone a family caregiver added, such as a bank.
-        val bedside = role == PorchExperience.BEDSIDE
+        val bedside = role == PorchExperience.BEDSIDE && !inboundPhone
         if (hasConnectedPeer && room.remoteParticipants.values.none { !bedside || it.kind != Participant.Kind.SIP }) finish(returning("Call ended."))
         else refresh()
     }
 
+    private fun finishPhoneCall() =
+        finish(text(if (hasConnectedPeer) "Call ended. Returning to the clock…" else "The phone call ended before it was answered."))
+
+    /**
+     * Porch wasn't answered, so the bedside calls their phone, in iOS's order (`switchToPhone`): the Porch call ends as
+     * moved to their phone, unless they answered it just now; the Porch room is left for a room of the phone's own, so a
+     * late Porch answer can't join; then the phone is dialed once Porch is in that room.
+     */
+    private suspend fun switchToPhone() {
+        val number = phoneNumber ?: return
+        if (ending || failed || hasConnectedPeer || accepted) return
+        if (!granted(Manifest.permission.RECORD_AUDIO) && !ask(listOf(Manifest.permission.RECORD_AUDIO))) {
+            fail(text("Microphone access is required."), text("Allow Porch's microphone in Settings to make a phone call."))
+            return
+        }
+        controlJob?.join()
+        if (ending || hasConnectedPeer) return
+        // Prefer a Porch answer that arrived just as the wait ran out.
+        if (room.remoteParticipants.isNotEmpty()) { refresh(); return }
+        session?.let { porch ->
+            switchingToPhone = true
+            try {
+                val response = porch.service.send("fallback", mapOf("callID" to JsonPrimitive(porch.call.id)))
+                session = null
+                app.coordinator.update(response)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                switchingToPhone = false
+                if ((e as? FamilyServiceException)?.code == "answered") {
+                    accepted = true
+                    waitJob?.cancel()
+                    ringback.stop()
+                    if (!mediaReady) finish(text("They answered Porch, but this device couldn't connect. Please try again."))
+                    else waitJob = scope.launch {
+                        delay(30_000)
+                        if (!hasConnectedPeer) finish(text("Couldn't finish connecting the Porch call."))
+                    }
+                } else fail(text("Couldn't switch to their phone."), BedsideText.error(app, e.message ?: "Couldn't switch to their phone."))
+                return
+            }
+        }
+        if (ending) return
+        val microphone = !mediaReady || microphoneOn
+        switchingToPhone = true
+        ringback.stop()
+        mediaReady = false
+        controlsEnabled = false
+        video = false
+        status = text("Porch wasn't answered. Trying %@'s phone…", name)
+        // Leaving releases the camera and microphone before joining the phone's room.
+        val porchRoom = room
+        room = LiveKit.create(app)
+        watch(room)
+        porchRoom.disconnect()
+        scope.launch { delay(500); porchRoom.release() }
+        if (!ending) ringback.start()
+        tiles = emptyList()
+        localTrack = null
+        showingPlaceholder = true
+        placeholder = text("Phone call\nCamera is off")
+        onPhone = true
+        updateKeypadHint()
+        try {
+            // A caregiver approved this number when they saved it. Without a PIN, the server's own list decides.
+            val approval = if (app.caregiverPIN.isNotEmpty()) PhoneApprovals.authorize(app, number) else null
+            val prepared = PhoneCalling.prepare(app, number, name, approval)
+            phoneControlToken = prepared.controlToken
+            announcement?.finished()
+            room.connect(prepared.serverUrl, prepared.token)
+            if (microphone) enableMicrophone() else room.localParticipant.setMicrophoneEnabled(false)
+            ringback.start()
+            PhoneCalling.start(app, prepared.controlToken)
+            switchingToPhone = false
+            mediaReady = true
+            controlsEnabled = true
+            refresh()
+            waitJob?.cancel()
+            waitJob = scope.launch {
+                delay(60_000)
+                if (!hasConnectedPeer) finish(text("Their phone didn't answer. Returning to the clock…"))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            if (ending) return
+            switchingToPhone = false
+            // Back to clock also hangs up a phone leg made before this failed.
+            fail(text("Couldn't connect their phone."), BedsideText.error(app, e.message ?: "Couldn't connect their phone."))
+            room.disconnect()
+        }
+    }
+
+    /** Stops on an explanation, which stays until Back to clock. */
+    private fun fail(title: String, detail: String) {
+        failed = true
+        ringback.stop()
+        announcement?.stop()
+        status = title
+        placeholder = detail
+        showingPlaceholder = true
+        tiles = emptyList()
+        localTrack = null
+        controlsEnabled = false
+        endTitle = text("Back to clock")
+    }
+
     private fun familyChanged(links: FamilyLinks) {
         val session = session ?: return
-        if (ending) return
+        // Moving to their phone ends the Porch call, which isn't this call ending.
+        if (ending || switchingToPhone) return
         val state = links.state(session.credential) ?: return
         val call = state.call
         if (call == null || call.id != callID || call.state == "ended") {
@@ -296,7 +476,9 @@ class PorchCall(
     }
 
     private fun changeMedia(camera: Boolean) {
-        if (controlJob != null || !mediaReady || ending || (camera && !video)) return
+        // Mute and camera apply to the current room. While the call is moving to a phone, that room is about to be
+        // replaced, so a tap here would change the room being left and could report a failure over the phone call.
+        if (controlJob != null || !mediaReady || ending || switchingToPhone || (camera && !video)) return
         controlsEnabled = false
         controlJob = scope.launch {
             try {
@@ -319,7 +501,11 @@ class PorchCall(
         }
     }
 
-    /** Ends the call: the media first, then the call on the server, then the screen, after `message` shows a moment. */
+    /**
+     * Ends the call: the media first, then the call on the server, then the screen, after `message` shows a moment. A
+     * regular phone stays connected until the server confirms it's hung up, so that's tried twice, and then offered as
+     * Retry ending phone call.
+     */
     fun finish(message: String?) {
         if (ending) return
         ending = true
@@ -327,6 +513,7 @@ class PorchCall(
         announcement?.stop()
         cue.stop()
         connectionJob?.cancel()
+        fallbackJob?.cancel()
         waitJob?.cancel()
         controlJob?.cancel()
         permissionsAnswered(false)
@@ -335,12 +522,21 @@ class PorchCall(
         status = message ?: text("Ending call…")
         scope.launch {
             connectionJob?.join()
+            fallbackJob?.join()
             controlJob?.join()
             room.disconnect()
-            session?.end()
+            val porch = session
+            if (porch != null && inboundPhone) {
+                if (!twice { porch.endConfirmed() }) { couldNotHangUp(); return@launch }
+            } else porch?.end()
             session = null
             tiles = emptyList()
             localTrack = null
+            phoneControlToken?.let { ticket ->
+                // Its own request, which the call ending doesn't cancel.
+                if (!twice { PhoneCalling.end(app, ticket) }) { couldNotHangUp(); return@launch }
+                phoneControlToken = null
+            }
             if (message != null) delay(1_500)
             onClosed(this@PorchCall)
             // The screen lets go of its video first.
@@ -348,6 +544,22 @@ class PorchCall(
             room.release()
             scope.cancel()
         }
+    }
+
+    /** Whether `action` went through, trying once more if it didn't. */
+    private suspend fun twice(action: suspend () -> Unit): Boolean {
+        repeat(2) {
+            try { action(); return true } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+        }
+        return false
+    }
+
+    private fun couldNotHangUp() {
+        failed = true
+        ending = false
+        endEnabled = true
+        endTitle = text("Retry ending phone call")
+        status = text("Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.")
     }
 
     private suspend fun ask(permissions: List<String>): Boolean {
@@ -377,4 +589,9 @@ class PorchCall(
     private fun text(english: String, vararg arguments: Any?) = BedsideText.string(app, english, *arguments)
 
     private class CallException(message: String) : Exception(message)
+
+    private companion object {
+        /** The regular phone in a bedside's call to it (lib/calls/phone.ts). */
+        const val PHONE_IDENTITY = "phone"
+    }
 }

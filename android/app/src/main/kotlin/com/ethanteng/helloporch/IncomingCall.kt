@@ -161,7 +161,13 @@ class IncomingCall(
         if (closed) return
         answering = true
         val session = session()
-        app.scope.launch { session.end() }
+        app.scope.launch {
+            // Someone calling the Porch number keeps ringing until the server hears. A call already gone counts as ended.
+            if (call.source != "phone") { session.end(); return@launch }
+            repeat(2) {
+                try { session.endConfirmed(); return@launch } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+            }
+        }
         close()
     }
 
