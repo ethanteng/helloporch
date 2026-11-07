@@ -240,16 +240,18 @@ private fun PorchKeyboardKeys(keyboard: PorchKeyboard, field: PorchKeyboardField
     val switcher = rememberKeyboardSwitcher(keyboard)
     var helping by remember { mutableStateOf(false) }
     val press: (String) -> Unit = { key -> pressKey(key, keyboard, field, context) { focusManager.clearFocus() } }
+    val rows = PorchKeyLayout.rows(field.keys, keyboard.symbols)
+    val size = keySize(LocalConfiguration.current.screenHeightDp, rows.size + 1)
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(KEY_GAP.dp)) {
+            if (size.heading) Row(Modifier.heightIn(min = HEADING_HEIGHT.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(field.title.ifEmpty { "Porch keyboard" }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 TextButton(onClick = { if (hardware) helping = true else switcher.useSystem() }, Modifier.focusProperties { canFocus = false }) {
                     Text(if (hardware) "Keyboard help" else "Use $device keyboard")
                 }
             }
-            for (row in PorchKeyLayout.rows(field.keys, keyboard.symbols)) KeyRow(row, keyboard.uppercase, press)
-            KeyRow(PorchKeyLayout.controls(field.keys, keyboard.uppercase, keyboard.symbols), keyboard.uppercase, press)
+            for (row in rows) KeyRow(row, keyboard.uppercase, size.height, press)
+            KeyRow(PorchKeyLayout.controls(field.keys, keyboard.uppercase, keyboard.symbols), keyboard.uppercase, size.height, press)
         }
     }
     if (helping) KeyboardHelp(device, onDismiss = { helping = false }, onPorch = { helping = false },
@@ -277,14 +279,29 @@ private fun pressKey(key: String, keyboard: PorchKeyboard, field: PorchKeyboardF
     }
 }
 
-/** A row of equal keys, each 52 dp tall. Keys never take focus, so the field keeps it. */
+private const val KEY_GAP = 7
+private const val HEADING_HEIGHT = 40
+private const val PADDING = 20
+
+/** How tall keys are, and whether the heading shows. The keyboard takes at most half the window, so a phone turned
+ * sideways still has room for the field: its keys get shorter, down to 32 dp, and it leaves out the heading, whose
+ * switch to the system keyboard is still under the form after Done. */
+private class KeySize(val height: Int, val heading: Boolean)
+
+private fun keySize(windowHeight: Int, rows: Int): KeySize {
+    val heading = windowHeight >= 480
+    val fixed = PADDING + KEY_GAP * (rows - 1) + if (heading) HEADING_HEIGHT + KEY_GAP else 0
+    return KeySize(((windowHeight / 2 - fixed) / rows).coerceIn(32, 52), heading)
+}
+
+/** A row of equal keys, `height` dp tall, 52 unless the window is short. Keys never take focus, so the field keeps it. */
 @Composable
-private fun KeyRow(keys: List<String>, uppercase: Boolean, press: (String) -> Unit) {
+private fun KeyRow(keys: List<String>, uppercase: Boolean, height: Int, press: (String) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         for (key in keys) {
             val title = PorchKeyLayout.title(key, uppercase)
             val description = if (key == PorchKeyLayout.DELETE) "Delete character" else title
-            Box(Modifier.weight(1f).height(52.dp)
+            Box(Modifier.weight(1f).height(height.dp)
                 .clip(RoundedCornerShape(9.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .focusProperties { canFocus = false }
@@ -292,7 +309,11 @@ private fun KeyRow(keys: List<String>, uppercase: Boolean, press: (String) -> Un
                 .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center) {
                 Text(title, Modifier.clearAndSetSemantics {}, maxLines = 1,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = if (key.length > 1) 15.sp else 22.sp))
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = when {
+                        key.length > 1 -> 15.sp
+                        height < 44 -> 18.sp
+                        else -> 22.sp
+                    }))
             }
         }
     }
