@@ -200,6 +200,8 @@ class PorchCall(
             announcement?.finished()
             room.connect(url, token)
             enableMicrophone()
+            // Allowed just now, on a first call: the call's service needs the microphone named to keep recording locked.
+            app.calls.updateService()
             if (video && CallPreferences.startVideoWithCamera(role, app.settings)) room.localParticipant.setCameraEnabled(true)
             mediaReady = true
             controlsEnabled = true
@@ -431,6 +433,7 @@ class PorchCall(
             announcement?.finished()
             room.connect(prepared.serverUrl, prepared.token)
             if (microphone) enableMicrophone() else room.localParticipant.setMicrophoneEnabled(false)
+            app.calls.updateService()
             ringback.start()
             PhoneCalling.start(app, prepared.controlToken)
             switchingToPhone = false

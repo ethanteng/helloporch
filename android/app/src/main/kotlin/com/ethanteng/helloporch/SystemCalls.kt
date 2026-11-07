@@ -144,9 +144,12 @@ class SystemCalls(private val app: PorchApplication) {
         stop(call)
     }
 
-    /** Decline, on the notification. */
+    /** Decline, on the notification. Porch's own incoming screen, once it has the call, declines it. */
     fun decline(callID: String) {
-        val call = ringing?.takeIf { it.callID == callID } ?: return
+        val call = ringing?.takeIf { it.callID == callID } ?: run {
+            app.calls.incoming?.takeIf { it.call.id == callID }?.decline()
+            return
+        }
         stop(call)
         app.scope.launch {
             try { app.service(call.credential).send("endCall", mapOf("callID" to JsonPrimitive(callID))) }
@@ -154,8 +157,12 @@ class SystemCalls(private val app: PorchApplication) {
         }
     }
 
-    /** Answer, on the notification, opens Porch. Its incoming screen answers as soon as it shows the call. */
-    fun answerWhenShown(callID: String) { answering = callID.lowercase() }
+    /** Answer, on the notification, opens Porch. Its incoming screen answers as soon as it shows the call, or now if
+     * it's already showing it. */
+    fun answerWhenShown(callID: String) {
+        val showing = app.calls.incoming?.takeIf { it.call.id == callID.lowercase() }
+        if (showing != null && app.onScreen) showing.answer() else answering = callID.lowercase()
+    }
 
     /** Whether Porch should answer this call as it shows it, because Answer was tapped on its notification. */
     fun takeAnswer(callID: String): Boolean {

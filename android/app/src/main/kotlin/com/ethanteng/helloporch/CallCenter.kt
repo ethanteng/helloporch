@@ -259,8 +259,12 @@ class CallCenter(private val app: PorchApplication) {
         cancelPendingCall()
     }
 
-    /** Porch is back on screen: a call in progress turns its camera back on if Porch turned it off. */
-    fun cameOnScreen() { active?.returnedToForeground() }
+    /** Porch is back on screen: a call in progress turns its camera back on if Porch turned it off, and a call whose
+     * notification's Answer opened Porch, already showing here, is answered. */
+    fun cameOnScreen() {
+        active?.returnedToForeground()
+        incoming?.let { if (app.systemCalls.takeAnswer(it.call.id)) it.answer() }
+    }
 
     private fun show(session: FamilyCallSession, name: String, photo: ByteArray?, announcement: OutgoingAnnouncement? = null,
         contact: CallContact? = null) {
