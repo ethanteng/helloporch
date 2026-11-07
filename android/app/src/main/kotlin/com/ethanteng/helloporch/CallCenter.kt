@@ -164,10 +164,12 @@ class CallCenter(private val app: PorchApplication) {
         if (busy) return
         opening = true
         error = null
+        // Still in front: the call's service names the microphone now, as for Answer (noteAnswering). The call then goes
+        // on if the phone locks before the server answers, since Android won't add it from the background (decision 8).
+        CallService.show(app, CallNotifications.ONGOING, CallNotifications.ongoing(app, person.name), serviceTypes(withMicrophone = true))
         app.scope.launch {
             try {
                 val session = app.coordinator.startCall(person, mode, dropIn = false, family = family)
-                if (!app.onScreen) { session.end(); return@launch }
                 show(session, person.name, person.photoID?.let { app.photos.familyMembers.data(it) })
             } catch (e: CancellationException) {
                 throw e
@@ -176,6 +178,8 @@ class CallCenter(private val app: PorchApplication) {
                     ?: e.message ?: "Couldn't start the call."
             } finally {
                 opening = false
+                // It didn't start: nothing is left for the service to show.
+                if (active == null) updateService()
             }
         }
     }
@@ -290,7 +294,7 @@ class CallCenter(private val app: PorchApplication) {
         active = call
         openedForCall = false
         updateService()
-        // Answered just as Porch left the screen, which stopped its check-ins: a family phone's call needs them to go on.
+        // Answered or placed just as Porch left the screen, which stopped its check-ins: a family phone's call needs them.
         if (!app.onScreen && continuing) app.coordinator.start()
         call.start()
     }

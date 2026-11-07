@@ -108,6 +108,7 @@ class PorchCall(
     private var phoneControlToken: String? = null
     /** Porch turned the camera off when it left the screen, and turns it back on when it's back. */
     private var cameraWhenBack = false
+    private var cameraJob: Job? = null
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
@@ -153,14 +154,23 @@ class PorchCall(
         // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
         if (!video || !room.localParticipant.isCameraEnabled || ending) return
         cameraWhenBack = true
-        scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
+        changeCamera(false)
     }
 
     /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
     fun returnedToForeground() {
         if (!cameraWhenBack || ending) return
         cameraWhenBack = false
-        scope.launch { runCatching { room.localParticipant.setCameraEnabled(true) } }
+        changeCamera(true)
+    }
+
+    /** Turns the camera off or on after any change still on its way, so a quick return to Porch ends with it on. */
+    private fun changeCamera(on: Boolean) {
+        val previous = cameraJob
+        cameraJob = scope.launch {
+            previous?.join()
+            runCatching { room.localParticipant.setCameraEnabled(on) }
+        }
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
