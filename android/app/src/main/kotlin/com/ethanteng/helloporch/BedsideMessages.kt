@@ -62,9 +62,11 @@ class BedsideMessages(private val app: PorchApplication) {
 
     fun file(message: FamilyMessage) = File(folder, "${message.id}.${message.fileExtension}")
 
-    /** Plays what's waiting, from the clock's button or the messages key. False when nothing is ready to play. */
+    /** Plays what's waiting, from the clock's button or the messages key. False when nothing is ready to play, or a call
+     * is ringing, up, or still starting: iOS won't start messages while one is opening. */
     fun play(): Boolean {
         if (playback != null) return true
+        if (app.calls.busy) return false
         val messages = ready.takeIf { it.isNotEmpty() } ?: return false
         val slots = runCatching { CallSlots.load(app.settings, app.photos) }.getOrNull() ?: return false
         val created = MessagePlayback(app, messages, slots) { if (playback === it) playback = null }
