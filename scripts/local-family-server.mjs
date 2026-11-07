@@ -26,6 +26,11 @@
 // from --phone-from, which must be a number the Twilio account owns, since this household's own number is made up.
 // Approve only your own numbers on the keypad.
 //   node scripts/local-family-server.mjs 3010 --livekit --phone .env.local --phone-from +15105550123
+//
+// --fcm <service account key> rings Android phones while Porch is closed: calls to them go out as real Firebase Cloud
+// Messaging pushes, from the Firebase project the key belongs to (the one in the app's google-services.json). Only its
+// project ID, client email and private key are read, and never printed. Keep the key out of the repo.
+//   node scripts/local-family-server.mjs 3010 --livekit --fcm ../firebase-adminsdk.json
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -36,7 +41,14 @@ import { handlePhoneCall } from '../lib/calls/phone.ts';
 
 const options = process.argv.slice(2), livekit = options.includes('--livekit');
 const valueOf = flag => { const at = options.indexOf(flag); return at < 0 ? undefined : options[at + 1]; };
-const port = Number(options.find((option, index) => /^[0-9]+$/.test(option) && !options[index - 1]?.startsWith('--phone')) ?? 3010), origin = `http://localhost:${port}`;
+const port = Number(options.find((option, index) => /^[0-9]+$/.test(option) && !/^--(phone|fcm)/.test(options[index - 1] ?? '')) ?? 3010), origin = `http://localhost:${port}`;
+// Real call pushes to Android (see the top of this file), with lib/family/push.ts's own FCM settings.
+const fcmFile = valueOf('--fcm');
+const fcm = fcmFile && (() => {
+  const key = JSON.parse(readFileSync(fcmFile, 'utf8'));
+  if (key.type !== 'service_account' || !key.project_id || !key.client_email || !key.private_key) throw new Error(`${fcmFile} isn't a Firebase service account key.`);
+  return { FCM_PROJECT_ID: key.project_id, FCM_CLIENT_EMAIL: key.client_email, FCM_PRIVATE_KEY: key.private_key };
+})();
 // Real phone calls (see the top of this file). Only these four settings are taken from the file.
 const phoneFile = valueOf('--phone'), phoneFrom = valueOf('--phone-from');
 const phone = phoneFile && (() => {
@@ -60,6 +72,17 @@ Object.assign(process.env, { LIVEKIT_URL: livekit ? localLiveKit.secure : 'wss:/
   TWILIO_ACCOUNT_SID: `AC${'0'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'local', PORCH_SERVER_ORIGIN: 'https://local.invalid',
   // The real trunk only with --phone. Porch numbers stay made up either way: their stand-ins below never use it.
   LIVEKIT_SIP_OUTBOUND_TRUNK_ID: phone ? phone.trunk : 'ST_local', LIVEKIT_SIP_URI: 'sip:local.invalid', PORCH_MAX_PHONE_NUMBERS: '20' });
+if (fcm) {
+  Object.assign(process.env, fcm);
+  // Says when a push went out, and what Firebase answered, so a phone that didn't ring can be told from one never sent.
+  const send = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const response = await send(input, init);
+    const url = typeof input === 'string' ? input : input.url;
+    if (url.startsWith('https://fcm.googleapis.com/')) console.log(`${new Date().toISOString().slice(11, 19)} FCM push -> ${response.status}`);
+    return response;
+  };
+}
 class MemoryStore {
   values = new Map();
   async get(key) { return this.values.get(key) ?? null; }
@@ -262,6 +285,7 @@ ipv4.listen(port, '127.0.0.1', async () => {
   console.log(`Porch is running at ${origin}, with an in-memory household for "Mom". The caregiver PIN is ${pin}.`);
   console.log(livekit ? `Calls connect through LiveKit at ${localLiveKit.url}.` : 'Calls start but never connect. Add --livekit to connect them (see the top of this file).');
   if (phone) console.log(`Phone fallback rings real phones through ${new URL(phone.url).host}, from ${phoneFrom}.`);
+  if (fcm) console.log(`Android phones ring while Porch is closed, through Firebase project ${fcm.FCM_PROJECT_ID}.`);
   console.log(`Invitation for a phone to join (works once, for a day):\n  porch://pair?${new URLSearchParams({ server: origin, code: await invite('Ethan') })}`);
   console.log(`Setup link for a new bedside tablet (works once, for a day):\n  porch://activate?${new URLSearchParams({ server: origin, code: await activation() })}`);
 });

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.input.InputManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.InputDevice
@@ -42,9 +43,11 @@ import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTrigger
 import kotlinx.coroutines.delay
 
-/** The microphone and camera, asked for in setup so the first call doesn't stop at a prompt. */
+/** The microphone and camera, asked for in setup so the first call doesn't stop at a prompt, and on Android 13 and
+ * later notifications, which ring the tablet if Porch isn't in front. */
 object SetupPermissions {
-    val all = listOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
+    val all = listOfNotNull(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA,
+        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null)
     /** Android says only whether a permission is granted, not whether it was ever asked, which iOS's resume rule goes
      * by. So Porch notes when it asks. */
     private const val askedKey = "porch.setup.permissionsAsked"
@@ -61,7 +64,11 @@ object SetupPermissions {
 @Composable
 fun SetupPermissionsScreen(app: PorchApplication, lovedOne: String, onContinue: () -> Unit) {
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { onContinue() }
-    FormSection("Microphone and camera", "Porch uses them for calls, so family can hear and see $lovedOne. The tablet asks once for each.") {
+    val notifications = Build.VERSION.SDK_INT >= 33
+    FormSection(if (notifications) "Microphone, camera and notifications" else "Microphone and camera",
+        if (notifications) "Porch uses the microphone and camera for calls, so family can hear and see $lovedOne, and notifications to ring if " +
+            "Porch isn't in front. The tablet asks once for each."
+        else "Porch uses them for calls, so family can hear and see $lovedOne. The tablet asks once for each.") {
         FormButton("Continue", onClick = {
             val asking = SetupPermissions.all.filter { !SetupPermissions.granted(app, it) }
             SetupPermissions.noteAsked(app)

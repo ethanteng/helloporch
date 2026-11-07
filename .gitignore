@@ -26,3 +26,6 @@ phone-adapter/build/
 
 # Private App Review activation links and submission drafts
 /.app-review/
+
+# Android's Firebase config (android/app/build.gradle.kts). The repo is public, so it stays on each computer.
+android/app/google-services.json
