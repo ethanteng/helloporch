@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -43,15 +45,32 @@ import androidx.media3.ui.compose.ContentFrame
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.KeypadAction
+import com.ethanteng.helloporch.core.ReceivedText
+import java.util.Locale
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * Plays waiting messages one after another until none are left or someone stops it, as iOS's MessagePlayerViewController
- * does: the chime and who it's from, then the message, and only one played to the end leaves the queue. Stop, the
- * messages key or the call key stop it, and leave the rest waiting. A call that comes in takes over. Main thread only.
+ * Plays waiting messages one after another until none are left or someone stops it, then shows and reads waiting texts
+ * the same way, as iOS's MessagePlayerViewController does: the chime and who it's from, then the message or the text's
+ * words, and only one played or read to the end leaves the queue. Stop, the messages key or the call key stop it, and
+ * leave the rest waiting. A call that comes in takes over. Main thread only.
  */
-class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMessage>, private val slots: CallSlots,
-    private val onFinish: (MessagePlayback) -> Unit) {
+class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMessage>, texts: List<ReceivedText>,
+    private val slots: CallSlots, private val onFinish: (MessagePlayback) -> Unit) {
     private val queue = ArrayDeque(messages)
+    private val textQueue = ArrayDeque(texts)
+    /** The text showing: being announced, read, or held on screen a moment after. */
+    var currentText by mutableStateOf<ReceivedText?>(null)
+        private set
+    /** A text read to the end stays on screen this long, for anyone still reading it, before the next one. */
+    private var hold: Job? = null
+    /** The language of the words showing, found while who they're from is said. */
+    private var foreign: Deferred<String?>? = null
     private val announcer = Announcer(app)
     private var player: ExoPlayer? = null
     /** The message showing: being announced, or playing. */
@@ -78,9 +97,23 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
         return contact?.photoData ?: if (message.fromPhone) null else FamilyPhotos.data(app, message.from)
     }
 
+    /** Who a text is from and when, and what the screen says about its words. */
+    fun textTitle(text: ReceivedText) = BedsideText.string(app, "Text from %@", BedsideMessages.textSender(app, text.from, slots).first)
+    fun textDetail(text: ReceivedText) = BedsideText.string(app, "Sent %@", BedsideMessages.sentText(app, text.sentAt))
+    fun textPhoto(text: ReceivedText): ByteArray? = BedsideMessages.textSender(app, text.from, slots).second?.photoData
+    /** That it was translated, and from what, then what came with it. */
+    fun textNotes(text: ReceivedText): List<String> =
+        listOfNotNull(if (text.translated) BedsideMessages.translatedNote(app, text.sourceLanguage) else null) + BedsideMessages.attachmentNotes(app, text)
+
     private fun playNext() {
         if (ended) return
-        val message = queue.removeFirstOrNull() ?: return close()
+        hold?.cancel(); hold = null
+        currentText = null
+        // Texts follow the messages.
+        val message = queue.removeFirstOrNull() ?: run {
+            val text = textQueue.removeFirstOrNull() ?: return close()
+            return show(text)
+        }
         val file = app.messages.file(message)
         if (!file.exists()) return playNext()
         current = message
@@ -123,6 +156,45 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
         playNext()
     }
 
+    /** A text: who it's from and when, then its words in the bedside's language, read aloud. */
+    private fun show(text: ReceivedText) {
+        current = null
+        video = null
+        currentText = text
+        // The detector reads the words off the main thread while who they're from is said.
+        foreign = app.scope.async(Dispatchers.Default) { BedsideMessages.otherLanguage(app, text) }
+        announcer.speak(BedsideMessages.textAnnouncement(app, text.from, text.sentAt, slots)) { read(text) }
+    }
+
+    private fun read(text: ReceivedText) {
+        if (ended || currentText?.id != text.id) return
+        if (text.text.isEmpty()) return readAttachments(text)
+        app.scope.launch {
+            val other = runCatching { foreign?.await() }.getOrNull()
+            if (ended || currentText?.id != text.id) return@launch
+            // A long text's natural reading gets longer to arrive than an announcement.
+            announcer.speak(text.text, chime = false, textID = text.id, voiceLocale = other?.let(Locale::forLanguageTag), naturalWait = 8_000) {
+                readAttachments(text)
+            }
+        }
+    }
+
+    private fun readAttachments(text: ReceivedText) {
+        if (ended || currentText?.id != text.id) return
+        val note = BedsideMessages.attachmentSentence(app, text) ?: return finishText(text)
+        announcer.speak(note, chime = false) { finishText(text) }
+    }
+
+    /** Read to the end, so it won't show again. It stays on screen a moment before the next one. */
+    private fun finishText(text: ReceivedText) {
+        if (ended || currentText?.id != text.id) return
+        app.messages.markRead(text)
+        hold = app.scope.launch {
+            delay(TEXT_HOLD)
+            if (!ended && currentText?.id == text.id) playNext()
+        }
+    }
+
     /** Stopping early leaves the message showing queued for another time. */
     fun stop() = close()
 
@@ -137,8 +209,11 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
         if (ended) return
         ended = true
         announcer.stop()
+        hold?.cancel(); hold = null
+        foreign?.cancel(); foreign = null
         release()
         current = null
+        currentText = null
         onFinish(this)
     }
 
@@ -146,6 +221,34 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
         video = null
         player?.release()
         player = null
+    }
+
+    private companion object {
+        const val TEXT_HOLD = 8_000L
+    }
+}
+
+/** A text: who it's from and when, its words as large as fits, what's true of them, and the words as sent under a
+ * translation. A short one sits in the middle of the room above Stop; a long one scrolls. */
+@Composable
+private fun TextShowing(playback: MessagePlayback, text: ReceivedText) {
+    val length = text.text.length
+    // Labels take the width, so a long text wraps rather than being cut off.
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Photo(playback.textPhoto(text), Modifier.size(140.dp))
+        Text(playback.textTitle(text), Modifier.fillMaxWidth(), color = PorchColors.nightText, fontSize = 40.sp, fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center)
+        Text(playback.textDetail(text), Modifier.fillMaxWidth().padding(bottom = 20.dp), color = PorchColors.nightSecondary, fontSize = 26.sp,
+            textAlign = TextAlign.Center)
+        if (text.text.isNotEmpty()) Text(text.text, Modifier.fillMaxWidth().padding(bottom = 12.dp), color = PorchColors.nightText,
+            fontSize = when { length <= 80 -> 52.sp; length <= 200 -> 44.sp; length <= 500 -> 36.sp; else -> 30.sp },
+            fontWeight = FontWeight.Medium, textAlign = if (length <= 200) TextAlign.Center else TextAlign.Start)
+        val notes = playback.textNotes(text)
+        if (notes.isNotEmpty()) Text(notes.joinToString("\n"), Modifier.fillMaxWidth(), color = PorchColors.nightSecondary, fontSize = 22.sp,
+            textAlign = TextAlign.Center)
+        if (text.translated && text.body.isNotEmpty()) Text(text.body, Modifier.fillMaxWidth(), color = PorchColors.nightSecondary, fontSize = 26.sp,
+            textAlign = TextAlign.Center)
     }
 }
 
@@ -166,6 +269,7 @@ fun MessagePlayerScreen(app: PorchApplication, playback: MessagePlayback) = Larg
     }, onHangUp = { "hang-up ignored while messages play" })
     val message = playback.current
     val video = playback.video
+    val text = playback.currentText
     Box(Modifier.fillMaxSize().background(PorchColors.night)) {
         if (video != null) ContentFrame(video, Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 32.dp, vertical = 24.dp),
@@ -177,6 +281,7 @@ fun MessagePlayerScreen(app: PorchApplication, playback: MessagePlayback) = Larg
                     color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (text != null) TextShowing(playback, text)
                 if (message != null && video == null) Column(Modifier.offset(y = (-30).dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Photo(playback.photo(message), Modifier.size(240.dp))

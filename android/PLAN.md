@@ -75,7 +75,7 @@ Requirements for a model we support:
 | CallKit | Jetpack Core-Telecom (`androidx.core:core-telecom`), a `CallStyle` notification with a full-screen intent, and a `phoneCall` foreground service |
 | UNUserNotification alerts | FCM notification on a `messages` channel |
 | AVSpeechSynthesizer | `TextToSpeech` |
-| NaturalLanguage, to read foreign words in a text with their own voice | ML Kit language identification (on device) |
+| NaturalLanguage, to read foreign words in a text with their own voice | Android's own `TextClassifier.detectLanguage` (on device; ML Kit language identification if a tablet's turns out not to work) |
 | AVAudioPlayer / AVPlayer | Media3 ExoPlayer, which plays the generated WAV tones, `.m4a`, `.mov`, `.mp4` and `.mp3` |
 | AVAudioRecorder | `MediaRecorder` (MPEG_4, AAC) |
 | AVCaptureMovieFileOutput, UIImagePickerController video | CameraX `VideoCapture` with `Recorder` |
@@ -541,13 +541,14 @@ Page contents:
 
 ## Phase 5: messages, voicemail and texts
 
-Built in five pull requests, each a working household:
+Built in six pull requests, each a working household:
 
 1. **The bedside plays waiting messages.** They download as they arrive (`messageMedia`, then `messageDelivered`), and Play N messages on the clock or the messages key plays them: the chime and who each is from, then the audio, or the video with that in a banner. Played to the end sends `messagePlayed`; Stop, the messages key or the call key leave the rest waiting, and a call takes over. Phone voicemail from a verified caller saved on the keypad is released here (`releaseKnownCaller`). Media3 ExoPlayer plays them.
-2. **Texts on the bedside, and caregiver mode's Messages page.** The page was planned for phase 4 but not built there: messages on or off, autoplay hours, the waiting queue, and review of held voicemail and texts. It's also where a caregiver removes a message that won't play, which the bedside skips and keeps, as iOS does.
-3. **The bedside's voicemail recorder and outbox.**
-4. **Messages on a family phone:** the thread, the composer, alerts and the profile.
-5. **Presence autoplay and someone at the bedside.**
+2. **Texts on the bedside.** Each one is fetched in the bedside's language (`textMessage`) and shows after the messages, counting toward Play N messages: who it's from and when, the words as large as fit, that it was translated and what came with it, read aloud in the household's natural voice (`speech {textID}`) or text-to-speech, then held on screen 8 s and reported (`textRead`). Read ones are kept across restarts, as played messages are. Texts from numbers the household doesn't know wait for a caregiver.
+3. **Caregiver mode's Messages page.** It was planned for phase 4 but not built there: messages on or off, autoplay hours, the waiting queue, and review of held voicemail and texts. It's also where a caregiver removes a message that won't play, which the bedside skips and keeps, as iOS does.
+4. **The bedside's voicemail recorder and outbox.**
+5. **Messages on a family phone:** the thread, the composer, alerts and the profile.
+6. **Presence autoplay and someone at the bedside.**
 
 ### Media formats both platforms play
 
@@ -581,7 +582,7 @@ Built in five pull requests, each a working household:
     - A translation shows the original beneath it, with "Translated from Y".
   - Reading:
     1. Chime, then the announcement.
-    2. The body, read with the natural clip (`speech {textID}`, waiting up to 8 s, at most 600 characters), otherwise with `TextToSpeech`. Words in another language use that language's voice, found with ML Kit language identification.
+    2. The body, read with the natural clip (`speech {textID}`, waiting up to 8 s, at most 600 characters), otherwise with `TextToSpeech`. Words in another language use that language's voice: the language the server named, or else Android's `TextClassifier` language detection, which needs no extra library.
     3. Then the counts of pictures and attachments are read aloud.
   - Each text stays on screen for 8 s, then `textRead`.
   - Held texts from unknown numbers wait for a caregiver.

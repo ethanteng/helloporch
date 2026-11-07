@@ -167,8 +167,7 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) 
     }
 }
 
-/** Play messages, in the clock's top left while any are waiting, as iOS shows it: texts count with them in phase 5's
- * second part. */
+/** Play messages, in the clock's top left while any are waiting, as iOS shows it. Texts count with them. */
 @Composable
 private fun MessagesButton(title: String, color: Color, text: Color, modifier: Modifier, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = modifier.heightIn(min = 64.dp), shape = CircleShape,

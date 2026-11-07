@@ -4,7 +4,11 @@
 // memory too and served from /media/, and /api/calls/contacts/authorize has a stand-in that approves keypad numbers.
 // Nothing here takes real phone calls, so a call that Block unknown callers turned away is made up:
 //   curl -X POST 'http://localhost:3010/local/blocked-call?number=%2B14155550100'
-// It's listed on every household that blocks unknown callers, as the phone webhooks would list it. It sets up a household, "Mom",
+// It's listed on every household that blocks unknown callers, as the phone webhooks would list it. Nothing receives real
+// texts either, so a text to the Porch number is made up too, and every household gets it, held for a caregiver unless the
+// number is on its keypad or allowed, as the text webhook would queue it:
+//   curl -X POST 'http://localhost:3010/local/text?from=%2B14155550200&body=Hi%20Mom&pictures=1'
+// It sets up a household, "Mom",
 // whose stand-in bedside checks in every few seconds, and prints an invitation for a phone to join it and a setup link
 // for a new bedside tablet.
 //
@@ -37,6 +41,7 @@ import { createServer } from 'node:http';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { authorizeBedsideCalling, handleFamily } from '../lib/family/service.ts';
 import { blockCall } from '../lib/family/screening.ts';
+import { receiveText } from '../lib/family/texts.ts';
 import { handlePhoneCall } from '../lib/calls/phone.ts';
 
 const options = process.argv.slice(2), livekit = options.includes('--livekit');
@@ -178,6 +183,26 @@ const serveMedia = (request, response, raw) => {
   if (!blob) { response.writeHead(404).end(); return; }
   response.writeHead(200, { 'Content-Type': blob.contentType, 'Content-Length': blob.body.length }).end(blob.body);
 };
+// A made-up text to the Porch number, for every household, as the Twilio text webhook would queue it.
+const localText = async (request, response) => {
+  try {
+    const params = new URL(request.url, origin).searchParams;
+    const from = params.get('from') ?? '', body = [...(params.get('body') ?? '').trim()].slice(0, 1600).join('');
+    const pictures = Math.max(0, Math.min(10, Number(params.get('pictures')) || 0));
+    if (!/^\+[1-9][0-9]{6,14}$/.test(from) || (!body && !pictures)) { response.writeHead(400).end('Pass ?from= with + and the country code, and ?body= or ?pictures=.\n'); return; }
+    let queued = 0;
+    for (const key of [...store.values.keys()].filter(key => key.startsWith('house:'))) {
+      const messageSID = `SM${randomBytes(16).toString('hex')}`;
+      if (await receiveText(store, () => media, key.slice('house:'.length), { messageSID, from, body, pictures, attachments: 0 }, Math.floor(Date.now() / 1000))) queued += 1;
+    }
+    console.log(`${time()} a text from ${from} reached ${queued} household${queued === 1 ? '' : 's'}`);
+    response.writeHead(200).end(`Queued for ${queued} household${queued === 1 ? '' : 's'}.\n`);
+  } catch (error) {
+    console.log(`${time()} local text failed: ${error.message}`);
+    if (!response.headersSent) response.writeHead(500).end(`${error.message}\n`);
+  }
+};
+
 // A stand-in for /api/calls/contacts/authorize, which reads Redis: the real PIN check, then a made-up approval for 30
 // days. Numbers starting +44 are refused, to try a country Porch can't call.
 const authorizeContact = async (request, response, body) => {
@@ -245,6 +270,7 @@ const onRequest = async (request, response) => {
   const raw = Buffer.concat(chunks), body = raw.toString();
   if (request.url.startsWith('/media/')) { serveMedia(request, response, raw); return; }
   if (request.method === 'POST' && request.url.startsWith('/local/blocked-call')) { await blockedCall(request, response); return; }
+  if (request.method === 'POST' && request.url.startsWith('/local/text')) { await localText(request, response); return; }
   if (request.method === 'POST' && request.url === '/api/calls/contacts/authorize') { await authorizeContact(request, response, body); return; }
   const phoneAction = /^\/api\/calls\/phone\/(prepare|start|end)$/.exec(request.url ?? '')?.[1];
   if (request.method === 'POST' && phoneAction) {
