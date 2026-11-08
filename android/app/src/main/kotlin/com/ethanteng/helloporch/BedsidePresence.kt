@@ -208,20 +208,31 @@ class BedsidePresence(private val context: Context) {
 
         @OptIn(ExperimentalGetImage::class)
         override fun analyze(image: ImageProxy) {
-            val time = image.imageInfo.timestamp
-            val media = image.image
-            // About three looks a second is plenty, and keeps the tablet cool.
-            val last = lastAnalysis
-            if (media == null || (last != null && time - last < ANALYSIS_INTERVAL_NANOS)) { image.close(); return }
-            lastAnalysis = time
-            // ML Kit turns the frame upright and measures faces in it, so the height they're a fraction of is upright too.
-            val rotation = image.imageInfo.rotationDegrees
-            val height = if (rotation == 90 || rotation == 270) image.width else image.height
-            faces.process(InputImage.fromMediaImage(media, rotation)).addOnCompleteListener(frames) { task ->
-                image.close()
-                if (!task.isSuccessful) return@addOnCompleteListener
-                val tallest = task.result.maxOfOrNull { it.boundingBox.height() }?.let { it.toDouble() / height }
-                main.execute { observed(tallest, time / 1e9, token) }
+            // A frame left open stops CameraX from delivering the next one, and can keep the camera from the call that
+            // comes after this look. ML Kit refuses a format or rotation it can't read by throwing.
+            var handedOff = false
+            try {
+                val time = image.imageInfo.timestamp
+                val media = image.image
+                // About three looks a second is plenty, and keeps the tablet cool.
+                val last = lastAnalysis
+                if (media == null || (last != null && time - last < ANALYSIS_INTERVAL_NANOS)) return
+                // ML Kit turns the frame upright and measures faces in it, so the height they're a fraction of is upright too.
+                val rotation = image.imageInfo.rotationDegrees
+                val height = if (rotation == 90 || rotation == 270) image.width else image.height
+                val input = InputImage.fromMediaImage(media, rotation)
+                lastAnalysis = time
+                faces.process(input).addOnCompleteListener(frames) { task ->
+                    image.close()
+                    if (!task.isSuccessful || height <= 0) return@addOnCompleteListener
+                    val tallest = task.result.maxOfOrNull { it.boundingBox.height() }?.let { it.toDouble() / height }
+                    main.execute { observed(tallest, time / 1e9, token) }
+                }
+                handedOff = true
+            } catch (_: RuntimeException) {
+                // Closed below.
+            } finally {
+                if (!handedOff) image.close()
             }
         }
     }
