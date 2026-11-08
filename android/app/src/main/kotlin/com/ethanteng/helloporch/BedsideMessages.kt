@@ -244,12 +244,20 @@ class BedsideMessages(private val app: PorchApplication) {
                 savedText(text.id)?.let(::forgetReading)
                 withContext(Dispatchers.IO) {
                     textFolder.mkdirs()
+                    val destination = textFile(text.id)
                     val temporary = File.createTempFile("text", ".json", app.cacheDir)
-                    temporary.writeText(PorchJson.encodeToString(ReceivedText.serializer(), received))
-                    if (!temporary.renameTo(textFile(text.id))) { temporary.delete(); throw IOException("Couldn't keep the text.") }
+                    try {
+                        temporary.writeText(PorchJson.encodeToString(ReceivedText.serializer(), received))
+                        // cacheDir and filesDir can be different drives. Copy when a rename can't cross them.
+                        if (!temporary.renameTo(destination)) temporary.copyTo(destination, overwrite = true)
+                    } finally {
+                        temporary.delete()
+                    }
                 }
-                fetchingTexts -= text.id
+                // Still in fetchingTexts, so this sync won't start another fetch for the same text. Taking the id out
+                // before sync, and again in finally, dropped a refetch that sync had just begun.
                 sync()
+                if (stillPaired(credential) && preparedText(text.id) != null) prefetchReadings()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -267,6 +275,13 @@ class BedsideMessages(private val app: PorchApplication) {
             try { app.service(credential).send("textRead", mapOf("textID" to JsonPrimitive(id))) }
             catch (e: CancellationException) { throw e } catch (_: Exception) { unreportedTexts += id }
         }
+    }
+
+    /** The words are on the tablet, so their natural reading can be fetched before anyone presses Play. */
+    private fun prefetchReadings() {
+        val state = app.coordinator.links.value.state ?: return
+        val slots = runCatching { CallSlots.load(app.settings, app.photos) }.getOrNull() ?: return
+        NaturalVoice.prefetch(app, state, slots)
     }
 
     /** A text's natural readings are its words, so they go with it. */
