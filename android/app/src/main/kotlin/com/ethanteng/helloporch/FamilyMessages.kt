@@ -232,7 +232,12 @@ fun MessageThreadScreen(app: PorchApplication, family: FamilyCredential, links: 
                 val url = service.send(entry.mediaAction, mapOf("messageID" to JsonPrimitive(entry.id))).media?.url ?: return@launch
                 playing = MessageMedia(url, FamilyMessageThread.type(entry), entry.video)
                 if (entry.isNew) {
-                    runCatching { service.send("receivedMessagePlayed", mapOf("messageID" to JsonPrimitive(entry.id))) }
+                    try {
+                        service.send("receivedMessagePlayed", mapOf("messageID" to JsonPrimitive(entry.id)))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                    }
                     loads++
                 }
             } catch (e: CancellationException) {
