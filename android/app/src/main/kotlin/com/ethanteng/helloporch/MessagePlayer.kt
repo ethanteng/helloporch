@@ -173,14 +173,12 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
         app.scope.launch {
             val other = runCatching { foreign?.await() }.getOrNull()
             if (ended || currentText?.id != text.id) return@launch
+            // Its own language's built-in voice when this tablet has one. Without one, the bedside's voice reads it, with an
+            // accent, rather than not at all. A reading that's cut off or fails otherwise isn't tried again in another voice.
+            val locale = other?.let(Locale::forLanguageTag)?.takeIf(app.speech::hasVoice)
             // A long text's natural reading gets longer to arrive than an announcement.
-            announcer.speak(text.text, chime = false, textID = text.id, voiceLocale = other?.let(Locale::forLanguageTag), naturalWait = 8_000) { said ->
-                when {
-                    said -> readAttachments(text)
-                    // No voice for its own language: the bedside's voice reads it, with an accent, rather than not at all.
-                    other != null -> announcer.speak(text.text, chime = false, textID = text.id) { again -> if (again) readAttachments(text) else unread(text) }
-                    else -> unread(text)
-                }
+            announcer.speak(text.text, chime = false, textID = text.id, voiceLocale = locale, naturalWait = 8_000) { said ->
+                if (said) readAttachments(text) else unread(text)
             }
         }
     }

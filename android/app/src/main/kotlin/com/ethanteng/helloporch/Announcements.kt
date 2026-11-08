@@ -66,6 +66,9 @@ class BedsideSpeech(context: Context) {
         if (voice != null) engine.setVoice(voice) == TextToSpeech.SUCCESS else engine.setLanguage(language.locale) >= TextToSpeech.LANG_AVAILABLE
     }
 
+    /** Whether this tablet's engine has a voice for `locale`. False until the engine has started. */
+    fun hasVoice(locale: Locale): Boolean = ready == true && engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE
+
     /** Says `text` in `locale`'s built-in voice, such as a text's words that Porch couldn't translate. */
     fun speak(text: String, locale: Locale, done: (Boolean) -> Unit): String =
         say(text, done) { engine.setLanguage(locale) >= TextToSpeech.LANG_AVAILABLE }
