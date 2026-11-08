@@ -82,7 +82,13 @@ class MessageAlerts(private val app: PorchApplication) {
             present += id
             val count = if (link.accessRemoved) 0 else link.state?.newMessages ?: continue
             val before = unplayed.put(id, count)
-            if (count == 0 && before != 0) manager.cancel(tag(id), 0)
+            if (count == 0 && before != 0) {
+                // The first count this process sees can come from a check-in that left before a notification it doesn't
+                // know of yet. One shown in the last minute stays, until a later check-in counts it; an older one, such as
+                // for messages played while Porch was closed, goes.
+                if (before == null && !link.accessRemoved) cancelShownBefore(manager, id, System.currentTimeMillis() - 60_000)
+                else manager.cancel(tag(id), 0)
+            }
         }
         // Leave this family drops the link without a zero count, so the notification would stay.
         for (id in unplayed.keys.filter { it !in present }) {
@@ -98,6 +104,16 @@ class MessageAlerts(private val app: PorchApplication) {
             }
         } catch (_: RuntimeException) {
             // The notification service can be briefly unavailable. The next check-in tries again.
+        }
+    }
+
+    private fun cancelShownBefore(manager: NotificationManagerCompat, id: String, time: Long) {
+        try {
+            for (status in manager.activeNotifications) {
+                if (status.tag == tag(id) && status.postTime < time) manager.cancel(status.tag, status.id)
+            }
+        } catch (_: RuntimeException) {
+            // The notification service can be briefly unavailable. A later check-in clears it once it's played.
         }
     }
 
