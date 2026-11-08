@@ -339,6 +339,8 @@ class CallCenter(private val app: PorchApplication) {
      * offers it once Porch is back. */
     private fun offerMessage(family: FamilyCredential, name: String, title: String) {
         if (app.coordinator.links.value.state(family)?.messagesEnabled == false) {
+            // This family can't take one. Drop an offer still held for them, so it doesn't show under the explanation.
+            if (messageOffer?.family?.deviceID == family.deviceID) messageOffer = null
             error = if (title.endsWith("isn't available")) "$name isn't available on Porch right now." else "$title."
             return
         }

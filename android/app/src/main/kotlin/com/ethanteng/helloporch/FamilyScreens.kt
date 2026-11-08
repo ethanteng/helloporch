@@ -87,8 +87,14 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     val threadFamily = families.firstOrNull { it.deviceID == thread }?.takeIf { open && caregiverFamily == null && composeFamily == null }
     val listing = caregiverFamily == null && composeFamily == null && threadFamily == null && !(link != null || joining || families.isEmpty())
     SideEffect { onReady(listing || caregiverFamily != null || threadFamily != null) }
-    // A call that didn't go through offers a message instead, as iOS does.
-    app.calls.messageOffer?.takeIf { it.recent && composeFamily == null && caregiverFamily == null }?.let { offer ->
+    // A call that didn't go through offers a message instead, as iOS does. Not once that family has left this phone,
+    // removed it, or turned messages off: Leave a message would open a composer that can't send.
+    app.calls.messageOffer?.takeIf { offer ->
+        val link = links.link(offer.family)
+        offer.recent && composeFamily == null && caregiverFamily == null &&
+            families.any { it.deviceID == offer.family.deviceID } &&
+            link?.accessRemoved != true && link?.state?.messagesEnabled != false
+    }?.let { offer ->
         AlertDialog(onDismissRequest = { app.calls.messageOffer = null }, title = { Text(offer.title) },
             text = { Text("Leave a message? It waits on their Porch until they play it.") },
             confirmButton = {
