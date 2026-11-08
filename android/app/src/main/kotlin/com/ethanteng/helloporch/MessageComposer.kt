@@ -65,6 +65,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ethanteng.helloporch.core.CallTone
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyMessageThread
+import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.MessageRecordingCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -230,7 +231,11 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
                 throw e
             } catch (e: Exception) {
                 phase = Phase.RECORDED
-                error = e.message ?: "Couldn't send the message. Try again."
+                // An upload that took too long, or a message unsent from the thread meanwhile, comes back as expired with
+                // "Record the message again", but this recording can still go: Send starts a new message with it.
+                val expired = (e as? FamilyServiceException)?.let { it.status == 409 && "expired" in it.message } == true
+                error = if (expired) "Sending took too long, so it didn't go. Tap Send to try again."
+                    else e.message ?: "Couldn't send the message. Try again."
             }
         }
     }
