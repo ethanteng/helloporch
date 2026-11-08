@@ -60,6 +60,8 @@ class PorchCall(
     private val phoneOnly: Boolean = false,
     /** Called once the call has ended and its screen should close. */
     private val onClosed: (PorchCall) -> Unit,
+    /** The bedside's Porch call that no one answered, after its screen closes: Porch records a message for them. */
+    private val onUnanswered: (() -> Unit)? = null,
 ) {
     data class Tile(val identity: String, val name: String, val track: VideoTrack?)
 
@@ -101,6 +103,11 @@ class PorchCall(
 
     private var accepted = session?.call?.state == "accepted"
     private var hasConnectedPeer = false
+    /** End call, the call-control key or the receiver: whoever called hung up, so there's no message to leave. */
+    private var endedByCaller = false
+    /** Ending as unanswered: a message is to be recorded once the screen closes, unless the receiver goes back first. */
+    private var offeringMessage = false
+    private var skipMessage = false
     /** On the call to their phone, from fallback or straight away. */
     private var onPhone = phoneOnly
     private var switchingToPhone = false
@@ -169,7 +176,20 @@ class PorchCall(
     /** The End call button, the call-control key, or the receiver put back. */
     fun endCall() {
         if (role == PorchExperience.BEDSIDE) app.cell2jack.record("callEndRequested")
+        endedByCaller = true
         finish(null)
+    }
+
+    /** The receiver put back. While the call is already ending as unanswered, it means no message: the picture phone's
+     * keys work only with the receiver up, so this hang-up won't arrive again on the message screen about to open. */
+    fun hangUp(): String {
+        if (ending) {
+            val cancelled = offeringMessage
+            if (cancelled) { skipMessage = true; offeringMessage = false }
+            return if (cancelled) "unanswered message cancelled" else "call ending"
+        }
+        endCall()
+        return "call end requested"
     }
 
     /** A keypad key while the call is showing: the call-control key hangs up, and the video key turns the camera off
@@ -535,6 +555,10 @@ class PorchCall(
     fun finish(message: String?) {
         if (ending) return
         ending = true
+        // As iOS decides it: a Porch call that ended without anyone joining, that the caller didn't hang up, and that
+        // didn't go on to their phone.
+        val unanswered = onUnanswered.takeIf { !endedByCaller && !hasConnectedPeer && !accepted && !onPhone && !switchingToPhone }
+        offeringMessage = unanswered != null
         ringback.stop()
         announcement?.stop()
         cue.stop()
@@ -545,7 +569,8 @@ class PorchCall(
         permissionsAnswered(false)
         controlsEnabled = false
         endEnabled = false
-        status = message ?: text("Ending call…")
+        // The message screen comes next, so it doesn't say the call is returning to the clock.
+        status = if (unanswered != null) text("%@ didn't answer.", name) else message ?: text("Ending call…")
         scope.launch {
             connectionJob?.join()
             fallbackJob?.join()
@@ -565,6 +590,8 @@ class PorchCall(
             }
             if (message != null) delay(1_500)
             onClosed(this@PorchCall)
+            if (offeringMessage && !skipMessage) unanswered?.invoke()
+            offeringMessage = false
             // The screen lets go of its video first.
             delay(500)
             room.release()

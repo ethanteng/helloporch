@@ -82,7 +82,7 @@ internal object CallColors {
 fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
     KeepScreenOn()
     BackHandler { call.endCall() }
-    CallKeys(app, onDigit = call::keypadDigit, onHangUp = { call.endCall(); "call end requested" })
+    CallKeys(app, onDigit = call::keypadDigit, onHangUp = call::hangUp)
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         // Backing out of the dialog answers with no results. `all` on that empty map is true, which would count as allowed.
         call.permissionsAnswered(results.isNotEmpty() && results.values.all { it })

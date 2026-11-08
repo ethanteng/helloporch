@@ -97,12 +97,15 @@ fun PorchRoot(
     val incoming = calls.incoming
     // A call takes over from messages playing, and isn't Stop.
     val callShowing = active != null || incoming != null
-    LaunchedEffect(callShowing) { if (callShowing) app.messages.interrupt() }
+    // A call also closes a message being recorded, which sends what was said.
+    LaunchedEffect(callShowing) { if (callShowing) { app.messages.interrupt(); calls.voicemail?.interrupt {} } }
     val playback = app.messages.playback
+    val voicemail = calls.voicemail
     when {
         // A call takes over from whatever is showing, as on iOS.
         active != null -> CallScreen(app, active)
         incoming != null -> IncomingCallScreen(app, incoming)
+        bedside && voicemail != null -> BedsideVoicemailScreen(app, voicemail)
         bedside && playback != null -> MessagePlayerScreen(app, playback)
         family -> FamilyScreens(app, if (joining) link else null, onLinkHandled, onReady = { familyReady = it })
         welcoming && page == WelcomePage.ON_TABLET -> BedsideOnTablet(onJoin = { page = WelcomePage.JOINING }, onBack = { page = WelcomePage.WELCOME })

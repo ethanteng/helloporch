@@ -43,6 +43,9 @@ class CallCenter(private val app: PorchApplication) {
     private var openedGeneration = 0
     /** A short note on the bedside's clock, such as "No one is assigned to 3", for 5 seconds. */
     var notice by mutableStateOf<String?>(null)
+    /** The message the bedside is recording for someone who didn't answer, while its screen shows. An incoming call
+     * still rings, and closes it (PorchRoot). */
+    var voicemail by mutableStateOf<BedsideVoicemail?>(null); private set
 
     /** The bedside's ringing call, so a later snapshot of the same call doesn't ring again. */
     private var incomingID: String? = null
@@ -248,7 +251,8 @@ class CallCenter(private val app: PorchApplication) {
                     return@launch
                 }
                 app.cell2jack.record("callSessionCreated")
-                show(session.copy(peerContact = contact), name, photo, announcement, contact)
+                val unanswered = memberID?.let { id -> { leaveMessage(id, name, photo, mode, BedsideVoicemail.Reason.UNANSWERED) } }
+                show(session.copy(peerContact = contact), name, photo, announcement, contact, unanswered)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -260,6 +264,13 @@ class CallCenter(private val app: PorchApplication) {
                     val call = PorchCall(app, null, name, photo, announcement, contact, phoneOnly = true, onClosed = ::closed)
                     active = call
                     call.start()
+                    return@launch
+                }
+                if (memberID != null && (e as? FamilyServiceException)?.code == "offline" && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
+                    // Their Porch app can't ring and there's no phone to try: leave a message, as for a missed call. The
+                    // message screen says they aren't available, so it waits for who was called to be said.
+                    announcement.finished()
+                    if (!cancelOpening) leaveMessage(memberID, name, photo, mode, BedsideVoicemail.Reason.UNAVAILABLE)
                     return@launch
                 }
                 announcement.stop()
@@ -303,14 +314,24 @@ class CallCenter(private val app: PorchApplication) {
     }
 
     private fun show(session: FamilyCallSession, name: String, photo: ByteArray?, announcement: OutgoingAnnouncement? = null,
-        contact: CallContact? = null) {
-        val call = PorchCall(app, session, name, photo, announcement, contact, onClosed = ::closed)
+        contact: CallContact? = null, onUnanswered: (() -> Unit)? = null) {
+        val call = PorchCall(app, session, name, photo, announcement, contact, onClosed = ::closed, onUnanswered = onUnanswered)
         active = call
         openedForCall = false
         updateService()
         // Answered or placed just as Porch left the screen, which stopped its check-ins: a family phone's call needs them.
         if (!app.onScreen && continuing) app.coordinator.start()
         call.start()
+    }
+
+    /**
+     * A Porch call that wasn't answered, and didn't ring through to a regular phone, records a message for that family
+     * member, as iOS's `leaveMessage` does: only with Leave a message if no one answers on, and with Porch in front.
+     */
+    private fun leaveMessage(memberID: String, name: String, photo: ByteArray?, mode: NativeCall.Mode, reason: BedsideVoicemail.Reason) {
+        if (!CallPreferences.leaveMessageWhenUnanswered(app.settings) || !app.onScreen || active != null || incoming != null || voicemail != null) return
+        voicemail = BedsideVoicemail(app, memberID, name, photo, video = mode == NativeCall.Mode.VIDEO, reason,
+            onClosed = { if (voicemail === it) voicemail = null })
     }
 
     private fun closed(call: PorchCall) {
