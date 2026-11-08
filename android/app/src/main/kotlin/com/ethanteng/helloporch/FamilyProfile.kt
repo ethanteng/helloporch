@@ -40,6 +40,7 @@ import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PorchExperience
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -67,7 +68,14 @@ fun FamilyProfileScreen(app: PorchApplication, family: FamilyCredential, links: 
     // A new phone, or a photo saved elsewhere: it downloads, and tries again on later check-ins if that fails.
     val photoID = me?.profile?.photoID
     val photo = remember(photoID, FamilyPhotos.saved) { FamilyPhotos.data(app, photoID) }
-    LaunchedEffect(photoID, photo == null) { if (photoID != null && photo == null) FamilyPhotos.loadOwn(app, photoID, family) }
+    LaunchedEffect(photoID, photo == null) {
+        if (photoID == null || photo != null) return@LaunchedEffect
+        // A download that failed may be tried again after a minute, so it is, until the photo is here.
+        while (true) {
+            FamilyPhotos.loadOwn(app, photoID, family)
+            delay(61_000)
+        }
+    }
 
     /** Saves a new name or photo: a photo is uploaded first, and JsonNull removes it. */
     fun save(change: Map<String, JsonElement>, photoData: ByteArray? = null) {

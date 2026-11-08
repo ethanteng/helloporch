@@ -87,11 +87,20 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     val composeFamily = composing?.let { c -> families.firstOrNull { it.deviceID == c.deviceID } }?.takeIf { open && caregiverFamily == null }
     val threadFamily = families.firstOrNull { it.deviceID == thread }?.takeIf { open && caregiverFamily == null && composeFamily == null }
     val profileFamily = families.firstOrNull { it.deviceID == profile }?.takeIf { open && caregiverFamily == null && composeFamily == null && threadFamily == null }
-    // A tapped message notification opens that family's thread, over whatever else is open.
+    // A tapped message notification opens that family's thread, as iOS opens it: what else was open closes first,
+    // caregiver mode, joining, and a message not yet sent included.
     val notified = app.messageAlerts.opening
     LaunchedEffect(notified, families) {
         val id = notified ?: return@LaunchedEffect
-        if (families.any { it.deviceID == id }) { thread = id; profile = null }
+        if (families.any { it.deviceID == id }) {
+            composing = null
+            profile = null
+            about = false
+            if (caregiving != null) { RemoteCaregiverSession.shared.end(); caregiving = null }
+            joining = false
+            if (link != null) onLinkHandled()
+            thread = id
+        }
         app.messageAlerts.opening = null
     }
     val listing = caregiverFamily == null && composeFamily == null && threadFamily == null && profileFamily == null &&
