@@ -8,6 +8,9 @@
 // texts either, so a text to the Porch number is made up too, and every household gets it, held for a caregiver unless the
 // number is on its keypad or allowed, as the text webhook would queue it:
 //   curl -X POST 'http://localhost:3010/local/text?from=%2B14155550200&body=Hi%20Mom&pictures=1'
+// Phone voicemail is made up the same way, from a recording sent as the body, and held for a caregiver as the voicemail
+// webhook holds it. Leave out from= for a hidden number, and add verified=1 for a caller ID the phone company checked:
+//   curl -X POST --data-binary @message.mp3 'http://localhost:3010/local/voicemail?from=%2B14155550300&seconds=12'
 // It sets up a household, "Mom",
 // whose stand-in bedside checks in every few seconds, and prints an invitation for a phone to join it and a setup link
 // for a new bedside tablet.
@@ -41,6 +44,7 @@ import { createServer } from 'node:http';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { authorizeBedsideCalling, handleFamily } from '../lib/family/service.ts';
 import { blockCall } from '../lib/family/screening.ts';
+import { receivePhoneVoicemail } from '../lib/family/messages.ts';
 import { receiveText } from '../lib/family/texts.ts';
 import { handlePhoneCall } from '../lib/calls/phone.ts';
 
@@ -241,6 +245,27 @@ const phoneCall = async (request, response, body, action) => {
   console.log(`${time()} phone/${action} -> ${result.status}${output.error ? ` (${output.error})` : ''}`);
   response.writeHead(result.status, { 'Content-Type': 'application/json' }).end(text);
 };
+// A made-up phone voicemail for every household that would take one, as the Twilio recording webhook stores it.
+const localVoicemail = async (request, response, raw) => {
+  try {
+    const params = new URL(request.url, origin).searchParams;
+    const from = params.get('from') ?? undefined, seconds = Number(params.get('seconds')) || 10;
+    if ((from !== undefined && !/^\+[1-9][0-9]{6,14}$/.test(from)) || raw.length === 0) {
+      response.writeHead(400).end('Send the recording as the body, and pass ?from= with + and the country code, or leave it out for a hidden number.\n');
+      return;
+    }
+    let queued = 0;
+    for (const key of [...store.values.keys()].filter(key => key.startsWith('house:'))) {
+      const recording = { id: randomUUID(), callerNumber: from, callerVerified: params.get('verified') === '1', audio: new Uint8Array(raw), durationSeconds: seconds };
+      if (await receivePhoneVoicemail(store, media, key.slice('house:'.length), recording, Math.floor(Date.now() / 1000))) queued += 1;
+    }
+    console.log(`${time()} a voicemail from ${from ?? 'a hidden number'} reached ${queued} household${queued === 1 ? '' : 's'}`);
+    response.writeHead(200).end(`Held for ${queued} household${queued === 1 ? '' : 's'}.\n`);
+  } catch (error) {
+    console.log(`${time()} local voicemail failed: ${error.message}`);
+    if (!response.headersSent) response.writeHead(500).end(`${error.message}\n`);
+  }
+};
 const blockedCall = async (request, response) => {
   try {
     const number = new URL(request.url, origin).searchParams.get('number') ?? '';
@@ -271,6 +296,7 @@ const onRequest = async (request, response) => {
   if (request.url.startsWith('/media/')) { serveMedia(request, response, raw); return; }
   if (request.method === 'POST' && request.url.startsWith('/local/blocked-call')) { await blockedCall(request, response); return; }
   if (request.method === 'POST' && request.url.startsWith('/local/text')) { await localText(request, response); return; }
+  if (request.method === 'POST' && request.url.startsWith('/local/voicemail')) { await localVoicemail(request, response, raw); return; }
   if (request.method === 'POST' && request.url === '/api/calls/contacts/authorize') { await authorizeContact(request, response, body); return; }
   const phoneAction = /^\/api\/calls\/phone\/(prepare|start|end)$/.exec(request.url ?? '')?.[1];
   if (request.method === 'POST' && phoneAction) {
