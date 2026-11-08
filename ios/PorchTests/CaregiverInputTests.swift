@@ -2340,9 +2340,10 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertTrue(phoneNav.viewControllers.first is SetupAdapterPhoneViewController)
         XCTAssertEqual(phoneNav.viewControllers.first?.title, "Connect the phone", "The view loads before onContinue is set")
         XCTAssertEqual(buttons(in: device.view).contains { $0.accessibilityIdentifier == "device.connectCell2Jack" }, SetupPhoneViewController.offered)
-        // Same order as Connect the Cell2Jack: the navigation loads the view, then onContinue is set.
+        // Connect the Cell2Jack sets onContinue after building the navigation, which can load the view first. Whether
+        // it does depends on timing, so load it here: that's the case the title has to survive.
         let driver = SetupPhoneViewController(BedsideSetup())
-        _ = PorchStyle.navigation(driver)
+        driver.loadViewIfNeeded()
         XCTAssertEqual(driver.title, "Set up Porch")
         driver.onContinue = {}
         XCTAssertEqual(driver.title, "Connect the phone")
