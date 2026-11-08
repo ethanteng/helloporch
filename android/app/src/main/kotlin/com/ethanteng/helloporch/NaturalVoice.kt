@@ -9,6 +9,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -31,6 +32,8 @@ object NaturalVoice {
     }
     /** When each sentence was last fetched, so one that couldn't be is tried again only after ten minutes. */
     private val attempted = mutableMapOf<String, Long>()
+    /** A sentence already being read, so Play and the ahead-of-time fetch share one download instead of two. */
+    private val loading = mutableMapOf<String, Deferred<File?>>()
     private var prefetching: Job? = null
     private var prefetchAgain = false
 
@@ -55,8 +58,8 @@ object NaturalVoice {
 
     /**
      * Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone who may drop
-     * in, who it's calling for everyone it can call, and who each waiting message is from. Texts and the voicemail
-     * recorder's prompts come with their parts of phase 5.
+     * in, who it's calling for everyone it can call, who each waiting message is from, and each waiting text. The
+     * voicemail recorder's prompts come with their part of phase 5.
      */
     fun prefetch(app: PorchApplication, state: FamilySnapshot, slots: CallSlots) {
         val language = BedsideText.language(app)
@@ -109,9 +112,23 @@ object NaturalVoice {
         for (voice in app.coordinator.links.value.state?.speech?.choices(language)?.voices.orEmpty()) file(app, text, language, voice.id).delete()
     }
 
-    /** Asks the server to read `text` and keeps the clip. Null when it isn't available. */
+    /**
+     * Asks the server to read `text` and keeps the clip. Null when it isn't available. One sentence in flight is one
+     * request: Play waits for the clip the ahead-of-time fetch already asked for, and they must not both write its file.
+     */
     private suspend fun load(app: PorchApplication, text: String, language: BedsideLanguage, voiceID: String, textID: String? = null): File? {
         val destination = file(app, text, language, voiceID)
+        if (destination.exists()) return destination
+        // The same words with and without a text id are different requests. A long text is only read with its id.
+        val key = "${destination.path}\u0000${textID ?: ""}"
+        loading[key]?.let { return it.await() }
+        val task = app.scope.async { readClip(app, text, language, voiceID, textID, destination) }
+        loading[key] = task
+        task.invokeOnCompletion { app.scope.launch { if (loading[key] === task) loading.remove(key) } }
+        return task.await()
+    }
+
+    private suspend fun readClip(app: PorchApplication, text: String, language: BedsideLanguage, voiceID: String, textID: String?, destination: File): File? {
         if (destination.exists()) return destination
         val credential = app.device.credential(PorchExperience.BEDSIDE) ?: return null
         return try {
