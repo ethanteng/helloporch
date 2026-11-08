@@ -9,7 +9,7 @@ The goal is Android versions of **both** Porch devices, working with the existin
 
 Both are one app with two modes, as on iOS, sharing the same calling server.
 
-Why the bedside matters now: inviting other families waits on Apple's DriverKit approval for the Cell2Jack (requested 2026-10-18, still pending), and the Cell2Jack also needs an M-series iPad. An Android tablet talks to the Cell2Jack over USB with no driver and no approval. That makes an Android bedside a second route to new families, alongside the phone adapter.
+Why the bedside matters: when this plan was written, inviting other families waited on Apple's DriverKit approval for the Cell2Jack (requested 2026-10-18, still pending), and the Cell2Jack also needed an M-series iPad. Since 2026-11-07 iPad families don't wait: the Porch phone adapter ([phone-adapter/README.md](../phone-adapter/README.md)) connects the Cell2Jack to any iPad without the driver, and Ethan provides each family's adapter. An Android tablet talks to the Cell2Jack over USB with no driver, no approval and no adapter, so an Android bedside is still a route to new families that needs less hardware.
 
 Estimate: about **18–23 weeks** for one experienced Android developer working by hand, or about **4–6 weeks** at the pace this repo was built. At that pace, testing on real devices limits progress more than writing code does. The iOS app has grown by about a third since the first draft, from about 11,100 to 14,800 lines of Swift. See [estimates](#estimates).
 
@@ -136,7 +136,7 @@ Requirements for a model we support:
 
 Make these device-neutral, or word them from the bedside's platform. Do the same for the admin invitation text (`lib/admin/invitations.ts:15`).
 
-**Invite landing pages.** `components/InviteLanding.tsx` tells everyone to install TestFlight and says the bedside is an iPad with an M chip. On Android, show the Play testing link instead, from an `NEXT_PUBLIC_PLAY_TESTING_URL` alongside `NEXT_PUBLIC_TESTFLIGHT_URL`, and describe a supported tablet.
+**Invite landing pages.** `components/InviteLanding.tsx` tells everyone to install TestFlight and describes the iPad bedside (iPadOS 15 or later, with the Porch phone adapter, since 2026-11-07). On Android, show the Play testing link instead, from an `NEXT_PUBLIC_PLAY_TESTING_URL` alongside `NEXT_PUBLIC_TESTFLIGHT_URL`, and describe a supported tablet.
 
 **Owner steps (Ethan).** Create the Firebase project and a service account, and put the key in Vercel.
 
