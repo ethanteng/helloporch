@@ -90,6 +90,9 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     var error by mutableStateOf<String?>(null)
     /** Sent: the screen says so, then closes. */
     var sent by mutableStateOf(false); private set
+    /** What to do once Android allows the microphone (and camera). Kept here, so turning the phone while it asks
+     * doesn't lose it, such as Leave a message starting to record. */
+    var afterPermission: (() -> Unit)? = null
     /** The front camera has finished opening, so Start recording can begin. */
     var cameraReady by mutableStateOf(false); private set
     var recorder: MessageRecorder? = null; private set
@@ -298,10 +301,9 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
             else -> close()
         }
     }
-    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        val next = pending
-        pending = null
+        val next = composer.afterPermission
+        composer.afterPermission = null
         // Backing out of the dialog answers with no results. `all` on that empty map is true.
         if (results.isNotEmpty() && results.values.all { it }) next?.invoke()
         else composer.error = "Allow Porch to use the microphone, and the camera for video, in Settings to record a message."
@@ -309,7 +311,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
     fun withPermissions(video: Boolean, action: () -> Unit) {
         val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA.takeIf { video })
             .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-        if (needed.isEmpty()) action() else { pending = action; permissions.launch(needed.toTypedArray()) }
+        if (needed.isEmpty()) action() else { composer.afterPermission = action; permissions.launch(needed.toTypedArray()) }
     }
     var started by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(startAudio) {

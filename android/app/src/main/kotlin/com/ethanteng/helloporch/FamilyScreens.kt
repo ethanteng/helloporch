@@ -88,7 +88,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     val listing = caregiverFamily == null && composeFamily == null && threadFamily == null && !(link != null || joining || families.isEmpty())
     SideEffect { onReady(listing || caregiverFamily != null || threadFamily != null) }
     // A call that didn't go through offers a message instead, as iOS does.
-    app.calls.messageOffer?.takeIf { composeFamily == null && caregiverFamily == null }?.let { offer ->
+    app.calls.messageOffer?.takeIf { it.recent && composeFamily == null && caregiverFamily == null }?.let { offer ->
         AlertDialog(onDismissRequest = { app.calls.messageOffer = null }, title = { Text(offer.title) },
             text = { Text("Leave a message? It waits on their Porch until they play it.") },
             confirmButton = {

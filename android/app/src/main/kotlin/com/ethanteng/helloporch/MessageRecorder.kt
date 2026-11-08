@@ -238,12 +238,14 @@ class MessageRecorder(
          * uses AAC.
          */
         private fun frontCameraRecordsAAC(context: Context): Boolean {
+            // Cameras that can't be listed are tried anyway: one that can't be used then records audio.
             val front = try {
                 val manager = context.getSystemService(CameraManager::class.java)
                 manager.cameraIdList.firstOrNull { manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT }
+                    ?: return false
             } catch (_: Exception) {
-                null
-            } ?: return false
+                return true
+            }
             val qualities = listOf(CamcorderProfile.QUALITY_480P, CamcorderProfile.QUALITY_720P, CamcorderProfile.QUALITY_HIGH)
             val codecs = try {
                 if (Build.VERSION.SDK_INT >= 31) qualities.flatMap { quality -> CamcorderProfile.getAll(front, quality)?.audioProfiles?.map { it.codec }.orEmpty() }

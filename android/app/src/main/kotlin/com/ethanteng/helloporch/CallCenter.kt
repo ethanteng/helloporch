@@ -49,8 +49,11 @@ class CallCenter(private val app: PorchApplication) {
     /** A family phone's call that didn't go through, offering to leave a message instead, until it's answered. */
     var messageOffer by mutableStateOf<MessageOffer?>(null)
 
-    /** Who a message would be for, in which family, and why it's offered, such as "Mom didn't answer". */
-    class MessageOffer(val family: FamilyCredential, val name: String, val title: String)
+    /** Who a message would be for, in which family, and why it's offered, such as "Mom didn't answer". `at` is when, in
+     * elapsed milliseconds: a call that ended while Porch wasn't in front offers it when Porch is back, but not long after. */
+    class MessageOffer(val family: FamilyCredential, val name: String, val title: String, val at: Long = SystemClock.elapsedRealtime()) {
+        val recent: Boolean get() = SystemClock.elapsedRealtime() - at < 10 * 60_000L
+    }
 
     /** The bedside's ringing call, so a later snapshot of the same call doesn't ring again. */
     private var incomingID: String? = null
@@ -332,9 +335,10 @@ class CallCenter(private val app: PorchApplication) {
     }
 
     /** As iOS's `offerVoicemail`: a message for someone a family phone couldn't reach, unless their family turned
-     * messages off, when it only says why. */
+     * messages off, when it only says why. A family call goes on while Porch isn't in front, so one that ends there
+     * offers it once Porch is back. */
     private fun offerMessage(family: FamilyCredential, name: String, title: String) {
-        if (app.coordinator.links.value.state(family)?.messagesEnabled == false || !app.onScreen) {
+        if (app.coordinator.links.value.state(family)?.messagesEnabled == false) {
             error = if (title.endsWith("isn't available")) "$name isn't available on Porch right now." else "$title."
             return
         }
