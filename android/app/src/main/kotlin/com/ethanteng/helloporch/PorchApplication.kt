@@ -88,6 +88,14 @@ class PorchApplication : Application() {
     /** The activity is resumed. Process [onScreen] stays true through a system dialog that pauses the activity, such as
      * the USB permission question, and the Cell2Jack should not run then. */
     private var activityResumed = false
+    private val presenceCamera = lazy { BedsidePresence(this) }
+    /** The bedside's presence camera, which the clock runs (ClockPresence). Made the first time the clock shows, so a
+     * family phone never makes one. */
+    val presence by presenceCamera
+
+    /** Stops the bedside's presence camera, if this device made one, and returns once the camera is free: a call's
+     * LiveKit opens it through Camera2, and the voicemail recorder through CameraX. */
+    suspend fun releaseCamera() { if (presenceCamera.isInitialized()) presence.release() }
 
     fun switchExperience(experience: PorchExperience) {
         device.experience = experience

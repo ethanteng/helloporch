@@ -20,6 +20,7 @@ aboutLibraries = "15.3.0"
 # 1.11.1 came out 2026-09-11, the newest release at least two weeks old when the bedside began playing messages.
 media3 = "1.11.1"
 camerax = "1.6.2"
+mlkit-face = "16.1.7"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
@@ -47,6 +48,8 @@ androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.r
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 androidx-camera-video = { module = "androidx.camera:camera-video", version.ref = "camerax" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+# The bundled model, so a tablet without Google Play services still detects faces.
+mlkit-face-detection = { module = "com.google.mlkit:face-detection", version.ref = "mlkit-face" }
 androidx-media3-ui-compose = { module = "androidx.media3:media3-ui-compose", version.ref = "media3" }
 
 [plugins]

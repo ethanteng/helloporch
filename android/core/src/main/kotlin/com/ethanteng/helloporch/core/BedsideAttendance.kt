@@ -3,12 +3,12 @@ package com.ethanteng.helloporch.core
 import java.time.Duration
 import java.time.Instant
 
-/** Whether someone is at the bedside iPad, so family can tell whether a call now is likely to be answered. The bedside
+/** Whether someone is at the bedside, so family can tell whether a call now is likely to be answered. The bedside
  * notices someone when a key is pressed or the screen is touched and, if a caregiver turns it on, when its camera sees
  * a face close by. It can't tell who: an aide or a visitor counts too. Family only learn when, never how. */
 object BedsideAttendance {
     /** Noticed this recently counts as there now. The camera looks every `lookInterval`, so someone sitting still stays
-     * "at the iPad" between looks, and a look or two that misses a turned head doesn't change that. */
+     * "at the tablet" between looks, and a look or two that misses a turned head doesn't change that. */
     const val presentSeconds: Double = 90.0
     /** After this long, family see nothing rather than a stale time. */
     const val shownSeconds: Double = 7 * 86400.0
@@ -16,15 +16,15 @@ object BedsideAttendance {
     const val lookInterval: Double = 30.0
     const val lookSeconds: Double = 5.0
 
-    /** What family see under the bedside's name, from server times. Null before anyone has been noticed, or once it's
-     * been a week. It never says no one is there: the camera can't see in the dark or across the room, and someone in
-     * bed can still hear a call ring. */
-    fun text(attendedAt: Double?, now: Double): String? {
+    /** What family see under the bedside's name, from server times. `device` is what they call the bedside: "iPad", or
+     * "tablet" for an Android one. Null before anyone has been noticed, or once it's been a week. It never says no one
+     * is there: the camera can't see in the dark or across the room, and someone in bed can still hear a call ring. */
+    fun text(attendedAt: Double?, now: Double, device: String): String? {
         if (attendedAt == null) return null
-        if (isPresent(attendedAt, now)) return "Someone is at the iPad"
+        if (isPresent(attendedAt, now)) return "Someone is at the $device"
         val age = now - attendedAt
         if (age >= shownSeconds) return null
-        return "Someone was at the iPad ${ago(age)}"
+        return "Someone was at the $device ${ago(age)}"
     }
 
     /** Noticed recently enough to count as there now. A server time a little behind the bedside's report still is. */
@@ -42,7 +42,7 @@ object BedsideAttendance {
         return if (days == 1) "1 day ago" else "$days days ago"
     }
 
-    // The camera's part is a caregiver's choice, kept on this iPad like starting messages when someone sits down.
+    // The camera's part is a caregiver's choice, kept on this bedside like starting messages when someone sits down.
     private const val cameraKey = "porch.attendanceCamera.v1"
 
     /** The camera also looks for someone, so family can see they're there. Off until a caregiver turns it on. */

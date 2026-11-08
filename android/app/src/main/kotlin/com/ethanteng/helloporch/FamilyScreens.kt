@@ -41,11 +41,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ethanteng.helloporch.core.BedsideAttendance
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyInvitation
 import com.ethanteng.helloporch.core.FamilyLinks
@@ -347,6 +350,16 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     bedside != null -> "${bedside.name}'s ${bedsideDevice(state)} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
                     else -> "Checking in…"
                 })
+                // Whether someone is at the bedside, as on iOS. Without a fresh check-in the last one's time stands still, so
+                // it would look current forever.
+                if (state != null && bedside != null && link?.error == null && link?.accessRemoved != true) {
+                    val attendedAt = state.bedsideAttendedAt?.toDouble()
+                    val now = state.serverTime.toDouble()
+                    BedsideAttendance.text(attendedAt, now, bedsideDevice(state))?.let {
+                        Text(it, Modifier.fillMaxWidth(), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                            color = if (BedsideAttendance.isPresent(attendedAt, now)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 if (state != null && link.accessRemoved != true) {
                     val from = bedside?.name ?: state.householdName
                     // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.

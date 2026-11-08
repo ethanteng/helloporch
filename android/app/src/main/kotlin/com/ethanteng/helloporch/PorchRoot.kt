@@ -117,7 +117,8 @@ fun PorchRoot(
         setup.open -> BedsideSetupFlow(app, setup, cordedPhoneSetup)
         setup.unlocking -> CaregiverGate(setup)
         setup.caregiver -> CaregiverMode(app, links, onClose = setup::closeCaregiver)
-        else -> BedsideHome(app, links, setup)
+        // The dialogs below cover the clock, so its presence camera stops while one shows.
+        else -> BedsideHome(app, links, setup, covered = notice != null || calls.error != null || replacement != null)
     }
     // Only the bedside's home and a family phone's list of families, or its caregiver mode, can take a call, with nothing
     // open over them.

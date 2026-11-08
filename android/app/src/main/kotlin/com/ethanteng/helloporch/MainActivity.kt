@@ -3,6 +3,7 @@ package com.ethanteng.helloporch
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.ethanteng.helloporch.core.AttendanceTracker
 import com.ethanteng.helloporch.core.RemoteCaregiverSession
 
 /** Porch's one activity. An invitation or setup link that opens Porch arrives here, when it starts or while it's open. */
@@ -69,6 +71,19 @@ class MainActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString(linkKey, link.value)
+    }
+
+    // Any touch or key press means someone is at the tablet, as `PorchWindow.sendEvent` counts them on iOS. Each still
+    // goes on as before: nothing here uses one up.
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        AttendanceTracker.shared.noticed()
+        return super.dispatchTouchEvent(event)
+    }
+    // Android calls this for every key event dispatched here, from a keypad, the Cell2Jack's adapter or a keyboard, and
+    // for each touch going down. androidx restricts overriding `dispatchKeyEvent`.
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        AttendanceTracker.shared.noticed()
     }
 
     // A keypad's keys reach the screen listening for them once Compose has passed them up, as `pressesBegan` does on

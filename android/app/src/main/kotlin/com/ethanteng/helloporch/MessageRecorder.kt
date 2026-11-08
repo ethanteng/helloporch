@@ -311,13 +311,6 @@ class MessageRecorder(
 
     private fun granted(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    private class CameraLifecycle : LifecycleOwner {
-        private val registry = LifecycleRegistry(this)
-        override val lifecycle: Lifecycle get() = registry
-        fun resume() { registry.currentState = Lifecycle.State.RESUMED }
-        fun end() { if (registry.currentState.isAtLeast(Lifecycle.State.CREATED)) registry.currentState = Lifecycle.State.DESTROYED }
-    }
-
     companion object {
         /** Whether this device can record a video message: with the camera allowed and a front camera. */
         fun canRecordVideo(context: Context): Boolean =
@@ -337,4 +330,14 @@ class MessageRecorder(
         private val completeFiles = setOf(VideoRecordEvent.Finalize.ERROR_NONE, VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED,
             VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED, VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE)
     }
+}
+
+/** A camera user's own lifecycle for CameraX, so its camera stops when it's done rather than with a screen. Each one is
+ * used once: [resume] when binding, then [end]. The bedside's presence camera has one too, and binds only its own use
+ * case to it, since it shares the front camera with this recorder. */
+internal class CameraLifecycle : LifecycleOwner {
+    private val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = registry
+    fun resume() { registry.currentState = Lifecycle.State.RESUMED }
+    fun end() { if (registry.currentState.isAtLeast(Lifecycle.State.CREATED)) registry.currentState = Lifecycle.State.DESTROYED }
 }
