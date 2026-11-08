@@ -133,11 +133,21 @@ internal object MessageText {
         else -> DateFormat.getInstanceForSkeleton(if (sameYear(seconds)) "EEEEMMMMd" else "EEEEMMMMdy").format(Date(seconds * 1_000))
     }
 
+    /** Whole calendar days, so the spring-forward day still counts yesterday as one day rather than zero. */
     private fun daysAgo(seconds: Long): Int {
-        fun start(calendar: Calendar) = calendar.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
-        val then = start(Calendar.getInstance().apply { timeInMillis = seconds * 1_000 })
-        val today = start(Calendar.getInstance())
-        return ((today.timeInMillis - then.timeInMillis) / 86_400_000L).toInt()
+        fun Calendar.startOfDay() = apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val then = Calendar.getInstance().apply { timeInMillis = seconds * 1_000 }.startOfDay()
+        val today = Calendar.getInstance().startOfDay()
+        // A time ahead of this phone isn't today or yesterday; the caller shows its date.
+        if (then.after(today)) return -1
+        var days = 0
+        while (then.before(today)) {
+            then.add(Calendar.DATE, 1)
+            days++
+        }
+        return days
     }
 
     private fun sameYear(seconds: Long) =
