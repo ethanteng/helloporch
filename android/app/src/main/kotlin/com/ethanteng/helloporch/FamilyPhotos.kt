@@ -85,11 +85,15 @@ object FamilyPhotos {
      * Hourly, so the folder isn't read on every check-in.
      */
     fun pruneOnFamilyPhone(app: PorchApplication, links: FamilyLinks) {
+        val families = links.links.filter { it.credential.role == PorchExperience.FAMILY }
+        // A phone in several families keeps a photo in each. The first check-in after an hour can be one
+        // family's alone, and pruning then would delete the others'.
+        if (families.isEmpty() || families.any { it.state == null && !it.accessRemoved }) return
         val now = SystemClock.elapsedRealtime()
         if (prunedAt != 0L && now - prunedAt < 3_600_000) return
         prunedAt = now
-        val keep = links.links.flatMap { link ->
-            val me = link.state?.me?.takeIf { it.role == PorchExperience.FAMILY } ?: return@flatMap emptyList()
+        val keep = families.flatMap { link ->
+            val me = link.state?.me ?: return@flatMap emptyList()
             listOfNotNull(me.profile?.photoID, me.photoID)
         }.toSet()
         kept = keep
