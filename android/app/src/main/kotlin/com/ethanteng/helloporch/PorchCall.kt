@@ -207,8 +207,8 @@ class PorchCall(
      * or on. Other keys do nothing during a call. */
     fun keypadDigit(digit: Int) {
         when (slots().action(digit)) {
-            // While an unanswered call is ending, it means no message, as putting the receiver back does.
-            KeypadAction.CALL_CONTROL -> if (ending) cancelMessage() else endCall()
+            // While an unanswered call is ending, it means no message, as putting the receiver back does (endCall).
+            KeypadAction.CALL_CONTROL -> endCall()
             KeypadAction.TOGGLE_VIDEO -> if (video && controlsEnabled) toggleCamera()
             else -> {}
         }
