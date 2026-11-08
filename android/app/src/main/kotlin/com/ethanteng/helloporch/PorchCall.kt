@@ -183,20 +183,25 @@ class PorchCall(
     /** The receiver put back. While the call is already ending as unanswered, it means no message: the picture phone's
      * keys work only with the receiver up, so this hang-up won't arrive again on the message screen about to open. */
     fun hangUp(): String {
-        if (ending) {
-            val cancelled = offeringMessage
-            if (cancelled) { skipMessage = true; offeringMessage = false }
-            return if (cancelled) "unanswered message cancelled" else "call ending"
-        }
+        if (ending) return if (cancelMessage()) "unanswered message cancelled" else "call ending"
         endCall()
         return "call end requested"
+    }
+
+    /** Whether a message was about to be recorded for an unanswered call that's ending, which now it won't be. */
+    private fun cancelMessage(): Boolean {
+        if (!offeringMessage) return false
+        skipMessage = true
+        offeringMessage = false
+        return true
     }
 
     /** A keypad key while the call is showing: the call-control key hangs up, and the video key turns the camera off
      * or on. Other keys do nothing during a call. */
     fun keypadDigit(digit: Int) {
         when (slots().action(digit)) {
-            KeypadAction.CALL_CONTROL -> endCall()
+            // While an unanswered call is ending, it means no message, as putting the receiver back does.
+            KeypadAction.CALL_CONTROL -> if (ending) cancelMessage() else endCall()
             KeypadAction.TOGGLE_VIDEO -> if (video && controlsEnabled) toggleCamera()
             else -> {}
         }
