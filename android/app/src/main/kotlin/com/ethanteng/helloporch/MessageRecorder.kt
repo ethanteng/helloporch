@@ -20,6 +20,9 @@ import androidx.camera.video.Recorder
 import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -76,7 +79,8 @@ class MessageRecorder(
     private var startedAt = 0L
     private var loudChecks = 0
     private var discarding = false
-    private var finished = false
+    /** Compose state, so a screen showing "Finishing…" redraws when it changes. */
+    private var finished by mutableStateOf(false)
 
     val isRecording: Boolean get() = startedAt != 0L
     /** True once recording has stopped, including while a video's picture and sound are put into one file. */

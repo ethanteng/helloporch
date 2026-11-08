@@ -152,8 +152,11 @@ class BedsideVoicemail(
     }
 
     private fun updateTimer() {
-        // Once it has stopped, elapsed is 0 while a video's picture and sound are put together.
-        if (recorder.isFinished) return
+        // Once it has stopped, such as at two minutes, elapsed is 0 while a video's picture and sound are put together.
+        if (recorder.isFinished) {
+            if (phase == Phase.RECORDING) status = text("Finishing your message…")
+            return
+        }
         val seconds = minOf(MessageRecordingCheck.MAX_SECONDS, recorder.elapsed).toInt()
         val limit = MessageRecordingCheck.MAX_SECONDS.toInt()
         timerText = "%d:%02d / %d:%02d".format(seconds / 60, seconds % 60, limit / 60, limit % 60)
@@ -174,7 +177,14 @@ class BedsideVoicemail(
                 timer?.cancel()
                 sendEnabled = false
                 cancelEnabled = false
-                if (send) recorder.stop() else { recorder.cancel(); complete(text("Message not sent.")) }
+                if (send) {
+                    // A video's picture and sound take a moment to put into one file. Audio's outcome replaces this at once.
+                    status = text("Finishing your message…")
+                    recorder.stop()
+                } else {
+                    recorder.cancel()
+                    complete(text("Message not sent."))
+                }
             }
             Phase.STOPPING, Phase.DONE -> {}
         }

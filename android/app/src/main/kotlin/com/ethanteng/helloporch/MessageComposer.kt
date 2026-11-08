@@ -316,7 +316,10 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
     val close = { composer.discard(); onDone() }
     BackHandler {
         when (composer.phase) {
-            MessageComposer.Phase.CAMERA, MessageComposer.Phase.RECORDING_AUDIO, MessageComposer.Phase.RECORDING_VIDEO -> composer.discard()
+            // A video that has stopped is being put into one file, which takes a moment: it comes to the review screen,
+            // where Back throws it away as usual.
+            MessageComposer.Phase.RECORDING_VIDEO -> if (composer.recorder?.isFinished != true) composer.discard()
+            MessageComposer.Phase.CAMERA, MessageComposer.Phase.RECORDING_AUDIO -> composer.discard()
             else -> close()
         }
     }
