@@ -188,7 +188,7 @@ const localText = async (request, response) => {
   try {
     const params = new URL(request.url, origin).searchParams;
     const from = params.get('from') ?? '', body = [...(params.get('body') ?? '').trim()].slice(0, 1600).join('');
-    const pictures = Math.max(0, Math.min(10, Number(params.get('pictures')) || 0));
+    const pictures = Math.max(0, Math.min(10, Math.floor(Number(params.get('pictures')) || 0)));
     if (!/^\+[1-9][0-9]{6,14}$/.test(from) || (!body && !pictures)) { response.writeHead(400).end('Pass ?from= with + and the country code, and ?body= or ?pictures=.\n'); return; }
     let queued = 0;
     for (const key of [...store.values.keys()].filter(key => key.startsWith('house:'))) {
