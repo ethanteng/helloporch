@@ -67,6 +67,8 @@ class MessageRecorder(
     private var picture: File? = null
     private var soundRunning = false
     private var soundComplete = false
+    /** The two-minute limit stops MediaRecorder itself, which can win the race with [stopSound]. */
+    private var soundAtLimit = false
     /** When the microphone and the camera were asked to stop, which is about when each recording ends: with each one's
      * length, when each started, which lines the sound up with the picture (MessageSoundSync). */
     private var soundStoppedNanos = 0L
@@ -137,7 +139,11 @@ class MessageRecorder(
             recorder.setOutputFile(file.path)
             // Two minutes stops it, and what was recorded is kept; for video, the camera stops with it.
             recorder.setOnInfoListener { _, what, _ ->
-                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) stop()
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                    // It stops itself, and that can finish before this runs, so stop() then throws.
+                    soundAtLimit = true
+                    stop()
+                }
             }
             recorder.setOnErrorListener { _, _, _ ->
                 soundRunning = false
@@ -195,7 +201,8 @@ class MessageRecorder(
         if (!isRecording) return
         // The camera stops first: the microphone's stop waits while it finishes its file.
         if (video) {
-            pictureStoppedNanos = SystemClock.elapsedRealtimeNanos()
+            // A second stop, such as the time limit arriving after Send, must not move this later.
+            if (pictureStoppedNanos == 0L) pictureStoppedNanos = SystemClock.elapsedRealtimeNanos()
             recording?.stop()
             stopSound()
         } else {
@@ -221,7 +228,9 @@ class MessageRecorder(
         if (!soundRunning) return soundComplete
         soundRunning = false
         soundStoppedNanos = SystemClock.elapsedRealtimeNanos()
-        soundComplete = runCatching { audio?.stop() }.isSuccess
+        val stopped = runCatching { audio?.stop() }.isSuccess
+        // At the time limit the recorder has often already stopped, and stop() throws. The file is complete.
+        soundComplete = stopped || soundAtLimit
         return soundComplete
     }
 
