@@ -98,8 +98,11 @@ class MessageAlerts(private val app: PorchApplication) {
         }
 
         private fun open(context: Context, recipient: String): PendingIntent =
+            // NEW_TASK: this intent is fired from a notification, not an activity. Without it, tapping the
+            // notification after Porch has left its task throws and the thread never opens. singleTask still
+            // delivers it to the running activity (onNewIntent) when Porch is already open.
             PendingIntent.getActivity(context, recipient.hashCode(), Intent(context, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 .putExtra("type", "message").putExtra("recipientID", recipient),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
