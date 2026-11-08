@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Files Porch hands to another app, such as the Porch number's contact card. Only this folder of the cache. -->
+<!-- Files Porch hands to another app: the Porch number's contact card, and a profile photo the camera app takes. Only these folders of the cache. -->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <cache-path name="camera" path="camera/" />
 </paths>

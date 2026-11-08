@@ -99,7 +99,10 @@ class PorchPush(private val app: PorchApplication) {
         val profiles = if (experience == PorchExperience.BEDSIDE) bedside else families
         val others = if (experience == PorchExperience.BEDSIDE) families else bedside
         val enabled = canRing()
-        val key = listOf(token, enabled, experience, profiles.map { it.credential }, others.map { it.credential }).toString()
+        // Message notifications go to a family phone that can show them. A device used as the bedside stops getting its
+        // families' (iOS's FamilyMessageAlerts.register).
+        val alerts = experience == PorchExperience.FAMILY && app.messageAlerts.allowed()
+        val key = listOf(token, enabled, alerts, experience, profiles.map { it.credential }, others.map { it.credential }).toString()
         if (!force && key == registered) return
         registered = key
         val previous = job
@@ -109,6 +112,15 @@ class PorchPush(private val app: PorchApplication) {
             for (other in others) {
                 try { app.service(other).send("registerVoIP", mapOf("token" to JsonNull)) }
                 catch (e: CancellationException) { throw e } catch (_: Exception) {}
+            }
+            val alertValues: Map<String, JsonElement> = if (alerts) mapOf("token" to JsonPrimitive(token), "platform" to JsonPrimitive("android"))
+                else mapOf("token" to JsonNull)
+            for (family in families) {
+                try { app.service(family).send("registerAlerts", alertValues) }
+                catch (e: CancellationException) { throw e }
+                catch (e: FamilyServiceException) { if (e.status != 401) registered = null }
+                // Tried again at the next check-in.
+                catch (_: Exception) { registered = null }
             }
             if (profiles.isEmpty()) { ready = false; return@launch }
             val values: Map<String, JsonElement> = if (enabled) mapOf("token" to JsonPrimitive(token), "platform" to JsonPrimitive("android"))

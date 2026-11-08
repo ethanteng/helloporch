@@ -69,6 +69,10 @@ object FamilyPhotos {
         }
     }
 
+    /** This phone's own photo in a family, for its profile, as iOS loads it with `source: self`. */
+    fun loadOwn(app: PorchApplication, id: String, credential: FamilyCredential) =
+        load(app, id, mapOf("source" to JsonPrimitive("self")), credential)
+
     /** A family member's photo for caregiver mode on a family phone, which asks with the caregiver PIN. */
     fun loadForCaregiver(app: PorchApplication, id: String, memberID: String, credential: FamilyCredential, pin: String) =
         load(app, id, mapOf("memberID" to JsonPrimitive(memberID)), credential, "caregiverProfilePhoto", pin)

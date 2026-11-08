@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         // A link not yet handled survives the activity being recreated, such as when the phone turns.
         link.value = if (savedInstanceState == null) intent?.dataString else savedInstanceState.getString(linkKey)
         val app = application as PorchApplication
-        if (savedInstanceState == null) openedForCall(intent)
+        if (savedInstanceState == null) { openedForCall(intent); app.messageAlerts.opened(intent) }
         // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
         // Switching to the bedside while this activity is already resumed starts it too (PorchApplication.switchExperience).
         lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
         // went elsewhere from there, so a family phone's caregiver mode ends. Porch never saw them leave.
         RemoteCaregiverSession.shared.reopened()
         openedForCall(intent)
+        (application as PorchApplication).messageAlerts.opened(intent)
         intent.dataString?.let { link.value = it }
     }
 
