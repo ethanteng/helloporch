@@ -2,11 +2,8 @@ package com.ethanteng.helloporch
 
 import android.icu.text.DateFormat
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalActivity
-import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -15,7 +12,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,18 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.compose.ContentFrame
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.FamilyText
@@ -114,7 +101,7 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
     var answered by remember { mutableStateOf<Set<String>>(emptySet()) }
     var wordsFailed by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<Any?>(null) }
-    var preview by remember { mutableStateOf<Preview?>(null) }
+    var preview by remember { mutableStateOf<MessageMedia?>(null) }
     var opening by remember { mutableStateOf(false) }
     // The list follows the household as it changes, so a text that arrives while it's open is read for too.
     val textIDs = texts.map { it.id }.toSet()
@@ -136,7 +123,7 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
         opening = true
         admin.launch {
             try {
-                request("caregiverMessageMedia", mapOf("messageID" to JsonPrimitive(message.id))).media?.let { preview = Preview(it.url, messageTitle(message), message.mode == "video") }
+                request("caregiverMessageMedia", mapOf("messageID" to JsonPrimitive(message.id))).media?.let { preview = MessageMedia(it.url, messageTitle(message), message.mode == "video") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -169,7 +156,7 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
             TextSection(admin, text, bedside, words[text.id], text.id in answered, wordsFailed, onRemove = { removing = text })
         }
     }
-    preview?.let { MessagePreview(it) { preview = null } }
+    preview?.let { MessagePlayerDialog(it) { preview = null } }
     // Caregiver changes go one at a time, and one made while another is saving is dropped, so Remove waits for it.
     when (val item = removing) {
         is FamilyMessage -> ConfirmRemove("Remove this message?",
@@ -237,52 +224,6 @@ private fun ConfirmRemove(title: String, detail: String, enabled: Boolean, onDis
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
-}
-
-private class Preview(val url: String, val title: String, val video: Boolean)
-
-/**
- * A waiting message, played here for the caregiver from the server's short-lived link, as iOS plays it in its own
- * player. Closing it, or leaving the app, stops it.
- */
-@OptIn(UnstableApi::class)
-@Composable
-private fun MessagePreview(preview: Preview, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val activity = LocalActivity.current
-    var ended by remember(preview) { mutableStateOf(false) }
-    var failed by remember(preview) { mutableStateOf(false) }
-    val player = remember(preview) {
-        ExoPlayer.Builder(context).build().apply {
-            addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) { ended = playbackState == Player.STATE_ENDED }
-                override fun onPlayerError(error: PlaybackException) { failed = true }
-            })
-            setMediaItem(MediaItem.fromUri(preview.url))
-            prepare()
-            play()
-        }
-    }
-    DisposableEffect(player) { onDispose { player.release() } }
-    // Leaving the app closes it. Pausing instead left the dialog saying "Playing…" with no sound when Porch came back.
-    // Turning the tablet recreates the activity, which is still this screen, so that isn't leaving.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        if (activity?.isChangingConfigurations != true) onClose() else player.pause()
-    }
-    AlertDialog(onDismissRequest = onClose,
-        title = { Text(preview.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (preview.video && !failed) ContentFrame(player, Modifier.fillMaxWidth().aspectRatio(4f / 3f))
-                Text(when {
-                    failed -> "Couldn't play this message. Try again."
-                    ended -> "That's the whole message."
-                    else -> "Playing…"
-                }, style = MaterialTheme.typography.bodyLarge)
-            }
-        },
-        dismissButton = if (ended && !failed) ({ TextButton(onClick = { player.seekTo(0); player.play() }) { Text("Play again") } }) else null,
-        confirmButton = { TextButton(onClick = onClose) { Text("Done") } })
 }
 
 private fun messageTitle(message: FamilyMessage): String {

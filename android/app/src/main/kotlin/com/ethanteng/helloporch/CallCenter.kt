@@ -46,6 +46,11 @@ class CallCenter(private val app: PorchApplication) {
     /** The message the bedside is recording for someone who didn't answer, while its screen shows. An incoming call
      * still rings, and closes it (PorchRoot). */
     var voicemail by mutableStateOf<BedsideVoicemail?>(null); private set
+    /** A family phone's call that didn't go through, offering to leave a message instead, until it's answered. */
+    var messageOffer by mutableStateOf<MessageOffer?>(null)
+
+    /** Who a message would be for, in which family, and why it's offered, such as "Mom didn't answer". */
+    class MessageOffer(val family: FamilyCredential, val name: String, val title: String)
 
     /** The bedside's ringing call, so a later snapshot of the same call doesn't ring again. */
     private var incomingID: String? = null
@@ -183,12 +188,14 @@ class CallCenter(private val app: PorchApplication) {
         app.scope.launch {
             try {
                 val session = app.coordinator.startCall(person, mode, dropIn = false, family = family)
-                show(session, person.name, person.photoID?.let { app.photos.familyMembers.data(it) })
+                show(session, person.name, person.photoID?.let { app.photos.familyMembers.data(it) },
+                    onUnanswered = { offerMessage(family, person.name, "${person.name} didn't answer") })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = (e as? FamilyServiceException)?.takeIf { it.code == "offline" }?.let { "${person.name} isn't available on Porch right now." }
-                    ?: e.message ?: "Couldn't start the call."
+                // Their Porch app can't ring, so a message can wait there instead, as iOS offers.
+                if ((e as? FamilyServiceException)?.code == "offline") offerMessage(family, person.name, "${person.name}'s Porch isn't available")
+                else error = e.message ?: "Couldn't start the call."
             } finally {
                 opening = false
                 // It didn't start: nothing is left for the service to show.
@@ -322,6 +329,16 @@ class CallCenter(private val app: PorchApplication) {
         // Answered or placed just as Porch left the screen, which stopped its check-ins: a family phone's call needs them.
         if (!app.onScreen && continuing) app.coordinator.start()
         call.start()
+    }
+
+    /** As iOS's `offerVoicemail`: a message for someone a family phone couldn't reach, unless their family turned
+     * messages off, when it only says why. */
+    private fun offerMessage(family: FamilyCredential, name: String, title: String) {
+        if (app.coordinator.links.value.state(family)?.messagesEnabled == false || !app.onScreen) {
+            error = if (title.endsWith("isn't available")) "$name isn't available on Porch right now." else "$title."
+            return
+        }
+        messageOffer = MessageOffer(family, name, title)
     }
 
     /**
