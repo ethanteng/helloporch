@@ -39,6 +39,7 @@ import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PorchExperience
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -115,13 +116,17 @@ fun FamilyProfileScreen(app: PorchApplication, family: FamilyCredential, links: 
     fun takeShot() {
         try {
             val folder = File(context.cacheDir, "camera").apply { mkdirs() }
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", File(folder, "profile.jpg"))
+            // The camera app writes this file. It has to exist first; some phones refuse a URI that doesn't.
+            val image = File(folder, "profile.jpg").apply { if (!exists()) createNewFile() }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", image)
             shot = uri.toString()
             takePicture.launch(uri)
         } catch (_: ActivityNotFoundException) {
             error = "No app on this phone can take a photo."
         } catch (_: SecurityException) {
             error = "Allow Porch to use the camera in Settings to take a photo."
+        } catch (_: IOException) {
+            error = "Couldn't take a photo. Try again."
         }
     }
     // Porch declares the camera, for calls, so Android lets it open the camera app only once the camera is allowed.
