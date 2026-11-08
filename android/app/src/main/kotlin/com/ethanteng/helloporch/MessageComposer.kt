@@ -173,7 +173,17 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
         val recorder = recorder ?: return
         if (phase != Phase.CAMERA || !cameraReady) return
         recorder.onFinish = ::recorded
-        if (!recorder.start()) { error = "Couldn't start recording. Try again."; return }
+        if (!recorder.start()) {
+            // The microphone already started, so this recorder can't start again.
+            recorder.cancel()
+            if (this.recorder === recorder) {
+                this.recorder = null
+                cameraReady = false
+                phase = Phase.IDLE
+                error = "Couldn't start recording. Try again."
+            }
+            return
+        }
         phase = Phase.RECORDING_VIDEO
         tick(recorder)
     }
