@@ -173,9 +173,16 @@ class PorchCall(
     fun toggleMicrophone() = changeMedia(camera = false)
     fun toggleCamera() = changeMedia(camera = true)
 
-    /** The End call button, the call-control key, or the receiver put back. */
+    /** The End call button, Back, the call-control key, or the receiver put back. While an unanswered call is already
+     * ending, this is that hang-up again: the message is skipped, as putting the receiver back does. */
     fun endCall() {
         if (role == PorchExperience.BEDSIDE) app.cell2jack.record("callEndRequested")
+        // [finish] has already decided to offer a message. Setting [endedByCaller] now does not change that, so cancel
+        // it the same way the receiver does. Back stays enabled after End call is disabled.
+        if (ending) {
+            cancelMessage()
+            return
+        }
         endedByCaller = true
         finish(null)
     }
