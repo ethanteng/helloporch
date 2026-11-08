@@ -56,6 +56,9 @@ class MessageRecorder(
         private set
     /** The finished recording, or null when nothing worth sending was recorded. Not called after [cancel]. */
     var onFinish: ((MessageRecording?) -> Unit)? = null
+    /** Recording has stopped, before [onFinish]. A video's picture and sound may still be going into one file. Not called
+     * after [cancel]. */
+    var onStopped: (() -> Unit)? = null
     /** The camera runs while this is resumed: its own, so the camera stops when the message does, not with a screen. */
     private val camera = CameraLifecycle()
     private val preview = Preview.Builder().build()
@@ -226,6 +229,7 @@ class MessageRecorder(
     fun cancel() {
         discarding = true
         onFinish = null
+        onStopped = null
         if (isRecording) stop() else { release(); finish(false) }
     }
 
@@ -243,6 +247,8 @@ class MessageRecorder(
     private fun finish(successfully: Boolean) {
         if (finished) return
         finished = true
+        // Before the file is ready, so a screen can stop offering "Don't send". Cancel already chose to throw it away.
+        if (!discarding) onStopped?.invoke()
         val duration = minOf(MessageRecordingCheck.MAX_SECONDS, elapsed)
         startedAt = 0L
         recording = null
