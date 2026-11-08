@@ -11,7 +11,9 @@ import com.ethanteng.helloporch.core.BedsideLanguage
 import com.ethanteng.helloporch.core.BedsidePreferences
 import com.ethanteng.helloporch.core.CallTone
 import java.io.File
+import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
@@ -31,6 +33,8 @@ class BedsideSpeech(context: Context) {
     private val folder = File(context.cacheDir, "PorchSpeech/spoken")
     /** null while the engine starts, then whether it did. */
     private var ready: Boolean? = null
+    /** Completes with [ready] once the engine has started, so a voice check can wait instead of guessing. */
+    private val started = CompletableDeferred<Boolean>()
     /** Sentences asked for while the engine starts, by ID and in order, so [stop] can take one back. */
     private val queued = linkedMapOf<String, () -> Unit>()
     /** Sentences being written, by ID, with what to do once they are. */
@@ -42,6 +46,8 @@ class BedsideSpeech(context: Context) {
             val starting = queued.values.toList()
             queued.clear()
             starting.forEach { it() }
+            // After this callback returns. A waiter that then speaks must not re-enter the engine from inside it.
+            if (!started.isCompleted) main.post { if (!started.isCompleted) started.complete(ready == true) }
         }
     }
 
@@ -60,14 +66,30 @@ class BedsideSpeech(context: Context) {
      * Says `text` in `language`, in the caregiver's chosen voice when this engine has it, and calls `done` with whether
      * it was said. False straight away when the engine has no voice for the language. Returns an ID for [stop].
      */
-    fun speak(text: String, language: BedsideLanguage, voiceName: String?, done: (Boolean) -> Unit): String {
+    fun speak(text: String, language: BedsideLanguage, voiceName: String?, done: (Boolean) -> Unit): String = say(text, done) {
+        val voice = voiceName?.let { name -> engine.voices?.firstOrNull { it.name == name && language.supportsSpeechVoice(it.locale.toLanguageTag()) } }
+        if (voice != null) engine.setVoice(voice) == TextToSpeech.SUCCESS else engine.setLanguage(language.locale) >= TextToSpeech.LANG_AVAILABLE
+    }
+
+    /**
+     * Whether this tablet's engine has a voice for `locale`, once the engine has started. Suspends until it has.
+     * False when it failed to start, or it has no voice for `locale`. Main thread only.
+     */
+    suspend fun hasVoice(locale: Locale): Boolean {
+        if (!started.await()) return false
+        return engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE
+    }
+
+    /** Says `text` in `locale`'s built-in voice, such as a text's words that Porch couldn't translate. */
+    fun speak(text: String, locale: Locale, done: (Boolean) -> Unit): String =
+        say(text, done) { engine.setLanguage(locale) >= TextToSpeech.LANG_AVAILABLE }
+
+    /** `voice` picks the voice once the engine has started, and says whether it has one. */
+    private fun say(text: String, done: (Boolean) -> Unit, voice: () -> Boolean): String {
         val id = UUID.randomUUID().toString()
         val start = start@{
             if (ready != true) { done(false); return@start }
-            val voice = voiceName?.let { name -> engine.voices?.firstOrNull { it.name == name && language.supportsSpeechVoice(it.locale.toLanguageTag()) } }
-            val usable = if (voice != null) engine.setVoice(voice) == TextToSpeech.SUCCESS
-                else engine.setLanguage(language.locale) >= TextToSpeech.LANG_AVAILABLE
-            if (!usable) { done(false); return@start }
+            if (!voice()) { done(false); return@start }
             folder.mkdirs()
             val file = File(folder, "$id.wav")
             writing[id] = { ok -> if (ok) play(id, file, done) else { file.delete(); done(false) } }
@@ -130,28 +152,38 @@ class Announcer(private val app: PorchApplication) {
     private var startJob: Job? = null
     private var watchdog: Job? = null
     private var completion: ((Boolean) -> Unit)? = null
+    /** How long a sentence may take once it starts: 15 seconds, or longer for a text's words. */
+    private var limit = 15_000L
 
     /**
      * The chime, then `message`. `done` gets whether it was said, and isn't called after [stop]. The voices are the
      * saved ones unless caregiver settings pass the ones being chosen, to preview them; a preview waits up to
-     * `naturalWait` milliseconds for a natural clip that isn't here yet, as iOS does.
+     * `naturalWait` milliseconds for a natural clip that isn't here yet, as iOS does. Without `chime` it goes on from
+     * something already said, such as a text's words after who it's from: `textID` lets the server read them although
+     * they're longer than an announcement, and `voiceLocale` reads words Porch couldn't translate in that language's
+     * built-in voice.
      */
     fun speak(message: String, language: BedsideLanguage = BedsideText.language(app),
         voiceName: String? = BedsidePreferences.load(app.settings).announcementVoiceIdentifier(language),
-        naturalVoice: String? = NaturalVoice.selected(app, language), naturalWait: Long = 0, done: (Boolean) -> Unit) {
+        naturalVoice: String? = NaturalVoice.selected(app, language), naturalWait: Long = 0, chime: Boolean = true,
+        textID: String? = null, voiceLocale: Locale? = null, done: (Boolean) -> Unit) {
         stop()
         completion = done
-        if (!chime.play(CallTone.ANNOUNCEMENT)) { finish(false); return }
+        // A text's words take longer to say than an announcement.
+        limit = if (chime) 15_000 else 15_000 + message.length * 350L
+        if (chime && !this.chime.play(CallTone.ANNOUNCEMENT)) { finish(false); return }
+        val natural = naturalVoice.takeIf { voiceLocale == null }
         startJob = scope.launch {
-            delay((CallTone.ANNOUNCEMENT.duration * 1_000).toLong())
+            if (chime) delay((CallTone.ANNOUNCEMENT.duration * 1_000).toLong())
             // A call or a drop-in never waits for a clip; a preview of a voice just chosen fetches it.
-            val ready = naturalVoice?.let { NaturalVoice.clip(app, message, language, it, naturalWait) }
-            if (ready != null && playClip(ready) { said -> if (said) finish(true) else { ready.delete(); speakBuiltIn(message, language, voiceName) } }) {
+            val ready = natural?.let { NaturalVoice.clip(app, message, language, it, naturalWait, textID) }
+            if (ready != null && playClip(ready) { said -> if (said) finish(true) else { ready.delete(); speakBuiltIn(message, language, voiceName, voiceLocale) } }) {
                 armWatchdog()
                 return@launch
             }
+            // A clip that couldn't start is broken.
             ready?.delete()
-            speakBuiltIn(message, language, voiceName)
+            speakBuiltIn(message, language, voiceName, voiceLocale)
         }
         // Until speech starts, so a stuck engine can't hold the call either.
         armWatchdog()
@@ -169,9 +201,10 @@ class Announcer(private val app: PorchApplication) {
         chime.stop()
     }
 
-    private fun speakBuiltIn(message: String, language: BedsideLanguage, voiceName: String?) {
+    private fun speakBuiltIn(message: String, language: BedsideLanguage, voiceName: String?, voiceLocale: Locale? = null) {
         armWatchdog()
-        speaking = app.speech.speak(message, language, voiceName) { said -> speaking = null; finish(said) }
+        val done = { said: Boolean -> speaking = null; finish(said) }
+        speaking = if (voiceLocale != null) app.speech.speak(message, voiceLocale, done) else app.speech.speak(message, language, voiceName, done)
     }
 
     private fun playClip(file: File, done: (Boolean) -> Unit): Boolean = try {
@@ -190,7 +223,7 @@ class Announcer(private val app: PorchApplication) {
 
     private fun armWatchdog() {
         watchdog?.cancel()
-        watchdog = scope.launch { delay(15_000); finish(false) }
+        watchdog = scope.launch { delay(limit); finish(false) }
     }
 
     private fun finish(said: Boolean) {

@@ -13,6 +13,20 @@ object BedsideMessageQueue {
     fun waiting(all: List<FamilyMessage>, played: Set<String>): List<FamilyMessage> =
         all.filter { it.held != true && it.id !in played }.sortedBy { it.sentAt }
 
+    /** Texts that show after the messages, oldest first: not held for a caregiver, and not already read here. */
+    fun waitingTexts(all: List<FamilyText>, read: Set<String>): List<FamilyText> =
+        all.filter { !it.held && it.id !in read }.sortedBy { it.sentAt }
+
+    /** Whether two BCP 47 tags are one language for reading aloud: every written Chinese counts as the Chinese choices'
+     * language, and Filipino (`fil`) as Tagalog. */
+    fun sameLanguage(a: String, b: String): Boolean = family(a) == family(b)
+
+    private fun family(tag: String): String = when (val base = tag.substringBefore('-').lowercase()) {
+        "zh", "yue", "cmn" -> "zh"
+        "fil" -> "tl"
+        else -> base
+    }
+
     /**
      * Held phone voicemail the bedside releases itself: the phone company verified the caller, and that number is saved on
      * the keypad. Other held voicemail waits for a caregiver. `releasing` are the ones already asked for.

@@ -3,7 +3,9 @@ package com.ethanteng.helloporch.core
 import com.ethanteng.helloporch.core.NativeCall.Mode.VOICE
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class BedsideMessageQueueTest {
     private fun message(id: String, sentAt: Long, from: String = "6f1c2a4e-3b5d-4e7f-9a1b-2c3d4e5f6a7b", fromName: String = "Ethan", callerNumber: String? = null,
@@ -20,6 +22,27 @@ class BedsideMessageQueueTest {
     fun waitingIsOldestFirstWithoutHeldOrPlayed() {
         val all = listOf(message("b", 200), message("a", 100), message("held", 50, held = true), message("played", 10))
         assertEquals(listOf("a", "b"), BedsideMessageQueue.waiting(all, played = setOf("played")).map { it.id })
+    }
+
+    @Test
+    fun textsShowOldestFirstWithoutHeldOrRead() {
+        val texts = listOf(
+            FamilyText("b", "+14155550200", sentAt = 200, held = false, delivered = true),
+            FamilyText("a", "+14155550200", sentAt = 100, held = false, delivered = false),
+            FamilyText("held", "+14155550999", sentAt = 50, held = true, delivered = false),
+            FamilyText("read", "+14155550200", sentAt = 10, held = false, delivered = true),
+        )
+        assertEquals(listOf("a", "b"), BedsideMessageQueue.waitingTexts(texts, read = setOf("read")).map { it.id })
+    }
+
+    @Test
+    fun languagesMatchAsTheyAreReadAloud() {
+        assertTrue(BedsideMessageQueue.sameLanguage("zh-Hant", "yue-Hant"))
+        assertTrue(BedsideMessageQueue.sameLanguage("cmn-Hans-CN", "zh-Hans"))
+        assertTrue(BedsideMessageQueue.sameLanguage("fil", "tl"))
+        assertTrue(BedsideMessageQueue.sameLanguage("en-US", "en"))
+        assertFalse(BedsideMessageQueue.sameLanguage("es", "en"))
+        assertFalse(BedsideMessageQueue.sameLanguage("ko", "zh-Hant"))
     }
 
     @Test
