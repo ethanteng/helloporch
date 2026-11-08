@@ -108,16 +108,22 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
     val messages = state?.messages.orEmpty()
     val texts = state?.texts.orEmpty()
     val bedside = bedsideDevice(admin.snapshot(links))
-    // Each waiting text's words, by ID, once caregiverTexts has answered. A text missing from the answer has none to show.
-    var words by remember { mutableStateOf<Map<String, FamilyText>?>(null) }
+    // Each waiting text's words, by ID, and the texts caregiverTexts has answered for: one it answered for but left out
+    // has none to show.
+    var words by remember { mutableStateOf<Map<String, FamilyText>>(emptyMap()) }
+    var answered by remember { mutableStateOf<Set<String>>(emptySet()) }
     var wordsFailed by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<Any?>(null) }
     var preview by remember { mutableStateOf<Preview?>(null) }
     var opening by remember { mutableStateOf(false) }
-    LaunchedEffect(texts.isNotEmpty()) {
-        if (texts.isEmpty() || words != null) return@LaunchedEffect
+    // The list follows the household as it changes, so a text that arrives while it's open is read for too.
+    val textIDs = texts.map { it.id }.toSet()
+    LaunchedEffect(textIDs) {
+        if (textIDs.all { it in answered }) return@LaunchedEffect
         try {
-            words = admin.request("caregiverTexts").texts.orEmpty().associateBy { it.id }
+            val loaded = admin.request("caregiverTexts").texts.orEmpty()
+            words = words + loaded.associateBy { it.id }
+            answered = answered + textIDs + loaded.map { it.id }
             wordsFailed = false
         } catch (e: CancellationException) {
             throw e
@@ -144,7 +150,7 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
         if (messages.isEmpty() && texts.isEmpty()) Text("No messages are waiting.", style = MaterialTheme.typography.bodyLarge)
         // Held texts first, then held phone voicemail: they're what needs a decision.
         for (text in texts.filter { it.held }.sortedBy { it.sentAt }) {
-            TextSection(admin, text, bedside, words, wordsFailed, onRemove = { removing = text })
+            TextSection(admin, text, bedside, words[text.id], text.id in answered, wordsFailed, onRemove = { removing = text })
         }
         for (message in messages.sortedWith(compareBy({ if (it.held == true) 0 else 1 }, { it.sentAt }))) {
             CaregiverGroup(messageTitle(message), messageDetail(message, bedside)) {
@@ -158,7 +164,7 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
             }
         }
         for (text in texts.filter { !it.held }.sortedBy { it.sentAt }) {
-            TextSection(admin, text, bedside, words, wordsFailed, onRemove = { removing = text })
+            TextSection(admin, text, bedside, words[text.id], text.id in answered, wordsFailed, onRemove = { removing = text })
         }
     }
     preview?.let { MessagePreview(it) { preview = null } }
@@ -172,11 +178,12 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
     }
 }
 
-/** A text with its words, and what the bedside shows when it translated them. `words` is null until they've loaded. */
+/** A text with its words, and what the bedside shows when it translated them. `answered` once caregiverTexts has
+ * answered for it, with its words or without. */
 @Composable
-private fun TextSection(admin: CaregiverAdmin, text: FamilyText, bedside: String, words: Map<String, FamilyText>?, failed: Boolean, onRemove: () -> Unit) {
+private fun TextSection(admin: CaregiverAdmin, text: FamilyText, bedside: String, loaded: FamilyText?, answered: Boolean, failed: Boolean,
+    onRemove: () -> Unit) {
     val state = if (text.held) "Waiting for your OK: number isn't saved on the keypad" else if (text.delivered) "Ready on the $bedside" else "Not on the $bedside yet"
-    val loaded = words?.get(text.id)
     CaregiverGroup("Text from ${senderName(text.from)}", "Sent ${whenSent(text.sentAt)} · $state") {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
@@ -188,8 +195,8 @@ private fun TextSection(admin: CaregiverAdmin, text: FamilyText, bedside: String
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                answered -> Text("The words for this text aren't available.", style = MaterialTheme.typography.bodyMedium)
                 failed -> Text("Couldn't load this text. Go back and try again.", style = MaterialTheme.typography.bodyMedium)
-                words != null -> Text("The words for this text aren't available.", style = MaterialTheme.typography.bodyMedium)
                 else -> Text("Loading the text…", style = MaterialTheme.typography.bodyMedium)
             }
             val pictures = text.pictures ?: 0
