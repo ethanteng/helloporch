@@ -502,12 +502,13 @@ fun StepperRow(title: String, value: String, onMinus: (() -> Unit)?, onPlus: (()
     }
 }
 
-/** A row that opens something or does something. */
+/** A row that opens something or does something. Not `enabled` while it can't, such as while another change is saving. */
 @Composable
-fun ActionRow(title: String, detail: String? = null, onClick: () -> Unit) {
-    CaregiverRow(onClick = onClick) {
+fun ActionRow(title: String, detail: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
+    CaregiverRow(onClick = if (enabled) onClick else null) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text(title, style = MaterialTheme.typography.titleMedium,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             detail?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }

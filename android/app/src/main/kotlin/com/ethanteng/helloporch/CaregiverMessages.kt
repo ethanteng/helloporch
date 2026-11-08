@@ -157,10 +157,12 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
                 ActionRow(if (message.held == true) "Listen first" else "Preview") { listen(message) }
                 if (message.held == true) {
                     HorizontalDivider()
-                    ActionRow("Let it play on Porch") { admin.perform("releaseMessage", mapOf("messageID" to JsonPrimitive(message.id))) }
+                    ActionRow("Let it play on Porch", enabled = !admin.busy) {
+                        admin.perform("releaseMessage", mapOf("messageID" to JsonPrimitive(message.id)))
+                    }
                 }
                 HorizontalDivider()
-                RemoveRow { removing = message }
+                RemoveRow(enabled = !admin.busy) { removing = message }
             }
         }
         for (text in texts.filter { !it.held }.sortedBy { it.sentAt }) {
@@ -168,13 +170,14 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
         }
     }
     preview?.let { MessagePreview(it) { preview = null } }
+    // Caregiver changes go one at a time, and one made while another is saving is dropped, so Remove waits for it.
     when (val item = removing) {
         is FamilyMessage -> ConfirmRemove("Remove this message?",
             if (item.fromPhone) "It won't play on the bedside Porch, and the recording is deleted."
             else "It won't play on the bedside Porch. ${item.fromName} will see that a caregiver removed it.",
-            onDismiss = { removing = null }) { removing = null; admin.perform("removeMessage", mapOf("messageID" to JsonPrimitive(item.id))) }
+            enabled = !admin.busy, onDismiss = { removing = null }) { removing = null; admin.perform("removeMessage", mapOf("messageID" to JsonPrimitive(item.id))) }
         is FamilyText -> ConfirmRemove("Remove this text?", "It won't show on the bedside Porch, and its words are deleted.",
-            onDismiss = { removing = null }) { removing = null; admin.perform("removeText", mapOf("textID" to JsonPrimitive(item.id))) }
+            enabled = !admin.busy, onDismiss = { removing = null }) { removing = null; admin.perform("removeText", mapOf("textID" to JsonPrimitive(item.id))) }
     }
 }
 
@@ -210,24 +213,29 @@ private fun TextSection(admin: CaregiverAdmin, text: FamilyText, bedside: String
         // Not until the words are here: otherwise Let it show approves a text the caregiver hasn't read.
         if (text.held && loaded != null) {
             HorizontalDivider()
-            ActionRow("Let it show on Porch") { admin.perform("releaseText", mapOf("textID" to JsonPrimitive(text.id))) }
+            ActionRow("Let it show on Porch", enabled = !admin.busy) { admin.perform("releaseText", mapOf("textID" to JsonPrimitive(text.id))) }
         }
         HorizontalDivider()
-        RemoveRow(onRemove)
+        RemoveRow(enabled = !admin.busy, onClick = onRemove)
     }
 }
 
 @Composable
-private fun RemoveRow(onClick: () -> Unit) {
-    CaregiverRow(onClick = onClick) {
-        Text("Remove", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+private fun RemoveRow(enabled: Boolean, onClick: () -> Unit) {
+    CaregiverRow(onClick = if (enabled) onClick else null) {
+        Text("Remove", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+            color = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun ConfirmRemove(title: String, detail: String, onDismiss: () -> Unit, onRemove: () -> Unit) {
+private fun ConfirmRemove(title: String, detail: String, enabled: Boolean, onDismiss: () -> Unit, onRemove: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(detail) },
-        confirmButton = { TextButton(onClick = onRemove) { Text("Remove", color = MaterialTheme.colorScheme.error) } },
+        confirmButton = {
+            TextButton(onClick = onRemove, enabled = enabled) {
+                Text("Remove", color = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
