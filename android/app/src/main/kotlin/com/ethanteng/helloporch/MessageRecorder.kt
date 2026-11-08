@@ -259,13 +259,17 @@ class MessageRecorder(
         onFinish = null
         val sound = sound
         val picture = picture?.takeIf { video }
-        if (!successfully || !sounded || discarding || sound == null || !keep(duration, loudChecks)) {
+        // For video, a camera that didn't leave a complete file. The microphone's is still whole.
+        val pictureFailed = picture != null && !successfully
+        if ((!successfully && !pictureFailed) || !sounded || discarding || sound == null || !keep(duration, loudChecks)) {
             sound?.delete()
             picture?.delete()
             callback?.invoke(null)
             return
         }
-        if (picture == null) {
+        if (picture == null || pictureFailed) {
+            // Audio, or a video without its picture: the sound alone still says it, as when joining the two fails.
+            picture?.delete()
             callback?.invoke(MessageRecording(sound, "audio", "audio/mp4", duration))
             return
         }

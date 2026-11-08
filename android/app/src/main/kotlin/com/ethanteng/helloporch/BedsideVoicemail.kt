@@ -161,6 +161,8 @@ class BedsideVoicemail(
         sendEnabled = false
         cancelEnabled = false
         status = text("Finishing your message…")
+        // Without the red dot and a stopped timer, it doesn't look as if it's still recording.
+        timerText = null
     }
 
     private fun updateTimer() {
@@ -192,6 +194,7 @@ class BedsideVoicemail(
                 if (send) {
                     // A video's picture and sound take a moment to put into one file. Audio's outcome replaces this at once.
                     status = text("Finishing your message…")
+                    timerText = null
                     recorder.stop()
                 } else {
                     recorder.cancel()
