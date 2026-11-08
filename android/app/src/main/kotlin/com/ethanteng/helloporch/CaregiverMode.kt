@@ -75,16 +75,16 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Caregiver mode's pages, as iOS's CaregiverPage lists them. Messages comes with messages (android/PLAN.md, phase 5). */
+/** Caregiver mode's pages, as iOS's CaregiverPage lists them. */
 enum class CaregiverPage(private val bedsideTitle: String, private val phoneTitle: String = bedsideTitle) {
-    PEOPLE("People", "Family"), CALLS("Calls"), DROP_IN("Drop-in"), DISPLAY("Display & voice"), PRIVACY("Privacy"),
+    PEOPLE("People", "Family"), CALLS("Calls"), DROP_IN("Drop-in"), MESSAGES("Messages"), DISPLAY("Display & voice"), PRIVACY("Privacy"),
     CAREGIVERS("Caregivers & PIN", "Caregivers"), DEVICE("This tablet"), ABOUT("About");
 
     fun title(onBedside: Boolean): String = if (onBedside) bedsideTitle else phoneTitle
 
     companion object {
         /** A family phone can't change the keypad, the clock or the tablet itself, so those pages stay on the bedside. */
-        fun pages(onBedside: Boolean): List<CaregiverPage> = if (onBedside) entries else listOf(PEOPLE, CALLS, DROP_IN, PRIVACY, CAREGIVERS, ABOUT)
+        fun pages(onBedside: Boolean): List<CaregiverPage> = if (onBedside) entries else listOf(PEOPLE, CALLS, DROP_IN, MESSAGES, PRIVACY, CAREGIVERS, ABOUT)
     }
 }
 
@@ -374,6 +374,7 @@ private fun CaregiverList(app: PorchApplication, admin: CaregiverAdmin, links: F
                     CaregiverPage.CAREGIVERS -> state?.people?.count { it.caregiver == true }?.takeIf { it > 0 }?.toString()
                     // As iOS's list shows it, so a household with drop-ins paused can tell without opening the page.
                     CaregiverPage.DROP_IN -> state?.let { if (it.dropInEnabled) "On" else "Off" }
+                    CaregiverPage.MESSAGES -> state?.let { messagesSummary(it.messages.orEmpty(), it.texts.orEmpty(), it.messagesEnabled) }
                     else -> null
                 }
                 CaregiverRow(onClick = { onPage(page) }, selected = page == selected) {
