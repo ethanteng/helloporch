@@ -98,6 +98,9 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     private var starting: Job? = null
     private var family: FamilyCredential? = null
     private var kind = "message"
+    /** The composer screen is showing. This ViewModel lives with the activity, so a send that finishes after the screen
+     * closes must not raise "Message sent": that note's OK would close the next visit. */
+    private var screenOpen = false
 
     /** Whom it's for, once, as the screen opens. */
     fun open(family: FamilyCredential, kind: String) {
@@ -178,6 +181,13 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     /** The screen said it was sent; a composer opened later starts fresh. */
     fun acknowledgeSent() { sent = false }
 
+    /** The screen came up, or left for somewhere other than a turn of the phone. Leaving throws away what wasn't sent.
+     * A send already going finishes, without raising its note on the next visit. */
+    fun screenVisibility(open: Boolean) {
+        screenOpen = open
+        if (!open) discard()
+    }
+
     /** Back to the start, throwing away anything recorded or the camera that was open. */
     fun discard() {
         if (phase == Phase.SENDING) return
@@ -206,7 +216,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
                 this@MessageComposer.recording = null
                 poster = null
                 phase = Phase.IDLE
-                sent = true
+                if (screenOpen) sent = true
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -241,6 +251,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
 
     /** Closing the screen throws away what wasn't sent; sending goes on. */
     override fun onCleared() {
+        screenOpen = false
         timer?.cancel()
         beep.stop()
         recorder?.cancel()
@@ -260,7 +271,10 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
     val context = LocalContext.current
     val activity = LocalActivity.current
     // Leaving the screen, but not turning the phone, throws away what wasn't sent.
-    DisposableEffect(composer) { onDispose { if (activity?.isChangingConfigurations != true) composer.discard() } }
+    DisposableEffect(composer) {
+        composer.screenVisibility(true)
+        onDispose { if (activity?.isChangingConfigurations != true) composer.screenVisibility(false) }
+    }
     // Porch leaving the screen stops a recording, which keeps what was recorded.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         if (activity?.isChangingConfigurations != true && composer.phase in setOf(MessageComposer.Phase.RECORDING_AUDIO, MessageComposer.Phase.RECORDING_VIDEO)) composer.stop()
