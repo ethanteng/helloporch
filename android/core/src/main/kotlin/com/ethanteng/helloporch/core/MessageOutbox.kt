@@ -77,3 +77,23 @@ object MessageRecordingCheck {
     /** At least 2 seconds long, with sound heard on at least two checks, such as someone speaking. */
     fun keep(durationSeconds: Double, loudChecks: Int): Boolean = durationSeconds >= 2 && loudChecks >= 2
 }
+
+/**
+ * Lines up a video message's sound with its picture, which are recorded apart: the microphone's sound and the camera's
+ * picture each start at 0 in their own files, so the sound moves by how much earlier it started. Neither says when it
+ * really started: the microphone starts a moment after it's asked to (about 0.45 s on the KB10), and the camera's first
+ * frame comes before or after CameraX says it started, by a different amount on each device. Both stop when they're
+ * asked to, together, so each one's start is when it stopped less its length. On a Galaxy A17 that lines up within
+ * 10 ms; the KB10's camera shows the world about 0.3 s late, so its sound leads by that much.
+ */
+object MessageSoundSync {
+    /** How much earlier the sound started than the picture, in microseconds, from when each was stopped (elapsed-realtime
+     * nanoseconds) and each one's length. 0 when any is missing. */
+    fun shiftMicros(pictureStopNanos: Long, pictureMicros: Long, soundStopNanos: Long, soundMicros: Long): Long =
+        if (pictureStopNanos <= 0 || pictureMicros <= 0 || soundStopNanos <= 0 || soundMicros <= 0) 0
+        else ((pictureStopNanos - pictureMicros * 1_000) - (soundStopNanos - soundMicros * 1_000)) / 1_000
+
+    /** Where a sound sample at `micros` in its own file goes in the message, or null for sound from before the picture
+     * began. */
+    fun soundTime(micros: Long, shiftMicros: Long): Long? = (micros - shiftMicros).takeIf { it >= 0 }
+}

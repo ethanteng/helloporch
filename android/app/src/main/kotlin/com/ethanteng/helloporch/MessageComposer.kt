@@ -342,7 +342,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
                         FormButton("Record audio", onClick = { withPermissions(video = false) { composer.startAudio() } }, filled = kind == "voicemail")
                     }
                     if (kind == "voicemail") { audio(); video() } else { video(); audio() }
-                    if (!videoSupported) Text("This phone's camera can't record a video message every family phone plays, so record audio instead.",
+                    if (!videoSupported) Text("This phone has no front camera for a video message, so record audio instead.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 MessageComposer.Phase.RECORDING_AUDIO -> FormSection("Recording for $recipient…", "Speak after the beep. You have two minutes.") {
