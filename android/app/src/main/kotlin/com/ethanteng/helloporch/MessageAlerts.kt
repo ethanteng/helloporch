@@ -71,15 +71,33 @@ class MessageAlerts(private val app: PorchApplication) {
         if (app.device.experience == PorchExperience.FAMILY) opening = recipient
     }
 
-    /** With each check-in: a family's notification goes once its messages are played, or when it removed this phone. */
+    /** With each check-in: a family's notification goes once its messages are played, when it removed this phone, or
+     * when this phone has left that family. */
     fun noteLinks(links: FamilyLinks) {
         if (app.device.experience != PorchExperience.FAMILY) return
         val manager = NotificationManagerCompat.from(app)
+        val present = mutableSetOf<String>()
         for (link in links.links) {
             val id = link.credential.deviceID
+            present += id
             val count = if (link.accessRemoved) 0 else link.state?.newMessages ?: continue
             val before = unplayed.put(id, count)
             if (count == 0 && before != 0) manager.cancel(tag(id), 0)
+        }
+        // Leave this family drops the link without a zero count, so the notification would stay.
+        for (id in unplayed.keys.filter { it !in present }) {
+            unplayed.remove(id)
+            manager.cancel(tag(id), 0)
+        }
+        // One posted before this process recorded a count, such as Firebase's own, is still showing.
+        try {
+            for (status in manager.activeNotifications) {
+                val tag = status.tag ?: continue
+                if (!tag.startsWith(TAG_PREFIX) || tag.removePrefix(TAG_PREFIX) in present) continue
+                manager.cancel(tag, status.id)
+            }
+        } catch (_: RuntimeException) {
+            // The notification service can be briefly unavailable. The next check-in tries again.
         }
     }
 
@@ -88,7 +106,8 @@ class MessageAlerts(private val app: PorchApplication) {
         const val CHANNEL = "messages"
 
         /** The tag the server gives a family's message notifications, so its newest replaces the last. */
-        fun tag(recipientID: String) = "porch-messages-$recipientID"
+        private const val TAG_PREFIX = "porch-messages-"
+        fun tag(recipientID: String) = "$TAG_PREFIX$recipientID"
 
         fun createChannel(context: Context) {
             val manager = context.getSystemService<NotificationManager>() ?: return
