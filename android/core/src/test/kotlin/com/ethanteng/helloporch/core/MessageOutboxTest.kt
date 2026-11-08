@@ -65,4 +65,27 @@ class MessageOutboxTest {
         assertTrue(MessageRecordingCheck.loud(0.02))
         assertFalse(MessageRecordingCheck.loud(0.01))
     }
+
+    @Test
+    fun aVideoMessagesSoundLinesUpWithItsPicture() {
+        // The picture stopped at 15 s with 10 s recorded, so it started at 5 s. The sound stopped 1 ms later with
+        // 10.081 s, so it started at 4.92 s, 80 ms before the picture: its first 80 ms are dropped and the rest moves
+        // earlier.
+        val shift = MessageSoundSync.shiftMicros(pictureStopNanos = 15_000_000_000, pictureMicros = 10_000_000,
+            soundStopNanos = 15_001_000_000, soundMicros = 10_081_000)
+        assertEquals(80_000L, shift)
+        assertNull(MessageSoundSync.soundTime(79_999, shift))
+        assertEquals(0L, MessageSoundSync.soundTime(80_000, shift))
+        assertEquals(920_000L, MessageSoundSync.soundTime(1_000_000, shift))
+        // The sound started 30 ms after the picture: it starts later in the message.
+        val later = MessageSoundSync.shiftMicros(pictureStopNanos = 15_000_000_000, pictureMicros = 10_000_000,
+            soundStopNanos = 15_000_000_000, soundMicros = 9_970_000)
+        assertEquals(-30_000L, later)
+        assertEquals(30_000L, MessageSoundSync.soundTime(0, later))
+        // Without a time or length, nothing moves.
+        assertEquals(0L, MessageSoundSync.shiftMicros(0, 10_000_000, 15_000_000_000, 10_000_000))
+        assertEquals(0L, MessageSoundSync.shiftMicros(15_000_000_000, 0, 15_000_000_000, 10_000_000))
+        assertEquals(0L, MessageSoundSync.shiftMicros(15_000_000_000, 10_000_000, 0, 10_000_000))
+        assertEquals(0L, MessageSoundSync.shiftMicros(15_000_000_000, 10_000_000, 15_000_000_000, 0))
+    }
 }

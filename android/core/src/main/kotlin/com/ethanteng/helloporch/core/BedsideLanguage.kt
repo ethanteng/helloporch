@@ -84,7 +84,7 @@ enum class BedsideLanguage(val code: String) {
 
         private val simplifiedStrings = mapOf(
             "%@ didn't answer." to "%@没有接听。", "%@ isn't available right now." to "%@现在无法接听。",
-            "Leave a message for %@" to "给%@留言", "Speak after the beep." to "请在嘀声后说话。", "Recording your message…" to "正在录制留言…",
+            "Leave a message for %@" to "给%@留言", "Speak after the beep." to "请在嘀声后说话。", "Recording your message…" to "正在录制留言…", "Finishing your message…" to "正在处理留言…",
             "Send message" to "发送留言", "Don't send" to "不发送", "Press %@ when you're finished." to "说完后请按 %@。",
             "Your message is on its way to %@." to "您的留言正在发送给%@。", "No message was recorded." to "没有录到留言。", "Message not sent." to "留言未发送。",
             "%@ didn't answer. Please leave a message after the beep." to "%@没有接听。请在嘀声后留言。",
@@ -158,7 +158,7 @@ enum class BedsideLanguage(val code: String) {
 
         private val cantoneseStrings = mapOf(
             "%@ didn't answer." to "%@冇接聽。", "%@ isn't available right now." to "%@而家未能接聽。",
-            "Leave a message for %@" to "留言畀%@", "Speak after the beep." to "請喺嘟一聲之後講。", "Recording your message…" to "錄緊留言…",
+            "Leave a message for %@" to "留言畀%@", "Speak after the beep." to "請喺嘟一聲之後講。", "Recording your message…" to "錄緊留言…", "Finishing your message…" to "處理緊留言…",
             "Send message" to "傳送留言", "Don't send" to "唔傳送", "Press %@ when you're finished." to "講完請按 %@。",
             "Your message is on its way to %@." to "您嘅留言正傳送畀%@。", "No message was recorded." to "冇錄到留言。", "Message not sent." to "留言冇傳送。",
             "%@ didn't answer. Please leave a message after the beep." to "%@冇接聽。請喺嘟一聲之後留言。",
@@ -232,7 +232,7 @@ enum class BedsideLanguage(val code: String) {
 
         private val spanishStrings = mapOf(
             "%@ didn't answer." to "%@ no ha contestado.", "%@ isn't available right now." to "%@ no está disponible ahora.",
-            "Leave a message for %@" to "Deje un mensaje para %@", "Speak after the beep." to "Hable después del pitido.", "Recording your message…" to "Grabando su mensaje…",
+            "Leave a message for %@" to "Deje un mensaje para %@", "Speak after the beep." to "Hable después del pitido.", "Recording your message…" to "Grabando su mensaje…", "Finishing your message…" to "Terminando su mensaje…",
             "Send message" to "Enviar mensaje", "Don't send" to "No enviar", "Press %@ when you're finished." to "Pulse %@ cuando termine.",
             "Your message is on its way to %@." to "Su mensaje se está enviando a %@.", "No message was recorded." to "No se ha grabado ningún mensaje.", "Message not sent." to "Mensaje no enviado.",
             "%@ didn't answer. Please leave a message after the beep." to "%@ no ha contestado. Deje un mensaje después del pitido.",
@@ -306,7 +306,7 @@ enum class BedsideLanguage(val code: String) {
 
         private val tagalogStrings = mapOf(
             "%@ didn't answer." to "Hindi po sumagot si %@.", "%@ isn't available right now." to "Hindi po makasagot si %@ ngayon.",
-            "Leave a message for %@" to "Mag-iwan ng mensahe para kay %@", "Speak after the beep." to "Magsalita po pagkatapos ng beep.", "Recording your message…" to "Nire-record ang inyong mensahe…",
+            "Leave a message for %@" to "Mag-iwan ng mensahe para kay %@", "Speak after the beep." to "Magsalita po pagkatapos ng beep.", "Recording your message…" to "Nire-record ang inyong mensahe…", "Finishing your message…" to "Tinatapos ang inyong mensahe…",
             "Send message" to "Ipadala ang mensahe", "Don't send" to "Huwag ipadala", "Press %@ when you're finished." to "Pindutin po ang %@ kapag tapos na kayo.",
             "Your message is on its way to %@." to "Ipinapadala na po ang inyong mensahe kay %@.", "No message was recorded." to "Walang na-record na mensahe.", "Message not sent." to "Hindi naipadala ang mensahe.",
             "%@ didn't answer. Please leave a message after the beep." to "Hindi po sumagot si %@. Mag-iwan po kayo ng mensahe pagkatapos ng beep.",
@@ -380,7 +380,7 @@ enum class BedsideLanguage(val code: String) {
 
         private val koreanStrings = mapOf(
             "%@ didn't answer." to "%@에게서 응답이 없어요.", "%@ isn't available right now." to "지금은 %@에게 연결할 수 없어요.",
-            "Leave a message for %@" to "%@에게 메시지 남기기", "Speak after the beep." to "삐 소리가 나면 말씀하세요.", "Recording your message…" to "메시지 녹음 중…",
+            "Leave a message for %@" to "%@에게 메시지 남기기", "Speak after the beep." to "삐 소리가 나면 말씀하세요.", "Recording your message…" to "메시지 녹음 중…", "Finishing your message…" to "메시지 마무리 중…",
             "Send message" to "메시지 보내기", "Don't send" to "보내지 않기", "Press %@ when you're finished." to "다 말씀하시면 %@ 키를 누르세요.",
             "Your message is on its way to %@." to "%@에게 메시지를 보내고 있어요.", "No message was recorded." to "녹음된 메시지가 없어요.", "Message not sent." to "메시지를 보내지 않았어요.",
             "%@ didn't answer. Please leave a message after the beep." to "%@에게서 응답이 없어요. 삐 소리가 나면 메시지를 남겨 주세요.",
@@ -454,7 +454,7 @@ enum class BedsideLanguage(val code: String) {
 
         private val traditionalStrings = mapOf(
             "%@ didn't answer." to "%@沒有接聽。", "%@ isn't available right now." to "%@現在無法接聽。",
-            "Leave a message for %@" to "留言給%@", "Speak after the beep." to "請在嗶聲後說話。", "Recording your message…" to "正在錄製留言…",
+            "Leave a message for %@" to "留言給%@", "Speak after the beep." to "請在嗶聲後說話。", "Recording your message…" to "正在錄製留言…", "Finishing your message…" to "正在處理留言…",
             "Send message" to "傳送留言", "Don't send" to "不要傳送", "Press %@ when you're finished." to "說完後請按 %@。",
             "Your message is on its way to %@." to "您的留言正在傳送給%@。", "No message was recorded." to "沒有錄到留言。", "Message not sent." to "留言未傳送。",
             "%@ didn't answer. Please leave a message after the beep." to "%@沒有接聽。請在嗶聲後留言。",

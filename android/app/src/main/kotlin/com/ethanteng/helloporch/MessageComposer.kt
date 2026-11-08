@@ -173,7 +173,17 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
         val recorder = recorder ?: return
         if (phase != Phase.CAMERA || !cameraReady) return
         recorder.onFinish = ::recorded
-        if (!recorder.start()) { error = "Couldn't start recording. Try again."; return }
+        if (!recorder.start()) {
+            // The microphone already started, so this recorder can't start again.
+            recorder.cancel()
+            if (this.recorder === recorder) {
+                this.recorder = null
+                cameraReady = false
+                phase = Phase.IDLE
+                error = "Couldn't start recording. Try again."
+            }
+            return
+        }
         phase = Phase.RECORDING_VIDEO
         tick(recorder)
     }
@@ -183,7 +193,11 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
         timer?.cancel()
         val recorder = recorder ?: return
         // Stopped during the beep, before recording began: nothing was recorded, and it mustn't start after all.
-        if (!recorder.isRecording) { discard(); return }
+        // A video that has stopped is still being put together, and leaving the app must not throw that away.
+        if (!recorder.isRecording) {
+            if (!recorder.isFinished) discard()
+            return
+        }
         recorder.stop()
     }
 
@@ -243,7 +257,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     private fun tick(recorder: MessageRecorder) {
         timer?.cancel()
         timer = viewModelScope.launch {
-            while (true) {
+            while (!recorder.isFinished) {
                 val seconds = minOf(MessageRecordingCheck.MAX_SECONDS, recorder.elapsed).toInt()
                 timerText = "${FamilyMessageThread.length(seconds)} / 2:00"
                 delay(500)
@@ -302,7 +316,10 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
     val close = { composer.discard(); onDone() }
     BackHandler {
         when (composer.phase) {
-            MessageComposer.Phase.CAMERA, MessageComposer.Phase.RECORDING_AUDIO, MessageComposer.Phase.RECORDING_VIDEO -> composer.discard()
+            // A video that has stopped is being put into one file, which takes a moment: it comes to the review screen,
+            // where Back throws it away as usual.
+            MessageComposer.Phase.RECORDING_VIDEO -> if (composer.recorder?.isFinished != true) composer.discard()
+            MessageComposer.Phase.CAMERA, MessageComposer.Phase.RECORDING_AUDIO -> composer.discard()
             else -> close()
         }
     }
@@ -342,7 +359,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
                         FormButton("Record audio", onClick = { withPermissions(video = false) { composer.startAudio() } }, filled = kind == "voicemail")
                     }
                     if (kind == "voicemail") { audio(); video() } else { video(); audio() }
-                    if (!videoSupported) Text("This phone's camera can't record a video message every family phone plays, so record audio instead.",
+                    if (!videoSupported) Text("This phone has no front camera for a video message, so record audio instead.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 MessageComposer.Phase.RECORDING_AUDIO -> FormSection("Recording for $recipient…", "Speak after the beep. You have two minutes.") {
@@ -380,6 +397,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
 @Composable
 private fun CameraRecording(composer: MessageComposer, recipient: String) {
     val recording = composer.phase == MessageComposer.Phase.RECORDING_VIDEO
+    val finishing = recording && composer.recorder?.isFinished == true
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { context ->
             PreviewView(context).apply {
@@ -391,8 +409,11 @@ private fun CameraRecording(composer: MessageComposer, recipient: String) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(Modifier.background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(20.dp)).padding(horizontal = 20.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (recording) "Recording for $recipient…" else "Video message for $recipient", color = Color.White,
-                    style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                Text(when {
+                    finishing -> "Finishing your video…"
+                    recording -> "Recording for $recipient…"
+                    else -> "Video message for $recipient"
+                }, color = Color.White, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                 if (recording) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.size(14.dp).background(Color(0.9f, 0.2f, 0.2f), CircleShape))
                     Text(composer.timerText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
@@ -405,9 +426,10 @@ private fun CameraRecording(composer: MessageComposer, recipient: String) {
                     Text("Cancel", style = MaterialTheme.typography.titleMedium)
                 }
                 Button(onClick = if (recording) composer::stop else composer::startVideo, Modifier.weight(1f).heightIn(min = 56.dp),
-                    enabled = composer.recorder != null && (recording || composer.cameraReady),
+                    enabled = !finishing && composer.recorder != null && (recording || composer.cameraReady),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0.68f, 0.19f, 0.19f), contentColor = Color.White)) {
                     Text(when {
+                        finishing -> "Finishing…"
                         recording -> "Stop recording"
                         composer.cameraReady -> "Start recording"
                         else -> "Starting camera…"

@@ -132,6 +132,7 @@ class BedsideVoicemail(
 
     private fun record() {
         if (phase != Phase.PROMPTING) return
+        recorder.onStopped = ::markFinishing
         recorder.onFinish = ::recorded
         if (!recorder.start()) {
             recorder.cancel()
@@ -151,7 +152,25 @@ class BedsideVoicemail(
         }
     }
 
+    /** The recording has stopped. For video, its picture and sound are still being put into one file, and Don't send
+     * would throw away a message the time limit, or Send, already kept. */
+    private fun markFinishing() {
+        if (phase != Phase.RECORDING) return
+        phase = Phase.STOPPING
+        timer?.cancel()
+        sendEnabled = false
+        cancelEnabled = false
+        status = text("Finishing your message…")
+        // Without the red dot and a stopped timer, it doesn't look as if it's still recording.
+        timerText = null
+    }
+
     private fun updateTimer() {
+        // Once it has stopped, such as at two minutes, elapsed is 0 while a video's picture and sound are put together.
+        if (recorder.isFinished) {
+            markFinishing()
+            return
+        }
         val seconds = minOf(MessageRecordingCheck.MAX_SECONDS, recorder.elapsed).toInt()
         val limit = MessageRecordingCheck.MAX_SECONDS.toInt()
         timerText = "%d:%02d / %d:%02d".format(seconds / 60, seconds % 60, limit / 60, limit % 60)
@@ -172,7 +191,15 @@ class BedsideVoicemail(
                 timer?.cancel()
                 sendEnabled = false
                 cancelEnabled = false
-                if (send) recorder.stop() else { recorder.cancel(); complete(text("Message not sent.")) }
+                if (send) {
+                    // A video's picture and sound take a moment to put into one file. Audio's outcome replaces this at once.
+                    status = text("Finishing your message…")
+                    timerText = null
+                    recorder.stop()
+                } else {
+                    recorder.cancel()
+                    complete(text("Message not sent."))
+                }
             }
             Phase.STOPPING, Phase.DONE -> {}
         }
