@@ -192,7 +192,9 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
     private fun readAttachments(text: ReceivedText) {
         if (ended || currentText?.id != text.id) return
         val note = BedsideMessages.attachmentSentence(app, text) ?: return finishText(text)
-        announcer.speak(note, chime = false) { finishText(text) }
+        // The words were already said. A picture by itself is only this sentence, so if it couldn't be said the text
+        // waits, as one whose words couldn't be read does: reporting it read deletes it on the server.
+        announcer.speak(note, chime = false) { said -> if (said || text.text.isNotEmpty()) finishText(text) else unread(text) }
     }
 
     /** Read to the end, so it won't show again. It stays on screen a moment before the next one. */
