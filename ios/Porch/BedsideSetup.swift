@@ -544,7 +544,8 @@ final class SetupAdapterPhoneViewController: BedsideSetupStep, Cell2JackDigitRec
             guard let key = press.key, let digit = key.keypadDigit else { unhandled.insert(press); continue }
             if keys.keyDown(Int(key.keyCode.rawValue)) { receiveKey(digit) }
         }
-        // The hang-up key goes on up: PorchWindow sends it back here through Cell2JackDigitRouter.
+        // The hang-up key (F24) isn't a keypad key, so it goes on up the responder chain. PorchWindow.sendEvent has
+        // already sent it here as the key went down, through Cell2JackDigitRouter to receiveCell2JackHangUp.
         if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
     }
     override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {

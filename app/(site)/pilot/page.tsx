@@ -60,11 +60,11 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Can I use a tablet I already own?",
-    a: "Most recent iPads and Android tablets should work, but compatibility depends on the model and accessories.",
+    a: "Probably. Any iPad with iPadOS 15 or later works, and so does an Android tablet with Android 15 or later.",
   },
   {
     q: "Do I need a special phone?",
-    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it.",
+    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it. With an iPad, it also goes through a Porch phone adapter, which I’ll provide.",
   },
   {
     q: "What is the Porch phone adapter?",
