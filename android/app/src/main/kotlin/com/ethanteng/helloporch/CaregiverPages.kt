@@ -416,7 +416,7 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             BedsideAttendance.setCameraEnabled(true, app.settings)
         } else {
             camera = false
-            admin.error = "Allow camera access in Settings → Porch to tell family when someone is at the tablet."
+            admin.error = "Allow camera access in Settings → Apps → Porch → Permissions to tell family when someone is at the tablet."
         }
     }
     CaregiverGroup {
