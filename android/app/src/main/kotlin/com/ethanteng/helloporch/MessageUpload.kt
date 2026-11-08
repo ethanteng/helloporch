@@ -64,7 +64,15 @@ class MessageUpload {
             if (status !in 200..299) throw FamilyServiceException("The upload didn't finish. Check the connection and try again.", status, "upload")
             upload.uploaded = true
         }
-        val sent = service.send("completeMessage", mapOf("messageID" to JsonPrimitive(upload.message.id))).message ?: upload.message
+        val sent = try {
+            service.send("completeMessage", mapOf("messageID" to JsonPrimitive(upload.message.id))).message ?: upload.message
+        } catch (e: FamilyServiceException) {
+            // Gone, unsent, expired, or a recording the server rejected ("Record the message again"): that id can't be
+            // completed, so sending again starts a new one. A full inbox, a blob not visible yet, or a busy server still
+            // can, and another message would use up a place in the queue. Those stay pending and are only completed.
+            if (e.status == 404 || "Record the message again" in e.message) pending = null
+            throw e
+        }
         pending = null
         return sent
     }

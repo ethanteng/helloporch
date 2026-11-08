@@ -58,10 +58,10 @@ import com.ethanteng.helloporch.core.joinFamily
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Family mode's screens: joining a family from an invitation, the families this phone is in, and caregiver mode for
- * one of them. Setup links go to the bedside's screens instead (PorchRoot). `onReady` says whether the list of families
- * or caregiver mode is showing, which is where a call could ring. A call takes over the screen and closes caregiver
- * mode. */
+/** Family mode's screens: joining a family from an invitation, the families this phone is in, a family's messages with
+ * the bedside and recording one, and caregiver mode for one of them. Setup links go to the bedside's screens instead
+ * (PorchRoot). `onReady` says whether the list of families, the messages or caregiver mode is showing, which is where a
+ * call could ring. A call takes over the screen and closes caregiver mode, and a message not yet sent. */
 @Composable
 fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Unit, onReady: (Boolean) -> Unit = {}) {
     val links by app.coordinator.links.collectAsStateWithLifecycle()
@@ -70,6 +70,9 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     var caregiving by rememberSaveable { mutableStateOf<String?>(null) }
     var caregiverNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var about by rememberSaveable { mutableStateOf(false) }
+    // A family's messages, by device ID, and a message being recorded for one.
+    var thread by rememberSaveable { mutableStateOf<String?>(null) }
+    var composing by rememberSaveable(stateSaver = composingSaver) { mutableStateOf<Composing?>(null) }
     // Joining or removing a family changes the list before any family has checked in.
     var changes by remember { mutableIntStateOf(0) }
     val families = remember(links, changes) { app.device.families }
@@ -79,10 +82,41 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     LaunchedEffect(caregiving, caregiverFamily == null) {
         if (caregiving != null && caregiverFamily == null) { RemoteCaregiverSession.shared.end(); caregiving = null }
     }
-    val listing = caregiverFamily == null && !(link != null || joining || families.isEmpty())
-    SideEffect { onReady(listing || caregiverFamily != null) }
+    val open = link == null && !joining
+    val composeFamily = composing?.let { c -> families.firstOrNull { it.deviceID == c.deviceID } }?.takeIf { open && caregiverFamily == null }
+    val threadFamily = families.firstOrNull { it.deviceID == thread }?.takeIf { open && caregiverFamily == null && composeFamily == null }
+    val listing = caregiverFamily == null && composeFamily == null && threadFamily == null && !(link != null || joining || families.isEmpty())
+    SideEffect { onReady(listing || caregiverFamily != null || threadFamily != null) }
+    // A call that didn't go through offers a message instead, as iOS does. Not once that family has left this phone,
+    // removed it, or turned messages off: Leave a message would open a composer that can't send.
+    app.calls.messageOffer?.takeIf { offer ->
+        val link = links.link(offer.family)
+        offer.recent && composeFamily == null && caregiverFamily == null &&
+            families.any { it.deviceID == offer.family.deviceID } &&
+            link?.accessRemoved != true && link?.state?.messagesEnabled != false
+    }?.let { offer ->
+        AlertDialog(onDismissRequest = { app.calls.messageOffer = null }, title = { Text(offer.title) },
+            text = { Text("Leave a message? It waits on their Porch until they play it.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    app.calls.messageOffer = null
+                    composing = Composing(offer.family.deviceID, offer.name, "voicemail", startAudio = true)
+                }) { Text("Leave a message") }
+            },
+            dismissButton = { TextButton(onClick = { app.calls.messageOffer = null }) { Text("Not now") } })
+    }
     if (caregiverFamily != null) {
         RemoteCaregiverMode(app, caregiverFamily, links, onClose = { reason -> caregiving = null; caregiverNotice = reason })
+        return
+    }
+    if (composeFamily != null) {
+        val c = composing!!
+        MessageComposerScreen(app, composeFamily, c.recipient, c.kind, c.startAudio, onDone = { composing = null })
+        return
+    }
+    if (threadFamily != null) {
+        MessageThreadScreen(app, threadFamily, links, onBack = { thread = null },
+            onRecord = { name -> composing = Composing(threadFamily.deviceID, name, "message", startAudio = false) })
         return
     }
     // From the families, or the join screen, as long as no invitation is waiting.
@@ -96,6 +130,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done,
                 onAbout = { about = true })
             else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ }, onAbout = { about = true },
+                onThread = { thread = it.deviceID }, onCompose = { family, name -> composing = Composing(family.deviceID, name, "message", startAudio = false) },
                 onCaregiver = { family ->
                     // Every visit starts with the PIN.
                     RemoteCaregiverSession.shared.end()
@@ -204,6 +239,20 @@ internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
     }
 }
 
+/** A message being recorded for `recipient` in a family, by its device ID: "message", or "voicemail" offered after a call
+ * that didn't go through, which can start recording audio at once. */
+private data class Composing(val deviceID: String, val recipient: String, val kind: String, val startAudio: Boolean)
+private val composingSaver = listSaver<Composing?, String>(
+    save = { it?.let { c -> listOf(c.deviceID, c.recipient, c.kind, c.startAudio.toString()) } ?: emptyList() },
+    restore = { if (it.size == 4) Composing(it[0], it[1], it[2], it[3].toBoolean()) else null })
+
+/** What's waiting for a caregiver's OK: phone voicemail, texts, or both, as iOS says it. */
+private fun reviewTitle(voicemails: Int, texts: Int): String = when {
+    texts == 0 -> if (voicemails == 1) "1 phone voicemail needs your review" else "$voicemails phone voicemails need your review"
+    voicemails == 0 -> if (texts == 1) "1 text needs your review" else "$texts texts need your review"
+    else -> "${voicemails + texts} messages need your review"
+}
+
 /** A call a family phone is about to place, while Android asks for the microphone and camera. */
 private class CallRequest(val family: FamilyCredential, val person: FamilyPerson, val mode: NativeCall.Mode)
 
@@ -236,7 +285,7 @@ private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit
 
 @Composable
 private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit,
-    onAbout: () -> Unit, onCaregiver: (FamilyCredential) -> Unit) {
+    onAbout: () -> Unit, onThread: (FamilyCredential) -> Unit, onCompose: (FamilyCredential, String) -> Unit, onCaregiver: (FamilyCredential) -> Unit) {
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -275,12 +324,30 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     bedside != null -> "${bedside.name}'s ${bedsideDevice(state)} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
                     else -> "Checking in…"
                 })
-                if (bedside != null && link.accessRemoved != true) {
-                    val opening = app.calls.opening
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening) { Text("Audio call") }
-                        Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening) { Text("Video call") }
+                if (state != null && link.accessRemoved != true) {
+                    val from = bedside?.name ?: state.householdName
+                    // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
+                    val held = state.heldMessages ?: 0
+                    val heldTexts = state.heldTexts ?: 0
+                    if (state.me.caregiver == true && held + heldTexts > 0) {
+                        Button(onClick = { onCaregiver(family) }, Modifier.fillMaxWidth()) { Text(reviewTitle(held, heldTexts)) }
                     }
+                    // Left by the bedside when its call to this phone wasn't answered.
+                    val unheard = state.newMessages ?: 0
+                    if (unheard > 0) Button(onClick = { onThread(family) }, Modifier.fillMaxWidth()) {
+                        Text(if (unheard == 1) "New message from $from" else "$unheard new messages from $from")
+                    }
+                    if (bedside != null) {
+                        val opening = app.calls.opening
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening) { Text("Audio call") }
+                            Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening) { Text("Video call") }
+                        }
+                        // Messages wait on the bedside, so they don't need it to be open right now.
+                        if (state.messagesEnabled != false) OutlinedButton(onClick = { onCompose(family, bedside.name) }, Modifier.fillMaxWidth()) { Text("Send a message") }
+                    }
+                    // Both ways in one thread, which stays while sending is off so earlier messages still play.
+                    OutlinedButton(onClick = { onThread(family) }, Modifier.fillMaxWidth()) { Text("Messages with $from") }
                 }
                 // Anyone can call the bedside on its own number, from any phone.
                 state?.porchNumber?.takeIf { link.accessRemoved != true }?.let { PorchNumberCard(bedside?.name ?: state.householdName, it) }
@@ -293,7 +360,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
             }
         }
     }
-    Text("This test version joins families, checks in with them, calls while Porch is open, and rings while it's closed. Messages come in a later version.",
+    Text("This test version joins families, checks in with them, calls, rings while Porch is closed, and sends and plays messages. Alerts for new messages come in a later version.",
         style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }
