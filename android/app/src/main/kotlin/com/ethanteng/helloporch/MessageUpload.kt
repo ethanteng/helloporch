@@ -1,6 +1,7 @@
 package com.ethanteng.helloporch
 
 import com.ethanteng.helloporch.core.FamilyCredential
+import com.ethanteng.helloporch.core.FamilyService
 import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.MessageRecordingCheck
 import com.ethanteng.helloporch.core.MessageUploadTarget
@@ -22,7 +23,8 @@ class MessageRecording(val file: File, val mode: String, val contentType: String
 /**
  * Sends a recording as iOS's MessageUploader does: the server signs a one-time upload URL and the file goes straight to
  * storage, then the message is completed. A retry reuses the same message, so a dropped connection doesn't use up
- * another place in the queue, and an upload that already finished is only completed. Main thread only.
+ * another place in the queue, and an upload that already finished is only completed, even one whose answer was lost.
+ * Main thread only.
  */
 class MessageUpload {
     private class Pending(val file: File, val message: SentMessage, val target: MessageUploadTarget, var uploaded: Boolean = false)
@@ -61,9 +63,25 @@ class MessageUpload {
                 upload.target.headers.forEach { (name, value) -> request.header(name, value) }
                 client.newCall(request.build()).execute().use { it.code }
             }
-            if (status !in 200..299) throw FamilyServiceException("The upload didn't finish. Check the connection and try again.", status, "upload")
+            if (status !in 200..299) {
+                val refused = FamilyServiceException("The upload didn't finish. Check the connection and try again.", status, "upload")
+                // The signed URL never overwrites. A file that reached storage on an earlier try, whose answer was lost
+                // (a timeout, or the connection dropping), turns this one away, and the message only needs completing.
+                // The server completes it only if the file is there.
+                try {
+                    return complete(service, upload)
+                } catch (e: FamilyServiceException) {
+                    // It isn't: the upload failed, and the next try sends the file again.
+                    if (e.status == 409 && "upload didn't finish" in e.message) throw refused
+                    throw e
+                }
+            }
             upload.uploaded = true
         }
+        return complete(service, upload)
+    }
+
+    private suspend fun complete(service: FamilyService, upload: Pending): SentMessage {
         val sent = try {
             service.send("completeMessage", mapOf("messageID" to JsonPrimitive(upload.message.id))).message ?: upload.message
         } catch (e: FamilyServiceException) {
