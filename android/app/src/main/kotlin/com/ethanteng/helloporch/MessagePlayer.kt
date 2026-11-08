@@ -54,6 +54,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Plays waiting messages one after another until none are left or someone stops it, then shows and reads waiting texts
@@ -173,9 +174,15 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
         app.scope.launch {
             val other = runCatching { foreign?.await() }.getOrNull()
             if (ended || currentText?.id != text.id) return@launch
-            // Its own language's built-in voice when this tablet has one. Without one, the bedside's voice reads it, with an
-            // accent, rather than not at all. A reading that's cut off or fails otherwise isn't tried again in another voice.
-            val locale = other?.let(Locale::forLanguageTag)?.takeIf(app.speech::hasVoice)
+            val tag = other?.let(Locale::forLanguageTag)
+            // The engine starts in the background. Until it has, it has not said this language is missing, and the
+            // bedside's voice must not read the words in its place: that reports the text read. Without a voice, the
+            // bedside's voice reads it, with an accent, rather than not at all. A reading that's cut off or fails
+            // otherwise isn't tried again in another voice. If the engine still hasn't started, ask for this language
+            // and let speech try it once the engine is up.
+            val ownVoice = tag?.let { withTimeoutOrNull(SPEECH_ENGINE_WAIT) { app.speech.hasVoice(it) } }
+            if (ended || currentText?.id != text.id) return@launch
+            val locale = if (ownVoice == false) null else tag
             // A long text's natural reading gets longer to arrive than an announcement.
             announcer.speak(text.text, chime = false, textID = text.id, voiceLocale = locale, naturalWait = 8_000) { said ->
                 if (said) readAttachments(text) else unread(text)
@@ -235,6 +242,8 @@ class MessagePlayback(private val app: PorchApplication, messages: List<FamilyMe
 
     private companion object {
         const val TEXT_HOLD = 8_000L
+        /** How long to wait for the speech engine before deciding a text's language has no voice. */
+        const val SPEECH_ENGINE_WAIT = 5_000L
     }
 }
 

@@ -13,6 +13,7 @@ import com.ethanteng.helloporch.core.CallTone
 import java.io.File
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
@@ -32,6 +33,8 @@ class BedsideSpeech(context: Context) {
     private val folder = File(context.cacheDir, "PorchSpeech/spoken")
     /** null while the engine starts, then whether it did. */
     private var ready: Boolean? = null
+    /** Completes with [ready] once the engine has started, so a voice check can wait instead of guessing. */
+    private val started = CompletableDeferred<Boolean>()
     /** Sentences asked for while the engine starts, by ID and in order, so [stop] can take one back. */
     private val queued = linkedMapOf<String, () -> Unit>()
     /** Sentences being written, by ID, with what to do once they are. */
@@ -43,6 +46,8 @@ class BedsideSpeech(context: Context) {
             val starting = queued.values.toList()
             queued.clear()
             starting.forEach { it() }
+            // After this callback returns. A waiter that then speaks must not re-enter the engine from inside it.
+            if (!started.isCompleted) main.post { if (!started.isCompleted) started.complete(ready == true) }
         }
     }
 
@@ -66,8 +71,14 @@ class BedsideSpeech(context: Context) {
         if (voice != null) engine.setVoice(voice) == TextToSpeech.SUCCESS else engine.setLanguage(language.locale) >= TextToSpeech.LANG_AVAILABLE
     }
 
-    /** Whether this tablet's engine has a voice for `locale`. False until the engine has started. */
-    fun hasVoice(locale: Locale): Boolean = ready == true && engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE
+    /**
+     * Whether this tablet's engine has a voice for `locale`, once the engine has started. Suspends until it has.
+     * False when it failed to start, or it has no voice for `locale`. Main thread only.
+     */
+    suspend fun hasVoice(locale: Locale): Boolean {
+        if (!started.await()) return false
+        return engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE
+    }
 
     /** Says `text` in `locale`'s built-in voice, such as a text's words that Porch couldn't translate. */
     fun speak(text: String, locale: Locale, done: (Boolean) -> Unit): String =
