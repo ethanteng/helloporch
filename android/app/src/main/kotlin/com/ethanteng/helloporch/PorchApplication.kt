@@ -60,6 +60,8 @@ class PorchApplication : Application() {
     val systemCalls by lazy { SystemCalls(this) }
     /** The family's messages waiting on the bedside, kept downloaded so they play at once. */
     val messages by lazy { BedsideMessages(this) }
+    /** Messages the bedside recorded for family, kept until they're sent. */
+    val outbox by lazy { BedsideOutbox(this) }
     /** Text-to-speech for the bedside's announcements, started when the bedside first comes to the front so it's
      * ready by the first key press. */
     val speech by lazy { BedsideSpeech(this) }
@@ -156,6 +158,9 @@ class PorchApplication : Application() {
         } catch (error: Exception) {
             Log.w("Porch", "Couldn't update messages: ${error.message}")
         }
+        // Messages recorded for family go once Porch can reach the server, after a call rather than during one.
+        outbox.start()
+        outbox.send()
         try {
             val slots = CallSlots.load(settings, photos)
             device.credential(PorchExperience.BEDSIDE)?.let { FamilyPhotos.sync(this, state, it, slots) }
@@ -184,10 +189,11 @@ class PorchApplication : Application() {
     }
 
     /** What a tablet set up as a new Porch leaves behind of the household it was: its keypad, photos, call, display and
-     * message settings, its waiting messages, and the camera's part in attendance, as `PorchDevice.forgetBedsideHousehold`
-     * does on iOS. The voicemail outbox comes with phase 5's third part. Family pairings stay. */
+     * message settings, its waiting messages, the messages it recorded that haven't gone yet, and the camera's part in
+     * attendance, as `PorchDevice.forgetBedsideHousehold` does on iOS. Family pairings stay. */
     fun forgetBedsideHousehold() {
         messages.forget()
+        outbox.discardAll()
         CallSlots.forget(settings, photos)
         photos.familyMembers.prune(keeping = emptySet(), olderThan = Instant.MAX)
         CallPreferences.forget(settings)
