@@ -97,7 +97,14 @@
             android:foregroundServiceType="phoneCall|microphone" />
         <!-- Decline and Hang up on Porch's call notifications. -->
         <receiver android:name=".CallActionReceiver" android:exported="false" />
-        <!-- Call pushes from Firebase. -->
+        <!-- Call pushes from Firebase, and message notifications, which Firebase shows itself while Porch isn't in front:
+             with Porch's icon, on the messages channel unless the server names another (MessageAlerts). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher_monochrome" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="messages" />
         <service android:name=".PorchMessagingService" android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

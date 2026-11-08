@@ -56,6 +56,8 @@ class PorchApplication : Application() {
     val calls by lazy { CallCenter(this) }
     /** Ringing when Porch isn't open, from Firebase. */
     val push by lazy { PorchPush(this) }
+    /** Notifications for messages the bedside leaves a family phone. */
+    val messageAlerts by lazy { MessageAlerts(this) }
     /** A call ringing through a notification while Porch isn't on screen. */
     val systemCalls by lazy { SystemCalls(this) }
     /** The family's messages waiting on the bedside, kept downloaded so they play at once. */
@@ -127,6 +129,7 @@ class PorchApplication : Application() {
         // Cell2JackAttachedActivity's process can start before the tablet is unlocked, when nothing here can be read.
         if (Application.getProcessName().endsWith(Cell2JackAttachedActivity.processSuffix)) return
         CallNotifications.createChannels(this)
+        MessageAlerts.createChannel(this)
         // Porch checks in while it's open and tells each family when it closes. Push rings it for calls while it's
         // closed. A call in progress on a family phone keeps it checking in, so the call goes on with the phone locked.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -149,8 +152,10 @@ class PorchApplication : Application() {
         systemCalls.noteLinks(links)
         // A family joined or left, or a bedside set up: the households that ring this device change with it.
         push.register()
-        // Photos caregiver mode downloaded on a family phone don't stay.
-        if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this)
+        // A family's message notification goes once its messages are played.
+        messageAlerts.noteLinks(links)
+        // Photos caregiver mode downloaded on a family phone don't stay. This phone's own photo in each family does.
+        if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this, links)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
         // Messages download, and played ones are reported, even when the saved keypad can't be read.
         try {

@@ -70,8 +70,9 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     var caregiving by rememberSaveable { mutableStateOf<String?>(null) }
     var caregiverNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var about by rememberSaveable { mutableStateOf(false) }
-    // A family's messages, by device ID, and a message being recorded for one.
+    // A family's messages, by device ID, and a message being recorded for one, and this phone's name and photo in one.
     var thread by rememberSaveable { mutableStateOf<String?>(null) }
+    var profile by rememberSaveable { mutableStateOf<String?>(null) }
     var composing by rememberSaveable(stateSaver = composingSaver) { mutableStateOf<Composing?>(null) }
     // Joining or removing a family changes the list before any family has checked in.
     var changes by remember { mutableIntStateOf(0) }
@@ -85,7 +86,25 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     val open = link == null && !joining
     val composeFamily = composing?.let { c -> families.firstOrNull { it.deviceID == c.deviceID } }?.takeIf { open && caregiverFamily == null }
     val threadFamily = families.firstOrNull { it.deviceID == thread }?.takeIf { open && caregiverFamily == null && composeFamily == null }
-    val listing = caregiverFamily == null && composeFamily == null && threadFamily == null && !(link != null || joining || families.isEmpty())
+    val profileFamily = families.firstOrNull { it.deviceID == profile }?.takeIf { open && caregiverFamily == null && composeFamily == null && threadFamily == null }
+    // A tapped message notification opens that family's thread, as iOS opens it: what else was open closes first,
+    // caregiver mode, joining, and a message not yet sent included.
+    val notified = app.messageAlerts.opening
+    LaunchedEffect(notified, families) {
+        val id = notified ?: return@LaunchedEffect
+        if (families.any { it.deviceID == id }) {
+            composing = null
+            profile = null
+            about = false
+            if (caregiving != null) { RemoteCaregiverSession.shared.end(); caregiving = null }
+            joining = false
+            if (link != null) onLinkHandled()
+            thread = id
+        }
+        app.messageAlerts.opening = null
+    }
+    val listing = caregiverFamily == null && composeFamily == null && threadFamily == null && profileFamily == null &&
+        !(link != null || joining || families.isEmpty())
     SideEffect { onReady(listing || caregiverFamily != null || threadFamily != null) }
     // A call that didn't go through offers a message instead, as iOS does. Not once that family has left this phone,
     // removed it, or turned messages off: Leave a message would open a composer that can't send.
@@ -119,6 +138,10 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             onRecord = { name -> composing = Composing(threadFamily.deviceID, name, "message", startAudio = false) })
         return
     }
+    if (profileFamily != null) {
+        FamilyProfileScreen(app, profileFamily, links, onBack = { profile = null })
+        return
+    }
     // From the families, or the join screen, as long as no invitation is waiting.
     if (about && link == null) {
         BackHandler { about = false }
@@ -130,7 +153,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done,
                 onAbout = { about = true })
             else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ }, onAbout = { about = true },
-                onThread = { thread = it.deviceID }, onCompose = { family, name -> composing = Composing(family.deviceID, name, "message", startAudio = false) },
+                onThread = { thread = it.deviceID }, onProfile = { profile = it.deviceID }, onCompose = { family, name -> composing = Composing(family.deviceID, name, "message", startAudio = false) },
                 onCaregiver = { family ->
                     // Every visit starts with the PIN.
                     RemoteCaregiverSession.shared.end()
@@ -285,7 +308,7 @@ private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit
 
 @Composable
 private fun Families(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onJoinAnother: () -> Unit, onChanged: () -> Unit,
-    onAbout: () -> Unit, onThread: (FamilyCredential) -> Unit, onCompose: (FamilyCredential, String) -> Unit, onCaregiver: (FamilyCredential) -> Unit) {
+    onAbout: () -> Unit, onThread: (FamilyCredential) -> Unit, onProfile: (FamilyCredential) -> Unit, onCompose: (FamilyCredential, String) -> Unit, onCaregiver: (FamilyCredential) -> Unit) {
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -355,12 +378,14 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 if (state?.me?.caregiver == true && link.accessRemoved != true) {
                     OutlinedButton(onClick = { onCaregiver(family) }, Modifier.fillMaxWidth()) { Text("Caregiver mode") }
                 }
+                // What the bedside shows for this phone, and whether its video calls start with the camera on.
+                if (state != null && link.accessRemoved != true) TextButton(onClick = { onProfile(family) }) { Text("Your name and photo") }
                 if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
                 else TextButton(onClick = { leaveError = null; leaving = family.deviceID }) { Text("Leave this family") }
             }
         }
     }
-    Text("This test version joins families, checks in with them, calls, rings while Porch is closed, and sends and plays messages. Alerts for new messages come in a later version.",
+    Text("This test version joins families, checks in with them, calls, rings while Porch is closed, sends and plays messages, and notifies you of new ones.",
         style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }
