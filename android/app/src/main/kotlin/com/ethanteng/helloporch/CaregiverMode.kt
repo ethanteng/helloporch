@@ -60,10 +60,12 @@ import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyAdminState
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyLinks
+import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.FamilyPerson
 import com.ethanteng.helloporch.core.FamilyResponse
 import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.FamilySnapshot
+import com.ethanteng.helloporch.core.FamilyText
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.PorchNumber
 import com.ethanteng.helloporch.core.RemoteCaregiverSession
@@ -114,6 +116,13 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     val myID: String? get() = remote?.deviceID
     private var remoteState by mutableStateOf(state)
     private var locked = false
+    /** Releasing or removing a message answers with `admin` and no household snapshot, so the bedside's next check-in is
+     * the first copy that would show it. Until then, these keep the queue the action just changed. A check-in that
+     * still has the old copy, because it was already in flight, doesn't put a removed message back. */
+    private var hiddenMessageIDs by mutableStateOf(emptySet<String>())
+    private var releasedMessageIDs by mutableStateOf(emptySet<String>())
+    private var hiddenTextIDs by mutableStateOf(emptySet<String>())
+    private var releasedTextIDs by mutableStateOf(emptySet<String>())
     /** One caregiver request at a time. A page refresh and a change can otherwise finish out of order, and the older
      * household would replace the one the change just saved. A family phone keeps that copy: its check-ins don't. */
     private val requests = Mutex()
@@ -186,6 +195,7 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
             app.service(credential).send(action, values, pin = code).also { response ->
                 app.coordinator.update(response)
                 if (remote != null) response.admin?.let { remoteState = it; if (!locked) RemoteCaregiverSession.shared.household = it }
+                else noteQueueChange(action, values)
             }
         } catch (e: FamilyServiceException) {
             // A changed PIN, withdrawn approval or too many wrong PINs ends a phone's caregiver mode.
@@ -235,7 +245,34 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     /** The household as caregiver mode sees it: who's in the family and how the household is set. */
     fun state(links: FamilyLinks): FamilyAdminState? = if (remote != null) remoteState else links.state?.let {
         FamilyAdminState(it.householdName, it.dropInEnabled, it.people.filter { person -> person.role == PorchExperience.FAMILY },
-            it.messagesEnabled, it.messages, it.texts, it.phoneDropIns, it.invitations, it.callScreening, it.shareAttendance)
+            it.messagesEnabled, waitingMessages(it.messages), waitingTexts(it.texts), it.phoneDropIns, it.invitations, it.callScreening, it.shareAttendance)
+    }
+
+    /** `releaseMessage` and `removeMessage` (and the text actions) don't send a new snapshot. Remember the one id the
+     * action changed, and show that until check-ins do too. */
+    private fun noteQueueChange(action: String, values: Map<String, JsonElement>) {
+        val id = (values["messageID"] ?: values["textID"]) as? JsonPrimitive
+        val queueID = id?.takeIf { it.isString }?.content ?: return
+        when (action) {
+            "removeMessage" -> hiddenMessageIDs = hiddenMessageIDs + queueID
+            "releaseMessage" -> releasedMessageIDs = releasedMessageIDs + queueID
+            "removeText" -> hiddenTextIDs = hiddenTextIDs + queueID
+            "releaseText" -> releasedTextIDs = releasedTextIDs + queueID
+        }
+    }
+
+    private fun waitingMessages(messages: List<FamilyMessage>?): List<FamilyMessage>? {
+        if (messages == null || (hiddenMessageIDs.isEmpty() && releasedMessageIDs.isEmpty())) return messages
+        return messages.filter { it.id !in hiddenMessageIDs }.map { message ->
+            if (message.id in releasedMessageIDs && message.held == true) message.copy(held = false) else message
+        }
+    }
+
+    private fun waitingTexts(texts: List<FamilyText>?): List<FamilyText>? {
+        if (texts == null || (hiddenTextIDs.isEmpty() && releasedTextIDs.isEmpty())) return texts
+        return texts.filter { it.id !in hiddenTextIDs }.map { text ->
+            if (text.id in releasedTextIDs && text.held) text.copy(held = false) else text
+        }
     }
 
     /** The household's check-in as this device last heard it. A phone in several families reads the one caregiver mode
