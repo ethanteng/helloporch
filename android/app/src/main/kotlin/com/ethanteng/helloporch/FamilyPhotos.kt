@@ -11,8 +11,10 @@ import androidx.compose.runtime.setValue
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.ContactPhotoStore
 import com.ethanteng.helloporch.core.FamilyCredential
+import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.FamilySnapshot
+import com.ethanteng.helloporch.core.PorchExperience
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
@@ -78,15 +80,20 @@ object FamilyPhotos {
         load(app, id, mapOf("memberID" to JsonPrimitive(memberID)), credential, "caregiverProfilePhoto", pin)
 
     /**
-     * With every family phone check-in: a phone keeps no one's photo yet, so ones caregiver mode downloaded are deleted
-     * a day after they were saved, as iOS's sync deletes them. Hourly, so the folder isn't read on every check-in.
+     * With every family phone check-in: photos caregiver mode downloaded are deleted a day after they were saved.
+     * This phone's own photo in each family stays, as iOS's sync keeps `me.profile.photoID` and the photo Porch shows.
+     * Hourly, so the folder isn't read on every check-in.
      */
-    fun pruneOnFamilyPhone(app: PorchApplication) {
+    fun pruneOnFamilyPhone(app: PorchApplication, links: FamilyLinks) {
         val now = SystemClock.elapsedRealtime()
         if (prunedAt != 0L && now - prunedAt < 3_600_000) return
         prunedAt = now
-        kept = null
-        app.photos.familyMembers.prune(keeping = emptySet())
+        val keep = links.links.flatMap { link ->
+            val me = link.state?.me?.takeIf { it.role == PorchExperience.FAMILY } ?: return@flatMap emptyList()
+            listOfNotNull(me.profile?.photoID, me.photoID)
+        }.toSet()
+        kept = keep
+        app.photos.familyMembers.prune(keeping = keep)
     }
 
     /** Starts downloading a photo unless it's already here, downloading, or failed in the last minute. */

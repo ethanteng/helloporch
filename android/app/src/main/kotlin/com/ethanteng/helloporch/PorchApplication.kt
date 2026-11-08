@@ -154,8 +154,8 @@ class PorchApplication : Application() {
         push.register()
         // A family's message notification goes once its messages are played.
         messageAlerts.noteLinks(links)
-        // Photos caregiver mode downloaded on a family phone don't stay.
-        if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this)
+        // Photos caregiver mode downloaded on a family phone don't stay. This phone's own photo in each family does.
+        if (links.state?.me?.role == PorchExperience.FAMILY) FamilyPhotos.pruneOnFamilyPhone(this, links)
         val state = links.state?.takeIf { it.me.role == PorchExperience.BEDSIDE } ?: return
         // Messages download, and played ones are reported, even when the saved keypad can't be read.
         try {
