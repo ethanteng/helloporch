@@ -124,9 +124,11 @@ class BedsideMessageRecorder(private val context: Context, video: Boolean) {
                 val provider = ProcessCameraProvider.awaitInstance(context)
                 if (discarding) return
                 bound = provider
-                // About the size of a family phone's video message, so two minutes stays well under the limit.
+                // About the size of a family phone's video message. A camera without SD takes the next size down, or
+                // else up, and the bitrate keeps two minutes at any size well under the server's 100 MB.
                 val recorder = Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.SD, FallbackStrategy.higherQualityOrLowerThan(Quality.SD))).build()
+                    .setQualitySelector(QualitySelector.from(Quality.SD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
+                    .setTargetVideoEncodingBitRate(VIDEO_BITRATE).build()
                 val capture = VideoCapture.withOutput(recorder)
                 camera.resume()
                 provider.unbindAll()
@@ -213,6 +215,12 @@ class BedsideMessageRecorder(private val context: Context, video: Boolean) {
         else finish(runCatching { audio?.stop() }.isSuccess)
     }
 
+    /**
+     * Lets go of the camera and the microphone now, for a call that's taking over, without waiting for the recording to
+     * finish. A recording that still finishes goes to [onFinish] as usual.
+     */
+    fun letGo() = release()
+
     /** Throws the recording away, whether or not it started. */
     fun cancel() {
         discarding = true
@@ -280,6 +288,8 @@ class BedsideMessageRecorder(private val context: Context, video: Boolean) {
     }
 
     private companion object {
+        /** 2 Mbps: about 30 MB for two minutes. */
+        const val VIDEO_BITRATE = 2_000_000
         val completeFiles = setOf(VideoRecordEvent.Finalize.ERROR_NONE, VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED,
             VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED, VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE)
     }
@@ -454,12 +464,14 @@ class BedsideVoicemail(
             Phase.RECORDING, Phase.STOPPING -> {
                 closing = then
                 if (phase == Phase.RECORDING) finish(send = true)
-                // The call mustn't wait on a recorder that never reports back.
+                // The call mustn't wait on a recorder that never reports back, or find the camera and microphone still
+                // held. A recording that finishes after this still goes to the outbox.
                 scope.launch {
                     delay(2_000)
                     val next = closing ?: return@launch
                     closing = null
                     phase = Phase.DONE
+                    recorder.letGo()
                     close(next)
                 }
             }
