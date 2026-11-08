@@ -411,12 +411,21 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     val share = admin.state(links)?.shareAttendance
     val context = LocalContext.current
     var camera by remember { mutableStateOf(BedsideAttendance.cameraEnabled(app.settings)) }
+    val refused = "Allow camera access in Settings → Apps → Porch → Permissions to tell family when someone is at the tablet."
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             BedsideAttendance.setCameraEnabled(true, app.settings)
         } else {
             camera = false
-            admin.error = "Allow camera access in Settings → Apps → Porch → Permissions to tell family when someone is at the tablet."
+            admin.error = refused
+        }
+    }
+    // Camera access taken away in Settings since the switch was turned on: the clock can't look, so the switch says so.
+    LaunchedEffect(Unit) {
+        if (admin.onBedside && camera && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            camera = false
+            BedsideAttendance.setCameraEnabled(false, app.settings)
+            admin.error = refused
         }
     }
     CaregiverGroup {

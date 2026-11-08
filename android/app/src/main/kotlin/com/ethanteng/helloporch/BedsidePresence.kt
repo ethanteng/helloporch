@@ -184,9 +184,9 @@ class BedsidePresence(private val context: Context) {
         }
     }
 
-    /** [stopThen], for a coroutine: returns once the camera is free. A caller that gives up meanwhile, such as a video
-     * call hung up while the camera is still closing, or a message interrupted before the beep, must not be resumed:
-     * that throws and takes the app down. The camera still closes. */
+    /** [stopThen], for a coroutine: returns once the camera is free. A caller that gave up meanwhile, such as a video
+     * call hung up while the camera is still closing, or a message interrupted before the beep, isn't resumed; the
+     * camera still closes. */
     suspend fun release() = suspendCancellableCoroutine { continuation ->
         stopThen { if (continuation.isActive) continuation.resume(Unit) }
     }
