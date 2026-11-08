@@ -90,6 +90,8 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     var error by mutableStateOf<String?>(null)
     /** Sent: the screen says so, then closes. */
     var sent by mutableStateOf(false); private set
+    /** The front camera has finished opening, so Start recording can begin. */
+    var cameraReady by mutableStateOf(false); private set
     var recorder: MessageRecorder? = null; private set
     private val upload = MessageUpload()
     private val beep = TonePlayer(AudioAttributes.USAGE_MEDIA)
@@ -141,18 +143,21 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
         if (phase != Phase.IDLE) return
         val recorder = MessageRecorder(app, video = true, keep = { seconds, _ -> seconds >= 1 })
         this.recorder = recorder
+        cameraReady = false
         phase = Phase.CAMERA
         viewModelScope.launch {
             try {
                 recorder.prepare()
                 // The camera couldn't be used, so this would record audio.
                 if (!recorder.video) throw MessageRecorder.RecorderException()
+                if (phase == Phase.CAMERA && this@MessageComposer.recorder === recorder) cameraReady = true
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 recorder.cancel()
                 if (this@MessageComposer.recorder === recorder) {
                     this@MessageComposer.recorder = null
+                    cameraReady = false
                     phase = Phase.IDLE
                     error = "Couldn't open the camera. Try again, or record audio."
                 }
@@ -162,7 +167,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
 
     fun startVideo() {
         val recorder = recorder ?: return
-        if (phase != Phase.CAMERA) return
+        if (phase != Phase.CAMERA || !cameraReady) return
         recorder.onFinish = ::recorded
         if (!recorder.start()) { error = "Couldn't start recording. Try again."; return }
         phase = Phase.RECORDING_VIDEO
@@ -196,6 +201,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
         beep.stop()
         recorder?.cancel()
         recorder = null
+        cameraReady = false
         recording?.file?.delete()
         recording = null
         poster = null
@@ -275,9 +281,15 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
         composer.screenVisibility(true)
         onDispose { if (activity?.isChangingConfigurations != true) composer.screenVisibility(false) }
     }
-    // Porch leaving the screen stops a recording, which keeps what was recorded.
+    // Porch leaving the screen stops a recording, which keeps what was recorded, and closes a camera preview that
+    // hasn't started. Turning the phone isn't leaving.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        if (activity?.isChangingConfigurations != true && composer.phase in setOf(MessageComposer.Phase.RECORDING_AUDIO, MessageComposer.Phase.RECORDING_VIDEO)) composer.stop()
+        if (activity?.isChangingConfigurations == true) return@LifecycleEventEffect
+        when (composer.phase) {
+            MessageComposer.Phase.CAMERA -> composer.discard()
+            MessageComposer.Phase.RECORDING_AUDIO, MessageComposer.Phase.RECORDING_VIDEO -> composer.stop()
+            else -> {}
+        }
     }
     val close = { composer.discard(); onDone() }
     BackHandler {
@@ -386,9 +398,13 @@ private fun CameraRecording(composer: MessageComposer, recipient: String) {
                     Text("Cancel", style = MaterialTheme.typography.titleMedium)
                 }
                 Button(onClick = if (recording) composer::stop else composer::startVideo, Modifier.weight(1f).heightIn(min = 56.dp),
-                    enabled = composer.recorder != null,
+                    enabled = composer.recorder != null && (recording || composer.cameraReady),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0.68f, 0.19f, 0.19f), contentColor = Color.White)) {
-                    Text(if (recording) "Stop recording" else "Start recording", style = MaterialTheme.typography.titleMedium)
+                    Text(when {
+                        recording -> "Stop recording"
+                        composer.cameraReady -> "Start recording"
+                        else -> "Starting camera…"
+                    }, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
