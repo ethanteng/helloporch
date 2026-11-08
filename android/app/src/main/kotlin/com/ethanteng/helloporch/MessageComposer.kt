@@ -94,6 +94,8 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     private val upload = MessageUpload()
     private val beep = TonePlayer(AudioAttributes.USAGE_MEDIA)
     private var timer: Job? = null
+    /** The beep and the pause before audio starts recording. */
+    private var starting: Job? = null
     private var family: FamilyCredential? = null
     private var kind = "message"
 
@@ -111,7 +113,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
         this.recorder = recorder
         phase = Phase.RECORDING_AUDIO
         timerText = ""
-        viewModelScope.launch {
+        starting = viewModelScope.launch {
             try {
                 recorder.prepare()
                 recorder.onFinish = ::recorded
@@ -167,7 +169,10 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     /** Stops recording; what was recorded comes back to play, send or record again. */
     fun stop() {
         timer?.cancel()
-        recorder?.stop()
+        val recorder = recorder ?: return
+        // Stopped during the beep, before recording began: nothing was recorded, and it mustn't start after all.
+        if (!recorder.isRecording) { discard(); return }
+        recorder.stop()
     }
 
     /** The screen said it was sent; a composer opened later starts fresh. */
@@ -177,6 +182,7 @@ class MessageComposer(application: Application) : AndroidViewModel(application) 
     fun discard() {
         if (phase == Phase.SENDING) return
         timer?.cancel()
+        starting?.cancel()
         beep.stop()
         recorder?.cancel()
         recorder = null

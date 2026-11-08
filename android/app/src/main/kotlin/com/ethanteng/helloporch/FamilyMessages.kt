@@ -68,6 +68,7 @@ import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
@@ -171,20 +172,29 @@ fun MessageThreadScreen(app: PorchApplication, family: FamilyCredential, links: 
     val name = state?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }?.name ?: loadedName ?: state?.householdName ?: "your loved one"
     // Again whenever the bedside leaves a new message, or one is played, unsent or refreshed.
     LaunchedEffect(state?.newMessages, loads) {
-        try {
-            val response = app.service(family).send("listMessages")
-            val received = response.received.orEmpty()
-            received.firstOrNull()?.fromName?.let { loadedName = it }
-            entries = FamilyMessageThread.entries(response.messages.orEmpty(), received)
-            loadError = null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Messages already on screen stay; only a refresh someone asked for says it failed.
-            val reason = e.message ?: "Couldn't load messages. Check the connection and try again."
-            if (entries == null) loadError = reason else if (reportFailure) error = reason
+        // A load that fails is tried again, after 10 seconds and then longer, so a new message that arrived during a
+        // dropped connection still shows without a refresh.
+        var wait = 10_000L
+        while (true) {
+            try {
+                val response = app.service(family).send("listMessages")
+                val received = response.received.orEmpty()
+                received.firstOrNull()?.fromName?.let { loadedName = it }
+                entries = FamilyMessageThread.entries(response.messages.orEmpty(), received)
+                loadError = null
+                reportFailure = false
+                return@LaunchedEffect
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Messages already on screen stay; only a refresh someone asked for says it failed.
+                val reason = e.message ?: "Couldn't load messages. Check the connection and try again."
+                if (entries == null) loadError = reason else if (reportFailure) error = reason
+                reportFailure = false
+            }
+            delay(wait)
+            wait = minOf(wait * 2, 60_000L)
         }
-        reportFailure = false
     }
     // Missing preview frames, one at a time; each is kept, so this happens once per video.
     LaunchedEffect(entries) {
