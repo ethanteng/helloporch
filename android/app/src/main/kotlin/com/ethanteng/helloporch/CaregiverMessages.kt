@@ -256,7 +256,11 @@ private fun MessagePreview(preview: Preview, onClose: () -> Unit) {
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (activity?.isChangingConfigurations != true) player.pause() }
+    // Leaving the app closes it. Pausing instead left the dialog saying "Playing…" with no sound when Porch came back.
+    // Turning the tablet recreates the activity, which is still this screen, so that isn't leaving.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        if (activity?.isChangingConfigurations != true) onClose() else player.pause()
+    }
     AlertDialog(onDismissRequest = onClose,
         title = { Text(preview.title) },
         text = {
