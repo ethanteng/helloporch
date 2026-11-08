@@ -79,6 +79,8 @@ class MessageRecorder(
     private var finished = false
 
     val isRecording: Boolean get() = startedAt != 0L
+    /** True once recording has stopped, including while a video's picture and sound are put into one file. */
+    val isFinished: Boolean get() = finished
     val elapsed: Double get() = if (startedAt == 0L) 0.0 else (SystemClock.elapsedRealtime() - startedAt) / 1_000.0
 
     class RecorderException : Exception("Couldn't record a message.")

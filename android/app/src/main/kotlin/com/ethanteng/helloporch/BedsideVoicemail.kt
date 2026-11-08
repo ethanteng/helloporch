@@ -152,6 +152,8 @@ class BedsideVoicemail(
     }
 
     private fun updateTimer() {
+        // Once it has stopped, elapsed is 0 while a video's picture and sound are put together.
+        if (recorder.isFinished) return
         val seconds = minOf(MessageRecordingCheck.MAX_SECONDS, recorder.elapsed).toInt()
         val limit = MessageRecordingCheck.MAX_SECONDS.toInt()
         timerText = "%d:%02d / %d:%02d".format(seconds / 60, seconds % 60, limit / 60, limit % 60)
