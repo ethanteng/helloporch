@@ -33,7 +33,9 @@ echo "Building versionCode $version_code ($version_name)."
 
 bundle=app/build/outputs/bundle/release/app-release.aab
 # A release build without the key is left unsigned, which Play would refuse anyway; say why here instead.
-if ! unzip -l "$bundle" | grep -qE ' META-INF/[^/]+\.(RSA|EC|DSA)$'; then echo "$bundle isn't signed with the upload key" >&2; exit 1; fi
+# The whole listing first: grep -q stops at its first match, and under pipefail unzip's broken pipe would fail the check.
+listing="$(unzip -l "$bundle")"
+if ! grep -qE ' META-INF/[^/]+\.(RSA|EC|DSA)$' <<<"$listing"; then echo "$bundle isn't signed with the upload key" >&2; exit 1; fi
 
 if [[ "$verify_only" == true ]]; then
   node scripts/play.mjs upload "$bundle" --notes "$notes" --verify-only
