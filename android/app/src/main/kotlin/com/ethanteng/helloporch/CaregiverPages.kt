@@ -414,6 +414,8 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     val refused = "Allow camera access in Settings → Apps → Porch → Permissions to tell family when someone is at the tablet."
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
+            // The activity may have been recreated while Android's question was up, which drops the switch's own state.
+            camera = true
             BedsideAttendance.setCameraEnabled(true, app.settings)
         } else {
             camera = false
@@ -421,13 +423,16 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
         }
     }
     // Camera access taken away in Settings since the switch was turned on: the clock can't look, so the switch says so.
-    LaunchedEffect(Unit) {
+    // Opening Privacy checks, and so does coming back to it, such as after turning access off in Settings.
+    fun cameraAccessTakenAway() {
         if (admin.onBedside && camera && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             camera = false
             BedsideAttendance.setCameraEnabled(false, app.settings)
             admin.error = refused
         }
     }
+    LaunchedEffect(Unit) { cameraAccessTakenAway() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { cameraAccessTakenAway() }
     CaregiverGroup {
         ToggleRow("Show family when someone is at the ${bedsideDevice(admin.snapshot(links))}", share == true,
             onChange = { admin.perform("setShareAttendance", mapOf("enabled" to JsonPrimitive(it))) },
