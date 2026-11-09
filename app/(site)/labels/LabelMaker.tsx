@@ -8,7 +8,7 @@ import styles from "./labels.module.css";
 
 const blankContact: Contact = { name: "", photo: null };
 const defaultDimensions = { width: Number(DEFAULT_WIDTH), height: Number(DEFAULT_HEIGHT) };
-const acceptImages = "image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.heic,.heif";
+const acceptImages = "image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif";
 
 type IconName = "photo" | "download" | "lock" | "chevron";
 function Icon({ name }: { name: IconName }) {

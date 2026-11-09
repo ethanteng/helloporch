@@ -36,7 +36,7 @@ export function canvasContext(canvas: HTMLCanvasElement) {
 
 export async function readPhoto(file: File): Promise<Photo> {
   if (file.size > MAX_IMAGE_BYTES) throw new Error("This photo is over 20 MB. Choose a smaller image.");
-  const supported = /^image\/(jpeg|png|webp|avif|heic|heif)$/i.test(file.type);
+  const supported = /^image\/(jpe?g|png|webp|avif|heic|heif)$/i.test(file.type);
   const recognizedExtension = /\.(jpe?g|png|webp|avif|heic|heif)$/i.test(file.name);
   if (!supported && !(recognizedExtension && (!file.type || file.type === "application/octet-stream"))) {
     throw new Error("Choose an image file, such as a JPG, PNG, or WebP.");
