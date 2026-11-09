@@ -169,13 +169,18 @@
   color: var(--muted);
 }
 
+/* Two columns that read down the left, then down the right. */
 .contents ol {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 32px;
+  columns: 2;
+  column-gap: 48px;
   margin: 0;
   padding-left: 26px;
   font: 400 17px / 1.5 var(--sans);
+}
+
+.contents li {
+  margin-bottom: 8px;
+  break-inside: avoid;
 }
 
 .contents li::marker {
@@ -389,7 +394,7 @@
   }
 
   .contents ol {
-    grid-template-columns: 1fr;
+    columns: 1;
   }
 
   .partHead {
