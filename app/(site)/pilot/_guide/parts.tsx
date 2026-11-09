@@ -1,13 +1,12 @@
 import Image from "next/image";
-import Link from "next/link";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 import styles from "./guide.module.css";
 
-// The pilot's getting-started guides. Nothing links to them: I send each invited family the one for their tablet, so
-// they stay out of search and the sitemap, like the pricing preview.
+// The pilot's guides: getting started on iOS or Android, and every feature. Nothing on the site links to them: I send
+// them to invited families, so they stay out of search and the sitemap, like the pricing preview.
 export function guideMetadata(title: string, description: string): Metadata {
   return { title, description, robots: { index: false, follow: false } };
 }
@@ -19,15 +18,15 @@ type GuideProps = {
   eyebrow: string;
   title: ReactNode;
   lede: ReactNode;
-  other: { href: string; label: string };
-  kit: KitPart[];
-  kitIntro: ReactNode;
-  ready: ReactNode[];
+  /** A line under the lede, such as a link to the other guides. */
+  aside?: ReactNode;
+  /** The parts to have ready, for a getting-started guide. */
+  kit?: { intro: ReactNode; parts: KitPart[]; ready: ReactNode[] };
   parts: GuidePart[];
 };
 
 /** A whole guide: the hero, what to have ready, a contents list and the numbered parts. */
-export function Guide({ eyebrow, title, lede, other, kit, kitIntro, ready, parts }: GuideProps) {
+export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
   return (
     <div className={`page ${styles.page}`}>
       <a href="#guide" className={styles.skip}>Skip to the guide</a>
@@ -38,16 +37,14 @@ export function Guide({ eyebrow, title, lede, other, kit, kitIntro, ready, parts
           <p className={styles.eyebrow}>{eyebrow}</p>
           <h1 className={styles.title}>{title}</h1>
           <div className={styles.lede}>{lede}</div>
-          <p className={styles.other}>
-            Using the other kind? <Link href={other.href}>{other.label}</Link>
-          </p>
+          {aside && <p className={styles.other}>{aside}</p>}
         </header>
 
-        <section className={styles.card} aria-labelledby="kit-title">
+        {kit && <section className={styles.card} aria-labelledby="kit-title">
           <h2 id="kit-title">What you’ll need</h2>
-          <p>{kitIntro}</p>
+          <p>{kit.intro}</p>
           <ul className={styles.kit}>
-            {kit.map((part) => (
+            {kit.parts.map((part) => (
               <li key={part.name}>
                 <span className={styles.kitPhoto}>
                   <Image src={part.photo} alt="" fill sizes="(max-width: 700px) 45vw, 230px" />
@@ -59,9 +56,9 @@ export function Guide({ eyebrow, title, lede, other, kit, kitIntro, ready, parts
           </ul>
           <h3 className={styles.readyTitle}>Have these ready, too</h3>
           <ul className={styles.ready}>
-            {ready.map((item, i) => <li key={i}>{item}</li>)}
+            {kit.ready.map((item, i) => <li key={i}>{item}</li>)}
           </ul>
-        </section>
+        </section>}
 
         <nav className={`${styles.column} ${styles.contents}`} aria-labelledby="contents-title">
           <h2 id="contents-title">In this guide</h2>
@@ -109,6 +106,63 @@ export function Contact() {
 /** My email address, as a link. */
 export function Email() {
   return <a href={`mailto:${email}`}>{email}</a>;
+}
+
+/** Where to tap in caregiver mode, such as Calls → Block unknown callers. */
+export function Path({ steps }: { steps: ReactNode[] }) {
+  return (
+    <span className={styles.path}>
+      {steps.map((step, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <>
+              <span className={styles.pathArrow} aria-hidden="true">→</span>
+              <span className={styles.srOnly}>, then </span>
+            </>
+          )}
+          <UI>{step}</UI>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/** Every setting's out-of-the-box value, and where it's changed. */
+export function Defaults({ rows }: { rows: [feature: ReactNode, value: ReactNode, where: ReactNode][] }) {
+  return (
+    <table className={styles.defaults}>
+      <thead>
+        <tr>
+          <th scope="col">Feature</th>
+          <th scope="col">Out of the box</th>
+          <th scope="col">Change it in caregiver mode</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(([feature, value, where], i) => (
+          <tr key={i}>
+            <th scope="row">{feature}</th>
+            <td data-label="Out of the box">{value}</td>
+            <td data-label="Change it">{where}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Where a feature is switched on or changed, its default, and how Android differs: one row each. */
+export function Setting({ rows }: { rows: [label: string, value: ReactNode][] }) {
+  return (
+    <dl className={styles.setting}>
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /** A button, screen title or switch, written exactly as Porch shows it. */

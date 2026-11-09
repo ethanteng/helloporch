@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Chain, Contact, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
 
 export const metadata = guideMetadata(
@@ -423,26 +424,32 @@ const parts: GuidePart[] = [
     id: "everyday",
     title: "How your loved one uses Porch",
     body: (
-      <ul>
-        <li>
-          <strong>To call someone,</strong> lift the receiver and press their key. Or tap <UI>Call someone</UI> on the
-          screen.
-        </li>
-        <li>
-          <strong>To answer,</strong> press 0 on the phone, or tap the answer button. To decline, tap{" "}
-          <UI>Decline</UI> on the screen.
-        </li>
-        <li>
-          <strong>To hang up,</strong> put the receiver back, or press 0.
-        </li>
-        <li>
-          <strong>Messages</strong> from family wait on the iPad until your loved one plays them.
-        </li>
-        <li>
-          <strong>Family</strong> can call, drop in if you allowed it, and send video or voice messages from their
-          phones.
-        </li>
-      </ul>
+      <>
+        <ul>
+          <li>
+            <strong>To call someone,</strong> lift the receiver and press their key. Or tap <UI>Call someone</UI> on the
+            screen.
+          </li>
+          <li>
+            <strong>To answer,</strong> press 0 on the phone, or tap the answer button. To decline, tap{" "}
+            <UI>Decline</UI> on the screen.
+          </li>
+          <li>
+            <strong>To hang up,</strong> put the receiver back, or press 0.
+          </li>
+          <li>
+            <strong>Messages</strong> from family wait on the iPad until your loved one plays them.
+          </li>
+          <li>
+            <strong>Family</strong> can call, drop in if you allowed it, and send video or voice messages from their
+            phones.
+          </li>
+        </ul>
+        <p>
+          For every feature, what it does out of the box and how to change it, see{" "}
+          <Link href="/pilot/features">Every Porch feature</Link>.
+        </p>
+      </>
     ),
   },
   {
@@ -570,15 +577,17 @@ export default function IOSGuide() {
           family calling from their own phones.
         </p>
       }
-      other={{ href: "/pilot/android", label: "The Android guide" }}
-      kitIntro="On an iPad, the phone also goes through the Porch phone adapter, a small board I set up, test and send you."
-      kit={kit}
-      ready={[
-        "Wi-Fi where your loved one lives, and its password.",
-        "Your private setup link, from me.",
-        "Your own iPhone to pair as the caregiver’s phone. An Android phone works too.",
-        "A few photos of the people your loved one calls most, for their keys.",
-      ]}
+      aside={<>Using the other kind? <Link href="/pilot/android">The Android guide</Link></>}
+      kit={{
+        intro: "On an iPad, the phone also goes through the Porch phone adapter, a small board I set up, test and send you.",
+        parts: kit,
+        ready: [
+          "Wi-Fi where your loved one lives, and its password.",
+          "Your private setup link, from me.",
+          "Your own iPhone to pair as the caregiver’s phone. An Android phone works too.",
+          "A few photos of the people your loved one calls most, for their keys.",
+        ],
+      }}
       parts={parts}
     />
   );
