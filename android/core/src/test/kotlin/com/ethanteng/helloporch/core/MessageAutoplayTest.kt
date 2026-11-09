@@ -51,4 +51,24 @@ class MessageAutoplayTest {
         assertFalse(trigger.observe(faceHeight = 0.25, time = 20.0)); assertFalse(trigger.observe(faceHeight = 0.25, time = 21.0))
         assertTrue(trigger.observe(faceHeight = 0.25, time = 22.0))
     }
+
+    @Test fun aSnoozeHoldsBackWhatWasWaitingForHalfAnHour() {
+        assertEquals(null, AutoplaySnooze.of(emptyList(), now = 100.0))
+        val snooze = AutoplaySnooze.of(listOf("a", "b"), now = 100.0)!!
+        assertEquals(100.0 + 30 * 60, snooze.until)
+        assertTrue(snooze.holds(listOf("a", "b"), now = 200.0))
+        // Played meanwhile, so fewer are waiting: still held back.
+        assertTrue(snooze.holds(listOf("b"), now = 200.0))
+        // Something new arrived, so it can start by itself.
+        assertFalse(snooze.holds(listOf("a", "c"), now = 200.0))
+        assertFalse(snooze.holds(listOf("a", "b"), now = 100.0 + 30 * 60))
+    }
+
+    @Test fun theNoticeSaysWhatsReadyFirstThenTheInboxsCount() {
+        assertEquals(emptyList(), MessageAutoplay.noticeCounts(total = 0, ready = 0))
+        assertEquals(listOf(1), MessageAutoplay.noticeCounts(total = 1, ready = 1))
+        assertEquals(listOf(3), MessageAutoplay.noticeCounts(total = 3, ready = 3))
+        assertEquals(listOf(2, 3), MessageAutoplay.noticeCounts(total = 3, ready = 2))
+        assertEquals(listOf(3), MessageAutoplay.noticeCounts(total = 3, ready = 0))
+    }
 }

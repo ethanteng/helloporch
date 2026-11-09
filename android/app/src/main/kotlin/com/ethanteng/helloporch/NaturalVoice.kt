@@ -4,6 +4,7 @@ import android.os.SystemClock
 import com.ethanteng.helloporch.core.BedsideLanguage
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilySnapshot
+import com.ethanteng.helloporch.core.MessageAutoplay
 import com.ethanteng.helloporch.core.PorchExperience
 import java.io.File
 import java.security.MessageDigest
@@ -58,7 +59,8 @@ object NaturalVoice {
 
     /**
      * Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone who may drop
-     * in, who it's calling for everyone it can call, who each waiting message is from, and each waiting text. The
+     * in, who it's calling for everyone it can call, how many messages are waiting, for presence autoplay's notice, who each
+     * waiting message is from, and each waiting text. The
      * voicemail recorder's prompts come with their part of phase 5.
      */
     fun prefetch(app: PorchApplication, state: FamilySnapshot, slots: CallSlots) {
@@ -83,8 +85,13 @@ object NaturalVoice {
         /** A text's words, read with its ID: they can be longer than an announcement. */
         val words = mutableListOf<Pair<String, String>>()
         if (state.messagesEnabled != false) {
-            for (message in state.messages.orEmpty().filter { it.held != true }) texts += BedsideMessages.announcement(app, message, slots)
-            for (text in state.texts.orEmpty().filter { !it.held }) texts += BedsideMessages.textAnnouncement(app, text.from, text.sentAt, slots)
+            val waiting = state.messages.orEmpty().filter { it.held != true }
+            val waitingTexts = state.texts.orEmpty().filter { !it.held }
+            // Presence autoplay's notice, as iOS has it ready whether or not autoplay is on, so the first one after a
+            // caregiver turns it on is in the natural voice too. Texts count with the messages there.
+            for (count in MessageAutoplay.noticeCounts(waiting.size + waitingTexts.size, app.messages.waitingCount)) texts += MessageNotice.text(app, count)
+            for (message in waiting) texts += BedsideMessages.announcement(app, message, slots)
+            for (text in waitingTexts) texts += BedsideMessages.textAnnouncement(app, text.from, text.sentAt, slots)
             // The server reads up to 600 characters of a text's words in a natural voice (`textLimits.spokenCharacters`).
             for (text in app.messages.readyTexts) {
                 BedsideMessages.attachmentSentence(app, text)?.let { texts += it }

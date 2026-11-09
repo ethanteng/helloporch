@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 5, 2026";
+const updated = "November 8, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -38,6 +38,7 @@ const providers: [name: string, role: string, receives: string][] = [
   ["Upstash", "Database for household details, settings, the list of waiting messages, and the words of text messages sent to a Porch number.", "The household details described above, including those text messages."],
   ["Apple", "Delivers call and message notifications to iPhones and iPads through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
   ["Google Firebase", "Delivers call and message notifications to Android phones and tablets through Firebase Cloud Messaging.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
+  ["Google ML Kit", "Notices a face in view on an Android tablet, when a caregiver turns on noticing someone in front of the tablet. The noticing happens on the tablet.", "Details about the device and the app, identifiers, and how well the feature performed and any errors, which Google uses for diagnostics and usage analytics. Never an image or anything the camera sees."],
   ["ElevenLabs", "Turns short announcements, and text messages sent to a Porch number, into natural speech, when a household uses a natural voice.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation."],
   ["Anthropic", "Translates a text message into the language set on the tablet, when the message isn’t already in that language.", "The words of that text. Not the sender’s number or name."],
   ["MailerLite", "Sends waitlist and pilot emails.", "Your email address, and your waitlist answer if you give one."],
@@ -88,7 +89,7 @@ export default function PrivacyPage() {
             <li>We don’t sell your information, show ads, or track you across other apps and websites.</li>
             <li>Calls go live between devices and aren’t recorded. Messages and voicemail are saved only when someone chooses to leave one. Text messages sent to a Porch number are saved until they’re read or removed.</li>
             <li>Unplayed messages, and unread text messages to a Porch number, are deleted after 7 days. Played messages are deleted after 90 days.</li>
-            <li>When Porch notices someone in front of an iPad, detection happens on the device. No image leaves it. Family see only when someone was last there.</li>
+            <li>When Porch notices someone in front of your loved one’s tablet, detection happens on the tablet. No image leaves it. Family see only when someone was last there.</li>
             <li>A few service providers help us run calls, phone service, storage, notifications, speech, translation, email and website analytics. They get only what they need.</li>
             <li>
               Email <a href={`mailto:${contact}`}>{contact}</a> any time to see or delete your family’s information.
@@ -158,8 +159,8 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>When someone was last at the tablet.</strong> Unless a caregiver turns this off, the last time
-                someone pressed a key or touched your loved one’s tablet and, on an iPad, if a caregiver turns it on, the
-                last time its camera saw a face close by. We keep only the latest time. Family members see that someone
+                someone pressed a key or touched your loved one’s tablet and, if a caregiver turns it on, the last time
+                its camera saw a face close by. We keep only the latest time. Family members see that someone
                 is at the tablet, or how long ago someone was, so they know whether to call. It doesn’t say who it was or
                 how Porch noticed.
               </li>
@@ -231,10 +232,12 @@ export default function PrivacyPage() {
             <h2 id="device-title">What stays on your device</h2>
             <ul>
               <li>
-                <strong>Noticing someone in front of an iPad.</strong> If a caregiver turns this on, your loved one’s
-                iPad uses its camera to notice that a face is in view, so it can start waiting messages or let family
-                know someone is there. This happens on the iPad. It doesn’t recognize who the person is, and no image is
-                saved or sent anywhere. For family, only the time it last saw someone is sent.
+                <strong>Noticing someone in front of the tablet.</strong> If a caregiver turns this on, your loved one’s
+                tablet uses its camera to notice that a face is in view, so it can start waiting messages or let family
+                know someone is there. This happens on the tablet. It doesn’t recognize who the person is, and no image
+                is saved or sent anywhere. For family, only the time it last saw someone is sent. On an Android tablet,
+                Google’s ML Kit does the noticing and sends Google usage details, as listed under
+                <a href="#share">who we share it with</a>, but never an image.
               </li>
               <li>
                 <strong>Contacts.</strong> When you pick someone from your contacts, Porch receives only that
@@ -351,8 +354,8 @@ export default function PrivacyPage() {
                 iPad, voice calls never turn on the camera.
               </li>
               <li>
-                <strong>Noticing someone in front of an iPad</strong> is off unless a caregiver turns it on, separately
-                for starting messages and for telling family.
+                <strong>Noticing someone in front of the tablet</strong> is off unless a caregiver turns it on,
+                separately for starting messages and for telling family.
               </li>
               <li>
                 <strong>Showing family when someone is at the tablet</strong> can be turned off by a caregiver. That

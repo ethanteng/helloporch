@@ -23,6 +23,8 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let profile: FamilyProfile?
     public let override: FamilyProfile?
     public let role: PorchExperience
+    /// "ios" or "android", so family can call an Android bedside its tablet. Servers from before Android don't send it.
+    public let platform: String?
     public let permissions: DropInPermissions
     public let canReceiveCalls: Bool?
     public let online: Bool

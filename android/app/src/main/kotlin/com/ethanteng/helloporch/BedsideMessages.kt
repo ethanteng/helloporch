@@ -11,6 +11,7 @@ import androidx.annotation.WorkerThread
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ethanteng.helloporch.core.AutoplaySnooze
 import com.ethanteng.helloporch.core.BedsideLanguage
 import com.ethanteng.helloporch.core.BedsideMessageQueue
 import com.ethanteng.helloporch.core.CallContact
@@ -19,12 +20,14 @@ import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.FamilySnapshot
 import com.ethanteng.helloporch.core.FamilyText
+import com.ethanteng.helloporch.core.MessageAutoplay
 import com.ethanteng.helloporch.core.MessageSender
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.PorchJson
 import com.ethanteng.helloporch.core.ReceivedText
 import java.io.File
 import java.io.IOException
+import java.time.Instant
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -51,6 +54,16 @@ class BedsideMessages(private val app: PorchApplication) {
         private set
     /** What's ready to play, messages and texts together. */
     val waitingCount: Int get() = ready.size + readyTexts.size
+    /** The same, by ID, as iOS's `waitingIDs`: what presence autoplay offers, and what Not now puts off. */
+    val waitingIDs: List<String> get() = ready.map { it.id } + readyTexts.map { it.id }
+
+    /** After Not now or Stop: what was waiting is left alone for 30 minutes, unless something new arrives. In memory, as
+     * on iOS, so a restart offers it again. */
+    var autoplaySnooze by mutableStateOf<AutoplaySnooze?>(null)
+        private set
+    /** "You have N new messages", over the clock, until it's said or put off. */
+    var notice by mutableStateOf<MessageNotice?>(null)
+        private set
 
     /** A text's words still waiting to be read, or null once it was read, removed, or is being fetched again. */
     fun preparedText(id: String): ReceivedText? = readyTexts.firstOrNull { it.id == id }
@@ -90,16 +103,61 @@ class BedsideMessages(private val app: PorchApplication) {
         val messages = ready
         val texts = readyTexts
         if (messages.isEmpty() && texts.isEmpty()) return false
+        endNotice()
         // A keypad that can't be read still plays. Names fall back to the family member's, or the caller's number.
         val slots = runCatching { CallSlots.load(app.settings, app.photos) }.getOrElse { CallSlots() }
-        val created = MessagePlayback(app, messages, texts, slots) { if (playback === it) playback = null }
+        val started = waitingIDs
+        val created = MessagePlayback(app, messages, texts, slots) { finished ->
+            if (playback === finished) playback = null
+            // Stop leaves what was already waiting alone for a while. A message that arrived during playback still starts by
+            // itself, and a call that took over isn't Stop.
+            if (!finished.interrupted) snoozeAutoplay(MessageAutoplay.deferredMessageIDs(started, waitingIDs))
+        }
         playback = created
         created.start()
         return true
     }
 
-    /** A call takes over from the messages playing. */
-    fun interrupt() = playback?.interrupt()
+    /** A call takes over from the messages playing, or from the notice before them. */
+    fun interrupt() {
+        endNotice()
+        playback?.interrupt()
+    }
+
+    /** Whether someone settling in front of the clock may start what's waiting: something is, it's within the caregiver's
+     * hours, and it isn't what was just put off. */
+    fun autoplayAllowed(): Boolean {
+        val waiting = waitingIDs
+        if (waiting.isEmpty() || !MessageAutoplay.load(app.settings).allows(Instant.now())) return false
+        return autoplaySnooze?.holds(waiting, SystemClock.elapsedRealtime() / 1_000.0) != true
+    }
+
+    /** Someone has settled in front of the clock: says how many messages are waiting, then plays them, as iOS's clock
+     * does. */
+    fun offer() {
+        if (notice != null || playback != null || app.calls.busy || app.calls.opening || !autoplayAllowed()) return
+        val created = MessageNotice(app, waitingCount)
+        notice = created
+        created.begin { if (notice === created) { notice = null; play() } }
+    }
+
+    /** Not now, from the notice or any key: what's waiting is left alone for 30 minutes. */
+    fun declineNotice() {
+        val current = notice ?: return
+        current.end()
+        notice = null
+        snoozeAutoplay(waitingIDs)
+    }
+
+    /** Something replaced the clock, or Porch left the front: the notice goes, and nothing is put off. */
+    fun endNotice() {
+        notice?.end()
+        notice = null
+    }
+
+    private fun snoozeAutoplay(ids: Collection<String>) {
+        AutoplaySnooze.of(ids, SystemClock.elapsedRealtime() / 1_000.0)?.let { autoplaySnooze = it }
+    }
 
     /** After each check-in, and after a download or a message played to the end. */
     fun sync(state: FamilySnapshot? = app.coordinator.links.value.state) {
@@ -169,7 +227,10 @@ class BedsideMessages(private val app: PorchApplication) {
 
     /** What a tablet set up as a new Porch leaves behind: the old household's messages. */
     fun forget() {
+        endNotice()
         playback?.stop()
+        // After the stop, which puts off what was playing.
+        autoplaySnooze = null
         ready = emptyList()
         readyTexts = emptyList()
         downloading.clear(); retryAfter.clear(); played.clear(); unreported.clear(); delivered.clear(); releasing.clear()

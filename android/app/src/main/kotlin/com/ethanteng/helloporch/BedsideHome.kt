@@ -70,7 +70,7 @@ import java.time.Instant
  * night colors, or on the dynamic clock's picture when a caregiver chose it, with Call someone beneath. A keypad key
  * calls whoever is on it. Until the tablet is set up, Set up Porch takes Call someone's place, and a setup that stopped
  * after its PIN goes on from here. Caregiver mode comes in phase 4. `covered`: PorchRoot shows something over the clock,
- * such as an error, which stops the presence camera.
+ * such as an error, which stops the presence camera and ends the messages notice.
  */
 @Composable
 fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup, covered: Boolean = false) {
@@ -79,8 +79,10 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup, 
     var picking by rememberSaveable { mutableStateOf(false) }
     if (picking && state != null) { BedsidePeople(app, links, onClose = { picking = false }); return }
     // The camera looks for someone only on the clock itself. Every screen that replaces it, and the people screen here,
-    // stops it.
-    if (state != null) ClockPresence(app, state, covered)
+    // stops it. With messages waiting it keeps watching, and someone settling in front of the tablet hears how many.
+    // Read again each minute, as the clock is, for the caregiver's hours and the end of a Not now.
+    if (state != null) ClockPresence(app, state, covered || app.messages.notice != null,
+        watchMessages = app.messages.autoplayAllowed(), onPresent = app.messages::offer)
     // A key calls whoever is on it. The receiver put back while a call is starting stops it opening.
     if (state != null) CallKeys(app, onDigit = app.calls::bedsideKey, onHangUp = app.calls::cancelPendingCall)
     val context = LocalContext.current
@@ -168,6 +170,7 @@ fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup, 
         if (state != null && waiting > 0) MessagesButton(text(if (waiting == 1) "Play 1 message" else "Play %d messages", waiting),
             palette?.controlBackground?.copy(alpha = 0.6f) ?: PorchColors.nightSurface, palette?.controlForeground ?: PorchColors.nightText,
             Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 16.dp, top = 12.dp, end = 88.dp)) { app.messages.play() }
+        if (state != null) ClockMessageNotice(app, covered)
     }
 }
 
