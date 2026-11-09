@@ -107,6 +107,8 @@ class BedsideVoicemail(
         began = true
         scope.launch {
             try {
+                // The clock's presence camera lets go of the camera first.
+                if (recorder.video) app.releaseCamera()
                 recorder.prepare()
             } catch (e: CancellationException) {
                 throw e

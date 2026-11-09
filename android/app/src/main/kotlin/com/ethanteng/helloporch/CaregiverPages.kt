@@ -1,8 +1,10 @@
 package com.ethanteng.helloporch
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.icu.text.DateFormat as IcuDateFormat
 import android.media.AudioAttributes
 import android.net.Uri
@@ -50,9 +52,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ethanteng.helloporch.core.BedsideAttendance
 import com.ethanteng.helloporch.core.BedsideLanguage
 import com.ethanteng.helloporch.core.BedsidePreferences
 import com.ethanteng.helloporch.core.BedsideScene
@@ -85,7 +89,7 @@ fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: Fa
         when (page) {
             CaregiverPage.PEOPLE, CaregiverPage.CALLS, CaregiverPage.DROP_IN, CaregiverPage.MESSAGES, CaregiverPage.ABOUT -> {}
             CaregiverPage.DISPLAY -> DisplayPage(app, admin, links)
-            CaregiverPage.PRIVACY -> PrivacyPage(admin, links)
+            CaregiverPage.PRIVACY -> PrivacyPage(app, admin, links)
             CaregiverPage.CAREGIVERS -> CaregiversPage(admin, links, onScreen)
             CaregiverPage.DEVICE -> DevicePage(app, onScreen, onClose)
         }
@@ -400,16 +404,55 @@ fun Choices(options: List<String>, selected: Int, modifier: Modifier = Modifier,
 
 // MARK: Privacy
 
-/** What family learn about someone being at the tablet, kept with the household. The camera check comes with the
- * presence camera. */
+/** What family learn about someone being at the tablet. Sharing it is kept with the household, so a phone can change it
+ * too. The camera check uses this tablet's own camera, so only the tablet shows that switch, kept on the tablet. */
 @Composable
-private fun PrivacyPage(admin: CaregiverAdmin, links: FamilyLinks) {
+private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks) {
     val share = admin.state(links)?.shareAttendance
+    val context = LocalContext.current
+    var camera by remember { mutableStateOf(BedsideAttendance.cameraEnabled(app.settings)) }
+    val refused = "Allow camera access in Settings → Apps → Porch → Permissions to tell family when someone is at the tablet."
+    val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            // The activity may have been recreated while Android's question was up, which drops the switch's own state.
+            camera = true
+            BedsideAttendance.setCameraEnabled(true, app.settings)
+        } else {
+            camera = false
+            admin.error = refused
+        }
+    }
+    // Camera access taken away in Settings since the switch was turned on: the clock can't look, so the switch says so.
+    // Opening Privacy checks, and so does coming back to it, such as after turning access off in Settings.
+    fun cameraAccessTakenAway() {
+        if (admin.onBedside && camera && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            camera = false
+            BedsideAttendance.setCameraEnabled(false, app.settings)
+            admin.error = refused
+        }
+    }
+    LaunchedEffect(Unit) { cameraAccessTakenAway() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { cameraAccessTakenAway() }
     CaregiverGroup {
         ToggleRow("Show family when someone is at the ${bedsideDevice(admin.snapshot(links))}", share == true,
             onChange = { admin.perform("setShareAttendance", mapOf("enabled" to JsonPrimitive(it))) },
             detail = if (share == null) "Not available on this Porch's server yet." else "Touches and key presses count.",
             enabled = share != null && !admin.busy)
+        if (admin.onBedside) {
+            HorizontalDivider()
+            // Only while family are shown it. The clock reads the switch again when caregiver mode closes.
+            ToggleRow("Check with the camera", camera, detail = "About every 30 seconds. Nothing is recorded.", enabled = share == true,
+                onChange = { on ->
+                    camera = on
+                    when {
+                        !on -> BedsideAttendance.setCameraEnabled(false, app.settings)
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED ->
+                            BedsideAttendance.setCameraEnabled(true, app.settings)
+                        // Turned back off if Android's question is refused.
+                        else -> askCamera.launch(Manifest.permission.CAMERA)
+                    }
+                })
+        }
     }
     PrivacyPolicyLink()
 }

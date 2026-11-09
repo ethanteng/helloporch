@@ -69,14 +69,18 @@ import java.time.Instant
  * The bedside's clock, as iOS's clock screen lays it out: the weekday, the time and the date, fitted to the screen, on
  * night colors, or on the dynamic clock's picture when a caregiver chose it, with Call someone beneath. A keypad key
  * calls whoever is on it. Until the tablet is set up, Set up Porch takes Call someone's place, and a setup that stopped
- * after its PIN goes on from here. Caregiver mode comes in phase 4.
+ * after its PIN goes on from here. Caregiver mode comes in phase 4. `covered`: PorchRoot shows something over the clock,
+ * such as an error, which stops the presence camera.
  */
 @Composable
-fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup) {
+fun BedsideHome(app: PorchApplication, links: FamilyLinks, setup: BedsideSetup, covered: Boolean = false) {
     val paired = links.credential != null || app.device.credential(PorchExperience.BEDSIDE) != null
     val state = links.state
     var picking by rememberSaveable { mutableStateOf(false) }
     if (picking && state != null) { BedsidePeople(app, links, onClose = { picking = false }); return }
+    // The camera looks for someone only on the clock itself. Every screen that replaces it, and the people screen here,
+    // stops it.
+    if (state != null) ClockPresence(app, state, covered)
     // A key calls whoever is on it. The receiver put back while a call is starting stops it opening.
     if (state != null) CallKeys(app, onDigit = app.calls::bedsideKey, onHangUp = app.calls::cancelPendingCall)
     val context = LocalContext.current

@@ -240,6 +240,8 @@ class PorchCall(
             app.calls.updateService()
             // The camera works only while Porch is in front. A call answered just as the phone locked starts it on return.
             if (video && CallPreferences.startVideoWithCamera(role, app.settings)) {
+                // LiveKit opens the camera itself, through Camera2, so the bedside's presence camera lets go of it first.
+                app.releaseCamera()
                 if (app.onScreen) room.localParticipant.setCameraEnabled(true) else cameraWhenBack = true
             }
             mediaReady = true
