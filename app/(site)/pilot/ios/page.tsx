@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Chain, Contact, Guide, guideMetadata, Questions, Says, Screenshot, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Guide, guideMetadata, Questions, Says, Screenshot, StepVideo, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
 import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
@@ -112,6 +112,11 @@ const parts: GuidePart[] = [
     title: "Install Porch on the iPad",
     body: (
       <>
+        <StepVideo
+          name="ios-setup"
+          label="Video: installing Porch and setting up your loved one’s Porch on the iPad"
+          caption="From installing Porch to choosing the corded phone. This video covers this step and the next two."
+        />
         <GetPorch device="iPad" />
         <p>
           Look for <UI>Porch Family Calling</UI> in TestFlight and <UI>Porch</UI> on the Home Screen.
@@ -252,6 +257,11 @@ const parts: GuidePart[] = [
     title: "Add your own phone",
     body: (
       <>
+        <StepVideo
+          name="ios-your-phone"
+          label="Video: adding your phone with the QR code on the iPad"
+          caption="Adding your iPhone with the QR code on the iPad."
+        />
         <p>
           When the iPad shows <UI>Add your phone</UI>, follow these steps to call, send messages and change Porch
           settings from your own phone.
@@ -319,6 +329,11 @@ const parts: GuidePart[] = [
     title: "Set up the phone’s number keys",
     body: (
       <>
+        <StepVideo
+          name="ios-keypad"
+          label="Video: putting a family member on key 1"
+          caption="Putting a family member who has joined on key 1."
+        />
         <p>
           Set up keys 1 to 8 on the iPad, one person per key. Key 0 answers and hangs up. Key 9 turns the camera
           off and on during video calls.
@@ -419,6 +434,11 @@ const parts: GuidePart[] = [
     title: "Invite family members",
     body: (
       <>
+        <StepVideo
+          name="ios-invite"
+          label="Video: inviting a relative from your phone"
+          caption="Inviting a relative from your iPhone."
+        />
         <p>Each relative gets their own invitation, from your iPhone:</p>
         <ol>
           <li>
@@ -508,6 +528,11 @@ const parts: GuidePart[] = [
     title: "Change the language or voice",
     body: (
       <>
+        <StepVideo
+          name="ios-language"
+          label="Video: changing the bedside language and voice"
+          caption="Switching the bedside to Spanish and choosing a voice."
+        />
         <p>
           Porch can speak English, Mandarin, Cantonese, Spanish, Tagalog and Korean. On the iPad, open caregiver mode,
           then <UI>Display &amp; voice</UI>. Choose a <UI>Bedside language</UI> and tap <UI>Save</UI>.

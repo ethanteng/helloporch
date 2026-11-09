@@ -185,6 +185,24 @@ export function Screenshot({ src, alt, width, height, device, caption }: {
   );
 }
 
+/**
+ * A short video of a few steps in Porch, from public/pilot/videos/<name>.mp4 with its poster <name>.jpg. Its captions
+ * are part of the picture, so it has no sound and needs no caption track. It loads only when played.
+ */
+export function StepVideo({ name, label, caption }: { name: string; label: string; caption?: ReactNode }) {
+  const src = `/pilot/videos/${name}.mp4`;
+  return (
+    <figure className={styles.video}>
+      <video controls muted playsInline preload="none" width={1280} height={960} poster={`/pilot/videos/${name}.jpg`}
+        aria-label={label}>
+        <source src={src} type="video/mp4" />
+        <a href={src}>Watch the video</a>
+      </video>
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
+  );
+}
+
 /** A button, screen title or switch, written exactly as Porch shows it. */
 export function UI({ children }: { children: ReactNode }) {
   return <span className={styles.ui}>{children}</span>;

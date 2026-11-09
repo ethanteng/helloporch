@@ -387,6 +387,26 @@
   border-radius: 28px;
 }
 
+/* A captioned step video: the full column, the same frame as a screenshot. */
+.video {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.video video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 1px solid oklch(0.85 0.03 70);
+  border-radius: 18px;
+  background: oklch(0.955 0.03 85);
+  box-shadow: 0 18px 36px -28px oklch(0.3 0.05 50 / 0.5);
+}
+
+.video figcaption,
 .shot figcaption {
   font: 400 15px / 1.5 var(--sans);
   text-align: center;

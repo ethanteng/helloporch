@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, Screenshot, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, Screenshot, StepVideo, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
 import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
@@ -93,6 +93,11 @@ const parts: GuidePart[] = [
     title: "Install Porch on the tablet",
     body: (
       <>
+        <StepVideo
+          name="android-setup"
+          label="Video: installing Porch and setting up your loved one’s Porch on the tablet"
+          caption="From installing Porch to choosing the corded phone. This video covers this step and the next two."
+        />
         <GetPorch device="tablet" />
         <p>
           The same Porch app works on the tablet and on family members’ phones. Set up your loved one’s Porch on
@@ -226,6 +231,11 @@ const parts: GuidePart[] = [
     title: "Add your phone",
     body: (
       <>
+        <StepVideo
+          name="android-your-phone"
+          label="Video: adding your phone with the QR code on the tablet"
+          caption="Adding your phone with the QR code on the tablet."
+        />
         <p>
           When the tablet shows <UI>Add your phone</UI>, follow these steps to call, send messages and change Porch
           settings from your own phone.
@@ -314,6 +324,11 @@ const parts: GuidePart[] = [
     title: "Set up the phone’s number keys",
     body: (
       <>
+        <StepVideo
+          name="android-keypad"
+          label="Video: putting a family member on key 1"
+          caption="Putting a family member who has joined on key 1."
+        />
         <p>
           Set up keys 1 to 8 on the tablet, one person per key. Key 0 answers and hangs up. Key 9 turns the camera
           off and on during video calls.
@@ -405,6 +420,11 @@ const parts: GuidePart[] = [
     title: "Invite family members",
     body: (
       <>
+        <StepVideo
+          name="android-invite"
+          label="Video: inviting a relative from your phone"
+          caption="Inviting a relative from your phone."
+        />
         <p>Each relative gets their own invitation, from your phone:</p>
         <ol>
           <li>
@@ -494,6 +514,11 @@ const parts: GuidePart[] = [
     title: "Change the language or voice",
     body: (
       <>
+        <StepVideo
+          name="android-language"
+          label="Video: changing the bedside language and voice"
+          caption="Switching the bedside to Spanish and choosing a voice."
+        />
         <p>
           Porch can speak English, Mandarin, Cantonese, Spanish, Tagalog and Korean. On the tablet, open caregiver mode,
           then <UI>Display &amp; voice</UI>. Choose a <UI>Bedside language</UI> and tap <UI>Save</UI>.
