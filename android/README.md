@@ -18,6 +18,25 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 CI runs the same command ([android-build.yml](../.github/workflows/android-build.yml)).
 
+## Release to Google Play
+
+Pilot families install Porch from Google Play's **internal testing** track, which needs no review and takes up to 100 testers by Google account. Play App Signing signs what families install; a release build is signed with Porch's upload key, which stays outside the repo with its passwords in a properties file beside it:
+
+```properties
+storeFile=helloporch-android-upload.jks
+storePassword=…
+keyAlias=upload
+keyPassword=…
+```
+
+Build the bundle with that file, a `versionCode` higher than the last upload's, and `app/google-services.json` in place so phones ring while Porch is closed:
+
+```bash
+./gradlew :app:bundleRelease -Pporch.upload=/path/to/helloporch-android-upload.properties -Pporch.versionCode=2 -Pporch.versionName=0.2
+```
+
+Upload `app/build/outputs/bundle/release/app-release.aab` to **Internal testing** in the Play Console, and add each tester's Google account email to its list. The test's opt-in link is what the [Android pilot guide](../app/(site)/pilot/android/page.tsx) and invitation pages show, from `NEXT_PUBLIC_PLAY_TESTING_URL` on the website's Vercel project. The app signing key's SHA-256 (Play Console → **Test and release** → **App integrity**) goes in `androidCertificates` in [lib/invite-links.ts](../lib/invite-links.ts), so invitation and setup links open Porch. If the upload key is lost, Google can register a new one.
+
 ## Try it against a local server
 
 [`scripts/local-family-server.mjs`](../scripts/local-family-server.mjs) runs the server's real `/api/family` handler on this computer with an in-memory store. It sets up a stand-in bedside, "Mom", which checks in every few seconds, and prints an invitation link and a setup link for a new bedside tablet. Nothing leaves the process: no Redis, LiveKit or push, and Porch numbers are made up by a stand-in for Twilio (area code 212 has none, to try choosing another). Photos are kept in memory and served from the same port, and a stand-in for `/api/calls/contacts/authorize` approves keypad numbers with the caregiver PIN, refusing `+44` numbers so a refusal can be tried. Nothing there takes real phone calls, so `curl -X POST 'http://localhost:3010/local/blocked-call?number=%2B14155550100'` makes up a call that Block unknown callers turned away, and `curl -X POST 'http://localhost:3010/local/text?from=%2B14155550200&body=Hi%20Mom&pictures=1'` makes up a text to the Porch number for every household, held for a caregiver unless the number is on the keypad or allowed. Debug builds may use plain HTTP to `localhost` only.
