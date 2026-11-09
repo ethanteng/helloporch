@@ -168,10 +168,14 @@ const phoneGuestServices = () => ({
     async listParticipants() { return []; }, async removeParticipant() {} },
   sip: cloudCalls ? {
     async createSipParticipant(trunk, number, room, options) {
-      return new SipClient(phone.url.replace(/^wss:/, 'https:'), phone.key, phone.secret, { requestTimeout: 10 })
+      // failover off, as the real server dials: a retry would ring the number twice.
+      return new SipClient(phone.url.replace(/^wss:/, 'https:'), phone.key, phone.secret, { requestTimeout: 10, failover: false })
         .createSipParticipant(trunk, number, room, { ...options, fromNumber: phoneFrom });
     },
-  } : { async createSipParticipant() { throw new Error("This test server has no phone line. Start it with --phone and without --livekit."); } },
+  } : { async createSipParticipant() {
+    // failed_precondition is a dial the handler treats as never started, so it doesn't stay "Calling…" for 75 seconds.
+    throw Object.assign(new Error("This test server has no phone line. Start it with --phone and without --livekit."), { code: 'failed_precondition' });
+  } },
 });
 const dependencies = { store, numberServices, endRoom, media, phoneGuestServices };
 
