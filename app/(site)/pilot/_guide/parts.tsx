@@ -92,6 +92,25 @@ export function Guide({ eyebrow, title, lede, other, kit, kitIntro, ready, parts
   );
 }
 
+// How families reach me during the pilot.
+const email = "ethan@helloporch.store";
+const phone = { shown: "415-867-6937", dial: "+14158676937" };
+
+/** My email address and phone number, as links: "email me at …, or call or text me at …". */
+export function Contact() {
+  return (
+    <>
+      email me at <a href={`mailto:${email}`}>{email}</a>, or call or text me at{" "}
+      <a href={`tel:${phone.dial}`}>{phone.shown}</a>
+    </>
+  );
+}
+
+/** My email address, as a link. */
+export function Email() {
+  return <a href={`mailto:${email}`}>{email}</a>;
+}
+
 /** A button, screen title or switch, written exactly as Porch shows it. */
 export function UI({ children }: { children: ReactNode }) {
   return <span className={styles.ui}>{children}</span>;

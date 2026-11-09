@@ -1,4 +1,4 @@
-import { Chain, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
 
 export const metadata = guideMetadata(
   "Get started with Porch on iPad and iPhone | HelloPorch",
@@ -62,6 +62,9 @@ const parts: GuidePart[] = [
         </ul>
         <Tip>
           <p>Set aside about 30 minutes, with the iPad, the phone, the adapter and your own iPhone all within reach.</p>
+          <p>
+            If you get stuck at any point, <Contact />.
+          </p>
         </Tip>
       </>
     ),
@@ -541,8 +544,8 @@ const parts: GuidePart[] = [
             q: "Something else.",
             a: (
               <p>
-                Reply to my invitation email and tell me what happened. A photo of the screen helps. This is a pilot,
-                and I want to hear about anything that’s confusing.
+                Tell me what happened. You can <Contact />. A photo of the screen helps. This is a pilot, and I
+                want to hear about anything that’s confusing.
               </p>
             ),
           },

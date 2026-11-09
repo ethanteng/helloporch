@@ -1,4 +1,4 @@
-import { Chain, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
 
 export const metadata = guideMetadata(
   "Get started with Porch on Android | HelloPorch",
@@ -45,8 +45,9 @@ const parts: GuidePart[] = [
         </p>
         <ol>
           <li>
-            <strong>Send me the Google account</strong> (usually a Gmail address) that’s signed in to Google Play on the
-            tablet, and the one on your own phone. Do the same later for any relative with an Android phone.
+            <strong>Email me the Google account</strong> (usually a Gmail address) that’s signed in to Google Play on the
+            tablet, and the one on your own phone, at <Email />. Do the same later for any relative with an Android
+            phone.
           </li>
           <li>
             <strong>I’ll send you two links.</strong> One lets you join Porch’s test on Google Play. The other is your
@@ -55,6 +56,9 @@ const parts: GuidePart[] = [
         </ol>
         <Tip>
           <p>Set aside about 30 minutes, with the tablet, the phone and your own phone all within reach.</p>
+          <p>
+            If you get stuck at any point, <Contact />.
+          </p>
         </Tip>
       </>
     ),
@@ -529,8 +533,8 @@ const parts: GuidePart[] = [
             q: "Something else.",
             a: (
               <p>
-                Reply to my invitation email and tell me what happened. A photo of the screen helps. This is a pilot,
-                and I want to hear about anything that’s confusing.
+                Tell me what happened. You can <Contact />. A photo of the screen helps. This is a pilot, and I
+                want to hear about anything that’s confusing.
               </p>
             ),
           },
