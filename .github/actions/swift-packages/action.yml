@@ -6,7 +6,8 @@ description: >-
   downloads packages.
 
 # GitHub's release downloads, where LiveKit's xcframeworks live, sometimes answer 504 for a while. Without a cache every
-# job downloaded them again, and one 504 failed the job before anything compiled.
+# job downloaded them again, and one 504 failed the job before anything compiled. The four iOS jobs resolve in parallel,
+# so a job that is still retrying looks up the exact cache key again: a sibling may have saved it since the first miss.
 runs:
   using: composite
   steps:
@@ -27,21 +28,58 @@ runs:
         key: ${{ steps.key.outputs.key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
     - name: Fetch missing Swift packages
+      id: fetch
       shell: bash
       run: |
-        for attempt in 1 2 3; do
-          if xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
-            -clonedSourcePackagesDirPath ios/build/packages; then
-            exit 0
-          fi
-          if [[ "$attempt" == 3 ]]; then exit 1; fi
-          echo "::warning::Fetching Swift packages failed (attempt $attempt of 3). Trying again in $((attempt * 30)) seconds."
-          sleep $((attempt * 30))
-        done
+        if xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
+          -clonedSourcePackagesDirPath ios/build/packages; then
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::Fetching Swift packages failed (attempt 1 of 3). Checking whether a parallel job saved them."
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+        fi
+    # Exact key only. A prefix match would replace a partial download with an older tree.
+    # Skip this lookup when the first restore was already an exact hit: the retries below then re-download,
+    # which is what a bad cache needs. This lookup is for a miss that a parallel job has since filled.
+    - name: Restore Swift packages a parallel job saved
+      id: restore_again
+      if: steps.fetch.outputs.ok != 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ios/build/packages
+        key: ${{ steps.key.outputs.key }}
+    - name: Fetch Swift packages again
+      id: fetch_again
+      if: steps.fetch.outputs.ok != 'true' && steps.restore_again.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        echo "::warning::Swift packages are not in the cache yet. Trying again in 30 seconds (attempt 2 of 3)."
+        sleep 30
+        if xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
+          -clonedSourcePackagesDirPath ios/build/packages; then
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Restore Swift packages a parallel job saved before the last try
+      id: restore_last
+      if: steps.fetch_again.outputs.ok == 'false' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ios/build/packages
+        key: ${{ steps.key.outputs.key }}
+    - name: Fetch Swift packages a last time
+      if: steps.fetch_again.outputs.ok == 'false' && steps.restore_last.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        echo "::warning::Swift packages are not in the cache yet. Trying again in 60 seconds (attempt 3 of 3)."
+        sleep 60
+        xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
+          -clonedSourcePackagesDirPath ios/build/packages
     # Saved now rather than at the end of the job, so a later test failure still leaves the packages for the next run.
     # Parallel jobs race to save the same key; the ones that lose only log a warning.
     - name: Save Swift packages
-      if: steps.restore.outputs.cache-hit != 'true'
+      if: steps.restore.outputs.cache-hit != 'true' && steps.restore_again.outputs.cache-hit != 'true' && steps.restore_last.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ios/build/packages
