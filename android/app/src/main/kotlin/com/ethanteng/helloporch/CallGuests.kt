@@ -168,7 +168,8 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
                 session.service.send("addPhoneGuest", mapOf("callID" to JsonPrimitive(callID), "phoneNumber" to JsonPrimitive(number),
                     "label" to JsonPrimitive(label)))
             } catch (e: FamilyServiceException) {
-                if (e.status >= 500) settle = 6_000
+                // A server error, or no answer at all (status 0, such as a timeout), may have dialed anyway.
+                if (e.status >= 500 || e.status == 0) settle = 6_000
                 throw e
             } catch (e: CancellationException) {
                 throw e
