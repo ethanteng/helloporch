@@ -83,7 +83,7 @@ class PorchCall(
     private val scope = MainScope()
     /** Family on a Porch call with the bedside can ring in another family member. Someone rung in can't add anyone. */
     val guests: CallGuests? = session?.takeIf { it.credential.role == PorchExperience.FAMILY && it.call.source != "phone" && it.call.guest != true }
-        ?.let { CallGuests(app, it, scope) }
+        ?.let { CallGuests(app, it, scope) { room } }
     /** On the bedside, someone who left a call that goes on, for a few seconds. */
     private var leftNotice: String? = null
     /** Each person's name while they're in the room, by identity: LiveKit has cleared it by the time they've left. */

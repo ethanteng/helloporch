@@ -33,6 +33,10 @@
 // from --phone-from, which must be a number the Twilio account owns, since this household's own number is made up.
 // Approve only your own numbers on the keypad.
 //   node scripts/local-family-server.mjs 3010 --livekit --phone .env.local --phone-from +15105550123
+// Without --livekit, --phone puts the calls themselves on LiveKit Cloud too, so a caregiver can add a real phone number
+// to a call (Add someone → A phone number…), which joins the call's room through the trunk with --phone-from as its
+// caller ID. Devices then reach LiveKit Cloud directly, with no adb reverse for 7880 and 7881.
+//   node scripts/local-family-server.mjs 3010 --phone .env.local --phone-from +15105550123
 //
 // --fcm <service account key> rings Android phones while Porch is closed: calls to them go out as real Firebase Cloud
 // Messaging pushes, from the Firebase project the key belongs to (the one in the app's google-services.json). Only its
@@ -41,7 +45,7 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { RoomServiceClient } from 'livekit-server-sdk';
+import { RoomServiceClient, SipClient } from 'livekit-server-sdk';
 import { authorizeBedsideCalling, handleFamily } from '../lib/family/service.ts';
 import { blockCall } from '../lib/family/screening.ts';
 import { receivePhoneVoicemail } from '../lib/family/messages.ts';
@@ -76,8 +80,11 @@ const phone = phoneFile && (() => {
 const localLiveKit = { url: 'ws://localhost:7880', secure: 'wss://localhost:7880', key: 'devkey', secret: 'secret' };
 const setupCode = randomBytes(24).toString('hex'), pin = '246810';
 // What buying a Porch number needs (lib/family/numbers.ts). None of it is real: the stand-ins below are all it reaches.
-Object.assign(process.env, { LIVEKIT_URL: livekit ? localLiveKit.secure : 'wss://local.invalid', LIVEKIT_API_KEY: livekit ? localLiveKit.key : 'local',
-  LIVEKIT_API_SECRET: livekit ? localLiveKit.secret : randomBytes(24).toString('hex'), PORCH_CONTACT_SETUP_CODE: setupCode,
+// Calls go through the LiveKit server on this computer with --livekit, or LiveKit Cloud with only --phone.
+const cloudCalls = !livekit && !!phone;
+Object.assign(process.env, { LIVEKIT_URL: livekit ? localLiveKit.secure : cloudCalls ? phone.url : 'wss://local.invalid',
+  LIVEKIT_API_KEY: livekit ? localLiveKit.key : cloudCalls ? phone.key : 'local',
+  LIVEKIT_API_SECRET: livekit ? localLiveKit.secret : cloudCalls ? phone.secret : randomBytes(24).toString('hex'), PORCH_CONTACT_SETUP_CODE: setupCode,
   TWILIO_ACCOUNT_SID: `AC${'0'.repeat(32)}`, TWILIO_AUTH_TOKEN: 'local', PORCH_SERVER_ORIGIN: 'https://local.invalid',
   // The real trunk only with --phone. Porch numbers stay made up either way: their stand-ins below never use it.
   LIVEKIT_SIP_OUTBOUND_TRUNK_ID: phone ? phone.trunk : 'ST_local', LIVEKIT_SIP_URI: 'sip:local.invalid', PORCH_MAX_PHONE_NUMBERS: '20' });
@@ -129,10 +136,15 @@ const numberServices = () => ({
     async createSipDispatchRule(rule, options) { const made = { sipDispatchRuleId: `SDR_${rules.length}`, rule, ...options }; rules.push(made); return made; },
   },
 });
-// Closing a call's room: the local LiveKit over plain HTTP, since the handler would use HTTPS, or nothing without one.
+// A call's rooms: the local LiveKit over plain HTTP, since the handler would use HTTPS, or LiveKit Cloud with only
+// --phone, or none.
+const rooms = () => livekit ? new RoomServiceClient(localLiveKit.url.replace(/^ws:/, 'http:'), localLiveKit.key, localLiveKit.secret)
+  : cloudCalls ? new RoomServiceClient(phone.url.replace(/^wss:/, 'https:'), phone.key, phone.secret, { requestTimeout: 8 }) : undefined;
+// Closing a call's room.
 const endRoom = async room => {
-  if (!livekit) return;
-  try { await new RoomServiceClient(localLiveKit.url.replace(/^ws:/, 'http:'), localLiveKit.key, localLiveKit.secret).deleteRoom(room); }
+  const client = rooms();
+  if (!client) return;
+  try { await client.deleteRoom(room); }
   catch (error) { if (error?.code !== 'not_found') throw error; }
 };
 // Photos and messages, kept in memory and served from /media/ on this server, where Porch's server keeps them in Vercel
@@ -148,13 +160,18 @@ const media = {
   async remove(pathnames) { for (const pathname of pathnames) blobs.delete(pathname); },
   async put(pathname, body, contentType) { blobs.set(pathname, { body: Buffer.from(body), contentType }); },
 };
-// Who is in a call's room, which ringing in family checks first: the local LiveKit over plain HTTP, as for endRoom. A
-// phone number added to a call needs a real SIP trunk, so dialing one is refused here.
-const localRooms = () => new RoomServiceClient(localLiveKit.url.replace(/^ws:/, 'http:'), localLiveKit.key, localLiveKit.secret);
+// Who is in a call's room, which adding someone checks first, as for endRoom. A phone number added to a call needs the
+// real trunk, so it's dialed only with calls on LiveKit Cloud, and with --phone-from as its caller ID, since this
+// household's own number is made up.
 const phoneGuestServices = () => ({
-  rooms: livekit ? localRooms() : { async getParticipant() { throw Object.assign(new Error('No LiveKit here.'), { code: 'not_found' }); },
+  rooms: rooms() ?? { async getParticipant() { throw Object.assign(new Error('No LiveKit here.'), { code: 'not_found' }); },
     async listParticipants() { return []; }, async removeParticipant() {} },
-  sip: { async createSipParticipant() { throw new Error("This test server has no phone line. Adding a phone number needs Porch's server."); } },
+  sip: cloudCalls ? {
+    async createSipParticipant(trunk, number, room, options) {
+      return new SipClient(phone.url.replace(/^wss:/, 'https:'), phone.key, phone.secret, { requestTimeout: 10 })
+        .createSipParticipant(trunk, number, room, { ...options, fromNumber: phoneFrom });
+    },
+  } : { async createSipParticipant() { throw new Error("This test server has no phone line. Start it with --phone and without --livekit."); } },
 });
 const dependencies = { store, numberServices, endRoom, media, phoneGuestServices };
 
@@ -344,7 +361,8 @@ ipv4.listen(port, '127.0.0.1', async () => {
   });
   ipv6.listen(port, '::1');
   console.log(`Porch is running at ${origin}, with an in-memory household for "Mom". The caregiver PIN is ${pin}.`);
-  console.log(livekit ? `Calls connect through LiveKit at ${localLiveKit.url}.` : 'Calls start but never connect. Add --livekit to connect them (see the top of this file).');
+  console.log(livekit ? `Calls connect through LiveKit at ${localLiveKit.url}.` : cloudCalls ? 'Calls connect through LiveKit Cloud, and a caregiver can add a real phone number.'
+    : 'Calls start but never connect. Add --livekit to connect them (see the top of this file).');
   if (phone) console.log(`Phone fallback rings real phones through ${new URL(phone.url).host}, from ${phoneFrom}.`);
   if (fcm) console.log(`Android phones ring while Porch is closed, through Firebase project ${fcm.FCM_PROJECT_ID}.`);
   console.log(`Invitation for a phone to join (works once, for a day):\n  porch://pair?${new URLSearchParams({ server: origin, code: await invite('Ethan') })}`);
