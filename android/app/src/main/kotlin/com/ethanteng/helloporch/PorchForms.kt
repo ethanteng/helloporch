@@ -3,16 +3,20 @@ package com.ethanteng.helloporch
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -24,6 +28,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -33,7 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -104,24 +112,37 @@ fun FormCard(title: String, detail: String? = null, content: @Composable ColumnS
     }
 }
 
-/** A full-width button: filled for the way on, outlined for another choice. */
+/** A full-width button: filled for the way on, outlined for another choice. `icon` goes before its words, as iOS's
+ * buttons show a symbol. */
 @Composable
-fun FormButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = true) {
-    val label: @Composable () -> Unit = { Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium) }
+fun FormButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = true,
+    @DrawableRes icon: Int? = null) {
     val size = modifier.fillMaxWidth().heightIn(min = 50.dp)
     val shape = LocalFormButtonShape.current
-    if (filled) Button(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.shape) { label() }
-    else OutlinedButton(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.outlinedShape) { label() }
+    if (filled) Button(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.shape) { ButtonLabel(text, icon) }
+    else OutlinedButton(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.outlinedShape) { ButtonLabel(text, icon) }
 }
 
 /** A full-width button that's only its words, as iOS's plain buttons are: one of several things to do, such as Send a
  * message under the call buttons. `color` is for one that removes something. */
 @Composable
-fun FormPlainButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = Color.Unspecified) {
+fun FormPlainButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = Color.Unspecified,
+    @DrawableRes icon: Int? = null) {
     TextButton(onClick, modifier.fillMaxWidth().heightIn(min = 50.dp), enabled = enabled,
         shape = LocalFormButtonShape.current ?: ButtonDefaults.textShape) {
-        Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium, color = color)
+        ButtonLabel(text, icon, color)
     }
+}
+
+/** A button's icon and words, in the button's color unless `color` says otherwise. The icon is decoration: the words say
+ * what the button does. */
+@Composable
+private fun ButtonLabel(text: String, @DrawableRes icon: Int?, color: Color = Color.Unspecified) {
+    icon?.let {
+        Icon(painterResource(it), contentDescription = null, Modifier.size(22.dp), tint = color.takeOrElse { LocalContentColor.current })
+        Spacer(Modifier.width(10.dp))
+    }
+    Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium, color = color)
 }
 
 /** A quieter choice, such as Do this later. */

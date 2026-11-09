@@ -25,8 +25,8 @@ fun PorchNumberCard(name: String, number: String) {
     val context = LocalContext.current
     FormCard("$name's Porch number", "Be sure to add this to your Contacts and share it with friends & loved ones.") {
         Text(PorchNumber.display(number), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        FormPlainButton("Add to Contacts", onClick = { addToContacts(context, name, number) })
-        FormPlainButton("Share this number", onClick = { shareNumber(context, name, number) })
+        FormPlainButton("Add to Contacts", onClick = { addToContacts(context, name, number) }, icon = R.drawable.ic_person_add)
+        FormPlainButton("Share this number", onClick = { shareNumber(context, name, number) }, icon = R.drawable.ic_share)
     }
 }
 

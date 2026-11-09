@@ -8,14 +8,17 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -33,11 +36,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -268,6 +273,16 @@ private fun reviewTitle(voicemails: Int, texts: Int): String = when {
     else -> "${voicemails + texts} messages need your review"
 }
 
+/** A row that opens a page, as iOS's `linkRow` is: its icon in the accent color, its name, and an arrow. */
+@Composable
+private fun SettingsRow(@DrawableRes icon: Int, title: String, onClick: () -> Unit) {
+    CaregiverRow(onClick = onClick, label = title) {
+        Icon(painterResource(icon), contentDescription = null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 /** How a bedside is, or why it can't be reached, centered as on iOS. */
 @Composable
 private fun Status(text: String) {
@@ -347,7 +362,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 link?.accessRemoved == true -> {
                     Status("This phone was removed from this family. Ask a caregiver for a new invitation.")
                     FormPlainButton(if (several) "Remove $name from this phone" else "Remove this family from this phone",
-                        onClick = { app.coordinator.forget(family); onChanged() }, color = MaterialTheme.colorScheme.error)
+                        onClick = { app.coordinator.forget(family); onChanged() }, color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
                 }
                 state == null -> Status(error ?: "Connecting…")
                 else -> {
@@ -355,12 +370,13 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
                     val held = state.heldMessages ?: 0
                     val heldTexts = state.heldTexts ?: 0
-                    if (state.me.caregiver == true && held + heldTexts > 0) FormButton(reviewTitle(held, heldTexts), onClick = { onCaregiver(family) })
+                    if (state.me.caregiver == true && held + heldTexts > 0) FormButton(reviewTitle(held, heldTexts), onClick = { onCaregiver(family) }, icon = R.drawable.ic_review)
                     // Left by the bedside when its call to this phone wasn't answered.
                     val unheard = state.newMessages ?: 0
-                    if (unheard > 0) FormButton(if (unheard == 1) "New message from $from" else "$unheard new messages from $from", onClick = { onThread(family) })
+                    if (unheard > 0) FormButton(if (unheard == 1) "New message from $from" else "$unheard new messages from $from", onClick = { onThread(family) },
+                        icon = R.drawable.ic_mail_unread)
                     // Both ways in one thread, which stays while sending is off so earlier messages still play.
-                    val thread: @Composable () -> Unit = { FormPlainButton("Messages with $from", onClick = { onThread(family) }) }
+                    val thread: @Composable () -> Unit = { FormPlainButton("Messages with $from", onClick = { onThread(family) }, icon = R.drawable.ic_forum) }
                     if (bedside != null) FormCard(bedside.name) {
                         Status(error ?: if (!bedside.online) "Porch isn't ready" else if (state.busy) "On a call" else "Porch is open")
                         // Whether someone is at the bedside, as on iOS. Without a fresh check-in the last one's time
@@ -374,10 +390,10 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                             }
                         }
                         val opening = app.calls.opening
-                        FormButton("Audio call", onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening)
-                        FormButton("Video call", onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening)
+                        FormButton("Audio call", onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening, icon = R.drawable.ic_call)
+                        FormButton("Video call", onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening, icon = R.drawable.ic_videocam)
                         // Messages wait on the bedside, so they don't need it to be open right now.
-                        if (state.messagesEnabled != false) FormPlainButton("Send a message", onClick = { onCompose(family, bedside.name) })
+                        if (state.messagesEnabled != false) FormPlainButton("Send a message", onClick = { onCompose(family, bedside.name) }, icon = R.drawable.ic_mail)
                         thread()
                     } else {
                         error?.let { Status(it) }
@@ -388,10 +404,10 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                     // What the bedside shows for this phone and whether its video calls start with the camera on, and for
                     // caregivers, the bedside's settings with its PIN. iOS has these on its settings page.
                     CaregiverGroup {
-                        ActionRow("Your name and photo", onClick = { onProfile(family) })
+                        SettingsRow(R.drawable.ic_account, "Your name and photo", onClick = { onProfile(family) })
                         if (state.me.caregiver == true) {
                             HorizontalDivider()
-                            ActionRow("Caregiver mode", onClick = { onCaregiver(family) })
+                            SettingsRow(R.drawable.ic_lock, "Caregiver mode", onClick = { onCaregiver(family) })
                         }
                     }
                 }
