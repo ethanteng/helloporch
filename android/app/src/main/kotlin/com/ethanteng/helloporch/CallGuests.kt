@@ -71,6 +71,9 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
     /** Phones this one already saw end, so a check-in from before the hang-up can't bring one back. */
     private val finished = mutableSetOf<String>()
     private var dialing = false
+    /** The phone this one is hanging up. The server takes it out of the room before it answers, so its leaving isn't the
+     * other end hanging up. */
+    private var hangingUpID: String? = null
     private var watchJob: Job? = null
     /** Keys go out one at a time, in the order pressed. */
     private val keys = Channel<Char>(Channel.UNLIMITED)
@@ -96,8 +99,9 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
         phone?.let { added ->
             val leg = leg ?: return@let
             val present = peers.firstOrNull { it.identity?.value == added.identity }
-            if (leg.observe(present != null, present?.attributes?.get("sip.callStatus"), now())) legEnded(added, leg.answered)
-            else phoneAnswered = leg.answered
+            if (!leg.observe(present != null, present?.attributes?.get("sip.callStatus"), now())) phoneAnswered = leg.answered
+            else if (hangingUpID == added.id) { end(added); showPhone("You hung up ${added.label}.") }
+            else legEnded(added, leg.answered)
         }
         val guest = latest(call?.porchGuest)
         // The bedside's LiveKit identity is its member ID. Someone is added only once both are in the room.
@@ -191,6 +195,7 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
         val current = phone ?: return
         if (hangingUp) return
         hangingUp = true
+        hangingUpID = current.id
         scope.launch {
             try {
                 val response = session.service.send("removePhoneGuest", mapOf("callID" to JsonPrimitive(callID), "guestID" to JsonPrimitive(current.id)))
@@ -207,6 +212,7 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
                 error = "Couldn't reach Porch. Check the connection and try again."
             } finally {
                 hangingUp = false
+                hangingUpID = null
                 refresh()
             }
         }
