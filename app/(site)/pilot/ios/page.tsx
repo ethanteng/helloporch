@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Chain, Contact, Guide, guideMetadata, Questions, Says, Screenshot, StepVideo, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Guide, guideMetadata, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
 import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
@@ -20,29 +20,6 @@ const kit: KitPart[] = [
   { name: "A USB-C hub", rule: "With a port for the iPad’s charger", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
-
-function GetPorch({ device }: { device: string }) {
-  return (
-    <ol>
-      <li>
-        On the {device}, install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store.
-      </li>
-      <li>
-        {testFlight ? (
-          <>
-            On the same {device}, open <a href={testFlight}>Porch’s TestFlight link</a>.
-          </>
-        ) : (
-          <>On the same {device}, open the TestFlight link I sent you.</>
-        )}{" "}
-        TestFlight opens. Tap <UI>Accept</UI>, then <UI>Install</UI>.
-      </li>
-    </ol>
-  );
-}
-
-// Where I suggest printing the phone's photo labels.
-const fedExCopies = "https://www.office.fedex.com/default/copies.html";
 
 const parts: GuidePart[] = [
   {
@@ -88,10 +65,6 @@ const parts: GuidePart[] = [
             <strong>Check the date and time are set automatically,</strong> under <UI>Settings</UI>, <UI>General</UI>,{" "}
             <UI>Date &amp; Time</UI>.
           </li>
-          <li>
-            <strong>Check the switch on the corded phone.</strong> Look on the side or bottom for <UI>T / P</UI> or{" "}
-            <UI>Tone / Pulse</UI>. Set it to <UI>T</UI> or <UI>Tone</UI>.
-          </li>
         </ol>
         <Tip label="An older iPad?">
           <p>
@@ -109,87 +82,37 @@ const parts: GuidePart[] = [
   },
   {
     id: "install",
-    title: "Install Porch on the iPad",
+    title: "Install and set up Porch",
     body: (
       <>
         <StepVideo
           name="ios-setup"
           label="Video: installing Porch and setting up your loved one’s Porch on the iPad"
-          caption="From installing Porch to choosing the corded phone. This video covers this step and the next two."
+          caption="Installing Porch, opening your setup link and setting up your loved one’s Porch."
         />
-        <GetPorch device="iPad" />
-        <p>
-          Look for <UI>Porch Family Calling</UI> in TestFlight and <UI>Porch</UI> on the Home Screen.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: "setup-link",
-    title: "Open your setup link on the iPad",
-    body: (
-      <>
-        <p>
-          On the iPad, tap the private setup link in your email or text. Porch opens to{" "}
-          <UI>Who is this Porch for?</UI>
-        </p>
-        <p>If the link opens a HelloPorch web page, follow these steps.</p>
         <ol>
           <li>
-            Tap <UI>Open setup in Porch</UI>.
+            On the iPad, install Apple’s free <a href={testFlightApp}>TestFlight app</a>. Then open{" "}
+            {testFlight ? <a href={testFlight}>Porch’s TestFlight link</a> : "the TestFlight link I sent you"} and tap{" "}
+            <UI>Accept</UI>, then <UI>Install</UI>. Porch appears on the Home Screen.
           </li>
           <li>
-            If that doesn’t work, tap <UI>Copy setup link</UI>. Open Porch, tap <UI>Set up Porch for someone</UI>, paste
-            the link into <UI>Setup link</UI> and tap <UI>Continue</UI>.
-          </li>
-        </ol>
-        <Warn>
-          <p>
-            Use the setup link on the iPad your loved one will use. You’ll add your own phone later with an
-            invitation from the iPad.
-          </p>
-        </Warn>
-      </>
-    ),
-  },
-  {
-    id: "setup",
-    title: "Set up your loved one’s Porch",
-    body: (
-      <>
-        <p>Where you see [Name] in this guide, the app shows the name you enter here.</p>
-        <ol>
-          <li>
-            <strong>
-              <UI>Who is this Porch for?</UI>
-            </strong>{" "}
-            Enter the name family members use, such as Grandpa Joe, and tap <UI>Continue</UI>. You can change it later.
+            Tap your private setup link on the iPad your loved one will use. Porch opens and asks{" "}
+            <UI>Who is this Porch for?</UI>
           </li>
           <li>
-            <strong>
-              <UI>Choose a caregiver PIN</UI>
-            </strong>{" "}
-            Enter the same six digits twice. You’ll use this PIN to change settings on the iPad or your phone.
-            Keep it somewhere safe.
+            Enter the name family members use, such as Grandpa Joe, and tap <UI>Continue</UI>.
+          </li>
+          <li>Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.</li>
+          <li>
+            Tap <UI>Get number</UI> to get a phone number for your loved one’s Porch. When it appears, tap{" "}
+            <UI>Continue</UI>.
           </li>
           <li>
-            <strong>
-              <UI>[Name]’s Porch number</UI>
-            </strong>{" "}
-            Tap <UI>Get number</UI> to get a phone number with the suggested area code. To pick another area code, tap{" "}
-            <UI>Use a different area code</UI>. When the number appears, tap <UI>Continue</UI>.
+            Tap <UI>Continue</UI> and allow the microphone and camera.
           </li>
           <li>
-            <strong>
-              <UI>Microphone and camera</UI>
-            </strong>{" "}
-            Tap <UI>Continue</UI> and allow access to the microphone and camera so family can hear and see your loved one.
-          </li>
-          <li>
-            <strong>
-              <UI>How will [Name] call?</UI>
-            </strong>{" "}
-            Choose <UI>Corded phone</UI>. If the adapter hasn’t arrived, tap <UI>Do this later</UI> on the next screen.
+            Choose <UI>Corded phone</UI>. If the phone adapter hasn’t arrived yet, tap <UI>Do this later</UI>.
           </li>
         </ol>
       </>
@@ -262,65 +185,26 @@ const parts: GuidePart[] = [
           label="Video: adding your phone with the QR code on the iPad"
           caption="Adding your iPhone with the QR code on the iPad."
         />
-        <p>
-          When the iPad shows <UI>Add your phone</UI>, follow these steps to call, send messages and change Porch
-          settings from your own phone.
-        </p>
         <ol>
           <li>
-            <strong>Install Porch on your phone.</strong> On an iPhone, use TestFlight as you did on the iPad.
-            If you use Android, send me the email address you use in Google Play. Once I’ve added you to the test,
-            open the Google Play test link I send you on your phone. Join the test, then tap <UI>Install</UI> in Google Play.
+            Install Porch on your phone first. On an iPhone, use TestFlight as you did on the iPad. On an Android
+            phone, send me the email address you use in Google Play, and I’ll send you a test link.
           </li>
           <li>
-            On the iPad, type your name as you want it to appear when you call. Tap <UI>Show QR code</UI>.
+            On the iPad, type your name, then tap <UI>Show QR code</UI>.
+          </li>
+          <li>Open the Camera app on your phone and point it at the code. Tap the link that appears.</li>
+          <li>
+            Porch opens on your phone. Tap <UI>Join family</UI>.
           </li>
           <li>
-            Open the Camera app on your phone and point it at the square code on the iPad. Tap the link that appears,
-            then tap <UI>Join family</UI> in Porch.
+            On an iPhone, allow the microphone and notifications, so calls can ring. On Android,{" "}
+            <Link href="/pilot/android#ring">let calls ring your phone</Link>.
           </li>
           <li>
-            On an iPhone, allow notifications so calls can ring and allow microphone access so people can hear you.
-            On Android, follow the steps to <Link href="/pilot/android#ring">let calls ring your phone</Link>.
-          </li>
-          <li>
-            The iPad says <Says>Your phone joined [Name]’s Porch.</Says> Tap <UI>Continue</UI>.
+            The iPad says your phone joined. Tap <UI>Continue</UI>.
           </li>
         </ol>
-        <Tip label="If the iPad keyboard doesn’t appear">
-          <p>
-            With the phone adapter plugged in, the iPad treats it as a keyboard and may hide its own. Tap{" "}
-            <UI>Porch keyboard</UI> under the field, or unplug the adapter while you type.
-          </p>
-        </Tip>
-        <p>If the link opens a web page, tap <UI>Open invitation in Porch</UI>. If Porch still doesn’t open, try either option below.</p>
-        <ul>
-          <li>
-            Tap <UI>Copy invitation</UI>, open Porch, tap <UI>I’m joining my family</UI>, paste it into{" "}
-            <UI>Porch invitation</UI> on iPhone or <UI>Invitation link</UI> on Android. Tap <UI>Join family</UI>.
-          </li>
-          <li>
-            On the iPad, tap <UI>Send the invitation instead</UI> and send the link to your phone.
-          </li>
-        </ul>
-        <h3>On your iPhone</h3>
-        <Screenshot
-          src="/pilot/screens/iphone-home.png"
-          width={690}
-          height={1500}
-          device="phone"
-          alt="Porch on an iPhone after joining Rose’s Porch: Audio call, Video call, Drop in with audio, Drop in with video, Send a message, Messages with Rose, and Rose’s Porch number."
-          caption="Porch on your iPhone once you’ve joined."
-        />
-        <ul>
-          <li>
-            Under <UI>[Name]’s Porch number</UI>, tap <UI>Add to Contacts</UI>, so you recognize their Porch when it calls you.
-          </li>
-          <li>
-            Tap the person icon in the top right corner, then <UI>Add a photo</UI>. Your loved one sees it when you call. You can
-            change your name there too.
-          </li>
-        </ul>
       </>
     ),
   },
@@ -334,98 +218,30 @@ const parts: GuidePart[] = [
           label="Video: putting a family member on key 1"
           caption="Putting a family member who has joined on key 1."
         />
-        <p>
-          Set up keys 1 to 8 on the iPad, one person per key. Key 0 answers and hangs up. Key 9 turns the camera
-          off and on during video calls.
-        </p>
-        <Screenshot
-          src="/pilot/screens/ipad-clock.png"
-          width={1600}
-          height={1112}
-          device="tablet"
-          alt="Porch’s clock on the iPad, with a gear in the top right corner and a Call someone button."
-          caption="The gear in the top right corner of the clock opens caregiver mode."
-        />
+        <p>Keys 1 to 8 call people. Key 0 answers and hangs up, and key 9 turns the camera off and on.</p>
         <ol>
           <li>
-            Setup ends on <UI>[Name]’s Porch is ready</UI>. Tap <UI>Put people on the keypad</UI>. Later, tap the gear on
-            the clock, enter your PIN and tap <UI>Open caregiver mode</UI>.
+            When setup ends, tap <UI>Put people on the keypad</UI>. Later, tap the gear on the clock, enter your PIN
+            and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
-            Open <UI>People</UI> and tap a key, such as 1.
+            Open <UI>People</UI> and tap a key, such as 1. Choose <UI>Call a person</UI>.
           </li>
           <li>
-            Choose <UI>Call a person</UI> under the heading for that key, such as <UI>What key 1 does</UI>.
+            If they’ve joined, tap <UI>Choose from Family on Porch</UI> and choose them. For anyone else, type their
+            name or tap <UI>Choose from Contacts</UI>.
           </li>
           <li>
-            Under <UI>Their details</UI>, tap <UI>Choose from Family on Porch</UI> for someone who has already joined.
-            For anyone else, type their name or tap <UI>Choose from Contacts</UI>. To invite them, tap <UI>Invite them</UI>.
+            Under <UI>Calls start as</UI>, choose <UI>Video</UI> or <UI>Voice</UI>.
           </li>
           <li>
-            Under <UI>Calls start as</UI>, choose video or audio. Under <UI>Photo &amp; button color</UI>, tap <UI>Add photo</UI>.
-          </li>
-          <li>
-            To try their regular phone if they miss a Porch call, turn on <UI>Call their phone</UI> and enter their{" "}
-            <UI>Primary number</UI>. By default, Porch tries that number after 20 seconds. For numbers outside the US,
-            start with + and the country code.
+            To try their regular phone when they miss a Porch call, turn on <UI>Call their phone</UI> and enter their{" "}
+            <UI>Primary number</UI>. Porch tries it after 20 seconds.
           </li>
           <li>
             Tap <UI>Save</UI>. Repeat for each key.
           </li>
         </ol>
-        <Screenshot
-          src="/pilot/screens/ipad-keypad.png"
-          width={1600}
-          height={1112}
-          device="tablet"
-          alt="Caregiver mode on the iPad with People open. The keypad shows David on key 1, Sarah on 2, Maria on 3 and James on 4, Video on / off on 9, Answer / hang up on 0, and Add on the empty keys."
-          caption="People in caregiver mode. Tap Add on an empty key to set it up."
-        />
-        <p>
-          Porch blocks calls from unknown numbers by default. To let a number through, open <UI>Calls</UI> in
-          caregiver mode, then <UI>Blocked numbers</UI>, and tap <UI>Allow</UI> next to the number.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: "labels",
-    title: "Put photos on the phone’s keys",
-    body: (
-      <>
-        <p>
-          Use the <Link href="/labels">phone button label maker</Link> to print a name and photo for each key.
-          You can use it on a computer, tablet or phone. The photos stay on that device.
-        </p>
-        <ol>
-          <li>
-            Under <UI>Choose your contacts</UI>, select the number of people you assigned to keys.
-          </li>
-          <li>
-            Under <UI>Add names and photos</UI>, enter names in key order and tap <UI>Add photo</UI> for each person.
-            Use a close-up of their face. Tap <UI>Preview &amp; adjust</UI> to move or zoom the photo.
-          </li>
-          <li>
-            Measure the width and height of a button in inches, including the space for the name. Enter the measurements under{" "}
-            <UI>Set the label size and quantity</UI>.
-          </li>
-          <li>
-            Check the <UI>Print preview</UI>, then tap <UI>Download print-ready PDF</UI>.
-          </li>
-          <li>
-            Print in color at <UI>Actual Size</UI> or 100% so the labels fit the keys.
-          </li>
-          <li>
-            Cut out each label and match it to the key you assigned in <UI>People</UI>. If the keys have clear
-            covers, lift them and slide the labels underneath.
-          </li>
-        </ol>
-        <Tip label="Printing at a shop">
-          <p>
-            If you use a print shop such as <a href={fedExCopies}>FedEx Office</a>, ask for color on{" "}
-            <strong>Matte Cover (100 lb.)</strong> paper at 100% size. Matte paper cuts down on glare under the key covers.
-          </p>
-        </Tip>
       </>
     ),
   },
@@ -439,87 +255,26 @@ const parts: GuidePart[] = [
           label="Video: inviting a relative from your phone"
           caption="Inviting a relative from your iPhone."
         />
-        <p>Each relative gets their own invitation, from your iPhone:</p>
         <ol>
           <li>
-            In Porch, tap the person icon in the top right corner, then <UI>Caregiver mode</UI>. Enter the PIN and tap{" "}
-            <UI>Open caregiver mode</UI>.
+            In Porch on your iPhone, tap the person icon in the top right corner, then <UI>Caregiver mode</UI>. Enter
+            the PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
           </li>
           <li>
-            Enter their name. <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> let their calls connect without your loved
-            one answering. Turn off either option if you want their calls to ring. Turn on <UI>Caregiver mode</UI>{" "}
-            for people who should be able to change settings.
+            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
+            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
           </li>
           <li>
-            Tap <UI>Create invitation</UI> and send it by text or email. Then tap <UI>Done</UI>.
+            Tap <UI>Create invitation</UI>, send it by text or email, then tap <UI>Done</UI>.
           </li>
         </ol>
         <p>
-          Each invitation works once and expires after 24 hours. The link shows them how to get Porch. On an iPhone, that’s
-          TestFlight and Porch, as you did. Relatives with an Android phone need me to add them to the Google Play test
-          first, so send me their Google account before you invite them.
+          Each invitation works once and expires after 24 hours. Relatives with an Android phone need me to add them to
+          the Google Play test first, so send me their Google account before you invite them.
         </p>
-        <p>
-          You can also invite people from the iPad: in caregiver mode, open <UI>People</UI> and tap{" "}
-          <UI>Invite someone</UI>.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: "test",
-    title: "Test calls in both directions",
-    body: (
-      <>
-        <h3>Call your loved one from your iPhone</h3>
-        <p>
-          With the clock showing on the iPad, tap <UI>Video call</UI> in Porch on your iPhone. With drop-ins enabled,
-          the iPad announces the caller and connects after five seconds. Tap <UI>Don’t connect</UI> or press 0 to stop it.
-        </p>
-        <p>
-          If the caller can’t drop in, the iPad rings. Your loved one can tap <UI>Answer video call</UI> or lift the
-          receiver and press 0.
-        </p>
-        <h3>Call you from the iPad</h3>
-        <p>
-          Lift the receiver and press your key. The iPad says <Says>Calling</Says> and your name, and your iPhone
-          rings like a regular phone call, even when it’s locked. Put the receiver back to hang up.
-        </p>
-        <p>
-          If you added a regular phone number to your key, Porch tries that number when you miss the call. Your
-          phone’s voicemail can take a message. If you left the number blank, your loved one can leave a message in Porch.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: "everyday",
-    title: "How your loved one uses Porch",
-    body: (
-      <>
-        <ul>
-          <li>
-            <strong>Make a call.</strong> Lift the receiver and press the person’s key. Or tap{" "}
-            <UI>Call someone</UI> and choose their name.
-          </li>
-          <li>
-            <strong>Answer a call.</strong> Lift the receiver and press 0, or tap the answer button. To decline, tap{" "}
-            <UI>Decline</UI> on the screen.
-          </li>
-          <li>
-            <strong>Hang up.</strong> Put the receiver back or press 0.
-          </li>
-          <li>
-            <strong>Play a message.</strong> Tap <UI>Play 1 message</UI> on the clock screen.
-          </li>
-          <li>
-            Family members can call and send messages from Porch on their phones. People you approve can also drop in.
-          </li>
-        </ul>
-        <p>See <Link href="/pilot/features">Porch features and settings</Link> for calling, messages and caregiver settings.</p>
       </>
     ),
   },
@@ -533,13 +288,22 @@ const parts: GuidePart[] = [
           label="Video: changing the bedside language and voice"
           caption="Switching the bedside to Spanish and choosing a voice."
         />
-        <p>
-          Porch can speak English, Mandarin, Cantonese, Spanish, Tagalog and Korean. On the iPad, open caregiver mode,
-          then <UI>Display &amp; voice</UI>. Choose a <UI>Bedside language</UI> and tap <UI>Save</UI>.
-        </p>
-        <p>
-          The <Link href="/pilot/features#language">language, voice and clock settings</Link> are in the features guide.
-        </p>
+        <ol>
+          <li>
+            On the clock, tap the gear in the top right corner. Enter your PIN and tap <UI>Open caregiver mode</UI>.
+          </li>
+          <li>
+            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose English, Mandarin, Cantonese,
+            Spanish, Tagalog or Korean.
+          </li>
+          <li>
+            To pick a voice, use the menu under <UI>Announcement voice</UI>. <UI>Preview announcement</UI> lets you
+            hear it.
+          </li>
+          <li>
+            Tap <UI>Save</UI>, then <UI>Back to clock</UI>.
+          </li>
+        </ol>
       </>
     ),
   },
@@ -598,6 +362,25 @@ const parts: GuidePart[] = [
             a: (
               <p>
                 Check that the iPad is on, plugged in and connected to Wi-Fi. Open Porch and leave the clock showing.
+              </p>
+            ),
+          },
+          {
+            q: "The setup link opens a web page instead of Porch.",
+            a: (
+              <p>
+                Tap <UI>Open setup in Porch</UI>. If that doesn’t work, tap <UI>Copy setup link</UI>, open Porch, tap{" "}
+                <UI>Set up Porch for someone</UI>, paste the link into <UI>Setup link</UI> and tap <UI>Continue</UI>.
+              </p>
+            ),
+          },
+          {
+            q: "My phone won’t join from the QR code.",
+            a: (
+              <p>
+                If the link opens a web page, tap <UI>Open invitation in Porch</UI>. Or tap <UI>Copy invitation</UI>,
+                open Porch, tap <UI>I’m joining my family</UI>, paste it in and tap <UI>Join family</UI>. You can also
+                tap <UI>Send the invitation instead</UI> on the iPad and send the link to your phone.
               </p>
             ),
           },
