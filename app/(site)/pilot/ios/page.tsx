@@ -400,76 +400,90 @@ const parts: GuidePart[] = [
     id: "help",
     title: "If something isn’t working",
     body: (
-      <Questions
-        items={[
-          {
-            q: "The phone’s keys don’t do anything.",
-            a: (
-              <p>
-                Lift the receiver before pressing a key. Check that the adapter’s red light is on and the charger
-                is plugged into the hub. Then open caregiver mode, <UI>This iPad</UI>, and run{" "}
-                <UI>Connect the phone</UI> again.
-              </p>
-            ),
-          },
-          {
-            q: "My phone says Porch isn’t ready.",
-            a: (
-              <p>
-                Check that the iPad is on, plugged in and connected to Wi-Fi. Open Porch and leave the clock showing.
-              </p>
-            ),
-          },
-          {
-            q: "The setup link opens a web page instead of Porch.",
-            a: (
-              <p>
-                Tap <UI>Open setup in Porch</UI>. If that doesn’t work, tap <UI>Copy setup link</UI>, open Porch, tap{" "}
-                <UI>Set up Porch for someone</UI>, paste the link into <UI>Setup link</UI> and tap <UI>Continue</UI>.
-              </p>
-            ),
-          },
-          {
-            q: "The setup link stopped working.",
-            a: <p>It works once and expires after 14 days. Ask me for a new one.</p>,
-          },
-          {
-            q: "Someone can’t call my loved one’s Porch number.",
-            a: (
-              <p>
-                Save their number to a key or open <UI>Calls</UI> in caregiver mode. Tap <UI>Blocked numbers</UI>, then{" "}
-                <UI>Allow</UI> next to the number.
-              </p>
-            ),
-          },
-          {
-            q: "Porch won’t open, or says it has expired.",
-            a: (
-              <p>
-                Each test version lasts 90 days. Open TestFlight and tap <UI>Update</UI> next to Porch.
-              </p>
-            ),
-          },
-          {
-            q: "How do I add someone later?",
-            a: (
-              <p>
-                Any time, from Porch on your phone: open caregiver mode, then <UI>Family</UI>, and tap{" "}
-                <UI>Invite someone</UI>. Send them the invitation and the <Link href="/pilot/phone">phone guide</Link>.
-              </p>
-            ),
-          },
-          {
-            q: "How do I get help?",
-            a: (
-              <p>
-                Tell me what happened and which device you were using. You can <Contact />. If there’s an error on the
-                screen, a photo helps.
-              </p>
-            ),
-          },
-        ]}
-      />
+      <>
+        <p>
+          The <Link href="/pilot/features">features guide</Link>, at{" "}
+          <Link href="/pilot/features">helloporch.store/pilot/features</Link>, explains every feature and setting in
+          detail.
+        </p>
+        <Questions
+          items={[
+            {
+              q: "The phone’s keys don’t do anything.",
+              a: (
+                <p>
+                  Lift the receiver before pressing a key. Check that the adapter’s red light is on and the charger
+                  is plugged into the hub. Then open caregiver mode, <UI>This iPad</UI>, and run{" "}
+                  <UI>Connect the phone</UI> again.
+                </p>
+              ),
+            },
+            {
+              q: "My phone says Porch isn’t ready.",
+              a: (
+                <p>
+                  Check that the iPad is on, plugged in and connected to Wi-Fi. Open Porch and leave the clock showing.
+                </p>
+              ),
+            },
+            {
+              q: "The setup link opens a web page instead of Porch.",
+              a: (
+                <p>
+                  Tap <UI>Open setup in Porch</UI>. If that doesn’t work, tap <UI>Copy setup link</UI>, open Porch, tap{" "}
+                  <UI>Set up Porch for someone</UI>, paste the link into <UI>Setup link</UI> and tap <UI>Continue</UI>.
+                </p>
+              ),
+            },
+            {
+              q: "The setup link stopped working.",
+              a: <p>It works once and expires after 14 days. Ask me for a new one.</p>,
+            },
+            {
+              q: "Someone can’t call my loved one’s Porch number.",
+              a: (
+                <p>
+                  Save their number to a key or open <UI>Calls</UI> in caregiver mode. Tap <UI>Blocked numbers</UI>, then{" "}
+                  <UI>Allow</UI> next to the number.
+                </p>
+              ),
+            },
+            {
+              q: "Porch won’t open, or says it has expired.",
+              a: (
+                <p>
+                  Each test version lasts 90 days. Open TestFlight and tap <UI>Update</UI> next to Porch.
+                </p>
+              ),
+            },
+            {
+              q: "How do I add someone later?",
+              a: (
+                <p>
+                  Any time, from Porch on your phone: open caregiver mode, then <UI>Family</UI>, and tap{" "}
+                  <UI>Invite someone</UI>. Send them the invitation and the <Link href="/pilot/phone">phone guide</Link>.
+                </p>
+              ),
+            },
+            {
+              q: "How do I get help?",
+              a: (
+                <>
+                  <p>
+                    Check the <Link href="/pilot/features">features guide</Link> at{" "}
+                    <Link href="/pilot/features">helloporch.store/pilot/features</Link> for how each feature and setting
+                    works.
+                  </p>
+                  <p>
+                    Or tell me what happened and which device you were using. You can <Contact />. If there’s an error
+                    on the screen, a photo helps.
+                  </p>
+                </>
+              ),
+            },
+          ]}
+        />
+      </>
     ),
   },
 ];
