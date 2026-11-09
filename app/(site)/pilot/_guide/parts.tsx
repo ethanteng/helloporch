@@ -127,14 +127,14 @@ export function Path({ steps }: { steps: ReactNode[] }) {
   );
 }
 
-/** Every setting's out-of-the-box value, and where it's changed. */
+/** Each setting’s starting value and where to change it. */
 export function Defaults({ rows }: { rows: [feature: ReactNode, value: ReactNode, where: ReactNode][] }) {
   return (
     <table className={styles.defaults}>
       <thead>
         <tr>
           <th scope="col">Feature</th>
-          <th scope="col">Out of the box</th>
+          <th scope="col">At setup</th>
           <th scope="col">Change it in caregiver mode</th>
         </tr>
       </thead>
@@ -142,7 +142,7 @@ export function Defaults({ rows }: { rows: [feature: ReactNode, value: ReactNode
         {rows.map(([feature, value, where], i) => (
           <tr key={i}>
             <th scope="row">{feature}</th>
-            <td data-label="Out of the box">{value}</td>
+            <td data-label="At setup">{value}</td>
             <td data-label="Change it">{where}</td>
           </tr>
         ))}
