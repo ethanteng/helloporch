@@ -398,8 +398,8 @@ Calls can be tried locally with LiveKit's server in dev mode; see [android/READM
   - The screen stays on and the system bars are hidden.
   - Incoming calls turn the screen on and show over the lock screen (`setShowWhenLocked`, `setTurnScreenOn`).
   - The bedside registers for call pushes too, in case Porch isn't in front.
-- **Default clock.** Weekday, time and date in the bedside locale. Sizes come from screen ratios, and AM/PM is shown at 25%. It refreshes on the minute, and on time or locale changes.
-- **Dynamic clock.** Drawn on a Canvas: sky ramps, a sun or moon arc, 24 stars at night, hills and a seasonal tree. It crossfades over 1.5 s unless animations are off. Day runs 6–18 by default, with a hemisphere setting.
+- **Dark clock** (the `default` appearance, chosen as Dark). Weekday, time and date in the bedside locale. Sizes come from screen ratios, and AM/PM is shown at 25%. It refreshes on the minute, and on time or locale changes.
+- **Dynamic clock** (Day & night, what a new bedside starts with since 2026-11-08). Drawn on a Canvas: sky ramps, a sun or moon arc, 24 stars at night, hills and a seasonal tree. It crossfades over 1.5 s unless animations are off. Day runs 6–18 by default, with a hemisphere setting.
 - **Contact grid.**
   - Two columns at width ≥ 600 dp, with photo cards and "Press X".
   - The button color is configurable, with black or white text chosen by WCAG contrast.

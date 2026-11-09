@@ -759,10 +759,13 @@ final class MessageSettingsViewController: CaregiverPageViewController {
         content.addArrangedSubview(group(rows: [toggleRow("Allow family messages", messagesOn), review]))
         // Starting messages when someone sits down uses this iPad's camera, so it's set on the iPad itself.
         guard admin.onBedside else { return }
-        // On by default, but without camera access it can't watch, so the switch shows off.
-        let enabled = MessageAutoplay.load().enabled && !cameraRefused
-        var autoplay = [autoplayToggle(enabled)]
-        if enabled { autoplay += [hourRow("Starting at", \.startHour), hourRow("Until", \.endHour)] }
+        var settings = MessageAutoplay.load()
+        if settings.enabled && cameraRefused {
+            settings.enabled = false; settings.save()
+            NotificationCenter.default.post(name: .porchMessageAutoplayChanged, object: nil)
+        }
+        var autoplay = [autoplayToggle(settings.enabled)]
+        if settings.enabled { autoplay += [hourRow("Starting at", \.startHour), hourRow("Until", \.endHour)] }
         content.addArrangedSubview(group(rows: autoplay))
     }
     private func autoplayToggle(_ enabled: Bool) -> UIView {
@@ -804,8 +807,9 @@ final class MessageSettingsViewController: CaregiverPageViewController {
     }
 }
 
-/// Camera access was refused or isn't allowed on this iPad. The camera switches are on by default, but show off then,
-/// since the camera can't look. Turning one on asks again, and says where to allow it.
+/// Camera access was refused or isn't allowed on this iPad. The camera switches are on by default, but the camera can't
+/// look then, so opening their page turns them off, as Android does: allowing the camera later doesn't start one that
+/// showed off. Turning one back on asks again, and says where to allow it.
 private var cameraRefused: Bool { [.denied, .restricted].contains(AVCaptureDevice.authorizationStatus(for: .video)) }
 
 /// What family learn about someone being at the iPad. Sharing it is a server setting, so a phone can change it too.
@@ -828,7 +832,11 @@ final class PrivacySettingsViewController: CaregiverPageViewController {
         content.addArrangedSubview(textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } })
     }
     private func cameraToggle(enabled: Bool) -> UIView {
-        let on = UISwitch(); on.isOn = BedsideAttendance.cameraEnabled() && !cameraRefused
+        if BedsideAttendance.cameraEnabled() && cameraRefused {
+            BedsideAttendance.setCameraEnabled(false)
+            NotificationCenter.default.post(name: .porchAttendanceCameraChanged, object: nil)
+        }
+        let on = UISwitch(); on.isOn = BedsideAttendance.cameraEnabled()
         on.isEnabled = enabled
         on.accessibilityIdentifier = "attendance.camera"
         on.addAction(UIAction { [weak self, weak on] _ in
