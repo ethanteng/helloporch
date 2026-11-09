@@ -349,6 +349,98 @@
   background: var(--honey);
 }
 
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pathArrow {
+  padding: 0 6px;
+  color: var(--tomato-deep);
+}
+
+/* The table of defaults: three columns, which become stacked cards on a phone. */
+.defaults {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 16px / 1.5 var(--sans);
+}
+
+.defaults thead th {
+  padding: 0 12px 10px 0;
+  font: 600 13px / 1.4 var(--sans);
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.defaults tbody tr {
+  border-top: 1px solid oklch(0.85 0.03 70);
+}
+
+.defaults tbody th,
+.defaults td {
+  padding: 12px 12px 12px 0;
+  vertical-align: top;
+  text-align: left;
+}
+
+.defaults tbody th {
+  width: 30%;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.defaults td {
+  color: var(--muted-2);
+}
+
+.defaults td:first-of-type {
+  width: 30%;
+  font-weight: 600;
+  color: var(--tomato-deep);
+}
+
+/* Where a feature is changed, its default, and Android's difference. */
+.setting {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 6px 22px;
+  border-radius: 18px;
+  background: var(--paper);
+}
+
+.setting > div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.setting > div + div {
+  border-top: 1px solid oklch(0.9 0.025 75);
+}
+
+.setting dt {
+  font: 600 14px / 1.6 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.setting dd {
+  margin: 0;
+  font: 400 17px / 1.6 var(--sans);
+  color: var(--muted-2);
+  text-wrap: pretty;
+}
+
 .faq {
   display: flex;
   flex-direction: column;
@@ -395,6 +487,35 @@
 
   .contents ol {
     columns: 1;
+  }
+
+  .setting > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .defaults thead {
+    display: none;
+  }
+
+  .defaults tbody tr {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 0;
+  }
+
+  .defaults tbody th,
+  .defaults td,
+  .defaults td:first-of-type {
+    width: auto;
+    padding: 0;
+  }
+
+  .defaults td::before {
+    content: attr(data-label) ": ";
+    font-weight: 400;
+    color: var(--muted);
   }
 
   .partHead {

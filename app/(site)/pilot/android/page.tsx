@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
 
 export const metadata = guideMetadata(
@@ -407,8 +408,8 @@ const parts: GuidePart[] = [
           phone rings. Put the receiver back to hang up.
         </p>
         <p>
-          If you don’t answer, Porch rings your regular phone number, if you added one. If nobody answers, your loved one can leave
-          you a message.
+          If you don’t answer, Porch rings your regular phone number, if you added one, and that phone’s own voicemail
+          can take a message. Without a number, your loved one can leave you a message in Porch.
         </p>
       </>
     ),
@@ -417,26 +418,32 @@ const parts: GuidePart[] = [
     id: "everyday",
     title: "How your loved one uses Porch",
     body: (
-      <ul>
-        <li>
-          <strong>To call someone,</strong> lift the receiver and press their key. Or tap <UI>Call someone</UI> on the
-          screen.
-        </li>
-        <li>
-          <strong>To answer,</strong> press 0 on the phone, or tap the answer button.
-        </li>
-        <li>
-          <strong>To hang up,</strong> put the receiver back, or press 0.
-        </li>
-        <li>
-          <strong>Messages</strong> from family wait on the tablet. The clock shows <UI>Play 1 message</UI> until your
-          loved one plays it.
-        </li>
-        <li>
-          <strong>Family</strong> can call, drop in if you allowed it, and send video or voice messages from their
-          phones.
-        </li>
-      </ul>
+      <>
+        <ul>
+          <li>
+            <strong>To call someone,</strong> lift the receiver and press their key. Or tap <UI>Call someone</UI> on the
+            screen.
+          </li>
+          <li>
+            <strong>To answer,</strong> press 0 on the phone, or tap the answer button.
+          </li>
+          <li>
+            <strong>To hang up,</strong> put the receiver back, or press 0.
+          </li>
+          <li>
+            <strong>Messages</strong> from family wait on the tablet. The clock shows <UI>Play 1 message</UI> until your
+            loved one plays it.
+          </li>
+          <li>
+            <strong>Family</strong> can call, drop in if you allowed it, and send video or voice messages from their
+            phones.
+          </li>
+        </ul>
+        <p>
+          For every feature, what it does out of the box and how to change it, see{" "}
+          <Link href="/pilot/features">Every Porch feature</Link>.
+        </p>
+      </>
     ),
   },
   {
@@ -559,15 +566,17 @@ export default function AndroidGuide() {
           get the family calling from their own phones.
         </p>
       }
-      other={{ href: "/pilot/ios", label: "The iPad and iPhone guide" }}
-      kitIntro="Android tablets read the phone through the Cell2Jack directly, so there’s no adapter to wait for."
-      kit={kit}
-      ready={[
-        "Wi-Fi where your loved one lives, and its password.",
-        "Your private setup link, and the link to join Porch’s Google Play test. I’ll send you both.",
-        "Your own phone, iPhone or Android, to pair as the caregiver’s phone.",
-        "A few photos of the people your loved one calls most, for their keys.",
-      ]}
+      aside={<>Using the other kind? <Link href="/pilot/ios">The iPad and iPhone guide</Link></>}
+      kit={{
+        intro: "Android tablets read the phone through the Cell2Jack directly, so there’s no adapter to wait for.",
+        parts: kit,
+        ready: [
+          "Wi-Fi where your loved one lives, and its password.",
+          "Your private setup link, and the link to join Porch’s Google Play test. I’ll send you both.",
+          "Your own phone, iPhone or Android, to pair as the caregiver’s phone.",
+          "A few photos of the people your loved one calls most, for their keys.",
+        ],
+      }}
       parts={parts}
     />
   );
