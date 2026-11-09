@@ -187,7 +187,7 @@ const parts: GuidePart[] = [
         />
         <ol>
           <li>
-            Install Porch on your phone first. On an iPhone, use TestFlight as you did on the iPad. On an Android
+            If you have an iPhone, install TestFlight first, then install Porch as you did on the iPad. On an Android
             phone, send me the email address you use in Google Play, and I’ll send you a test link.
           </li>
           <li>
