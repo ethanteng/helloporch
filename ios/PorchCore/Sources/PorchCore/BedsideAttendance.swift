@@ -1,8 +1,8 @@
 import Foundation
 
 /// Whether someone is at the bedside, so family can tell whether a call now is likely to be answered. The bedside
-/// notices someone when a key is pressed or the screen is touched and, if a caregiver turns it on, when its camera sees
-/// a face close by. It can't tell who: an aide or a visitor counts too. Family only learn when, never how.
+/// notices someone when a key is pressed or the screen is touched and, unless a caregiver turns it off, when its camera
+/// sees a face close by. It can't tell who: an aide or a visitor counts too. Family only learn when, never how.
 public enum BedsideAttendance {
     /// Noticed this recently counts as there now. The camera looks every `lookInterval`, so someone sitting still stays
     /// "at the iPad" between looks, and a look or two that misses a turned head doesn't change that.
@@ -45,9 +45,12 @@ public enum BedsideAttendance {
 
     // The camera's part is a caregiver's choice, kept on this iPad like starting messages when someone sits down.
     private static let cameraKey = "porch.attendanceCamera.v1"
-    /// The camera also looks for someone, so family can see they're there. Off until a caregiver turns it on.
-    public static func cameraEnabled(in defaults: UserDefaults = .standard) -> Bool { defaults.bool(forKey: cameraKey) }
+    /// The camera also looks for someone, so family can see they're there. On until a caregiver turns it off; setup asks
+    /// for the camera, and without it the camera doesn't look.
+    public static func cameraEnabled(in defaults: UserDefaults = .standard) -> Bool { defaults.object(forKey: cameraKey) as? Bool ?? true }
     public static func setCameraEnabled(_ enabled: Bool, in defaults: UserDefaults = .standard) { defaults.set(enabled, forKey: cameraKey) }
+    /// Back to the default, for a new household.
+    public static func forgetCamera(in defaults: UserDefaults = .standard) { defaults.removeObject(forKey: cameraKey) }
 }
 
 /// When this bedside last noticed someone. Main thread only. Kept for this launch; the server keeps the newest it heard.

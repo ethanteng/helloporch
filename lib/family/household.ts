@@ -219,7 +219,7 @@ export function takesAvailability(member: Member, launch: unknown, sequence: unk
 /** Whether family see when someone was last at the bedside iPad. A caregiver can turn it off. */
 export function attendanceShared(house: Household) { return house.shareAttendance !== false; }
 /** The bedside reports, with each poll, how many seconds ago it last noticed someone at the iPad: a key pressed, the
- * screen touched or, if a caregiver turned it on, a face its camera saw. Seconds ago, not a time, so the iPad's clock
+ * screen touched or, unless a caregiver turned it off, a face its camera saw. Seconds ago, not a time, so the iPad's clock
  * doesn't matter. Only the newest poll may call this: `secondsAgo` was counted at send time, so a poll that arrives
  * late would otherwise move the time forward. Among polls that do count, the newest time is kept. Anything else, or a
  * report while sharing is off, is ignored rather than failing the poll. So is a time from before sharing was turned

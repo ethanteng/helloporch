@@ -136,7 +136,7 @@ class PorchCall(
     private var waitJob: Job? = null
     private var controlJob: Job? = null
     private var permissionAnswer: CompletableDeferred<Boolean>? = null
-    /** Hanging up after a stretch of silence, when a caregiver turned it on (off by default; 15 seconds to 30 minutes). */
+    /** Hanging up after a stretch of silence, unless a caregiver turned it off (on by default; 15 seconds to 30 minutes). */
     private val inactivity = CallInactivityTimer(
         if (CallPreferences.disconnectAfterSilence(app.settings)) CallPreferences.silenceSeconds(app.settings).toDouble() else null,
         clock = SystemClock::elapsedRealtime)

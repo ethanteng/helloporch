@@ -32,13 +32,16 @@ class BedsideAttendanceTest {
         assertEquals("Someone was at the iPad 5 minutes ago", BedsideAttendance.text(attendedAt = 1000.0, now = 1300.0, device = "iPad"))
     }
 
-    @Test fun theCameraIsOffUntilACaregiverTurnsItOn() {
+    @Test fun theCameraIsOnUntilACaregiverTurnsItOff() {
         val settings = MemorySettings()
+        assertTrue(BedsideAttendance.cameraEnabled(settings))
+        BedsideAttendance.setCameraEnabled(false, settings)
         assertFalse(BedsideAttendance.cameraEnabled(settings))
         BedsideAttendance.setCameraEnabled(true, settings)
         assertTrue(BedsideAttendance.cameraEnabled(settings))
         BedsideAttendance.setCameraEnabled(false, settings)
-        assertFalse(BedsideAttendance.cameraEnabled(settings))
+        BedsideAttendance.forgetCamera(settings)
+        assertTrue(BedsideAttendance.cameraEnabled(settings), "A new household starts with the default")
     }
 
     @Test fun theBedsideReportsWholeSecondsSinceItLastNoticedSomeone() {

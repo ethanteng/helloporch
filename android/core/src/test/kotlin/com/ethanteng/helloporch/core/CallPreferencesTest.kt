@@ -47,9 +47,9 @@ class CallPreferencesTest {
         assertFalse(CallPreferences.startVideoWithCamera(PorchExperience.FAMILY, settings))
     }
 
-    @Test fun preferencesDefaultOffPersistAndValidateBounds() {
+    @Test fun preferencesDefaultOnPersistAndValidateBounds() {
         val settings = MemorySettings()
-        assertFalse(CallPreferences.disconnectAfterSilence(settings))
+        assertTrue(CallPreferences.disconnectAfterSilence(settings))
         assertEquals(120, CallPreferences.silenceSeconds(settings))
         CallPreferences.saveSilence(enabled = true, seconds = 45, settings)
         assertTrue(CallPreferences.disconnectAfterSilence(settings))

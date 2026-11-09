@@ -52,11 +52,11 @@ final class CallInactivityTests: XCTestCase {
         XCTAssertTrue(timer.update(at: 40, connected: true, speaking: false))
     }
 
-    func testPreferencesDefaultOffPersistAndValidateBounds() throws {
+    func testPreferencesDefaultOnPersistAndValidateBounds() throws {
         let suite = "porch.silence-test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
+        XCTAssertTrue(CallPreferences.disconnectAfterSilence(in: defaults))
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 120)
         CallPreferences.saveSilence(enabled: true, seconds: 45, in: defaults)
         XCTAssertTrue(CallPreferences.disconnectAfterSilence(in: defaults))

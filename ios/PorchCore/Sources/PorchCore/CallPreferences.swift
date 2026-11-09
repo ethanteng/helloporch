@@ -1,6 +1,6 @@
 import Foundation
 
-/// Device-wide caregiver preferences. Silence disconnection is opt-in.
+/// Device-wide caregiver preferences. Silence disconnection is on until a caregiver turns it off.
 public enum CallPreferences {
     public static let fallbackRange = 5...120
     public static let defaultFallbackSeconds = 20
@@ -18,7 +18,7 @@ public enum CallPreferences {
     private static let leaveMessageKey = "porch.leaveMessageWhenUnanswered"
 
     public static func disconnectAfterSilence(in defaults: UserDefaults = .standard) -> Bool {
-        defaults.bool(forKey: silenceEnabledKey)
+        defaults.object(forKey: silenceEnabledKey) as? Bool ?? true
     }
 
     public static func silenceSeconds(in defaults: UserDefaults = .standard) -> Int {

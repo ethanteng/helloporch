@@ -12,10 +12,13 @@ class MessageAutoplayTest {
     private val zone = ZoneId.of("America/Los_Angeles")
     private fun at(hour: Int, minute: Int = 0): Instant = ZonedDateTime.of(2026, 10, 18, hour, minute, 0, 0, zone).toInstant()
 
-    @Test fun autoplayIsOffUntilACaregiverTurnsItOnAndKeepsToItsHours() {
+    @Test fun autoplayIsOnUntilACaregiverTurnsItOffAndKeepsToItsHours() {
         val prefs = MemorySettings()
         var settings = MessageAutoplay.load(prefs)
-        assertFalse(settings.enabled); assertFalse(settings.allows(at(12), zone))
+        assertTrue(settings.enabled); assertTrue(settings.allows(at(12), zone))
+        settings.copy(enabled = false).save(prefs)
+        assertFalse(MessageAutoplay.load(prefs).enabled, "Turned off stays off")
+        assertFalse(MessageAutoplay.load(prefs).allows(at(12), zone))
         settings = settings.copy(enabled = true); settings.save(prefs)
         val saved = MessageAutoplay.load(prefs)
         assertEquals(settings, saved)

@@ -388,7 +388,7 @@ Calls can be tried locally with LiveKit's server in dev mode; see [android/READM
   - Self view at 30% of the short side, at most 200 dp, 4:3. The photo and name move to stay clear of it.
   - Mute, camera and end, with one control change at a time. A chime plays when the camera turns on.
 - **Screen.** Keep it on during any call. Phones turn the screen off with the proximity sensor on voice calls.
-- **Silence hang-up.** Off by default; 1–30 minutes, default 2. It uses LiveKit active-speaker events, and a phone participant on a Porch call counts as activity. Reset it on reconnect.
+- **Silence hang-up.** On by default (since 2026-11-08); 1–30 minutes, default 2. It uses LiveKit active-speaker events, and a phone participant on a Porch call counts as activity. Reset it on reconnect.
 - **Audio.** Use LiveKit's Android audio handling: speaker by default, plus Bluetooth headsets. During a Telecom call, route through the call's endpoint API. iOS shows no route picker; keep it that way unless testing shows a need.
 
 ### Bedside tablet

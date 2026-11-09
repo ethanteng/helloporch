@@ -64,15 +64,15 @@ const parts: GuidePart[] = [
             ["How long a call to the tablet rings", "45 seconds", <><Path steps={["Calls", "Ring before voicemail"]} />, tablet only</>],
             ["Try a regular phone after a missed Porch call", "After 20 seconds, if the key has a phone number", <><Path steps={["Calls", "Try their phone after"]} />, tablet only</>],
             ["Leave a message after an unanswered call from the tablet", "Offered unless the call went to a regular phone", <><Path steps={["Calls", "Leave a message if no one answers"]} />, tablet only</>],
-            ["End calls after silence", "Off", <><Path steps={["Calls", "End calls after silence"]} />, tablet only</>],
+            ["End calls after silence", "On, after 2 minutes", <><Path steps={["Calls", "End calls after silence"]} />, tablet only</>],
             ["Family messages", "On", <Path key="p" steps={["Messages", "Allow family messages"]} />],
             ["Voicemail and texts from unknown numbers", "Held for a caregiver to review", <Path key="p" steps={["Messages", "Waiting messages"]} />],
-            ["Playing messages when someone is in front of the tablet", "Off", <><Path steps={["Messages", "Play when someone is in front of the iPad"]} />, tablet only</>],
+            ["Playing messages when someone is in front of the tablet", "On, from 8 AM until 9 PM", <><Path steps={["Messages", "Play when someone is in front of the iPad"]} />, tablet only</>],
             ["Showing family when someone was at the tablet", "On, from touches and key presses", <Path key="p" steps={["Privacy", "Show family when someone is at the iPad"]} />],
-            ["Using the camera to notice someone", "Off", <><Path steps={["Privacy", "Check with the camera"]} />, tablet only</>],
+            ["Using the camera to notice someone", "On", <><Path steps={["Privacy", "Check with the camera"]} />, tablet only</>],
             ["Language", "English", <><Path steps={["Display & voice", "Bedside language"]} />, tablet only</>],
             ["Announcement voice", "Porch’s voice", <><Path steps={["Display & voice", "Announcement voice"]} />, tablet only</>],
-            ["Clock", "Dark", <><Path steps={["Display & voice", "Clock"]} />, tablet only</>],
+            ["Clock", "Day & night", <><Path steps={["Display & voice", "Clock"]} />, tablet only</>],
             ["Keypad", "0 answers and hangs up, 9 turns video off and on, and the other keys are empty", <><Path steps={["People"]} />, tablet only</>],
             ["A new keypad person’s calls", "Start as video", <>The key’s <UI>Calls start as</UI>, tablet only</>],
             ["Putting the receiver back hangs up", "On", <><Path steps={["This iPad", "Hang up when the receiver is put back"]} />, tablet only</>],
@@ -316,7 +316,7 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            Turn on <Path steps={["Messages", "Play when someone is in front of the iPad"]} />. Porch uses the camera
+            With <Path steps={["Messages", "Play when someone is in front of the iPad"]} /> on, Porch uses the camera
             to see if someone is there, then announces and plays waiting messages. It doesn’t record video.
           </li>
           <li>
@@ -328,7 +328,7 @@ const parts: GuidePart[] = [
         </ul>
         <Setting
           rows={[
-            ["Default", "Off. When on, it plays from 8 AM until 9 PM."],
+            ["Default", "On, from 8 AM until 9 PM."],
             ["Change it", "On the tablet only."],
             ["Android", <>The switch is <UI>Play when someone is in front of the tablet</UI>.</>],
           ]}
@@ -539,7 +539,7 @@ const parts: GuidePart[] = [
         </p>
         <Setting
           rows={[
-            ["Default", "English, Porch’s voice and the Dark clock."],
+            ["Default", "English, Porch’s voice and the Day & night clock."],
             ["Change it", "Tablet only."],
             ["Use a tablet voice", <>Choose <UI>System default</UI> or select a voice from the list.</>],
             ["Android", <>If Porch says no voice is available for a language, add one in Android’s <UI>Settings</UI>, under <UI>Accessibility</UI>, <UI>Text-to-speech output</UI>.</>],
@@ -566,7 +566,7 @@ const parts: GuidePart[] = [
         </ul>
         <Setting
           rows={[
-            ["Default", "Sharing is on, from touches and key presses. The camera check is off."],
+            ["Default", "Sharing is on. Touches, key presses and the camera check all count."],
             ["Change it", <><Path key="p" steps={["Privacy", "Show family when someone is at the iPad"]} />, on the tablet or a caregiver’s phone. <UI>Check with the camera</UI> is on the tablet only.</>],
           ]}
         />
@@ -594,7 +594,7 @@ const parts: GuidePart[] = [
         </ul>
         <Setting
           rows={[
-            ["Default", "Ending silent calls is off. If you turn it on, the wait starts at 2 minutes. You can set it to 1–30 minutes."],
+            ["Default", "Ending silent calls is on, after 2 minutes. You can set it to 1–30 minutes, or turn it off."],
             ["Change it", "Tablet only."],
           ]}
         />

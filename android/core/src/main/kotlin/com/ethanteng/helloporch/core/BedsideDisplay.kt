@@ -12,7 +12,8 @@ import kotlinx.serialization.encoding.Encoder
 
 @Serializable
 data class BedsidePreferences(
-    val appearance: Appearance = Appearance.DEFAULT,
+    /** The Day & night clock until a caregiver chooses Dark. */
+    val appearance: Appearance = Appearance.DYNAMIC,
     val hemisphere: Hemisphere = Hemisphere.NORTHERN,
     val dayStart: Int = 6,
     val nightStart: Int = 18,

@@ -17,10 +17,13 @@ final class MessageAutoplayTests: XCTestCase {
         return calendar
     }
 
-    func testAutoplayIsOffUntilACaregiverTurnsItOnAndKeepsToItsHours() {
+    func testAutoplayIsOnUntilACaregiverTurnsItOffAndKeepsToItsHours() {
         let prefs = defaults()
         var settings = MessageAutoplay.load(from: prefs)
-        XCTAssertFalse(settings.enabled); XCTAssertFalse(settings.allows(at(12), calendar: calendar))
+        XCTAssertTrue(settings.enabled); XCTAssertTrue(settings.allows(at(12), calendar: calendar))
+        var off = settings; off.enabled = false; off.save(to: prefs)
+        XCTAssertFalse(MessageAutoplay.load(from: prefs).enabled, "Turned off stays off")
+        XCTAssertFalse(MessageAutoplay.load(from: prefs).allows(at(12), calendar: calendar))
         settings.enabled = true; settings.save(to: prefs)
         let saved = MessageAutoplay.load(from: prefs)
         XCTAssertEqual(saved, settings)

@@ -759,9 +759,10 @@ final class MessageSettingsViewController: CaregiverPageViewController {
         content.addArrangedSubview(group(rows: [toggleRow("Allow family messages", messagesOn), review]))
         // Starting messages when someone sits down uses this iPad's camera, so it's set on the iPad itself.
         guard admin.onBedside else { return }
-        let settings = MessageAutoplay.load()
-        var autoplay = [autoplayToggle(settings.enabled)]
-        if settings.enabled { autoplay += [hourRow("Starting at", \.startHour), hourRow("Until", \.endHour)] }
+        // On by default, but without camera access it can't watch, so the switch shows off.
+        let enabled = MessageAutoplay.load().enabled && !cameraRefused
+        var autoplay = [autoplayToggle(enabled)]
+        if enabled { autoplay += [hourRow("Starting at", \.startHour), hourRow("Until", \.endHour)] }
         content.addArrangedSubview(group(rows: autoplay))
     }
     private func autoplayToggle(_ enabled: Bool) -> UIView {
@@ -803,6 +804,10 @@ final class MessageSettingsViewController: CaregiverPageViewController {
     }
 }
 
+/// Camera access was refused or isn't allowed on this iPad. The camera switches are on by default, but show off then,
+/// since the camera can't look. Turning one on asks again, and says where to allow it.
+private var cameraRefused: Bool { [.denied, .restricted].contains(AVCaptureDevice.authorizationStatus(for: .video)) }
+
 /// What family learn about someone being at the iPad. Sharing it is a server setting, so a phone can change it too.
 /// The camera check uses this iPad's own camera, so only the iPad shows that switch.
 final class PrivacySettingsViewController: CaregiverPageViewController {
@@ -823,7 +828,7 @@ final class PrivacySettingsViewController: CaregiverPageViewController {
         content.addArrangedSubview(textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } })
     }
     private func cameraToggle(enabled: Bool) -> UIView {
-        let on = UISwitch(); on.isOn = BedsideAttendance.cameraEnabled()
+        let on = UISwitch(); on.isOn = BedsideAttendance.cameraEnabled() && !cameraRefused
         on.isEnabled = enabled
         on.accessibilityIdentifier = "attendance.camera"
         on.addAction(UIAction { [weak self, weak on] _ in

@@ -4,8 +4,8 @@ import java.time.Duration
 import java.time.Instant
 
 /** Whether someone is at the bedside, so family can tell whether a call now is likely to be answered. The bedside
- * notices someone when a key is pressed or the screen is touched and, if a caregiver turns it on, when its camera sees
- * a face close by. It can't tell who: an aide or a visitor counts too. Family only learn when, never how. */
+ * notices someone when a key is pressed or the screen is touched and, unless a caregiver turns it off, when its camera
+ * sees a face close by. It can't tell who: an aide or a visitor counts too. Family only learn when, never how. */
 object BedsideAttendance {
     /** Noticed this recently counts as there now. The camera looks every `lookInterval`, so someone sitting still stays
      * "at the tablet" between looks, and a look or two that misses a turned head doesn't change that. */
@@ -45,9 +45,12 @@ object BedsideAttendance {
     // The camera's part is a caregiver's choice, kept on this bedside like starting messages when someone sits down.
     private const val cameraKey = "porch.attendanceCamera.v1"
 
-    /** The camera also looks for someone, so family can see they're there. Off until a caregiver turns it on. */
-    fun cameraEnabled(settings: PorchSettings): Boolean = settings.getBoolean(cameraKey) ?: false
+    /** The camera also looks for someone, so family can see they're there. On until a caregiver turns it off; setup asks
+     * for the camera, and without it the camera doesn't look. */
+    fun cameraEnabled(settings: PorchSettings): Boolean = settings.getBoolean(cameraKey) ?: true
     fun setCameraEnabled(enabled: Boolean, settings: PorchSettings) = settings.putBoolean(cameraKey, enabled)
+    /** Back to the default, for a new household. */
+    fun forgetCamera(settings: PorchSettings) = settings.remove(cameraKey)
 }
 
 /** When this bedside last noticed someone. Main thread only. Kept for this launch; the server keeps the newest it heard. */

@@ -43,15 +43,18 @@ final class BedsideAttendanceTests: XCTestCase {
         XCTAssertEqual(BedsideAttendance.device(in: try snapshot(me: bedside("android"), people: [phone])), "tablet")
     }
 
-    func testTheCameraIsOffUntilACaregiverTurnsItOn() {
+    func testTheCameraIsOnUntilACaregiverTurnsItOff() {
         let name = "BedsideAttendanceTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertTrue(BedsideAttendance.cameraEnabled(in: defaults))
+        BedsideAttendance.setCameraEnabled(false, in: defaults)
         XCTAssertFalse(BedsideAttendance.cameraEnabled(in: defaults))
         BedsideAttendance.setCameraEnabled(true, in: defaults)
         XCTAssertTrue(BedsideAttendance.cameraEnabled(in: defaults))
         BedsideAttendance.setCameraEnabled(false, in: defaults)
-        XCTAssertFalse(BedsideAttendance.cameraEnabled(in: defaults))
+        BedsideAttendance.forgetCamera(in: defaults)
+        XCTAssertTrue(BedsideAttendance.cameraEnabled(in: defaults), "A new household starts with the default")
     }
 
     func testTheBedsideReportsWholeSecondsSinceItLastNoticedSomeone() {

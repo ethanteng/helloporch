@@ -1,12 +1,12 @@
 import Foundation
 
 /// Playing waiting messages when someone sits in front of the bedside iPad. Kept on this iPad,
-/// off until a caregiver turns it on, and limited to waking hours.
+/// on until a caregiver turns it off, and limited to waking hours.
 public struct MessageAutoplay: Codable, Equatable {
     public static let hourRange = 0...23
     /// After Not now or Stop, the camera waits this long before trying again.
     public static let snoozeSeconds: TimeInterval = 30 * 60
-    public var enabled = false
+    public var enabled = true
     /// Local hours, start inclusive and end exclusive: 8 and 21 mean 8:00 AM until 9:00 PM.
     public var startHour = 8
     public var endHour = 21
@@ -14,7 +14,7 @@ public struct MessageAutoplay: Codable, Equatable {
     private enum CodingKeys: String, CodingKey { case enabled, startHour, endHour }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         startHour = try values.decodeIfPresent(Int.self, forKey: .startHour) ?? 8
         endHour = try values.decodeIfPresent(Int.self, forKey: .endHour) ?? 21
     }
