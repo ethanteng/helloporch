@@ -1,0 +1,48 @@
+name: Swift packages
+description: >-
+  Restores Porch's Swift packages, including LiveKit's prebuilt frameworks, from the Actions cache, fetches whatever is
+  missing with retries, and saves them for later runs. Builds then pass
+  `-clonedSourcePackagesDirPath ios/build/packages -disableAutomaticPackageResolution`, so this is the only step that
+  downloads packages.
+
+# GitHub's release downloads, where LiveKit's xcframeworks live, sometimes answer 504 for a while. Without a cache every
+# job downloaded them again, and one 504 failed the job before anything compiled.
+runs:
+  using: composite
+  steps:
+    - name: Name the package cache
+      id: key
+      shell: bash
+      run: |
+        resolved="$(shasum -a 256 ios/Porch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved | cut -c 1-16)"
+        xcode="$(xcodebuild -version | awk '/Build version/ { print $3 }')"
+        echo "key=swift-packages-$RUNNER_OS-$xcode-$resolved" >> "$GITHUB_OUTPUT"
+        echo "prefix=swift-packages-$RUNNER_OS-" >> "$GITHUB_OUTPUT"
+    # An older cache is still worth restoring: only what changed is fetched.
+    - name: Restore Swift packages
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ios/build/packages
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+    - name: Fetch missing Swift packages
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          if xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
+            -clonedSourcePackagesDirPath ios/build/packages; then
+            exit 0
+          fi
+          if [[ "$attempt" == 3 ]]; then exit 1; fi
+          echo "::warning::Fetching Swift packages failed (attempt $attempt of 3). Trying again in $((attempt * 30)) seconds."
+          sleep $((attempt * 30))
+        done
+    # Saved now rather than at the end of the job, so a later test failure still leaves the packages for the next run.
+    # Parallel jobs race to save the same key; the ones that lose only log a warning.
+    - name: Save Swift packages
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ios/build/packages
+        key: ${{ steps.key.outputs.key }}

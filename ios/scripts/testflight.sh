@@ -84,6 +84,7 @@ xcodebuild -version
 # The project keeps separate bundle IDs and profile settings for app and driver.
 # A global PRODUCT_BUNDLE_IDENTIFIER would also rename the nested driver.
 xcodebuild -project ios/Porch.xcodeproj -scheme "$scheme" \
+  -clonedSourcePackagesDirPath ios/build/packages -disableAutomaticPackageResolution \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$archive_path" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
