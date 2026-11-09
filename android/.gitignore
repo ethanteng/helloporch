@@ -4,3 +4,7 @@ build/
 local.properties
 .idea/
 *.iml
+# Signing keys and their passwords never go in the repo (README, "Release to Google Play").
+*.jks
+*.keystore
+*upload*.properties

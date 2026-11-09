@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -25,6 +27,13 @@ val firebase: Map<String, String> = file("google-services.json").takeIf { it.exi
     )
 } ?: emptyMap()
 
+// Release builds are signed with Porch's upload key, which Google Play replaces with the app signing key. The key and
+// its passwords stay outside the repo, in a properties file named by -Pporch.upload or PORCH_ANDROID_UPLOAD (README).
+// Without one, a release build is left unsigned.
+val upload: Pair<Properties, File>? = ((findProperty("porch.upload") as String?) ?: System.getenv("PORCH_ANDROID_UPLOAD"))
+    ?.let { file(it) }?.takeIf { it.exists() }
+    ?.let { found -> Properties().apply { found.inputStream().use { load(it) } } to found.parentFile }
+
 android {
     namespace = "com.ethanteng.helloporch"
     // Current AndroidX libraries need API 37 to build against. The app still targets 36 (decision 6 in PLAN.md).
@@ -35,12 +44,30 @@ android {
         applicationId = "com.ethanteng.helloporch"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1"
+        // Each upload to Google Play needs a higher versionCode: -Pporch.versionCode (README).
+        versionCode = (findProperty("porch.versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("porch.versionName") as String?) ?: "0.1"
         // The calling server, as on iOS (PorchServerURL). Invitations for any other server carry it in their link.
         buildConfigField("String", "PORCH_SERVER_URL", "\"https://porch-calling-prototype.vercel.app\"")
         for (name in listOf("FIREBASE_APP_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID")) {
             buildConfigField("String", name, "\"${firebase[name].orEmpty()}\"")
+        }
+    }
+
+    upload?.let { (properties, folder) ->
+        signingConfigs {
+            create("upload") {
+                storeFile = folder.resolve(properties.getProperty("storeFile"))
+                storePassword = properties.getProperty("storePassword")
+                keyAlias = properties.getProperty("keyAlias")
+                keyPassword = properties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("upload")
         }
     }
 
