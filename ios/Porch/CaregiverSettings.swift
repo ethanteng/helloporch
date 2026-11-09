@@ -759,7 +759,11 @@ final class MessageSettingsViewController: CaregiverPageViewController {
         content.addArrangedSubview(group(rows: [toggleRow("Allow family messages", messagesOn), review]))
         // Starting messages when someone sits down uses this iPad's camera, so it's set on the iPad itself.
         guard admin.onBedside else { return }
-        let settings = MessageAutoplay.load()
+        var settings = MessageAutoplay.load()
+        if settings.enabled && cameraRefused {
+            settings.enabled = false; settings.save()
+            NotificationCenter.default.post(name: .porchMessageAutoplayChanged, object: nil)
+        }
         var autoplay = [autoplayToggle(settings.enabled)]
         if settings.enabled { autoplay += [hourRow("Starting at", \.startHour), hourRow("Until", \.endHour)] }
         content.addArrangedSubview(group(rows: autoplay))
@@ -803,6 +807,11 @@ final class MessageSettingsViewController: CaregiverPageViewController {
     }
 }
 
+/// Camera access was refused or isn't allowed on this iPad. The camera switches are on by default, but the camera can't
+/// look then, so opening their page turns them off, as Android does: allowing the camera later doesn't start one that
+/// showed off. Turning one back on asks again, and says where to allow it.
+private var cameraRefused: Bool { [.denied, .restricted].contains(AVCaptureDevice.authorizationStatus(for: .video)) }
+
 /// What family learn about someone being at the iPad. Sharing it is a server setting, so a phone can change it too.
 /// The camera check uses this iPad's own camera, so only the iPad shows that switch.
 final class PrivacySettingsViewController: CaregiverPageViewController {
@@ -823,6 +832,10 @@ final class PrivacySettingsViewController: CaregiverPageViewController {
         content.addArrangedSubview(textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } })
     }
     private func cameraToggle(enabled: Bool) -> UIView {
+        if BedsideAttendance.cameraEnabled() && cameraRefused {
+            BedsideAttendance.setCameraEnabled(false)
+            NotificationCenter.default.post(name: .porchAttendanceCameraChanged, object: nil)
+        }
         let on = UISwitch(); on.isOn = BedsideAttendance.cameraEnabled()
         on.isEnabled = enabled
         on.accessibilityIdentifier = "attendance.camera"

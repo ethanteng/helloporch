@@ -126,7 +126,7 @@ enum PorchDevice {
         CallPreferences.forget(in: defaults)
         BedsidePreferences().save(to: defaults)
         MessageAutoplay().save(to: defaults)
-        BedsideAttendance.setCameraEnabled(false, in: defaults)
+        BedsideAttendance.forgetCamera(in: defaults)
         BedsideOutbox.shared.discardAll()
         for name in [Notification.Name.porchBedsideDisplayChanged, .porchMessageAutoplayChanged, .porchAttendanceCameraChanged] {
             NotificationCenter.default.post(name: name, object: nil)

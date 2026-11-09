@@ -647,10 +647,10 @@ final class BedsideAndKeypadTests: XCTestCase {
         prefs.hemisphere = .northern
         XCTAssertFalse(BedsideScene(date: date(hour: 8), preferences: prefs, calendar: local).isDay)
     }
-    func testDisplayPreferencesDefaultDarkAndPersistSchedule() {
+    func testDisplayPreferencesDefaultDayAndNightAndPersistSchedule() {
         let defaults = defaults(); var prefs = BedsidePreferences.load(from: defaults)
-        XCTAssertEqual(prefs.appearance, .default)
-        prefs.appearance = .dynamic; prefs.hemisphere = .southern; prefs.dayStart = 7; prefs.nightStart = 20; prefs.save(to: defaults)
+        XCTAssertEqual(prefs.appearance, .dynamic)
+        prefs.appearance = .default; prefs.hemisphere = .southern; prefs.dayStart = 7; prefs.nightStart = 20; prefs.save(to: defaults)
         XCTAssertEqual(BedsidePreferences.load(from: defaults), prefs)
         XCTAssertFalse(BedsideScene(date: date(hour: 19), preferences: .init(), calendar: calendar).isDay)
         XCTAssertTrue(BedsideScene(date: date(hour: 19), preferences: prefs, calendar: calendar).isDay)

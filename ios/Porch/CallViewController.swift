@@ -16,7 +16,7 @@ final class CallViewController: UIViewController {
     private var cancelOpening = false
     /// Who a call that's opening is for, said aloud. The call screen takes it over once it appears.
     private var announcement: OutgoingCallAnnouncement?
-    /// Plays waiting messages when someone sits down in front of the iPad, if a caregiver turned it on.
+    /// Plays waiting messages when someone sits down in front of the iPad, unless a caregiver turned it off.
     /// If a caregiver lets family see that someone is at the iPad, it also looks for them now and then.
     private let presence = BedsidePresence()
     /// While a look for someone at the iPad is under way, when it ends. One starts every `BedsideAttendance.lookInterval`.

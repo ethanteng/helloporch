@@ -595,7 +595,7 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertFalse(toggle.isOn)
         toggle.isOn = true; toggle.sendActions(for: .valueChanged)
         XCTAssertTrue(keypad.enabled)
-        XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
+        XCTAssertNil(defaults.object(forKey: "porch.disconnectAfterSilence"), "Silence stays at its default")
         toggle.isOn = false; toggle.sendActions(for: .valueChanged)
         XCTAssertFalse(keypad.enabled)
     }

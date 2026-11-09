@@ -3,7 +3,8 @@ import Foundation
 public struct BedsidePreferences: Codable, Equatable {
     public enum Appearance: String, Codable { case `default`, dynamic }
     public enum Hemisphere: String, Codable { case northern, southern }
-    public var appearance: Appearance = .default
+    /// The Day & night clock until a caregiver chooses Dark.
+    public var appearance: Appearance = .dynamic
     public var hemisphere: Hemisphere = .northern
     public var dayStart: Int = 6
     public var nightStart: Int = 18
@@ -20,7 +21,7 @@ public struct BedsidePreferences: Codable, Equatable {
     private enum CodingKeys: String, CodingKey { case appearance, hemisphere, dayStart, nightStart, language, announcementVoiceIdentifiers }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        appearance = try values.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .default
+        appearance = try values.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .dynamic
         hemisphere = try values.decodeIfPresent(Hemisphere.self, forKey: .hemisphere) ?? .northern
         dayStart = try values.decodeIfPresent(Int.self, forKey: .dayStart) ?? 6
         nightStart = try values.decodeIfPresent(Int.self, forKey: .nightStart) ?? 18

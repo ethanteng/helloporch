@@ -80,7 +80,7 @@ fun MessagesPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLin
     }
 }
 
-/** Presence autoplay, as iOS's Messages page has it: kept on this tablet, off until a caregiver turns it on, and only
+/** Presence autoplay, as iOS's Messages page has it: kept on this tablet, on until a caregiver turns it off, and only
  * between the hours chosen. Turning it on asks for the camera; refused, it stays off. The clock reads it again when
  * caregiver mode closes. */
 @Composable

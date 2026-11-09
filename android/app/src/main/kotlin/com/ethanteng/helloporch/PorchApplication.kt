@@ -212,7 +212,7 @@ class PorchApplication : Application() {
         CallPreferences.forget(settings)
         BedsidePreferences().save(settings)
         MessageAutoplay().save(settings)
-        BedsideAttendance.setCameraEnabled(false, settings)
+        BedsideAttendance.forgetCamera(settings)
     }
 
     private companion object { const val caregiverPINAccount = "porch.contact-setup-code" }

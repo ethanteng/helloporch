@@ -5,10 +5,10 @@ import java.time.ZoneId
 import kotlinx.serialization.Serializable
 
 /** Playing waiting messages when someone sits in front of the bedside iPad. Kept on this iPad,
- * off until a caregiver turns it on, and limited to waking hours. */
+ * on until a caregiver turns it off, and limited to waking hours. */
 @Serializable
 data class MessageAutoplay(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     /** Local hours, start inclusive and end exclusive: 8 and 21 mean 8:00 AM until 9:00 PM. */
     val startHour: Int = 8,
     val endHour: Int = 21,

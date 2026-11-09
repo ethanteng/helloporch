@@ -45,11 +45,11 @@ class BedsideDisplayTest {
         assertFalse(BedsideScene(date(hour = 8), prefs, local).isDay)
     }
 
-    @Test fun displayPreferencesDefaultDarkAndPersistSchedule() {
+    @Test fun displayPreferencesDefaultDayAndNightAndPersistSchedule() {
         val settings = MemorySettings()
         var prefs = BedsidePreferences.load(settings)
-        assertEquals(BedsidePreferences.Appearance.DEFAULT, prefs.appearance)
-        prefs = prefs.copy(appearance = BedsidePreferences.Appearance.DYNAMIC, hemisphere = BedsidePreferences.Hemisphere.SOUTHERN, dayStart = 7, nightStart = 20)
+        assertEquals(BedsidePreferences.Appearance.DYNAMIC, prefs.appearance)
+        prefs = prefs.copy(appearance = BedsidePreferences.Appearance.DEFAULT, hemisphere = BedsidePreferences.Hemisphere.SOUTHERN, dayStart = 7, nightStart = 20)
         prefs.save(settings)
         assertEquals(prefs, BedsidePreferences.load(settings))
         assertFalse(BedsideScene(date(hour = 19), BedsidePreferences(), zone).isDay)

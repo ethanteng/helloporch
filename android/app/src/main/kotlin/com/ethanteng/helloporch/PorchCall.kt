@@ -136,10 +136,9 @@ class PorchCall(
     private var waitJob: Job? = null
     private var controlJob: Job? = null
     private var permissionAnswer: CompletableDeferred<Boolean>? = null
-    /** Hanging up after a stretch of silence, when a caregiver turned it on (off by default; 15 seconds to 30 minutes). */
-    private val inactivity = CallInactivityTimer(
-        if (CallPreferences.disconnectAfterSilence(app.settings)) CallPreferences.silenceSeconds(app.settings).toDouble() else null,
-        clock = SystemClock::elapsedRealtime)
+    /** Hanging up after a stretch of silence, on the bedside unless a caregiver turned it off (on by default; 15 seconds
+     * to 30 minutes). A family phone leaves it to the bedside. */
+    private val inactivity = CallInactivityTimer(CallPreferences.silenceTimeout(role, app.settings), clock = SystemClock::elapsedRealtime)
 
     fun start() {
         watch(room)

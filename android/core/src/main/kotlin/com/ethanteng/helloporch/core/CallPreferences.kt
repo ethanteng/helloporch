@@ -1,6 +1,6 @@
 package com.ethanteng.helloporch.core
 
-/** Device-wide caregiver preferences. Silence disconnection is opt-in. */
+/** Device-wide caregiver preferences. Silence disconnection is on until a caregiver turns it off. */
 object CallPreferences {
     val fallbackRange = 5..120
     const val defaultFallbackSeconds = 20
@@ -17,7 +17,12 @@ object CallPreferences {
     private const val cameraKey = "porch.startVideoWithCamera"
     private const val leaveMessageKey = "porch.leaveMessageWhenUnanswered"
 
-    fun disconnectAfterSilence(settings: PorchSettings): Boolean = settings.getBoolean(silenceEnabledKey) ?: false
+    fun disconnectAfterSilence(settings: PorchSettings): Boolean = settings.getBoolean(silenceEnabledKey) ?: true
+
+    /** How long a call on this device waits through silence before hanging up, or null when it doesn't. Only the
+     * bedside hangs up: a family phone has no switch for it, so the bedside's choice holds for the call. */
+    fun silenceTimeout(role: PorchExperience, settings: PorchSettings): Double? =
+        if (role == PorchExperience.BEDSIDE && disconnectAfterSilence(settings)) silenceSeconds(settings).toDouble() else null
 
     fun silenceSeconds(settings: PorchSettings): Int = settings.getInt(silenceSecondsKey)?.takeIf { it in silenceRange } ?: defaultSilenceSeconds
 

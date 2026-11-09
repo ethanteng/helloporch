@@ -52,17 +52,20 @@ final class CallInactivityTests: XCTestCase {
         XCTAssertTrue(timer.update(at: 40, connected: true, speaking: false))
     }
 
-    func testPreferencesDefaultOffPersistAndValidateBounds() throws {
+    func testPreferencesDefaultOnPersistAndValidateBounds() throws {
         let suite = "porch.silence-test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
+        XCTAssertTrue(CallPreferences.disconnectAfterSilence(in: defaults))
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 120)
+        XCTAssertEqual(CallPreferences.silenceTimeout(as: .bedside, in: defaults), 120)
+        XCTAssertNil(CallPreferences.silenceTimeout(as: .family, in: defaults), "A family phone leaves it to the bedside")
         CallPreferences.saveSilence(enabled: true, seconds: 45, in: defaults)
         XCTAssertTrue(CallPreferences.disconnectAfterSilence(in: defaults))
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 45)
         CallPreferences.saveSilence(enabled: false, seconds: 0, in: defaults)
         XCTAssertFalse(CallPreferences.disconnectAfterSilence(in: defaults))
+        XCTAssertNil(CallPreferences.silenceTimeout(as: .bedside, in: defaults))
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 15)
         CallPreferences.saveSilence(enabled: true, seconds: 9999, in: defaults)
         XCTAssertEqual(CallPreferences.silenceSeconds(in: defaults), 1800)

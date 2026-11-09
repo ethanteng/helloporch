@@ -1,6 +1,6 @@
 import Foundation
 
-/// Device-wide caregiver preferences. Silence disconnection is opt-in.
+/// Device-wide caregiver preferences. Silence disconnection is on until a caregiver turns it off.
 public enum CallPreferences {
     public static let fallbackRange = 5...120
     public static let defaultFallbackSeconds = 20
@@ -18,7 +18,13 @@ public enum CallPreferences {
     private static let leaveMessageKey = "porch.leaveMessageWhenUnanswered"
 
     public static func disconnectAfterSilence(in defaults: UserDefaults = .standard) -> Bool {
-        defaults.bool(forKey: silenceEnabledKey)
+        defaults.object(forKey: silenceEnabledKey) as? Bool ?? true
+    }
+
+    /// How long a call on this device waits through silence before hanging up, or nil when it doesn't. Only the
+    /// bedside hangs up: a family phone has no switch for it, so the bedside's choice holds for the call.
+    public static func silenceTimeout(as role: PorchExperience, in defaults: UserDefaults = .standard) -> TimeInterval? {
+        role == .bedside && disconnectAfterSilence(in: defaults) ? TimeInterval(silenceSeconds(in: defaults)) : nil
     }
 
     public static func silenceSeconds(in defaults: UserDefaults = .standard) -> Int {

@@ -3,6 +3,7 @@ package com.ethanteng.helloporch.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CallPreferencesTest {
@@ -47,15 +48,18 @@ class CallPreferencesTest {
         assertFalse(CallPreferences.startVideoWithCamera(PorchExperience.FAMILY, settings))
     }
 
-    @Test fun preferencesDefaultOffPersistAndValidateBounds() {
+    @Test fun preferencesDefaultOnPersistAndValidateBounds() {
         val settings = MemorySettings()
-        assertFalse(CallPreferences.disconnectAfterSilence(settings))
+        assertTrue(CallPreferences.disconnectAfterSilence(settings))
+        assertEquals(120.0, CallPreferences.silenceTimeout(PorchExperience.BEDSIDE, settings))
+        assertNull(CallPreferences.silenceTimeout(PorchExperience.FAMILY, settings), "A family phone leaves it to the bedside")
         assertEquals(120, CallPreferences.silenceSeconds(settings))
         CallPreferences.saveSilence(enabled = true, seconds = 45, settings)
         assertTrue(CallPreferences.disconnectAfterSilence(settings))
         assertEquals(45, CallPreferences.silenceSeconds(settings))
         CallPreferences.saveSilence(enabled = false, seconds = 0, settings)
         assertFalse(CallPreferences.disconnectAfterSilence(settings))
+        assertNull(CallPreferences.silenceTimeout(PorchExperience.BEDSIDE, settings))
         assertEquals(15, CallPreferences.silenceSeconds(settings))
         CallPreferences.saveSilence(enabled = true, seconds = 9999, settings)
         assertEquals(1800, CallPreferences.silenceSeconds(settings))
