@@ -414,8 +414,8 @@ const parts: GuidePart[] = [
           rings like a regular phone call, even when it’s locked. Put the receiver back to hang up.
         </p>
         <p>
-          If you don’t answer, Porch rings your regular phone number, if you added one. If nobody answers, your loved one can leave
-          you a message.
+          If you don’t answer, Porch rings your regular phone number, if you added one, and that phone’s own voicemail
+          can take a message. Without a number, your loved one can leave you a message in Porch.
         </p>
       </>
     ),

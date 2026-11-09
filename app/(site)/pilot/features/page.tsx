@@ -67,7 +67,7 @@ const parts: GuidePart[] = [
             ["Calls from unknown numbers", "Blocked", <Path key="p" steps={["Calls", "Block unknown callers"]} />],
             ["How long a call to the tablet rings", "45 seconds", <><Path steps={["Calls", "Ring before voicemail"]} />, tablet only</>],
             ["Ringing your regular phone when Porch isn’t answered", "After 20 seconds, for anyone whose key has a phone number", <><Path steps={["Calls", "Try their phone after"]} />, tablet only</>],
-            ["A message when a call from the tablet isn’t answered", "Offered", <><Path steps={["Calls", "Leave a message if no one answers"]} />, tablet only</>],
+            ["A message when a call from the tablet isn’t answered", "Offered, unless the call went on to their regular phone", <><Path steps={["Calls", "Leave a message if no one answers"]} />, tablet only</>],
             ["Hanging up calls nobody is talking on", "Off", <><Path steps={["Calls", "End calls after silence"]} />, tablet only</>],
             ["Family messages", "On", <Path key="p" steps={["Messages", "Allow family messages"]} />],
             ["Voicemail and texts from unknown numbers", "Wait for a caregiver’s OK", <Path key="p" steps={["Messages", "Waiting messages"]} />],
@@ -176,7 +176,7 @@ const parts: GuidePart[] = [
         </ol>
         <p>
           Someone who isn’t on Porch at all, with only a phone number on their key, gets a regular phone call straight
-          away.
+          away. Once a call goes to a regular phone and nobody picks up, that phone’s own voicemail answers.
         </p>
         <Setting
           rows={[
@@ -366,10 +366,11 @@ const parts: GuidePart[] = [
         </p>
         <ul>
           <li>
-            <strong>From the tablet:</strong> after trying the Porch app and their phone, Porch says{" "}
-            <Says>[Name] didn’t answer. Please leave a message after the beep.</Says> Your loved one talks, presses 0
-            when they’re finished, and taps <UI>Send message</UI>, or <UI>Don’t send</UI>. It arrives in{" "}
-            <UI>Messages with [Name]</UI> on the family member’s phone.
+            <strong>From the tablet:</strong> when the Porch app isn’t answered and the call doesn’t go on to their
+            regular phone, Porch says <Says>[Name] didn’t answer. Please leave a message after the beep.</Says> Your
+            loved one talks, presses 0 when they’re finished, and taps <UI>Send message</UI>, or <UI>Don’t send</UI>.
+            It arrives in <UI>Messages with [Name]</UI> on the family member’s phone. If the call went on to their
+            regular phone, that phone’s own voicemail takes the message instead.
           </li>
           <li>
             <strong>From a family phone:</strong> Porch asks <Says>Leave a message?</Says> Tap{" "}
