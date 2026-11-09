@@ -11,8 +11,8 @@ export function guideMetadata(title: string, description: string): Metadata {
   return { title, description, robots: { index: false, follow: false } };
 }
 
-/** A part to buy: what it is, what to look for, roughly what it costs, and the listing I use, if there is one. */
-export type KitPart = { name: string; rule: string; price: string; href?: string; photo: string };
+/** A part to buy: what it is, what to look for, and, where I give them, roughly what it costs and the listing I use. */
+export type KitPart = { name: string; rule: string; price?: string; href?: string; photo: string };
 export type GuidePart = { id: string; title: string; body: ReactNode };
 
 type GuideProps = {
@@ -52,7 +52,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
                 </span>
                 <strong className={styles.kitName}>{part.name}</strong>
                 <span className={styles.kitRule}>{part.rule}</span>
-                <span className={styles.kitPrice}>{part.price}</span>
+                {part.price && <span className={styles.kitPrice}>{part.price}</span>}
                 {part.href && (
                   <a className={styles.kitLink} href={part.href} target="_blank" rel="noopener noreferrer">
                     See it on Amazon
