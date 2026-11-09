@@ -6,9 +6,16 @@ export const porchWebOrigin = "https://helloporch.store";
 export const porchServerOrigin = "https://porch-calling-prototype.vercel.app";
 export const porchAppID = "7U9T57JPF7.com.ethanteng.helloporch";
 export const porchAndroidPackage = "com.ethanteng.helloporch";
-/** SHA-256 fingerprints of the certificates Android builds are signed with, as `keytool -list -v` prints them: Play App
- * Signing's key, the upload key and the debug key. Until one exists, no build can open invitation links. */
-export const androidCertificates: string[] = [];
+/** SHA-256 fingerprints of the certificates Android builds are signed with, as `keytool -list -v` prints them, so each kind
+ * of build opens invitation links (android/README.md, "Release to Google Play"). */
+export const androidCertificates: string[] = [
+  // Play App Signing's key, which signs Porch as Google Play installs it.
+  "22:F5:00:7A:89:81:04:70:F1:5D:99:CC:FA:A1:A2:30:50:C0:AB:CA:B9:C7:74:D8:CF:D7:C0:41:E6:EC:21:00",
+  // The upload key, for a release build installed without Google Play.
+  "4A:20:C5:AA:B6:52:30:0F:1B:B4:0D:A1:C5:78:22:63:97:B5:1F:85:FD:6F:FD:6C:32:E1:C6:1F:6E:90:6F:F8",
+  // The debug key of the Mac that builds test versions.
+  "1A:46:5E:5A:F8:61:AA:A4:33:17:77:36:E3:CA:DE:BA:D1:14:B3:60:C1:C6:BA:07:26:FE:29:9C:21:DF:23:18",
+];
 export type InviteKind = "family" | "bedside";
 export const invitePaths: Record<InviteKind, string> = { family: "/join", bedside: "/setup" };
 // The app's own scheme: porch://pair for a family member, porch://activate for a bedside.

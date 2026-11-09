@@ -15,17 +15,18 @@ test("Apple's link file lets only the invitation pages open Porch", async () => 
   assert.deepEqual(applinks.details[0].components.map(c => c['/']), ['/join', '/setup']);
 });
 
-test("Android's link file names Porch's package and signing keys, and nothing until a key exists", async () => {
+test("Android's link file names Porch's package and signing keys, and nothing without a key", async () => {
   const response = getAssetLinks();
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /^application\/json/);
-  assert.deepEqual(await response.json(), []);
-  const fingerprint = Array.from({ length: 32 }, () => 'AB').join(':');
-  androidCertificates.push(fingerprint);
+  assert.ok(androidCertificates.length > 0);
+  for (const fingerprint of androidCertificates) assert.match(fingerprint, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+  assert.deepEqual(await response.json(), [{ relation: ['delegate_permission/common.handle_all_urls'],
+    target: { namespace: 'android_app', package_name: 'com.ethanteng.helloporch', sha256_cert_fingerprints: androidCertificates } }]);
+  const saved = androidCertificates.splice(0);
   try {
-    assert.deepEqual(await getAssetLinks().json(), [{ relation: ['delegate_permission/common.handle_all_urls'],
-      target: { namespace: 'android_app', package_name: 'com.ethanteng.helloporch', sha256_cert_fingerprints: [fingerprint] } }]);
-  } finally { androidCertificates.length = 0; }
+    assert.deepEqual(await getAssetLinks().json(), []);
+  } finally { androidCertificates.push(...saved); }
 });
 
 test("an Android tablet is not called a phone when Chrome's user agent says Mobile", () => {
