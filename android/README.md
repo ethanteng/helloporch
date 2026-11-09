@@ -29,13 +29,22 @@ keyAlias=upload
 keyPassword=…
 ```
 
-Build the bundle with that file, a `versionCode` higher than the last upload's, and `app/google-services.json` in place so phones ring while Porch is closed:
+**Upload a new version** with the **Upload Porch to Google Play** workflow ([android-release.yml](../.github/workflows/android-release.yml)) from GitHub's Actions tab. Like the TestFlight workflow, it only checks unless **verify_only** is unchecked, and then it deploys the calling server first. [`scripts/release.sh`](scripts/release.sh) does the work, and runs the same way from this folder:
 
 ```bash
-./gradlew :app:bundleRelease -Pporch.upload=/path/to/helloporch-android-upload.properties -Pporch.versionCode=2 -Pporch.versionName=0.2
+PLAY_SERVICE_ACCOUNT_JSON="$(cat /path/to/play-service-account.json)" PORCH_ANDROID_UPLOAD=/path/to/helloporch-android-upload.properties \
+  scripts/release.sh --notes "What changed" [--version-name 0.3] [--verify-only]
 ```
 
-Upload `app/build/outputs/bundle/release/app-release.aab` to **Internal testing** in the Play Console, and add each tester's Google account email to its list. The test's opt-in link is what the [Android pilot guide](../app/(site)/pilot/android/page.tsx) and invitation pages show, from `NEXT_PUBLIC_PLAY_TESTING_URL` on the website's Vercel project. The app signing key's SHA-256 (Play Console → **Test and release** → **App integrity**) goes in `androidCertificates` in [lib/invite-links.ts](../lib/invite-links.ts), so invitation and setup links open Porch. If the upload key is lost, Google can register a new one.
+It asks Google Play for the next `versionCode` (one more than any it has), builds the bundle signed with the upload key with `app/google-services.json` in place so phones ring while Porch is closed, and uploads it to **Internal testing** with the notes as "What's new". The version people see is `0.<versionCode>` unless `--version-name` says otherwise. [`scripts/play.mjs`](scripts/play.mjs) talks to the Google Play Developer API with a service account, set up once:
+
+1. In Google Cloud, in any project, turn on the **Google Play Android Developer API**, create a service account with no roles, and add a JSON key to it. Keep the key outside the repo.
+2. In the Play Console, under **Users and permissions**, invite the service account's email and give it Porch with **Release to testing tracks**.
+3. For the workflow, add these secrets to the repository's **google-play** environment: `PLAY_SERVICE_ACCOUNT_JSON` (the key's JSON), `ANDROID_UPLOAD_KEYSTORE` (the upload key's `.jks`, base64), `ANDROID_UPLOAD_PASSWORD` (its password, the same for the key and the store), and `ANDROID_GOOGLE_SERVICES_JSON` (`app/google-services.json`, base64).
+
+By hand, build with `./gradlew :app:bundleRelease -Pporch.upload=/path/to/helloporch-android-upload.properties -Pporch.versionCode=<next> -Pporch.versionName=<name>` and upload `app/build/outputs/bundle/release/app-release.aab` in the Play Console.
+
+Add each tester's Google account email to the internal testing list in the Play Console. The test's opt-in link is what the [Android pilot guide](../app/(site)/pilot/android/page.tsx) and invitation pages show, from `NEXT_PUBLIC_PLAY_TESTING_URL` on the website's Vercel project. The app signing key's SHA-256 (Play Console → **Test and release** → **App integrity**) goes in `androidCertificates` in [lib/invite-links.ts](../lib/invite-links.ts), so invitation and setup links open Porch. If the upload key is lost, Google can register a new one.
 
 ## Try it against a local server
 
