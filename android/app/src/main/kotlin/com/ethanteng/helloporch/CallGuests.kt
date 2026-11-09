@@ -1,69 +1,145 @@
 package com.ethanteng.helloporch
 
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ethanteng.helloporch.core.CallGuestRules
 import com.ethanteng.helloporch.core.FamilyCallSession
+import com.ethanteng.helloporch.core.FamilyPhoneGuest
 import com.ethanteng.helloporch.core.FamilyPorchGuest
 import com.ethanteng.helloporch.core.FamilyRelative
 import com.ethanteng.helloporch.core.FamilyServiceException
+import com.ethanteng.helloporch.core.PhoneGuestLeg
+import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * Lets a family member on a call with the bedside ring in another family member, who joins with video, as iOS's
- * CallGuestControls does for family: Add someone lists whose Porch can ring now, `addPorchGuest` rings them, and the
- * line under the call's status says how it goes. Their phone gets an ordinary incoming call for the invitation. Anyone in
- * the family on the call can add one at a time, and they stay on if whoever added them leaves. Main thread only.
+ * Lets a family member on a call with the bedside add someone, as iOS's CallGuestControls does: another family member
+ * on Porch, who rings like an ordinary call and joins with video, or, for caregivers, a regular phone, such as a bank
+ * that needs Mom on the line, with a keypad for its menus and its own hang-up. The server rings or dials them into the
+ * call's room. A family member stays on if whoever added them leaves; a phone stays on only while this phone does, and
+ * only this phone sees its number. Anyone in the family on the call can add one of each at a time. Main thread only.
  */
-class CallGuests(private val app: PorchApplication, private val session: FamilyCallSession, private val scope: CoroutineScope) {
+class CallGuests(private val app: PorchApplication, private val session: FamilyCallSession, private val scope: CoroutineScope,
+    private val room: () -> Room) {
     private val callID = session.call.id
-    private val bedsideID = CallGuestRules.bedsideID(session.call, session.credential.deviceID)
+    private val myID = session.credential.deviceID
+    private val bedsideID = CallGuestRules.bedsideID(session.call, myID)
 
-    /** Add someone, on the call's buttons. */
+    /** Add someone, on the call's buttons, and what it says: "Add a phone" when no family can be rung. */
     var showsAdd by mutableStateOf(false); private set
-    /** A ring is being asked for. */
+    var addTitle by mutableStateOf("Add someone"); private set
+    /** A ring or a dial is being asked for. */
     var adding by mutableStateOf(false); private set
     /** "Ringing David…", or for a few seconds how it went. */
     var status by mutableStateOf<String?>(null); private set
-    /** Who Add someone offers, while its list is open. */
+    /** "Calling Bank…", "Bank is on the call", or for a few seconds how it ended. */
+    var phoneStatus by mutableStateOf<String?>(null); private set
+    /** The phone this one added, while it's on the call: its keypad and its own hang-up show. */
+    var phone by mutableStateOf<FamilyPhoneGuest?>(null); private set
+    /** Its keypad works once it has answered. */
+    var phoneAnswered by mutableStateOf(false); private set
+    var hangingUp by mutableStateOf(false); private set
+    /** Who Add someone offers, while its list is open, and whether it offers a phone number too. */
     var choices by mutableStateOf<List<FamilyRelative>?>(null); private set
-    /** Why a ring couldn't start, until it's dismissed. */
+    var choicesIncludePhone by mutableStateOf(false); private set
+    /** The form for the phone number to add, while it's open. */
+    var phoneForm by mutableStateOf(false); private set
+    /** The added phone's keypad, while it's open, and the keys sent to it so far. */
+    var keypad by mutableStateOf(false); private set
+    var keysPressed by mutableStateOf(""); private set
+    /** Why a ring, a dial or a hang-up didn't go through, until it's dismissed. */
     var error by mutableStateOf<String?>(null)
+    /** Why the phone form's dial didn't go through. It survives the phone turning, unlike the form's own message. */
+    var dialProblem by mutableStateOf<String?>(null)
 
     /** The family member just rung in, until the household's call shows them, and how each invitation last looked. */
     private var invited: FamilyPorchGuest? = null
     private val states = mutableMapOf<String, String>()
     private var notice: String? = null
     private var noticeJob: Job? = null
+    private var phoneNotice: String? = null
+    private var phoneNoticeJob: Job? = null
+    /** The added phone's leg in the room. */
+    private var leg: PhoneGuestLeg? = null
+    /** Phones this one already saw end, so a check-in from before the hang-up can't bring one back. */
+    private val finished = mutableSetOf<String>()
+    /** True from the moment a dial is asked for until it has settled, so a second tap can't start another. */
+    private var startingDial = false
+    var dialing by mutableStateOf(false)
+        private set
+    /** The phone this one is hanging up. The server takes it out of the room before it answers, so its leaving isn't the
+     * other end hanging up. */
+    private var hangingUpID: String? = null
+    private var watchJob: Job? = null
+    /** Keys go out one at a time, in the order pressed. */
+    private val keys = Channel<Char>(Channel.UNLIMITED)
     private var peers: List<Participant> = emptyList()
+
+    init {
+        scope.launch {
+            for (key in keys) {
+                val code = CallGuestRules.dtmfCode(key) ?: continue
+                val sent = runCatching { room().localParticipant.publishDtmf(code, key.toString()).getOrThrow() }
+                if (sent.isFailure) error = "Couldn't send that key. Try again."
+            }
+        }
+    }
 
     /** Whenever the room's people or the household's call change. */
     fun refresh(peers: List<Participant> = this.peers) {
         this.peers = peers
         val state = app.coordinator.state(session.credential)
         val call = state?.call?.takeIf { it.id == callID }
+        // A phone this one added, such as after the call screen came back, is followed again.
+        call?.phoneGuest?.takeIf { phone == null && it.addedBy == myID && it.id !in finished }?.let(::track)
+        phone?.let { added ->
+            val leg = leg ?: return@let
+            val present = peers.firstOrNull { it.identity?.value == added.identity }
+            if (!leg.observe(present != null, present?.attributes?.get("sip.callStatus"), now())) phoneAnswered = leg.answered
+            else if (hangingUpID == added.id) { end(added); showPhone("You hung up ${added.label}.") }
+            else legEnded(added, leg.answered)
+        }
         val guest = latest(call?.porchGuest)
-        // The bedside's LiveKit identity is its member ID. Someone rung in only once both are in the room.
+        // The bedside's LiveKit identity is its member ID. Someone is added only once both are in the room.
         val bedsideHere = bedsideID != null && peers.any { it.kind != Participant.Kind.SIP && it.identity?.value == bedsideID }
-        showsAdd = CallGuestRules.showsAdd(call, bedsideHere, CallGuestRules.ringable(state?.family.orEmpty(), guest))
+        val ringable = CallGuestRules.ringable(state?.family.orEmpty(), guest)
+        val canDial = canDial()
+        showsAdd = CallGuestRules.showsAdd(call, bedsideHere, ringable, canDial)
+        addTitle = if (ringable.isNotEmpty()) "Add someone" else "Add a phone"
         status = if (guest?.state == "ringing") "Ringing ${guest.name}…" else notice
+        phoneStatus = phone?.let { if (phoneAnswered) "${it.label} is on the call" else "Calling ${it.label}…" } ?: phoneNotice
     }
 
-    /** Opens the list of who can be rung in. */
+    /** Family on Porch first, since they join with video, then a phone number. With only one choice, it opens directly. */
     fun add() {
         val state = app.coordinator.state(session.credential)
         val people = CallGuestRules.ringable(state?.family.orEmpty(), invited ?: state?.call?.takeIf { it.id == callID }?.porchGuest)
-        if (people.isNotEmpty()) choices = people
+        val canDial = canDial()
+        when {
+            people.isEmpty() && canDial -> { dialProblem = null; phoneForm = true }
+            people.isNotEmpty() -> { choicesIncludePhone = canDial; choices = people }
+        }
     }
 
     fun closeChoices() { choices = null }
+
+    fun choosePhone() { choices = null; dialProblem = null; phoneForm = true }
+
+    /** Closes the form once a dial isn't in flight. Closing it must not cancel a number that may already be ringing. */
+    fun closePhoneForm() {
+        if (dialing) return
+        phoneForm = false
+        dialProblem = null
+    }
 
     fun ring(person: FamilyRelative) {
         choices = null
@@ -87,6 +163,157 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
         }
     }
 
+    /**
+     * Dials `number` (E.164) into the call as `label`, such as "Bank", on this call's own scope. The form's composition
+     * is cancelled when the phone turns or the form closes, and that must not cancel the request: it may already be ringing.
+     */
+    fun beginDial(label: String, number: String) {
+        if (startingDial || dialing) return
+        val current = phone
+        if (current != null) {
+            dialProblem = "Hang up ${current.label} before adding another number."
+            return
+        }
+        dialProblem = null
+        // Set before the request is launched, so Cancel can't dismiss the form in the gap and hide a failure.
+        startingDial = true
+        dialing = true
+        adding = true
+        scope.launch {
+            try {
+                dial(label, number)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FamilyServiceException) {
+                dialProblem = e.message
+            } finally {
+                startingDial = false
+            }
+        }
+    }
+
+    /**
+     * A dial that fails on the server's side, or is cancelled as the call ends, may still be ringing. The server keeps
+     * tracking it, so another number waits for the next check-in to show it here first.
+     */
+    private suspend fun dial(label: String, number: String) {
+        val current = phone
+        if (current != null) throw FamilyServiceException("Hang up ${current.label} before adding another number.", 409)
+        var settle = 0L
+        try {
+            val response = try {
+                session.service.send("addPhoneGuest", mapOf("callID" to JsonPrimitive(callID), "phoneNumber" to JsonPrimitive(number),
+                    "label" to JsonPrimitive(label)))
+            } catch (e: FamilyServiceException) {
+                // A server error, or no answer at all (status 0, such as a timeout), may have dialed anyway.
+                if (e.status >= 500 || e.status == 0) settle = 6_000
+                throw e
+            } catch (e: CancellationException) {
+                settle = 6_000
+                throw e
+            } catch (e: Exception) {
+                settle = 6_000
+                throw FamilyServiceException("Couldn't reach Porch. Check the connection and try again.", 0)
+            }
+            app.coordinator.update(response)
+            track(response.phoneGuest ?: throw FamilyServiceException("Couldn't add that phone number.", 502))
+        } finally {
+            val wait = settle
+            scope.launch {
+                delay(wait)
+                dialing = false
+                adding = false
+                refresh()
+            }
+        }
+    }
+
+    /** Hangs up the phone this one added. It stays on the call while the server says otherwise. */
+    fun hangUp() {
+        val current = phone ?: return
+        if (hangingUp) return
+        hangingUp = true
+        hangingUpID = current.id
+        scope.launch {
+            try {
+                val response = session.service.send("removePhoneGuest", mapOf("callID" to JsonPrimitive(callID), "guestID" to JsonPrimitive(current.id)))
+                app.coordinator.update(response)
+                if (phone?.id == current.id) {
+                    end(current)
+                    showPhone("You hung up ${current.label}.")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FamilyServiceException) {
+                error = e.message
+                keepFollowing(current)
+            } catch (e: Exception) {
+                error = "Couldn't reach Porch. Check the connection and try again."
+                keepFollowing(current)
+            } finally {
+                hangingUp = false
+                hangingUpID = null
+                refresh()
+            }
+        }
+    }
+
+    /** A hang-up that failed while the phone is still in the room: the room's dropping it a moment earlier counted as
+     * this hang-up, so it's followed again and Hang up comes back. */
+    private fun keepFollowing(current: FamilyPhoneGuest) {
+        if (peers.any { it.identity?.value == current.identity }) finished -= current.id
+    }
+
+    fun openKeypad() { if (phone != null && phoneAnswered) { keysPressed = ""; keypad = true } }
+
+    fun closeKeypad() { keypad = false }
+
+    /** A key on the added phone's keypad, for menus such as "press 1 for your account balance". */
+    fun press(key: Char) {
+        if (CallGuestRules.dtmfCode(key) == null || phone == null) return
+        keysPressed = (keysPressed + key).takeLast(24)
+        keys.trySend(key)
+    }
+
+    /** A caregiver can add one phone at a time. */
+    private fun canDial() = app.coordinator.state(session.credential)?.canAddPhoneGuests == true && phone == null && !dialing
+
+    private fun track(added: FamilyPhoneGuest) {
+        // The number is on the call, so the form is finished even if this was found on a later check-in.
+        phoneForm = false
+        dialProblem = null
+        // Following the same phone again, such as when the dial's answer arrives after a check-in, must not restart its clock.
+        if (phone?.id == added.id && leg != null) return
+        phone = added
+        phoneAnswered = false
+        phoneNotice = null
+        leg = PhoneGuestLeg(now())
+        watchJob?.cancel()
+        // A phone that never joins is caught once its time is up, even if nothing in the room changes.
+        watchJob = scope.launch {
+            delay((PhoneGuestLeg.JOIN_SECONDS * 1_000).toLong())
+            refresh()
+        }
+    }
+
+    private fun legEnded(ended: FamilyPhoneGuest, answered: Boolean) {
+        end(ended)
+        showPhone(if (answered) "${ended.label} hung up." else "${ended.label} didn't answer.")
+        // Frees the call for another number. The server also checks the room, so a failure here is harmless.
+        scope.launch {
+            runCatching { session.service.send("removePhoneGuest", mapOf("callID" to JsonPrimitive(callID), "guestID" to JsonPrimitive(ended.id))) }
+        }
+    }
+
+    private fun end(ended: FamilyPhoneGuest) {
+        finished += ended.id
+        phone = null
+        phoneAnswered = false
+        leg = null
+        keypad = false
+        watchJob?.cancel()
+    }
+
     /** The latest invitation, from the server once it has caught up with this phone. A change this phone sees happen is
      * said for a few seconds; one that was already over when the call opened isn't. */
     private fun latest(server: FamilyPorchGuest?): FamilyPorchGuest? {
@@ -106,4 +333,16 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
             refresh()
         }
     }
+
+    private fun showPhone(message: String) {
+        phoneNotice = message
+        phoneNoticeJob?.cancel()
+        phoneNoticeJob = scope.launch {
+            delay(5_000)
+            phoneNotice = null
+            refresh()
+        }
+    }
+
+    private fun now() = SystemClock.elapsedRealtime() / 1_000.0
 }
