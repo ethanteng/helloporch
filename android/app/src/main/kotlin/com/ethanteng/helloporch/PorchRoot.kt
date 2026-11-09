@@ -107,7 +107,7 @@ fun PorchRoot(
         incoming != null -> IncomingCallScreen(app, incoming)
         bedside && voicemail != null -> BedsideVoicemailScreen(app, voicemail)
         bedside && playback != null -> MessagePlayerScreen(app, playback)
-        family -> FamilyScreens(app, if (joining) link else null, onLinkHandled, onReady = { familyReady = it })
+        family -> PorchTheme { FamilyScreens(app, if (joining) link else null, onLinkHandled, onReady = { familyReady = it }) }
         welcoming && page == WelcomePage.ON_TABLET -> BedsideOnTablet(onJoin = { page = WelcomePage.JOINING }, onBack = { page = WelcomePage.WELCOME })
         welcoming -> Welcome(
             onSetUp = {

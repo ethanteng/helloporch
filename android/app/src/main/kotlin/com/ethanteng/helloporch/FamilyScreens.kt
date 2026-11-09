@@ -8,24 +8,19 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,9 +36,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -151,18 +150,17 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
         AboutScreen(navigation = { TextButton(onClick = { about = false }) { Text("Back") } })
         return
     }
-    Surface(Modifier.fillMaxSize()) {
-        Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done,
-                onAbout = { about = true })
-            else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ }, onAbout = { about = true },
-                onThread = { thread = it.deviceID }, onProfile = { profile = it.deviceID }, onCompose = { family, name -> composing = Composing(family.deviceID, name, "message", startAudio = false) },
-                onCaregiver = { family ->
-                    // Every visit starts with the PIN.
-                    RemoteCaregiverSession.shared.end()
-                    caregiving = family.deviceID
-                })
-        }
+    // Titled Porch, as iOS's family screen is.
+    FormScreen("Porch") {
+        if (!listing) JoinFamily(app, link.orEmpty(), adding = families.isNotEmpty(), onJoined = done, onCancel = if (families.isEmpty()) null else done,
+            onAbout = { about = true })
+        else Families(app, links, families, onJoinAnother = { joining = true }, onChanged = { changes++ }, onAbout = { about = true },
+            onThread = { thread = it.deviceID }, onProfile = { profile = it.deviceID }, onCompose = { family, name -> composing = Composing(family.deviceID, name, "message", startAudio = false) },
+            onCaregiver = { family ->
+                // Every visit starts with the PIN.
+                RemoteCaregiverSession.shared.end()
+                caregiving = family.deviceID
+            })
     }
     PorchErrorDialog(caregiverNotice) { caregiverNotice = null }
 }
@@ -182,8 +180,8 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
     OutlinedTextField(text, { text = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Invitation link") }, singleLine = true)
     if (adding) OutlinedTextField(nickname, { nickname = it }, Modifier.fillMaxWidth(), label = { Text("What you call this family (optional)") }, singleLine = true)
     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    Button(enabled = !busy && text.isNotBlank(), onClick = {
-        val invitation = try { FamilyInvitation(text.trim(), BuildConfig.PORCH_SERVER_URL) } catch (e: IllegalArgumentException) { error = e.message; return@Button }
+    FormButton(if (busy) "Joining…" else "Join family", enabled = !busy && text.isNotBlank(), onClick = {
+        val invitation = try { FamilyInvitation(text.trim(), BuildConfig.PORCH_SERVER_URL) } catch (e: IllegalArgumentException) { error = e.message; return@FormButton }
         busy = true; error = null
         scope.launch {
             try {
@@ -199,10 +197,10 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
             catch (e: Exception) { error = e.message ?: "Couldn't join. Check the connection and try again." }
             finally { busy = false }
         }
-    }) { Text(if (busy) "Joining…" else "Join family") }
-    onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
+    })
+    onCancel?.let { FormLink("Cancel", onClick = it) }
     // The licenses, before a phone has joined any family.
-    if (!adding) TextButton(onClick = onAbout) { Text("About Porch") }
+    if (!adding) FormLink("About Porch", onClick = onAbout)
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 
@@ -242,26 +240,22 @@ internal fun RingWhenClosed(app: PorchApplication, bedside: Boolean = false) {
             "Open settings")
         else -> return
     }
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(detail)
-            Button(onClick = {
-                val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null)
-                    .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-                val settings = when {
-                    canRing && Build.VERSION.SDK_INT >= 34 ->
-                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", context.packageName, null))
-                    !canRing && needed.isEmpty() -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    refused -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-                    else -> null
-                }
-                val camera = listOf(Manifest.permission.CAMERA).takeIf { askCamera }.orEmpty()
-                    .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-                if (settings == null) ask.launch((needed + camera).toTypedArray())
-                else try { context.startActivity(settings) } catch (_: ActivityNotFoundException) {}
-            }) { Text(button) }
-        }
+    FormCard(title, detail) {
+        FormButton(button, onClick = {
+            val needed = listOfNotNull(Manifest.permission.RECORD_AUDIO, if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null)
+                .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+            val settings = when {
+                canRing && Build.VERSION.SDK_INT >= 34 ->
+                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", context.packageName, null))
+                !canRing && needed.isEmpty() -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                refused -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                else -> null
+            }
+            val camera = listOf(Manifest.permission.CAMERA).takeIf { askCamera }.orEmpty()
+                .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+            if (settings == null) ask.launch((needed + camera).toTypedArray())
+            else try { context.startActivity(settings) } catch (_: ActivityNotFoundException) {}
+        })
     }
 }
 
@@ -277,6 +271,23 @@ private fun reviewTitle(voicemails: Int, texts: Int): String = when {
     texts == 0 -> if (voicemails == 1) "1 phone voicemail needs your review" else "$voicemails phone voicemails need your review"
     voicemails == 0 -> if (texts == 1) "1 text needs your review" else "$texts texts need your review"
     else -> "${voicemails + texts} messages need your review"
+}
+
+/** A row that opens a page, as iOS's `linkRow` is: its icon in the accent color, its name, and an arrow. */
+@Composable
+private fun SettingsRow(@DrawableRes icon: Int, title: String, onClick: () -> Unit) {
+    CaregiverRow(onClick = onClick, label = title) {
+        Icon(painterResource(icon), contentDescription = null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** How a bedside is, or why it can't be reached, centered as on iOS. */
+@Composable
+private fun Status(text: String) {
+    Text(text, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center)
 }
 
 /** A call a family phone is about to place, while Android asks for the microphone and camera. */
@@ -315,6 +326,8 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
+    // A family that removed this phone, by device ID, while the phone asks before taking it off.
+    var removing by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     // As on iOS, the microphone and, for video, the camera are asked for before the call starts. Asking after would
     // leave the bedside ringing while the question is up, or after it's refused.
@@ -333,77 +346,81 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
         if (needed.isEmpty()) app.calls.call(call.person, call.mode, call.family)
         else { request = call; permissions.launch(needed.toTypedArray()) }
     }
-    Text(if (families.size == 1) "Your family" else "Your families", style = MaterialTheme.typography.headlineMedium)
     RingWhenClosed(app)
-    for (family in families) {
+    // Laid out as iOS's family screen is: the bedside on a card of its own, with its calls and messages, and its Porch
+    // number on another. A phone in more than one family shows each under its name; with one, the page is its bedside.
+    val several = families.size > 1
+    families.forEachIndexed { index, family ->
         val link = links.link(family)
         val state = link?.state
         val bedside = state?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }
-        ElevatedCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(app.device.familyName(family) ?: state?.householdName ?: "Your family", style = MaterialTheme.typography.titleLarge)
-                Text(when {
-                    link?.accessRemoved == true -> "This phone was removed from this family. Ask a caregiver for a new invitation."
-                    // A failed check-in keeps the last snapshot. Showing that bedside as on would stay true until the
-                    // next one that works, which is what a dropped connection looks like.
-                    link?.error != null -> link.error!!
-                    bedside != null -> "${bedside.name}'s ${bedsideDevice(state)} ${if (bedside.online) "is on and ready." else "isn't checking in right now."}"
-                    else -> "Checking in…"
-                })
-                // Whether someone is at the bedside, as on iOS. Without a fresh check-in the last one's time stands still, so
-                // it would look current forever.
-                if (state != null && bedside != null && link?.error == null && link?.accessRemoved != true) {
-                    val attendedAt = state.bedsideAttendedAt?.toDouble()
-                    val now = state.serverTime.toDouble()
-                    BedsideAttendance.text(attendedAt, now, bedsideDevice(state))?.let {
-                        Text(it, Modifier.fillMaxWidth(), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                            color = if (BedsideAttendance.isPresent(attendedAt, now)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+        val name = app.device.familyName(family) ?: state?.householdName ?: "this family"
+        // A failed check-in keeps the last snapshot. Showing that bedside as on would stay true until the next one that
+        // works, which is what a dropped connection looks like, so the error shows instead.
+        val error = link?.error
+        Column(Modifier.padding(top = if (index > 0) 24.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (several) Text(name, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            when {
+                link?.accessRemoved == true -> {
+                    Status("This phone was removed from this family. Ask a caregiver for a new invitation.")
+                    FormPlainButton(if (several) "Remove $name from this phone" else "Remove this family from this phone",
+                        onClick = { removing = family.deviceID }, color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
                 }
-                if (state != null && link.accessRemoved != true) {
+                state == null -> Status(error ?: "Connecting…")
+                else -> {
                     val from = bedside?.name ?: state.householdName
                     // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
                     val held = state.heldMessages ?: 0
                     val heldTexts = state.heldTexts ?: 0
-                    if (state.me.caregiver == true && held + heldTexts > 0) {
-                        Button(onClick = { onCaregiver(family) }, Modifier.fillMaxWidth()) { Text(reviewTitle(held, heldTexts)) }
-                    }
+                    if (state.me.caregiver == true && held + heldTexts > 0) FormButton(reviewTitle(held, heldTexts), onClick = { onCaregiver(family) }, icon = R.drawable.ic_review)
                     // Left by the bedside when its call to this phone wasn't answered.
                     val unheard = state.newMessages ?: 0
-                    if (unheard > 0) Button(onClick = { onThread(family) }, Modifier.fillMaxWidth()) {
-                        Text(if (unheard == 1) "New message from $from" else "$unheard new messages from $from")
-                    }
-                    if (bedside != null) {
-                        val opening = app.calls.opening
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening) { Text("Audio call") }
-                            Button(onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening) { Text("Video call") }
-                        }
-                        // Messages wait on the bedside, so they don't need it to be open right now.
-                        if (state.messagesEnabled != false) OutlinedButton(onClick = { onCompose(family, bedside.name) }, Modifier.fillMaxWidth()) { Text("Send a message") }
-                    }
+                    if (unheard > 0) FormButton(if (unheard == 1) "New message from $from" else "$unheard new messages from $from", onClick = { onThread(family) },
+                        icon = R.drawable.ic_mail_unread)
                     // Both ways in one thread, which stays while sending is off so earlier messages still play.
-                    OutlinedButton(onClick = { onThread(family) }, Modifier.fillMaxWidth()) { Text("Messages with $from") }
+                    val thread: @Composable () -> Unit = { FormPlainButton("Messages with $from", onClick = { onThread(family) }, icon = R.drawable.ic_forum) }
+                    if (bedside != null) FormCard(bedside.name) {
+                        Status(error ?: if (!bedside.online) "Porch isn't ready" else if (state.busy) "On a call" else "Porch is open")
+                        // Whether someone is at the bedside, as on iOS. Without a fresh check-in the last one's time
+                        // stands still, so it would look current forever.
+                        if (error == null) {
+                            val attendedAt = state.bedsideAttendedAt?.toDouble()
+                            val now = state.serverTime.toDouble()
+                            BedsideAttendance.text(attendedAt, now, bedsideDevice(state))?.let {
+                                Text(it, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                                    color = if (BedsideAttendance.isPresent(attendedAt, now)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        val opening = app.calls.opening
+                        FormButton("Audio call", onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VOICE)) }, enabled = !opening, icon = R.drawable.ic_call)
+                        FormButton("Video call", onClick = { calling(CallRequest(family, bedside, NativeCall.Mode.VIDEO)) }, enabled = !opening, icon = R.drawable.ic_videocam)
+                        // Messages wait on the bedside, so they don't need it to be open right now.
+                        if (state.messagesEnabled != false) FormPlainButton("Send a message", onClick = { onCompose(family, bedside.name) }, icon = R.drawable.ic_mail)
+                        thread()
+                    } else {
+                        error?.let { Status(it) }
+                        thread()
+                    }
+                    // Anyone can call the bedside on its own number, from any phone.
+                    state.porchNumber?.let { PorchNumberCard(from, it) }
+                    // What the bedside shows for this phone and whether its video calls start with the camera on, and for
+                    // caregivers, the bedside's settings with its PIN. iOS has these on its settings page.
+                    CaregiverGroup {
+                        SettingsRow(R.drawable.ic_account, "Your name and photo", onClick = { onProfile(family) })
+                        if (state.me.caregiver == true) {
+                            HorizontalDivider()
+                            SettingsRow(R.drawable.ic_lock, "Caregiver mode", onClick = { onCaregiver(family) })
+                        }
+                    }
                 }
-                // Anyone can call the bedside on its own number, from any phone.
-                state?.porchNumber?.takeIf { link.accessRemoved != true }?.let { PorchNumberCard(bedside?.name ?: state.householdName, it) }
-                // Caregivers change the bedside's settings from here with its PIN.
-                if (state?.me?.caregiver == true && link.accessRemoved != true) {
-                    OutlinedButton(onClick = { onCaregiver(family) }, Modifier.fillMaxWidth()) { Text("Caregiver mode") }
-                }
-                // What the bedside shows for this phone, and whether its video calls start with the camera on.
-                if (state != null && link.accessRemoved != true) TextButton(onClick = { onProfile(family) }) { Text("Your name and photo") }
-                if (link?.accessRemoved == true) TextButton(onClick = { app.coordinator.forget(family); onChanged() }) { Text("Remove from this phone") }
-                else TextButton(onClick = { leaveError = null; leaving = family.deviceID }) { Text("Leave this family") }
             }
+            if (link?.accessRemoved != true) FormLink(if (several) "Leave $name" else "Leave this family", onClick = { leaveError = null; leaving = family.deviceID })
         }
     }
-    Text("This test version joins families, checks in with them, calls, rings while Porch is closed, sends and plays messages, and notifies you of new ones.",
-        style = MaterialTheme.typography.bodySmall)
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    if (families.size < FamilyNames.limit) OutlinedButton(onClick = onJoinAnother) { Text("Join another family") }
+    if (families.size < FamilyNames.limit) FormLink("Join another family", onClick = onJoinAnother)
     // The open-source licenses, for anyone, not only a family's caregivers.
-    TextButton(onClick = onAbout) { Text("About Porch") }
+    FormLink("About Porch", onClick = onAbout)
     families.firstOrNull { it.deviceID == leaving }?.let { family ->
         val name = app.device.familyName(family) ?: links.state(family)?.householdName ?: "this family"
         // As on iOS (FamilyProfiles.swift): the phone leaves on the server, then forgets the family.
@@ -419,5 +436,17 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 }
             }) { Text("Leave") } },
             dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } })
+    }
+    families.firstOrNull { it.deviceID == removing }?.let { family ->
+        // As on iOS (confirmRemoval): only a new invitation brings the family back. With one family it isn't named,
+        // since the page doesn't name it either.
+        val name = if (several) app.device.familyName(family) ?: links.state(family)?.householdName else null
+        AlertDialog(onDismissRequest = { removing = null },
+            title = { Text("Remove ${name ?: "this family"} from this phone?") },
+            text = { Text("They've already removed this phone. To join again, you'll need a new invitation.") },
+            confirmButton = { TextButton(onClick = { removing = null; app.coordinator.forget(family); onChanged() }) {
+                Text("Remove", color = MaterialTheme.colorScheme.error)
+            } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } })
     }
 }
