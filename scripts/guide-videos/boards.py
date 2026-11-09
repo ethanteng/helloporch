@@ -54,7 +54,7 @@ board("ios-setup", "tablet", None, [
 pair = lambda caption, main, side, tap=None, on="main": beat(
     caption, f"ios/{main}", tap, IPAD if on == "main" else IPHONE, side=f"ios/{side}", on=on)
 board("ios-your-phone", "pair", "Add your own phone", [
-    pair("Install Porch on your phone first. On an iPhone, use TestFlight as you did on the iPad.", "j01-add-phone", "k00-p-home"),
+    pair("If you have an iPhone, install TestFlight first.", "j01-add-phone", "k00-p-home"),
     pair("On the iPad, type your name, then tap Show QR code.", "j02-name", "k00-p-home", (590, 358)),
     pair("Open the Camera app on your phone and point it at the code. Tap the link that appears.", "j03-qr", "k00-p-home"),
     pair("Porch opens on your phone. Tap Join family.", "j03-qr", "k01-p-join", (201, 387), on="side"),
