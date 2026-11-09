@@ -3,7 +3,8 @@
 # pixels) and become fractions here. Run: python3 -I boards.py <screenshots dir> <output dir>
 import json, os, sys
 
-shots, out = sys.argv[1], sys.argv[2]
+# The renderer reads image paths against the storyboard's own folder, so give it absolute ones.
+shots, out = os.path.abspath(sys.argv[1]), sys.argv[2]
 os.makedirs(out, exist_ok=True)
 
 IPAD, IPHONE = (1180, 820), (402, 874)
