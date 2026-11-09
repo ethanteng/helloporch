@@ -99,14 +99,17 @@ private fun AutoplayGroup(app: PorchApplication, admin: CaregiverAdmin) {
         if (granted) save(settings.copy(enabled = true))
         else admin.error = refused
     }
-    // Camera access taken away in Settings since it was turned on: the clock can't watch, so the switch says so. Checked
-    // as the page opens and each time it comes back, as Privacy does.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+    // Camera access taken away in Settings since it was turned on: the clock can't watch, so the switch says so. Opening
+    // Messages checks, and so does coming back to it, as Privacy does. Resume alone misses a page opened while Porch is
+    // already in front, such as after returning from Settings onto another caregiver page.
+    fun cameraAccessTakenAway() {
         if (settings.enabled && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             save(settings.copy(enabled = false))
             admin.error = refused
         }
     }
+    LaunchedEffect(Unit) { cameraAccessTakenAway() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { cameraAccessTakenAway() }
     val locale = LocalConfiguration.current.locales[0]
     fun hour(value: Int) = DateFormat.getInstanceForSkeleton("j", locale)
         .format(Date.from(LocalDate.of(2026, 1, 1).atTime(value, 0).atZone(ZoneId.systemDefault()).toInstant()))
