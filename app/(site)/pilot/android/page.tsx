@@ -133,13 +133,13 @@ const parts: GuidePart[] = [
     title: "Set up Porch, one screen at a time",
     body: (
       <>
-        <p>We’ll call your loved one “Mom” here. Porch uses whatever name you give it.</p>
+        <p>Porch shows the name you choose on its screens. Below, we write it as [Name].</p>
         <ol>
           <li>
             <strong>
               <UI>Who is this Porch for?</UI>
             </strong>{" "}
-            Type what the family calls them, such as Mom or Grandpa Joe. Family see this name, and you can change it
+            Type what the family calls them, such as Grandpa Joe or Aunt Linda. Family see this name, and you can change it
             later. Tap <UI>Continue</UI>.
           </li>
           <li>
@@ -151,9 +151,9 @@ const parts: GuidePart[] = [
           </li>
           <li>
             <strong>
-              <UI>Mom’s Porch number</UI>
+              <UI>[Name]’s Porch number</UI>
             </strong>{" "}
-            Every Porch gets its own phone number, so people can call Mom from any phone. Porch suggests an area code
+            Every Porch gets its own phone number, so people can call your loved one from any phone. Porch suggests an area code
             near the tablet. Tap <UI>Get number</UI>, or <UI>Use a different area code</UI> to pick another. It can
             take a little while. When the number appears, tap <UI>Continue</UI>.
           </li>
@@ -166,7 +166,7 @@ const parts: GuidePart[] = [
           </li>
           <li>
             <strong>
-              <UI>How will Mom call?</UI>
+              <UI>How will [Name] call?</UI>
             </strong>{" "}
             Choose <UI>Corded phone</UI>. The next part walks through it.
           </li>
@@ -210,7 +210,7 @@ const parts: GuidePart[] = [
           </ul>
         </Tip>
         <p>
-          Waiting on a part? Tap <UI>Do this later</UI>. Mom can use the touchscreen meanwhile. Connect the phone any
+          Waiting on a part? Tap <UI>Do this later</UI>. Your loved one can use the touchscreen meanwhile. Connect the phone any
           time from caregiver mode: <UI>This tablet</UI>, then <UI>Connect the phone</UI>.
         </p>
       </>
@@ -222,7 +222,7 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          The tablet now shows <UI>Add your phone</UI>. Your phone becomes the caregiver’s phone: you can call Mom, send
+          The tablet now shows <UI>Add your phone</UI>. Your phone becomes the caregiver’s phone: you can call your loved one, send
           messages and change settings from it.
         </p>
         <ol>
@@ -234,7 +234,7 @@ const parts: GuidePart[] = [
             <UI>Accept</UI>, then <UI>Install</UI>.
           </li>
           <li>
-            On the tablet, type your name and tap <UI>Show QR code</UI>. Your name is how Porch tells Mom who’s
+            On the tablet, type your name and tap <UI>Show QR code</UI>. Your name is how Porch tells your loved one who’s
             calling.
           </li>
           <li>
@@ -242,7 +242,7 @@ const parts: GuidePart[] = [
             in. Tap <UI>Join family</UI>.
           </li>
           <li>
-            The tablet says <Says>Your phone joined Mom’s Porch.</Says> Tap <UI>Continue</UI>, then{" "}
+            The tablet says <Says>Your phone joined [Name]’s Porch.</Says> Tap <UI>Continue</UI>, then{" "}
             <UI>Back to the clock</UI>.
           </li>
         </ol>
@@ -269,7 +269,7 @@ const parts: GuidePart[] = [
           </li>
         </ul>
         <p>
-          While you’re there, tap <UI>Your name and photo</UI>, then <UI>Add a photo</UI>. Mom sees it when you call.
+          While you’re there, tap <UI>Your name and photo</UI>, then <UI>Add a photo</UI>. Your loved one sees it when you call.
         </p>
       </>
     ),
@@ -296,7 +296,7 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Each number key on the phone can call one person. Mom lifts the receiver and presses their key. Set the keys
+          Each number key on the phone can call one person. Your loved one lifts the receiver and presses that person’s key. Set the keys
           up on the tablet:
         </p>
         <ol>
@@ -314,7 +314,7 @@ const parts: GuidePart[] = [
             Under <UI>Their details</UI>:
             <ul>
               <li>
-                For someone who has joined Mom’s Porch, tap <UI>Choose from Family on Porch</UI>.
+                For someone who has joined your loved one’s Porch, tap <UI>Choose from Family on Porch</UI>.
               </li>
               <li>
                 Otherwise type their name, or tap <UI>Choose from Contacts</UI>. You can tap <UI>Invite them</UI> to
@@ -337,11 +337,11 @@ const parts: GuidePart[] = [
         <Tip>
           <p>
             Keys 0 and 9 control calls: 0 answers and hangs up, and 9 turns video on and off. Use 1 to 8 for people.
-            Many big-button phones have room for a photo on each key, which makes them easier for Mom to find.
+            Many big-button phones have room for a photo on each key, which makes them easier for your loved one to find.
           </p>
         </Tip>
         <p>
-          Only people on the keypad, and numbers you allow, can call Mom’s Porch number from a regular phone. Anyone
+          Only people on the keypad, and numbers you allow, can call your loved one’s Porch number from a regular phone. Anyone
           else is turned away and listed under <UI>Blocked numbers</UI>, where you can allow them.
         </p>
       </>
@@ -361,8 +361,8 @@ const parts: GuidePart[] = [
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
           </li>
           <li>
-            Type their name. Leave <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> on if they may drop in on Mom
-            without her answering. Turn on <UI>Caregiver mode</UI> only for someone who should change settings.
+            Type their name. Leave <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> on if they may drop in without your loved
+            one having to answer. Turn on <UI>Caregiver mode</UI> only for someone who should change settings.
           </li>
           <li>
             Tap <UI>Create invitation</UI>, then <UI>Share invitation</UI> and send it by text or email. If they’re next
@@ -382,14 +382,14 @@ const parts: GuidePart[] = [
     title: "Make a test call",
     body: (
       <>
-        <h3>Call Mom from your phone</h3>
+        <h3>Call your loved one from your phone</h3>
         <p>
           In Porch on your phone, tap <UI>Video call</UI>. What happens on the tablet depends on whether you may drop
           in:
         </p>
         <ul>
           <li>
-            <strong>Drop-in:</strong> the tablet says who’s dropping in and connects after five seconds. Mom can press 0
+            <strong>Drop-in:</strong> the tablet says who’s dropping in and connects after five seconds. Your loved one can press 0
             or tap <UI>Don’t connect</UI> to stop it.
           </li>
           <li>
@@ -399,11 +399,11 @@ const parts: GuidePart[] = [
         </ul>
         <h3>Call you from the tablet</h3>
         <p>
-          Lift the receiver and press your key. The tablet says <Says>Calling Ethan.</Says> with your name, and your
+          Lift the receiver and press your key. The tablet says <Says>Calling</Says> and your name, and your
           phone rings. Put the receiver back to hang up.
         </p>
         <p>
-          If you don’t answer, Porch rings your regular phone number, if you added one. If nobody answers, Mom can leave
+          If you don’t answer, Porch rings your regular phone number, if you added one. If nobody answers, your loved one can leave
           you a message.
         </p>
       </>
@@ -411,7 +411,7 @@ const parts: GuidePart[] = [
   },
   {
     id: "everyday",
-    title: "How Mom uses Porch",
+    title: "How your loved one uses Porch",
     body: (
       <ul>
         <li>
@@ -425,8 +425,8 @@ const parts: GuidePart[] = [
           <strong>To hang up,</strong> put the receiver back, or press 0.
         </li>
         <li>
-          <strong>Messages</strong> from family wait on the tablet. The clock shows <UI>Play 1 message</UI> until Mom
-          plays it.
+          <strong>Messages</strong> from family wait on the tablet. The clock shows <UI>Play 1 message</UI> until your
+          loved one plays it.
         </li>
         <li>
           <strong>Family</strong> can call, drop in if you allowed it, and send video or voice messages from their
@@ -461,7 +461,7 @@ const parts: GuidePart[] = [
           bedside.
         </li>
         <li>
-          <strong>Turn the volume up</strong> so Mom hears calls and announcements.
+          <strong>Turn the volume up</strong> so your loved one hears calls and announcements.
         </li>
         <li>
           <strong>Let Porch run in the background.</strong> In <UI>Settings</UI>, open <UI>Apps</UI>, then{" "}
@@ -490,7 +490,7 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "My phone doesn’t ring when Mom calls.",
+            q: "My phone doesn’t ring when my loved one calls.",
             a: (
               <p>
                 Open Porch on your phone and follow any card at the top, such as <UI>Ring when Porch is closed</UI>.
@@ -499,7 +499,7 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "My phone says Mom’s tablet isn’t checking in.",
+            q: "My phone says the tablet isn’t checking in.",
             a: (
               <p>
                 The tablet is off, out of charge, off Wi-Fi, or Porch isn’t open. Check it’s plugged in and connected
@@ -517,7 +517,7 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "Someone can’t call Mom’s Porch number.",
+            q: "Someone can’t call my loved one’s Porch number.",
             a: (
               <p>
                 Unknown callers are turned away. Put them on the keypad with their number, or allow them from{" "}

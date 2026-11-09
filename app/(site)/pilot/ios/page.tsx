@@ -143,13 +143,13 @@ const parts: GuidePart[] = [
     title: "Set up Porch, one screen at a time",
     body: (
       <>
-        <p>We’ll call your loved one “Mom” here. Porch uses whatever name you give it.</p>
+        <p>Porch shows the name you choose on its screens. Below, we write it as [Name].</p>
         <ol>
           <li>
             <strong>
               <UI>Who is this Porch for?</UI>
             </strong>{" "}
-            Type what the family calls them, such as Mom or Grandpa Joe. Family see this name, and you can change it
+            Type what the family calls them, such as Grandpa Joe or Aunt Linda. Family see this name, and you can change it
             later. Tap <UI>Continue</UI>.
           </li>
           <li>
@@ -161,9 +161,9 @@ const parts: GuidePart[] = [
           </li>
           <li>
             <strong>
-              <UI>Mom’s Porch number</UI>
+              <UI>[Name]’s Porch number</UI>
             </strong>{" "}
-            Every Porch gets its own phone number, so people can call Mom from any phone. Porch suggests an area code
+            Every Porch gets its own phone number, so people can call your loved one from any phone. Porch suggests an area code
             near the iPad. Tap <UI>Get number</UI>, or <UI>Use a different area code</UI> to pick another. It can take a
             little while. When the number appears, tap <UI>Continue</UI>.
           </li>
@@ -171,11 +171,11 @@ const parts: GuidePart[] = [
             <strong>
               <UI>Microphone and camera</UI>
             </strong>{" "}
-            Tap <UI>Continue</UI>, then <UI>Allow</UI> for each. Without them, family can’t hear or see Mom.
+            Tap <UI>Continue</UI>, then <UI>Allow</UI> for each. Without them, family can’t hear or see your loved one.
           </li>
           <li>
             <strong>
-              <UI>How will Mom call?</UI>
+              <UI>How will [Name] call?</UI>
             </strong>{" "}
             Choose <UI>Corded phone</UI>. The next part walks through it. If the adapter hasn’t arrived yet, choose it
             anyway and tap <UI>Do this later</UI> on the next screen.
@@ -227,11 +227,11 @@ const parts: GuidePart[] = [
           </ul>
         </Tip>
         <p>
-          Adapter not here yet? Tap <UI>Do this later</UI>. Mom can use the touchscreen meanwhile. When it arrives,
+          Adapter not here yet? Tap <UI>Do this later</UI>. Your loved one can use the touchscreen meanwhile. When it arrives,
           open caregiver mode, then <UI>This iPad</UI>, and tap <UI>Connect the phone</UI>.
         </p>
         <p>
-          The phone is the keypad. Calls themselves use the iPad’s speaker, microphone and camera, so Mom sees and hears
+          The phone is the keypad. Calls themselves use the iPad’s speaker, microphone and camera, so your loved one sees and hears
           family on the screen.
         </p>
       </>
@@ -243,7 +243,7 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          The iPad now shows <UI>Add your phone</UI>. Your iPhone becomes the caregiver’s phone: you can call Mom, send
+          The iPad now shows <UI>Add your phone</UI>. Your iPhone becomes the caregiver’s phone: you can call your loved one, send
           messages and change settings from it.
         </p>
         <ol>
@@ -253,7 +253,7 @@ const parts: GuidePart[] = [
             then install Porch from the test link I send you.
           </li>
           <li>
-            On the iPad, type your name and tap <UI>Show QR code</UI>. Your name is how Porch tells Mom who’s calling.
+            On the iPad, type your name and tap <UI>Show QR code</UI>. Your name is how Porch tells your loved one who’s calling.
           </li>
           <li>
             Open the Camera on your iPhone and point it at the code. Tap the link that appears. Porch opens with the
@@ -264,7 +264,7 @@ const parts: GuidePart[] = [
             even when it’s locked.
           </li>
           <li>
-            The iPad says <Says>Your phone joined Mom’s Porch.</Says> Tap <UI>Continue</UI>.
+            The iPad says <Says>Your phone joined [Name]’s Porch.</Says> Tap <UI>Continue</UI>.
           </li>
         </ol>
         <Tip label="If the iPad keyboard doesn’t appear">
@@ -286,10 +286,10 @@ const parts: GuidePart[] = [
         <h3>On your iPhone</h3>
         <ul>
           <li>
-            Under <UI>Mom’s Porch number</UI>, tap <UI>Add to Contacts</UI>, so you know it’s Mom when her Porch calls.
+            Under <UI>[Name]’s Porch number</UI>, tap <UI>Add to Contacts</UI>, so you recognize their Porch when it calls you.
           </li>
           <li>
-            Tap the person icon in the top right corner, then <UI>Add a photo</UI>. Mom sees it when you call. You can
+            Tap the person icon in the top right corner, then <UI>Add a photo</UI>. Your loved one sees it when you call. You can
             change your name there too.
           </li>
         </ul>
@@ -302,12 +302,12 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Each number key on the phone can call one person. Mom lifts the receiver and presses their key. Set the keys
+          Each number key on the phone can call one person. Your loved one lifts the receiver and presses that person’s key. Set the keys
           up on the iPad.
         </p>
         <ol>
           <li>
-            Setup ends on <UI>Mom’s Porch is ready</UI>. Tap <UI>Put people on the keypad</UI>. Later, tap the gear on
+            Setup ends on <UI>[Name]’s Porch is ready</UI>. Tap <UI>Put people on the keypad</UI>. Later, tap the gear on
             the clock, enter your PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
@@ -320,7 +320,7 @@ const parts: GuidePart[] = [
             Under <UI>Their details</UI>:
             <ul>
               <li>
-                For someone who has joined Mom’s Porch, such as you, tap <UI>Choose from Family on Porch</UI>.
+                For someone who has joined your loved one’s Porch, such as you, tap <UI>Choose from Family on Porch</UI>.
               </li>
               <li>
                 Otherwise type their name, or tap <UI>Choose from Contacts</UI>. You can tap <UI>Invite them</UI> to
@@ -345,11 +345,11 @@ const parts: GuidePart[] = [
         <Tip>
           <p>
             Keys 0 and 9 control calls: 0 answers and hangs up, and 9 turns video on and off. Use 1 to 8 for people.
-            Many big-button phones have room for a photo on each key, which makes them easier for Mom to find.
+            Many big-button phones have room for a photo on each key, which makes them easier for your loved one to find.
           </p>
         </Tip>
         <p>
-          Only people on the keypad, and numbers you allow, can call Mom’s Porch number from a regular phone. Anyone
+          Only people on the keypad, and numbers you allow, can call your loved one’s Porch number from a regular phone. Anyone
           else is turned away and listed under <UI>Blocked numbers</UI>, where you can allow them.
         </p>
       </>
@@ -370,8 +370,8 @@ const parts: GuidePart[] = [
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
           </li>
           <li>
-            Type their name. Leave <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> on if they may drop in on Mom
-            without her answering. Turn on <UI>Caregiver mode</UI> only for someone who should change settings.
+            Type their name. Leave <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> on if they may drop in without your loved
+            one having to answer. Turn on <UI>Caregiver mode</UI> only for someone who should change settings.
           </li>
           <li>
             Tap <UI>Create invitation</UI> and send it by text or email. Then tap <UI>Done</UI>.
@@ -394,23 +394,23 @@ const parts: GuidePart[] = [
     title: "Make a test call",
     body: (
       <>
-        <h3>Call Mom from your iPhone</h3>
+        <h3>Call your loved one from your iPhone</h3>
         <p>
           With the clock showing on the iPad, tap <UI>Video call</UI> in Porch on your iPhone. Because you’re approved
-          to drop in, the iPad says who’s dropping in and connects after five seconds, without Mom touching anything.
-          She can press 0 or tap <UI>Don’t connect</UI> to stop it.
+          to drop in, the iPad says who’s dropping in and connects after five seconds, without your loved one touching anything.
+          They can press 0 or tap <UI>Don’t connect</UI> to stop it.
         </p>
         <p>
-          A relative who isn’t approved rings instead. The iPad shows <UI>Incoming video call</UI>. Mom taps{" "}
+          A relative who isn’t approved rings instead. The iPad shows <UI>Incoming video call</UI>. Your loved one taps{" "}
           <UI>Answer video call</UI>, or presses 0 on the phone.
         </p>
         <h3>Call you from the iPad</h3>
         <p>
-          Lift the receiver and press your key. The iPad says <Says>Calling Ethan.</Says> with your name, and your iPhone
+          Lift the receiver and press your key. The iPad says <Says>Calling</Says> and your name, and your iPhone
           rings like a regular phone call, even when it’s locked. Put the receiver back to hang up.
         </p>
         <p>
-          If you don’t answer, Porch rings your regular phone number, if you added one. If nobody answers, Mom can leave
+          If you don’t answer, Porch rings your regular phone number, if you added one. If nobody answers, your loved one can leave
           you a message.
         </p>
       </>
@@ -418,7 +418,7 @@ const parts: GuidePart[] = [
   },
   {
     id: "everyday",
-    title: "How Mom uses Porch",
+    title: "How your loved one uses Porch",
     body: (
       <ul>
         <li>
@@ -433,7 +433,7 @@ const parts: GuidePart[] = [
           <strong>To hang up,</strong> put the receiver back, or press 0.
         </li>
         <li>
-          <strong>Messages</strong> from family wait on the iPad until Mom plays them.
+          <strong>Messages</strong> from family wait on the iPad until your loved one plays them.
         </li>
         <li>
           <strong>Family</strong> can call, drop in if you allowed it, and send video or voice messages from their
@@ -459,14 +459,14 @@ const parts: GuidePart[] = [
       <ul>
         <li>
           <strong>Keep Porch open on the clock, and the iPad plugged in</strong> with the charger in the hub. Porch keeps
-          the screen awake while the clock is showing. Drop-ins and Mom’s calls out need the clock open.
+          the screen awake while the clock is showing. Drop-ins, and calls your loved one makes, need the clock open.
         </li>
         <li>
           <strong>Turn the volume up</strong> with the iPad’s side buttons. To check it, open caregiver mode, then{" "}
           <UI>Calls</UI> and <UI>Test sounds</UI>.
         </li>
         <li>
-          <strong>Keep Porch in front, if Mom tends to wander into other apps,</strong> with Apple’s Guided Access: in{" "}
+          <strong>Keep Porch in front, if your loved one tends to wander into other apps,</strong> with Apple’s Guided Access: in{" "}
           <UI>Settings</UI>, open <UI>Accessibility</UI>, then <UI>Guided Access</UI>. In its options, leave{" "}
           <UI>Touch</UI> and <UI>Software Keyboards</UI> on. Pause it when you need to type in Porch.
         </li>
@@ -494,7 +494,7 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "My iPhone doesn’t ring when Mom calls.",
+            q: "My iPhone doesn’t ring when my loved one calls.",
             a: (
               <p>
                 Check that Porch’s notifications and microphone are allowed in your iPhone’s Settings, under Porch. A
@@ -521,7 +521,7 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "Someone can’t call Mom’s Porch number.",
+            q: "Someone can’t call my loved one’s Porch number.",
             a: (
               <p>
                 Unknown callers are turned away. Put them on the keypad with their number, or allow them from{" "}
