@@ -3,6 +3,7 @@ package com.ethanteng.helloporch
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +17,18 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -30,11 +37,24 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.ethanteng.helloporch.core.RemoteCaregiverSession
@@ -44,7 +64,8 @@ import com.ethanteng.helloporch.core.RemoteCaregiverSession
 @Composable
 fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, actions: (@Composable () -> Unit)? = null,
     scrolls: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxSize()) {
+    // The page, which FormCard's cards sit on. Material's own theme makes it the same color as a surface.
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
             // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them. It gets
             // smaller before it's cut short, as beside Back to clock in caregiver mode's list on a 10-inch tablet.
@@ -80,12 +101,65 @@ fun FormSection(title: String, detail: String? = null, content: @Composable Colu
     }
 }
 
-/** A full-width button: filled for the way on, outlined for another choice. */
+/** A card of its own on the page, as iOS's `section` is: a centered heading, what it's about, and what goes with it,
+ * centered under them. Raised as CaregiverGroup's cards are, so it stands out on Material's page as well as PorchTheme's,
+ * which keeps it white. */
 @Composable
-fun FormButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = true) {
-    val label: @Composable () -> Unit = { Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium) }
+fun FormCard(title: String, detail: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), tonalElevation = 2.dp) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, Modifier.fillMaxWidth().semantics { heading() }, style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            detail?.let {
+                Text(it, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center)
+            }
+            content()
+        }
+    }
+}
+
+/** A full-width button: filled for the way on, outlined for another choice. `icon` goes before its words, as iOS's
+ * buttons show a symbol. */
+@Composable
+fun FormButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = true,
+    @DrawableRes icon: Int? = null) {
     val size = modifier.fillMaxWidth().heightIn(min = 50.dp)
-    if (filled) Button(onClick, size, enabled = enabled) { label() } else OutlinedButton(onClick, size, enabled = enabled) { label() }
+    val shape = LocalFormButtonShape.current
+    if (filled) Button(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.shape) { ButtonLabel(text, icon) }
+    else OutlinedButton(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.outlinedShape) { ButtonLabel(text, icon) }
+}
+
+/** A full-width button that's only its words, as iOS's plain buttons are: one of several things to do, such as Send a
+ * message under the call buttons. `color` is for one that removes something. */
+@Composable
+fun FormPlainButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = Color.Unspecified,
+    @DrawableRes icon: Int? = null) {
+    TextButton(onClick, modifier.fillMaxWidth().heightIn(min = 50.dp), enabled = enabled,
+        shape = LocalFormButtonShape.current ?: ButtonDefaults.textShape) {
+        ButtonLabel(text, icon, color)
+    }
+}
+
+/** A button's icon and words, in the button's color unless `color` says otherwise. The icon starts the text itself, so
+ * it stays beside the words when they wrap, as iOS's does, rather than at the edge of a full-width line. It's
+ * decoration: a screen reader hears only the words. */
+@Composable
+private fun ButtonLabel(text: String, @DrawableRes icon: Int?, color: Color = Color.Unspecified) {
+    val style = MaterialTheme.typography.titleMedium
+    if (icon == null) { Text(text, textAlign = TextAlign.Center, style = style, color = color); return }
+    val label = buildAnnotatedString {
+        appendInlineContent("icon", " ")
+        append(" ")
+        append(text)
+    }
+    // Sized in em, so it grows with the words under a larger font setting.
+    val inline = mapOf("icon" to InlineTextContent(Placeholder(1.4.em, 1.4.em, PlaceholderVerticalAlign.TextCenter)) {
+        Icon(painterResource(icon), contentDescription = null, Modifier.fillMaxSize(), tint = color.takeOrElse { LocalContentColor.current })
+    })
+    val words = AnnotatedString(text)
+    Text(label, Modifier.clearAndSetSemantics { this.text = words }, textAlign = TextAlign.Center, style = style,
+        color = color, inlineContent = inline)
 }
 
 /** A quieter choice, such as Do this later. */
