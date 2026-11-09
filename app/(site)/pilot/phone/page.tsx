@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Contact, Email, Guide, guideMetadata, Links, Questions, StepVideo, Tip, UI, type GuidePart } from "../_guide/parts";
+import { Contact, Email, Guide, guideMetadata, Links, Questions, Tip, UI, type GuidePart } from "../_guide/parts";
 import { playTesting, qrFor, testFlight, testFlightApp } from "../links";
 
 export const metadata = guideMetadata(
@@ -15,7 +15,10 @@ const parts: GuidePart[] = [
     title: "Get Porch",
     body: (
       <>
-        <p>During the pilot, Porch is a test app. Get it from the link for your phone, then open your invitation.</p>
+        <p>
+          Someone in your family has set up Porch for your loved one and invited you. During the pilot, Porch is a
+          test app: get it from the link for your phone, then open your invitation.
+        </p>
         <Links
           items={[
             {
@@ -47,7 +50,7 @@ const parts: GuidePart[] = [
             },
             {
               name: "Your invitation",
-              sent: "From a caregiver, or the code on your loved one’s iPad or tablet.",
+              sent: "From whoever invited you, or the code on your loved one’s iPad or tablet.",
               device: "your own phone",
               how: "It works once and expires after 24 hours.",
             },
@@ -99,64 +102,6 @@ const parts: GuidePart[] = [
     ),
   },
   {
-    id: "invite",
-    title: "Invite family members",
-    body: (
-      <>
-        <p>Caregivers invite relatives from their phone, one invitation per person.</p>
-        <h3>On an iPhone</h3>
-        <StepVideo
-          name="ios-invite"
-          label="Video: inviting a relative from an iPhone"
-          caption="Inviting a relative from an iPhone."
-        />
-        <ol>
-          <li>
-            In Porch, tap the person icon in the top right corner, then <UI>Caregiver mode</UI>. Enter the PIN and tap{" "}
-            <UI>Open caregiver mode</UI>.
-          </li>
-          <li>
-            Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
-          </li>
-          <li>
-            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
-            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
-          </li>
-          <li>
-            Tap <UI>Create invitation</UI>, send it by text or email, then tap <UI>Done</UI>.
-          </li>
-        </ol>
-        <h3>On an Android phone</h3>
-        <StepVideo
-          name="android-invite"
-          label="Video: inviting a relative from an Android phone"
-          caption="Inviting a relative from an Android phone."
-        />
-        <ol>
-          <li>
-            In Porch, scroll down and tap <UI>Caregiver mode</UI>. Enter the PIN and tap <UI>Open caregiver mode</UI>.
-          </li>
-          <li>
-            Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
-          </li>
-          <li>
-            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
-            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
-          </li>
-          <li>
-            Tap <UI>Create invitation</UI>, then <UI>Share invitation</UI>, and send it by text or email. If they’re
-            next to you, they can scan the code. Then tap <UI>Done</UI>.
-          </li>
-        </ol>
-        <p>
-          Each invitation works once and expires after 24 hours. Send relatives this guide with their invitation.
-          Relatives with an Android phone need me to add their Google account to the Google Play test first, so send me
-          their email before you invite them.
-        </p>
-      </>
-    ),
-  },
-  {
     id: "help",
     title: "If something isn’t working",
     body: (
@@ -189,7 +134,7 @@ const parts: GuidePart[] = [
           },
           {
             q: "My invitation stopped working.",
-            a: <p>Invitations work once and expire after 24 hours. Ask a caregiver for a new one.</p>,
+            a: <p>Invitations work once and expire after 24 hours. Ask whoever invited you for a new one.</p>,
           },
           {
             q: "Google Play says Porch isn’t available.",
@@ -244,8 +189,8 @@ export default function PhoneGuide() {
       }
       lede={
         <p>
-          For everyone in the family, on an iPhone or an Android phone: get Porch, join your family and make sure
-          calls ring.
+          For family and friends invited to a loved one’s Porch, on an iPhone or an Android phone: get Porch, join
+          and make sure calls ring.
         </p>
       }
       aside={

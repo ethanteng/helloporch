@@ -197,10 +197,76 @@ const parts: GuidePart[] = [
             <strong>On the tablet:</strong> it says your phone joined. Tap <UI>Continue</UI>, then <UI>Back to the clock</UI>.
           </li>
         </ol>
+      </>
+    ),
+  },
+  {
+    id: "family",
+    title: "Invite family members",
+    on: ["phone"],
+    body: (
+      <>
         <p>
-          For the rest of the family, see <Link href="/pilot/phone#invite">Invite family members</Link> in the phone
-          guide.
+          Invite family and friends from Porch on your phone, now or any time later. Each person gets their own
+          invitation. Send it with the <Link href="/pilot/phone">phone guide</Link>, which shows them how to get Porch
+          and join.
         </p>
+        <h3>On an iPhone</h3>
+        <StepVideo
+          name="ios-invite"
+          label="Video: inviting a relative from an iPhone"
+          caption="Inviting a relative from an iPhone."
+        />
+        <ol>
+          <li>
+            In Porch, tap the person icon in the top right corner, then <UI>Caregiver mode</UI>. Enter the PIN and tap{" "}
+            <UI>Open caregiver mode</UI>.
+          </li>
+          <li>
+            Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
+          </li>
+          <li>
+            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
+            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
+          </li>
+          <li>
+            Tap <UI>Create invitation</UI>, send it by text or email, then tap <UI>Done</UI>.
+          </li>
+        </ol>
+        <h3>On an Android phone</h3>
+        <StepVideo
+          name="android-invite"
+          label="Video: inviting a relative from an Android phone"
+          caption="Inviting a relative from an Android phone."
+        />
+        <ol>
+          <li>
+            In Porch, scroll down and tap <UI>Caregiver mode</UI>. Enter the PIN and tap <UI>Open caregiver mode</UI>.
+          </li>
+          <li>
+            Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
+          </li>
+          <li>
+            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
+            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
+          </li>
+          <li>
+            Tap <UI>Create invitation</UI>, then <UI>Share invitation</UI>, and send it by text or email. If they’re
+            next to you, they can scan the code. Then tap <UI>Done</UI>.
+          </li>
+        </ol>
+        <p>
+          Each invitation works once and expires after 24 hours. If one runs out, make a new one the same way.
+          Relatives with an Android phone need me to add their Google account to the Google Play test first, so send me
+          their email before you invite them.
+        </p>
+        <Tip label="Adding people later">
+          <p>
+            You can invite someone whenever they’re ready, from your phone as above, or on the tablet: open caregiver
+            mode, then <UI>People</UI>, and tap <UI>Invite someone</UI> under the keypad. People you invite with{" "}
+            <UI>Caregiver mode</UI> turned on can invite others too.
+          </p>
+        </Tip>
       </>
     ),
   },
@@ -366,6 +432,15 @@ const parts: GuidePart[] = [
               <p>
                 Save their number to a key or open <UI>Calls</UI> in caregiver mode. Tap <UI>Blocked numbers</UI>, then{" "}
                 <UI>Allow</UI> next to the number.
+              </p>
+            ),
+          },
+          {
+            q: "How do I add someone later?",
+            a: (
+              <p>
+                Any time, from Porch on your phone: open caregiver mode, then <UI>Family</UI>, and tap{" "}
+                <UI>Invite someone</UI>. Send them the invitation and the <Link href="/pilot/phone">phone guide</Link>.
               </p>
             ),
           },
