@@ -3,21 +3,44 @@ import XCTest
 
 final class BedsideAttendanceTests: XCTestCase {
     func testFamilySeeSomeoneIsThereThenHowLongAgoAndNothingOnceItsStale() {
-        XCTAssertNil(BedsideAttendance.text(attendedAt: nil, now: 1000))
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1000), "Someone is at the iPad")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1089), "Someone is at the iPad")
+        XCTAssertNil(BedsideAttendance.text(attendedAt: nil, now: 1000, device: "iPad"))
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1000, device: "iPad"), "Someone is at the iPad")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1089, device: "iPad"), "Someone is at the iPad")
         // A server time a little behind the bedside's report still reads as now.
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1005, now: 1000), "Someone is at the iPad")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1090), "Someone was at the iPad 1 minute ago")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 25 * 60 + 59), "Someone was at the iPad 25 minutes ago")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 3600), "Someone was at the iPad 1 hour ago")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 5 * 3600 + 3599), "Someone was at the iPad 5 hours ago")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 86400), "Someone was at the iPad 1 day ago")
-        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 6 * 86400 + 86399), "Someone was at the iPad 6 days ago")
-        XCTAssertNil(BedsideAttendance.text(attendedAt: 0, now: 7 * 86400))
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1005, now: 1000, device: "iPad"), "Someone is at the iPad")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1090, device: "iPad"), "Someone was at the iPad 1 minute ago")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 25 * 60 + 59, device: "iPad"), "Someone was at the iPad 25 minutes ago")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 3600, device: "iPad"), "Someone was at the iPad 1 hour ago")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 5 * 3600 + 3599, device: "iPad"), "Someone was at the iPad 5 hours ago")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 86400, device: "iPad"), "Someone was at the iPad 1 day ago")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 6 * 86400 + 86399, device: "iPad"), "Someone was at the iPad 6 days ago")
+        XCTAssertNil(BedsideAttendance.text(attendedAt: 0, now: 7 * 86400, device: "iPad"))
         XCTAssertTrue(BedsideAttendance.isPresent(attendedAt: 1000, now: 1089))
         XCTAssertFalse(BedsideAttendance.isPresent(attendedAt: 1000, now: 1090))
         XCTAssertFalse(BedsideAttendance.isPresent(attendedAt: nil, now: 1000))
+    }
+
+    func testFamilyCallAnAndroidBedsideItsTablet() throws {
+        func snapshot(me: [String: Any], people: [[String: Any]]) throws -> FamilySnapshot {
+            let object: [String: Any] = ["householdID": "home", "householdName": "Pat", "dropInEnabled": false, "me": me, "people": people, "busy": false, "serverTime": 1]
+            return try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+        let permissions = ["audio": false, "video": false]
+        let phone: [String: Any] = ["id": "fam", "name": "Ethan", "role": "family", "platform": "ios", "permissions": permissions, "online": true]
+        func bedside(_ platform: String?) -> [String: Any] {
+            var person: [String: Any] = ["id": "bed", "name": "Pat", "role": "bedside", "permissions": permissions, "online": true]
+            person["platform"] = platform
+            return person
+        }
+        let android = try snapshot(me: phone, people: [bedside("android")])
+        XCTAssertEqual(BedsideAttendance.device(in: android), "tablet")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 1000, now: 1000, device: BedsideAttendance.device(in: android)), "Someone is at the tablet")
+        XCTAssertEqual(BedsideAttendance.text(attendedAt: 0, now: 3600, device: BedsideAttendance.device(in: android)), "Someone was at the tablet 1 hour ago")
+        XCTAssertEqual(BedsideAttendance.device(in: try snapshot(me: phone, people: [bedside("ios")])), "iPad")
+        // A server from before Android doesn't say.
+        XCTAssertEqual(BedsideAttendance.device(in: try snapshot(me: phone, people: [bedside(nil)])), "iPad")
+        // The bedside's own snapshot has it as `me`.
+        XCTAssertEqual(BedsideAttendance.device(in: try snapshot(me: bedside("android"), people: [phone])), "tablet")
     }
 
     func testTheCameraIsOffUntilACaregiverTurnsItOn() {

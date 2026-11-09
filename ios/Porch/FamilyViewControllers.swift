@@ -130,7 +130,7 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
         for credential in credentials {
             let link = coordinator.link(for: credential), label = attendanceLabel(for: credential)
             // Without a fresh check-in the last one's time stands still, so it would look current forever.
-            let attended = link?.error != nil ? nil : link?.state.flatMap { BedsideAttendance.text(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) }
+            let attended = link?.error != nil ? nil : link?.state.flatMap { BedsideAttendance.text(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime, device: BedsideAttendance.device(in: $0)) }
             label.text = attended; label.isHidden = attended == nil
             label.textColor = link?.state.map { BedsideAttendance.isPresent(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) } == true ? PorchStyle.accent : PorchStyle.secondary
         }
