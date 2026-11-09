@@ -87,7 +87,8 @@ if (fcm) {
   const send = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
     const response = await send(input, init);
-    const url = typeof input === 'string' ? input : input.url;
+    // LiveKit's server SDK passes a URL, and other callers a string or a Request.
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (url.startsWith('https://fcm.googleapis.com/')) console.log(`${new Date().toISOString().slice(11, 19)} FCM push -> ${response.status}`);
     return response;
   };
@@ -147,7 +148,15 @@ const media = {
   async remove(pathnames) { for (const pathname of pathnames) blobs.delete(pathname); },
   async put(pathname, body, contentType) { blobs.set(pathname, { body: Buffer.from(body), contentType }); },
 };
-const dependencies = { store, numberServices, endRoom, media };
+// Who is in a call's room, which ringing in family checks first: the local LiveKit over plain HTTP, as for endRoom. A
+// phone number added to a call needs a real SIP trunk, so dialing one is refused here.
+const localRooms = () => new RoomServiceClient(localLiveKit.url.replace(/^ws:/, 'http:'), localLiveKit.key, localLiveKit.secret);
+const phoneGuestServices = () => ({
+  rooms: livekit ? localRooms() : { async getParticipant() { throw Object.assign(new Error('No LiveKit here.'), { code: 'not_found' }); },
+    async listParticipants() { return []; }, async removeParticipant() {} },
+  sip: { async createSipParticipant() { throw new Error("This test server has no phone line. Adding a phone number needs Porch's server."); } },
+});
+const dependencies = { store, numberServices, endRoom, media, phoneGuestServices };
 
 const time = () => new Date().toISOString().slice(11, 19);
 const call = async (action, values = {}, credential, code) => {

@@ -25,10 +25,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -96,6 +98,7 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(CallColors.night)) {
         val wide = maxWidth > maxHeight
+        val narrow = maxWidth < 600.dp
         // About 30% of the short side, at most 200 dp, 4:3 and turned with the screen.
         val selfWidth = selfViewWidth(maxWidth, maxHeight, wide)
         // The other people's video fills the screen. Two share it: side by side when it's wide, stacked when it's tall.
@@ -118,6 +121,8 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(call.name, color = CallColors.text, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 Text(call.status, color = CallColors.text, fontSize = 17.sp, textAlign = TextAlign.Center)
+                // Who this phone is ringing in, and how it went.
+                call.guests?.status?.let { Text(it, color = CallColors.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center) }
                 call.keypadHint?.let { Text(it, color = CallColors.secondary, fontSize = 16.sp, textAlign = TextAlign.Center) }
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -126,19 +131,48 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
                     Text(call.placeholder, color = Color.White, fontSize = 28.sp, textAlign = TextAlign.Center)
                 }
             }
-            // As wide as the screen allows, up to a comfortable width on a tablet, with each button an equal share.
-            Row(Modifier.widthIn(max = 720.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                val each = Modifier.weight(1f)
-                CallButton(if (call.microphoneOn) "Mute" else "Unmute", call.controlsEnabled, onClick = call::toggleMicrophone, app = app, modifier = each)
-                if (call.video) CallButton(if (call.cameraOn) "Camera off" else "Camera on", call.controlsEnabled, onClick = call::toggleCamera, app = app, modifier = each)
-                CallButton(call.endTitle, call.endEnabled, onClick = call::endCall, color = CallColors.end, translated = true, app = app, modifier = each)
+            // As wide as the screen allows, up to a comfortable width on a tablet, with each button an equal share. Four
+            // don't fit a phone's width with their words, so there they take two rows.
+            val buttons = mutableListOf<@Composable (Modifier) -> Unit>()
+            buttons += { CallButton(if (call.microphoneOn) "Mute" else "Unmute", call.controlsEnabled, onClick = call::toggleMicrophone, app = app, modifier = it) }
+            if (call.video) buttons += { CallButton(if (call.cameraOn) "Camera off" else "Camera on", call.controlsEnabled, onClick = call::toggleCamera, app = app, modifier = it) }
+            call.guests?.takeIf { it.showsAdd }?.let { guests -> buttons += { CallButton("Add someone", !guests.adding, onClick = guests::add, app = app, modifier = it) } }
+            buttons += { CallButton(call.endTitle, call.endEnabled, onClick = call::endCall, color = CallColors.end, translated = true, app = app, modifier = it) }
+            val rows = if (buttons.size > 3 && narrow) buttons.chunked(2) else listOf(buttons)
+            Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        row.forEach { button -> button(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
+        call.guests?.let { AddSomeone(it, call.video) }
         call.localTrack?.let { track ->
             VideoTrackView(call.room, track, Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(16.dp).width(selfWidth)
                 .aspectRatio(if (wide) 4f / 3f else 3f / 4f).clip(RoundedCornerShape(12.dp)), mirror = true)
         }
     }
+}
+
+/** Who Add someone can ring in, as iOS lists them, and why a ring couldn't start. */
+@Composable
+private fun AddSomeone(guests: CallGuests, video: Boolean) {
+    guests.choices?.let { people ->
+        AlertDialog(onDismissRequest = guests::closeChoices,
+            title = { Text("Add someone to this call") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (video) Text("Family join on Porch with video.")
+                    people.forEach { person ->
+                        TextButton(onClick = { guests.ring(person) }, Modifier.fillMaxWidth()) { Text(person.name, fontSize = 20.sp) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = guests::closeChoices) { Text("Cancel") } })
+    }
+    PorchErrorDialog(guests.error) { guests.error = null }
 }
 
 private fun selfViewWidth(width: Dp, height: Dp, wide: Boolean): Dp {
