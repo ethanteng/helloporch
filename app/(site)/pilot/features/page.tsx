@@ -511,20 +511,19 @@ const parts: GuidePart[] = [
             During a call with the tablet from your phone, once it’s connected, tap <UI>Add someone</UI>.
           </li>
           <li>
-            Choose a family member, and Porch rings them into the call. Or, on an iPhone, if you’re a caregiver,
-            choose <UI>A phone number…</UI>, enter who you’re calling and their number, and tap{" "}
+            Choose a family member, and Porch rings them into the call. Or, if you’re a caregiver, choose{" "}
+            <UI>A phone number…</UI>, enter who you’re calling and their number, and tap{" "}
             <UI>Call and add to this call</UI>.
           </li>
           <li>
-            On an iPhone, tap <UI>Hang up [their name]</UI> to let them go. If you hang up, a phone number you added
-            is hung up too.
+            Tap <UI>Hang up [their name]</UI> to let them go. If you hang up, a phone number you added is hung up
+            too.
           </li>
         </ol>
         <Setting
           rows={[
             ["Default", "Anyone in the family can add a family member. Only caregivers can add a phone number."],
             ["Limits", "Phone numbers in the US and Canada, including toll-free numbers. The tablet can’t start one."],
-            ["Android", "Adding a family member works. Adding a phone number isn’t available yet."],
           ]}
         />
       </>
@@ -834,7 +833,7 @@ const parts: GuidePart[] = [
           <li>Deleting a Porch, its number and everything in it.</li>
           <li>Backing up the keypad, so a new tablet gets it automatically.</li>
           <li>
-            On Android: adding a phone number to a call, and switching a family tablet back to the bedside.
+            On Android: switching a family tablet back to the bedside.
           </li>
         </ul>
         <p>
