@@ -1,11 +1,14 @@
 # The calling server deploy does not need native apps, simulator builds, tests,
 # operator scripts, or local credentials. Vercel supplies runtime secrets.
-ios/
-tests/
-scripts/
+# Vercel applies this to the website's Git builds too. The folder rules start with /
+# so they match only the top-level folders: a bare ios/ also removed the website's
+# app/(site)/pilot/ios page, which then served a 404.
+/ios/
+/tests/
+/scripts/
 .env*
 !.env.example
-.app-review/
+/.app-review/
 node_modules/
 .next/
 .git/
