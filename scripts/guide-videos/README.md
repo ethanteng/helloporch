@@ -16,3 +16,10 @@ from the real apps against `scripts/local-family-server.mjs` with a made-up hous
 
 Captions sit at the top of the frame, where video players don't put their controls. The frame is dark green
 (`background` and `dark` in each storyboard), so the videos stand apart from the cream page.
+
+## Link QR codes
+
+The guides' "Before you start" shows the TestFlight and Google Play test links with a QR code each, from
+`public/pilot/links/`. `swift qr.swift <url> <out.svg>` makes one and checks it reads back as that URL. The codes are
+tied to the exact links in `app/(site)/pilot/links.ts`: if a link changes on Vercel, the guide shows it without a code
+until you make a new one and update that list.

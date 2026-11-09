@@ -1,17 +1,12 @@
 import Link from "next/link";
-import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Email, Guide, guideMetadata, Links, Questions, Says, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { playTesting, qrFor, testFlight, testFlightApp } from "../links";
 import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
   "Set up Porch on an Android tablet | HelloPorch",
   "Set up your loved one’s Android tablet, connect the corded phone and add family members to Porch.",
 );
-
-// Porch's Google Play testing page, the same one invitation pages use. Until it's set, the guide says I'll send it.
-const playTesting = process.env.NEXT_PUBLIC_PLAY_TESTING_URL;
-// For a caregiver with an iPhone: Porch's public TestFlight link, and Apple's TestFlight app.
-const testFlight = process.env.NEXT_PUBLIC_TESTFLIGHT_URL;
-const testFlightApp = "https://apps.apple.com/app/testflight/id899247664";
 
 const kit: KitPart[] = [
   { name: "An Android tablet", rule: "Android 15 or later", photo: "/pilot/ipad.jpg" },
@@ -28,18 +23,52 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          During the pilot, I’ll add your Google account to the Porch test before you can install the app.
+          During the pilot, Porch is a test app, so you’ll use a few links to set it up. Open each one on the device
+          it’s for.
         </p>
-        <ol>
-          <li>
-            <strong>Email me at <Email />.</strong> Send the email address you use in Google Play on the tablet, usually
-            a Gmail address. If you have an Android phone, include the address you use on your phone too.
-          </li>
-          <li>
-            I’ll send you two links. Use the Google Play test link to install Porch. Use the private setup link to
-            set up one tablet. The setup link expires after 14 days.
-          </li>
-        </ol>
+        <Links
+          items={[
+            {
+              name: "Porch on Google Play",
+              href: playTesting,
+              qr: qrFor(playTesting),
+              sent: "I’ll send you this link.",
+              device: "every Android phone and tablet, including your loved one’s tablet",
+              how: (
+                <>
+                  First email me at <Email /> the address of the Google account each person uses in Google Play, including the one on the tablet.
+                  It’s usually a Gmail address, but any Google account works. Once I’ve added it, open this link,
+                  accept the invitation and tap <UI>Install</UI>.
+                </>
+              ),
+            },
+            {
+              name: "Porch on TestFlight",
+              href: testFlight,
+              qr: qrFor(testFlight),
+              sent: "I’ll send you this link.",
+              device: "every iPhone and iPad in the family",
+              how: (
+                <>
+                  First install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store. Then open
+                  this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                </>
+              ),
+            },
+            {
+              name: "Your private setup link",
+              sent: "I’ll email or text it to you.",
+              device: "your loved one’s tablet only",
+              how: "It works on one tablet and expires after 14 days.",
+            },
+            {
+              name: "Family invitations",
+              sent: "You make these in Porch.",
+              device: "each person’s own phone",
+              how: "Make them once the tablet is set up. Each works once and expires after 24 hours.",
+            },
+          ]}
+        />
         <Tip>
           <p>Allow about 30 minutes. Have the tablet, corded phone and your own phone nearby.</p>
           <p>
@@ -63,6 +92,9 @@ const parts: GuidePart[] = [
         </li>
         <li>
           <strong>Sign in to Google Play</strong> with the Google account you sent me.
+        </li>
+        <li>
+          <strong>Make sure you can open your setup link on it,</strong> from your email or texts on the tablet.
         </li>
       </ol>
     ),

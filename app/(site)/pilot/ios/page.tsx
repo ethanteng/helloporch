@@ -1,16 +1,12 @@
 import Link from "next/link";
-import { Chain, Contact, Guide, guideMetadata, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Email, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { playTesting, qrFor, testFlight, testFlightApp } from "../links";
 import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
   "Set up Porch on an iPad | HelloPorch",
   "Set up your loved one’s iPad, connect the corded phone and add family members to Porch.",
 );
-
-// Porch's public TestFlight link, the same one invitation pages use. Without it, the guide says I'll send it.
-const testFlight = process.env.NEXT_PUBLIC_TESTFLIGHT_URL;
-// Apple's TestFlight app on the App Store.
-const testFlightApp = "https://apps.apple.com/app/testflight/id899247664";
 
 const kit: KitPart[] = [
   { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
@@ -28,17 +24,56 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          During the pilot, use Apple’s TestFlight app to install Porch.
+          During the pilot, Porch is a test app, so you’ll use a few links to set it up. Open each one on the device
+          it’s for.
         </p>
-        <ul>
-          <li>
-            I’ll email or text you a <strong>private setup link</strong>. It works on one iPad and expires after 14 days.
-          </li>
-          <li>
-            I’ll mail you the <strong>Porch phone adapter.</strong> Or, if you are in the Bay Area, I can bring it to
-            you in-person. You can set up the iPad now and connect the phone when the adapter arrives.
-          </li>
-        </ul>
+        <Links
+          items={[
+            {
+              name: "Porch on TestFlight",
+              href: testFlight,
+              qr: qrFor(testFlight),
+              sent: "I’ll send you this link.",
+              device: "every iPhone and iPad, including your loved one’s iPad",
+              how: (
+                <>
+                  First install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store. Then open
+                  this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                </>
+              ),
+            },
+            {
+              name: "Porch on Google Play",
+              href: playTesting,
+              qr: qrFor(playTesting),
+              sent: "I’ll send you this link.",
+              device: "every Android phone in the family",
+              how: (
+                <>
+                  First email me at <Email /> the address of the Google account each person uses in Google Play.
+                  It’s usually a Gmail address, but any Google account works. Once I’ve added it, open this link,
+                  accept the invitation and tap <UI>Install</UI>.
+                </>
+              ),
+            },
+            {
+              name: "Your private setup link",
+              sent: "I’ll email or text it to you.",
+              device: "your loved one’s iPad only",
+              how: "It works on one iPad and expires after 14 days.",
+            },
+            {
+              name: "Family invitations",
+              sent: "You make these in Porch.",
+              device: "each person’s own phone",
+              how: "Make them once the iPad is set up. Each works once and expires after 24 hours.",
+            },
+          ]}
+        />
+        <p>
+          I’ll mail you the <strong>Porch phone adapter.</strong> Or, if you are in the Bay Area, I can bring it to
+          you in-person. You can set up the iPad now and connect the phone when the adapter arrives.
+        </p>
         <Tip>
           <p>Allow about 30 minutes. Have the iPad, corded phone, adapter and your own phone nearby.</p>
           <p>
@@ -64,6 +99,13 @@ const parts: GuidePart[] = [
           <li>
             <strong>Check the date and time are set automatically,</strong> under <UI>Settings</UI>, <UI>General</UI>,{" "}
             <UI>Date &amp; Time</UI>.
+          </li>
+          <li>
+            <strong>Sign in to the App Store</strong> with an Apple ID, so the iPad can install TestFlight.
+          </li>
+          <li>
+            <strong>Make sure you can open your setup link on it,</strong> from your email or texts on the iPad, or by
+            AirDrop from your iPhone.
           </li>
         </ol>
         <Tip label="An older iPad?">

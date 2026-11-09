@@ -203,6 +203,46 @@ export function StepVideo({ name, label, caption }: { name: string; label: strin
   );
 }
 
+/**
+ * A link a family opens during setup: what it is, which device to open it on, and what to do first. `sent` stands in
+ * for a link that isn't set yet, or one I send each family, such as "I’ll send you this link."
+ */
+export type GuideLink = { name: string; href?: string; qr?: string; sent?: ReactNode; device: ReactNode; how: ReactNode };
+
+/** The links a family uses, one card each, with the link written out and, where there is one, a QR code to scan. */
+export function Links({ items }: { items: GuideLink[] }) {
+  return (
+    <ul className={styles.links}>
+      {items.map((link) => (
+        <li key={link.name} className={styles.link}>
+          <div className={styles.linkText}>
+            <h3>{link.name}</h3>
+            {link.href ? (
+              <a className={styles.linkUrl} href={link.href}>
+                {link.href.replace(/^https:\/\//, "")}
+              </a>
+            ) : (
+              link.sent && <span className={styles.linkSent}>{link.sent}</span>
+            )}
+            <p>
+              <strong>Open it on</strong> {link.device}.
+            </p>
+            <p>{link.how}</p>
+          </div>
+          {link.qr && (
+            <figure className={styles.linkQr}>
+              {/* A small SVG: no need for image optimization. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={link.qr} alt={`QR code for ${link.name}`} width={112} height={112} />
+              <figcaption>Scan with the device’s camera</figcaption>
+            </figure>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A button, screen title or switch, written exactly as Porch shows it. */
 export function UI({ children }: { children: ReactNode }) {
   return <span className={styles.ui}>{children}</span>;
