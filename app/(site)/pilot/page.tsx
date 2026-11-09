@@ -6,6 +6,7 @@ import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 import { pageMetadata } from "@/lib/site-metadata";
 import PilotSignup from "./PilotSignup";
+import { shopping } from "./shopping";
 import styles from "./pilot.module.css";
 
 export const metadata: Metadata = pageMetadata({
@@ -21,12 +22,12 @@ export const metadata: Metadata = pageMetadata({
 // also goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop off, so it
 // has no link. The links are the ones I use, on Amazon, and the prices are roughly what they cost there.
 const KIT: { name: string; rule: string; price: string; optional?: boolean; photo: string; href?: string }[] = [
-  { name: "A tablet", rule: "iPad or Android", price: "About $150 to $350 new", photo: "/pilot/ipad.jpg" },
-  { name: "A big-button corded phone", rule: "Any brand", price: "About $28", photo: "/pilot/phone.jpg", href: "https://www.amazon.com/dp/B0FZ99J2QG" },
-  { name: "A Cell2Jack", rule: "Must be a Cell2Jack", price: "About $37", photo: "/pilot/cell2jack.jpg", href: "https://www.amazon.com/dp/B089984QRT" },
-  { name: "A Porch phone adapter", rule: "For an iPad only", price: "I’ll provide it", photo: "/pilot/adapter.jpg" },
-  { name: "A USB-C hub", rule: "Any brand, with a charging port", price: "About $19", photo: "/pilot/hub.jpg", href: "https://www.amazon.com/dp/B0BQLLB61B" },
-  { name: "A sturdy stand", rule: "Any brand", price: "About $30", optional: true, photo: "/pilot/stand.jpg", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
+  { name: "A tablet", rule: "iPad or Android", ...shopping.tablet, photo: "/pilot/ipad.jpg" },
+  { name: "A big-button corded phone", rule: "Any brand", ...shopping.phone, photo: "/pilot/phone.jpg" },
+  { name: "A Cell2Jack", rule: "Must be a Cell2Jack", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
+  { name: "A Porch phone adapter", rule: "For an iPad only", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A USB-C hub", rule: "Any brand, with a charging port", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "A sturdy stand", rule: "Any brand", ...shopping.stand, optional: true, photo: "/pilot/stand.jpg" },
 ];
 
 // Each step's text, one paragraph per entry.

@@ -11,7 +11,8 @@ export function guideMetadata(title: string, description: string): Metadata {
   return { title, description, robots: { index: false, follow: false } };
 }
 
-export type KitPart = { name: string; rule: string; photo: string };
+/** A part to buy: what it is, what to look for, roughly what it costs, and the listing I use, if there is one. */
+export type KitPart = { name: string; rule: string; price: string; href?: string; photo: string };
 export type GuidePart = { id: string; title: string; body: ReactNode };
 
 type GuideProps = {
@@ -51,6 +52,12 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
                 </span>
                 <strong className={styles.kitName}>{part.name}</strong>
                 <span className={styles.kitRule}>{part.rule}</span>
+                <span className={styles.kitPrice}>{part.price}</span>
+                {part.href && (
+                  <a className={styles.kitLink} href={part.href} target="_blank" rel="noopener noreferrer">
+                    See it on Amazon
+                  </a>
+                )}
               </li>
             ))}
           </ul>
@@ -162,6 +169,19 @@ export function Setting({ rows }: { rows: [label: string, value: ReactNode][] })
         </div>
       ))}
     </dl>
+  );
+}
+
+/** A screenshot of a Porch screen: a tablet's fills the column, a phone's sits narrower in the middle. */
+export function Screenshot({ src, alt, width, height, device, caption }: {
+  src: string; alt: string; width: number; height: number; device: "tablet" | "phone"; caption?: ReactNode;
+}) {
+  return (
+    <figure className={`${styles.shot} ${device === "phone" ? styles.shotPhone : styles.shotTablet}`}>
+      <Image src={src} alt={alt} width={width} height={height}
+        sizes={device === "phone" ? "(max-width: 700px) 70vw, 300px" : "(max-width: 800px) 100vw, 760px"} />
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
   );
 }
 

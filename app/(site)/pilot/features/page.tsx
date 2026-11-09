@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Contact, Defaults, Guide, guideMetadata, Path, Says, Setting, Tip, UI, type GuidePart } from "../_guide/parts";
+import { Contact, Defaults, Guide, guideMetadata, Path, Says, Screenshot, Setting, Tip, UI, type GuidePart } from "../_guide/parts";
 
 export const metadata = guideMetadata(
   "Porch features and settings | HelloPorch",
@@ -19,9 +19,8 @@ const parts: GuidePart[] = [
         </p>
         <ul>
           <li>
-            <strong>On the tablet.</strong> On an iPad, tap the gear icon on the clock screen. On Android, tap{" "}
-            <UI>Caregiver mode</UI> in the top right corner. Enter the PIN and tap <UI>Open caregiver mode</UI>. Tap{" "}
-            <UI>Back to clock</UI> when you’re done.
+            <strong>On the tablet.</strong> Tap the gear in the top right corner of the clock. Enter the PIN and tap{" "}
+            <UI>Open caregiver mode</UI>. Tap <UI>Back to clock</UI> when you’re done.
           </li>
           <li>
             <strong>On a caregiver’s phone.</strong> On an iPhone, tap your photo or the person icon in the top right,
@@ -29,6 +28,14 @@ const parts: GuidePart[] = [
             the PIN. Tap <UI>Done</UI> to close caregiver mode. It locks after 10 minutes without use.
           </li>
         </ul>
+        <Screenshot
+          src="/pilot/screens/ipad-keypad.png"
+          width={1600}
+          height={1112}
+          device="tablet"
+          alt="Caregiver mode on the iPad. The menu on the left lists People, Calls, Drop-in, Messages, Display & voice, Privacy, Caregivers & PIN and This iPad, with People open on the right."
+          caption="Caregiver mode on the iPad. The settings in this guide start from the menu on the left."
+        />
         <p>
           Settings marked <em>tablet only</em> must be changed on your loved one’s tablet. On a caregiver’s phone,
           they appear with a lock under <UI>On the bedside iPad</UI> or <UI>On the bedside tablet</UI>.
