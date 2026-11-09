@@ -14,8 +14,10 @@ import com.ethanteng.helloporch.core.CallInactivityTimer
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTone
+import com.ethanteng.helloporch.core.FamilyCallRecord
 import com.ethanteng.helloporch.core.FamilyCallSession
 import com.ethanteng.helloporch.core.FamilyLinks
+import com.ethanteng.helloporch.core.FamilyPerson
 import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.KeypadAction
 import com.ethanteng.helloporch.core.LiveKitAddress
@@ -79,6 +81,14 @@ class PorchCall(
     /** The number the bedside tries when Porch isn't answered. */
     private val phoneNumber = contact?.phoneNumber?.takeIf { role == PorchExperience.BEDSIDE && !inboundPhone }
     private val scope = MainScope()
+    /** Family on a Porch call with the bedside can ring in another family member. Someone rung in can't add anyone. */
+    val guests: CallGuests? = session?.takeIf { it.credential.role == PorchExperience.FAMILY && it.call.source != "phone" && it.call.guest != true }
+        ?.let { CallGuests(app, it, scope) }
+    /** On the bedside, someone who left a call that goes on, for a few seconds. */
+    private var leftNotice: String? = null
+    /** Each person's name while they're in the room, by identity: LiveKit has cleared it by the time they've left. */
+    private val peerNames = mutableMapOf<String, String>()
+    private var leftJob: Job? = null
     /** Replaced by a room of its own when the call moves to their phone, so a late Porch answer can't join it. */
     var room: Room by mutableStateOf(LiveKit.create(app)); private set
     private var roomJobs: List<Job> = emptyList()
@@ -308,6 +318,10 @@ class PorchCall(
         if (ending || failed) return
         updateKeypadHint()
         val peers = room.remoteParticipants.values.toList()
+        for (peer in peers) {
+            val identity = peer.identity?.value ?: continue
+            peer.name?.takeIf { it.isNotEmpty() }?.let { peerNames[identity] = it }
+        }
         // A regular phone's leg says how its call is going: connected once it's "active" (or "automation", such as a
         // menu that answers), and gone at "hangup".
         if (inboundPhone || onPhone) {
@@ -343,15 +357,69 @@ class PorchCall(
             else -> text("Calling %@ on Porch…", name)
         }
         if (video) {
-            // An added phone has no video, so it gets no tile.
+            // An added phone has no video, so it gets no tile. Family see Mom first; the bedside sees whoever the call is with.
+            val first = if (role == PorchExperience.BEDSIDE) peerID else bedsidePerson()?.id ?: peerID
             tiles = peers.filter { it.kind != Participant.Kind.SIP }
-                .sortedBy { if (it.identity?.value == peerID) 0 else 1 }
+                .sortedBy { if (it.identity?.value == first) 0 else 1 }
                 .map { peer -> Tile(peer.identity?.value.orEmpty(), peer.name.orEmpty(), videoOf(peer)) }
             localTrack = videoOf(room.localParticipant)
             showingPlaceholder = !(tiles.size > 1 || tiles.firstOrNull()?.track != null)
         }
+        addedPeople(peers)
         if (hasConnectedPeer && mediaReady) playConnectionCue()
         checkInactivity()
+    }
+
+    /**
+     * People added to a call with the bedside, as iOS's call screens show them: family rung in, or a phone a caregiver
+     * added, such as a bank. The bedside says who they are, in its language. A family phone's own controls show how
+     * adding someone goes, so its status changes only once the bedside has left.
+     */
+    private fun addedPeople(peers: List<Participant>) {
+        guests?.refresh(peers)
+        val session = session ?: return
+        if (!hasConnectedPeer || inboundPhone) return
+        if (role == PorchExperience.BEDSIDE) {
+            val call = app.coordinator.state(session.credential)?.call?.takeIf { it.id == callID }
+            val lines = bedsideLines(peers, call) + listOfNotNull(leftNotice)
+            if (lines.isNotEmpty()) status = (listOf(status) + lines).joinToString("\n")
+            return
+        }
+        val bedside = bedsidePerson() ?: return
+        if (peers.isNotEmpty() && peers.none { it.identity?.value == bedside.id }) {
+            status = "${bedside.name} left the call."
+            if (peers.none { it.kind != Participant.Kind.SIP }) placeholder = "Phone call"
+        }
+    }
+
+    /** What the bedside says about people added to its call: "Calling David…", "David joined the call". */
+    private fun bedsideLines(peers: List<Participant>, call: FamilyCallRecord?): List<String> {
+        val lines = mutableListOf<String>()
+        call?.porchGuest?.let { guest ->
+            if (guest.state == "ringing") lines += text("Calling %@…", guest.name)
+            else if (guest.state == "joined" && peers.any { it.identity?.value == guest.memberID }) lines += text("%@ joined the call", guest.name)
+        }
+        peers.firstOrNull { it.kind == Participant.Kind.SIP }?.let { phone ->
+            val name = phone.name.orEmpty()
+            lines += text(if (phone.attributes["sip.callStatus"] == "active") "%@ joined the call" else "Calling %@…", name)
+        }
+        return lines
+    }
+
+    /** The bedside in this call's household, which family see first. */
+    private fun bedsidePerson(): FamilyPerson? {
+        val state = session?.let { app.coordinator.state(it.credential) } ?: return null
+        return if (state.me.role == PorchExperience.BEDSIDE) state.me else state.people.firstOrNull { it.role == PorchExperience.BEDSIDE }
+    }
+
+    private fun noteLeft(name: String) {
+        leftNotice = text("%@ left the call", name)
+        leftJob?.cancel()
+        leftJob = scope.launch {
+            delay(6_000)
+            leftNotice = null
+            refresh()
+        }
     }
 
     /** Ends the call after the chosen stretch with no one speaking. Silence counts only while connected with someone,
@@ -400,7 +468,12 @@ class PorchCall(
         // The bedside is never left on with only a phone a family caregiver added, such as a bank.
         val bedside = role == PorchExperience.BEDSIDE && !inboundPhone
         if (hasConnectedPeer && room.remoteParticipants.values.none { !bedside || it.kind != Participant.Kind.SIP }) finish(returning("Call ended."))
-        else refresh()
+        else {
+            // The call goes on without them, such as whoever rang in David hanging up.
+            val name = participant.name?.takeIf { it.isNotEmpty() } ?: participant.identity?.value?.let { peerNames[it] }
+            if (bedside && hasConnectedPeer && participant.kind != Participant.Kind.SIP) name?.let(::noteLeft)
+            refresh()
+        }
     }
 
     private fun finishPhoneCall() =
@@ -522,7 +595,7 @@ class PorchCall(
             finish(if (english) call?.reason ?: text("Call ended. Returning to Porch…") else text("Call ended. Returning to Porch…"))
             return
         }
-        if (role == PorchExperience.BEDSIDE) refresh()
+        if (role == PorchExperience.BEDSIDE) refresh() else guests?.refresh()
         if (call.state == "accepted" && !accepted) {
             accepted = true
             waitJob?.cancel()

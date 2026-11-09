@@ -630,6 +630,11 @@ Built in six pull requests, each a working household:
   - **Adding a phone number:** caregivers only. `addPhoneGuest` takes US and Canadian numbers, with a 25 s request timeout and a 75 s window to join. `removePhoneGuest` runs on hang-up.
   - **DTMF:** sent over LiveKit data. iOS uses `publishDtmf`, codes 0–9 with `*` = 10 and `#` = 11; check what the Android SDK offers for this.
   - **On the tablet:** two people share the screen.
+
+  Built in pull requests, each tried on a KB10 with two family devices:
+
+  1. **Ringing family into a call** (`CallGuests`, `CallGuestRules`). On a family phone's Porch call with the bedside, **Add someone** shows once the call is answered, the bedside is in the room and someone's Porch can ring; it lists them, and `addPorchGuest` rings one. The line under the status says "Ringing David…", then for 5 s "David joined the call.", "declined.", "didn't answer.", "left the call." or "Stopped ringing David."; Add someone hides while they ring or are on. Someone rung in sees "Ethan with Mom" and can't add anyone. Each screen shows the others' video with Mom first on a phone, and on a phone's narrow screen the four buttons take two rows. The tablet adds "Calling David…", "David joined the call", and for 6 s "Ethan left the call" when a call goes on without someone, in its language; a family phone says "Mom left the call." once she's gone. The call goes on while two people are on it, as the server decides (`carriesOn`). The local test server checks the room with the local LiveKit, as `addPorchGuest` needs.
+  2. **Adding a phone number,** with its keypad.
 - **Dedicated tablet.**
   - Optional lock task mode, with Porch as device owner. It's set once with `adb shell dpm set-device-owner` on a freshly reset tablet, and hides the status bar and app switching.
   - On the tablet, set no screen lock and turn battery optimization off for Porch, once each in Settings.
