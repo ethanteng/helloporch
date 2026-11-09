@@ -16,7 +16,8 @@ runs:
       shell: bash
       run: |
         resolved="$(shasum -a 256 ios/Porch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved | cut -c 1-16)"
-        xcode="$(xcodebuild -version | awk '/Build version/ { print $3 }')"
+        # Read from Xcode's version.plist: a second `xcodebuild -version` took about a minute on the runner.
+        xcode="$(plutil -extract ProductBuildVersion raw "$(xcode-select -p)/../version.plist")"
         echo "key=swift-packages-$RUNNER_OS-$xcode-$resolved" >> "$GITHUB_OUTPUT"
         echo "prefix=swift-packages-$RUNNER_OS-" >> "$GITHUB_OUTPUT"
     # An older cache is still worth restoring: only what changed is fetched.
