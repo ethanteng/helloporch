@@ -6,7 +6,8 @@ export const metadata = guideMetadata(
   "What each Porch feature does for your family, what it does out of the box, and how to change it or turn it off.",
 );
 
-// Every feature as built on 2026-11-08, on the iPad and iPhone apps and the Android apps. Labels are the apps' own.
+// Every feature, on the iPad and iPhone apps and the Android apps, which have the same features. Labels are the
+// apps' own; where Android's differ, the page says so.
 // The defaults are a household set up from the app: drop-in on, unknown callers blocked, invitations approving audio
 // and video drop-in (lib/family/service.ts), plus each app's own settings defaults.
 
@@ -43,8 +44,8 @@ const parts: GuidePart[] = [
         </p>
         <Tip label="Close caregiver mode on the tablet">
           <p>
-            While caregiver mode is open on the tablet, drop-ins don’t connect, and on Android calls don’t ring. Tap{" "}
-            <UI>Back to clock</UI> when you’re finished.
+            While caregiver mode is open on the tablet, drop-ins don’t connect. Tap <UI>Back to clock</UI> when
+            you’re finished.
           </p>
         </Tip>
       </>
@@ -71,7 +72,7 @@ const parts: GuidePart[] = [
             ["Hanging up calls nobody is talking on", "Off", <><Path steps={["Calls", "End calls after silence"]} />, tablet only</>],
             ["Family messages", "On", <Path key="p" steps={["Messages", "Allow family messages"]} />],
             ["Voicemail and texts from unknown numbers", "Wait for a caregiver’s OK", <Path key="p" steps={["Messages", "Waiting messages"]} />],
-            ["Playing messages when someone is in front of the iPad", "Off. iPad only", <><Path steps={["Messages", "Play when someone is in front of the iPad"]} /></>],
+            ["Playing messages when someone is in front of the tablet", "Off", <><Path steps={["Messages", "Play when someone is in front of the iPad"]} />, tablet only</>],
             ["Showing family when someone was at the tablet", "On, from touches and key presses", <Path key="p" steps={["Privacy", "Show family when someone is at the iPad"]} />],
             ["Using the camera to notice someone", "Off", <><Path steps={["Privacy", "Check with the camera"]} />, tablet only</>],
             ["Language", "English", <><Path steps={["Display & voice", "Bedside language"]} />, tablet only</>],
@@ -120,6 +121,10 @@ const parts: GuidePart[] = [
         <p>
           To move someone, tap them under <UI>People</UI>, then <UI>Keypad key</UI>, and pick another key or{" "}
           <UI>Take off the keypad</UI>.
+        </p>
+        <p>
+          To put each person’s photo and name on their key, print labels with the{" "}
+          <Link href="/labels">phone button label maker</Link>. The setup guides walk through it.
         </p>
         <h3>What else a key can do</h3>
         <ul>
@@ -239,12 +244,8 @@ const parts: GuidePart[] = [
         </p>
         <ul>
           <li>
-            <strong>On an iPhone,</strong> tap <UI>Drop in with video</UI> or <UI>Drop in with audio</UI>. An approved
+            In Porch on your phone, tap <UI>Drop in with video</UI> or <UI>Drop in with audio</UI>. An approved
             person’s <UI>Video call</UI> and <UI>Audio call</UI> drop in too.
-          </li>
-          <li>
-            <strong>On an Android phone,</strong> there are no separate buttons. An approved person’s{" "}
-            <UI>Video call</UI> or <UI>Audio call</UI> drops in by itself.
           </li>
           <li>
             Your loved one can stop it by tapping <UI>Don’t connect</UI> or pressing 0.
@@ -331,8 +332,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          <strong>Why it matters:</strong> your loved one doesn’t have to press anything. When the iPad notices someone
-          in front of it, Porch says <Says>You have 2 new messages.</Says> and plays them.
+          <strong>Why it matters:</strong> your loved one doesn’t have to press anything. When the tablet notices
+          someone in front of it, Porch says <Says>You have 2 new messages.</Says> and plays them.
         </p>
         <ul>
           <li>
@@ -349,8 +350,8 @@ const parts: GuidePart[] = [
         <Setting
           rows={[
             ["Default", "Off. When on, it plays from 8 AM until 9 PM."],
-            ["Change it", "On the iPad only."],
-            ["Android", "Not available yet. Messages play from the clock’s button or a messages key."],
+            ["Change it", "On the tablet only."],
+            ["Android", <>The switch is <UI>Play when someone is in front of the tablet</UI>.</>],
           ]}
         />
       </>
@@ -504,7 +505,7 @@ const parts: GuidePart[] = [
         </p>
         <ol>
           <li>
-            During a call with the tablet from your iPhone, once it’s connected, tap <UI>Add someone</UI>.
+            During a call with the tablet from your phone, once it’s connected, tap <UI>Add someone</UI>.
           </li>
           <li>
             Choose a family member, and Porch rings them into the call. Or, if you’re a caregiver, choose{" "}
@@ -520,7 +521,6 @@ const parts: GuidePart[] = [
           rows={[
             ["Default", "Anyone in the family can add a family member. Only caregivers can add a phone number."],
             ["Limits", "Phone numbers in the US and Canada, including toll-free numbers. The tablet can’t start one."],
-            ["Android", "Not available yet."],
           ]}
         />
       </>
@@ -813,8 +813,8 @@ const parts: GuidePart[] = [
         </li>
         <li>
           <strong>Turning the tablet into a family device,</strong> for calling the bedside instead:{" "}
-          <Path steps={["This iPad", "Use this iPad as a family device"]} />. An iPad can switch back from its own
-          settings with <UI>Use this iPad as the bedside Porch</UI>. An Android tablet can’t switch back yet.
+          <Path steps={["This iPad", "Use this iPad as a family device"]} />. You can switch it back later from its
+          Porch settings, with <UI>Use this iPad as the bedside Porch</UI>.
         </li>
       </ul>
     ),
@@ -829,10 +829,6 @@ const parts: GuidePart[] = [
           <li>Resetting a forgotten caregiver PIN.</li>
           <li>Deleting a Porch, its number and everything in it.</li>
           <li>Backing up the keypad, so a new tablet gets it automatically.</li>
-          <li>
-            On Android: three-way calls, playing messages when someone is in front of the tablet, and switching a family
-            tablet back to the bedside.
-          </li>
         </ul>
         <p>
           Something here not working the way it says, or a feature you wish Porch had? <Contact />.

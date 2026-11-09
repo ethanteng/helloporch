@@ -34,6 +34,9 @@ function GetPorch({ device }: { device: string }) {
   );
 }
 
+// Where I suggest printing the phone's photo labels.
+const fedExCopies = "https://www.office.fedex.com/default/copies.html";
+
 const parts: GuidePart[] = [
   {
     id: "before",
@@ -343,13 +346,65 @@ const parts: GuidePart[] = [
           <p>
             Keys 0 and 9 control calls: 0 answers and hangs up, and 9 turns video on and off. Use 1 to 8 for people.
             Many big-button phones have room for a photo on each key, which makes them easier for your loved one to find.
-            Use the <Link href="/labels">phone button label maker</Link> to print photos and names at the right size.
+            The next step prints labels for them.
           </p>
         </Tip>
         <p>
           Only people on the keypad, and numbers you allow, can call your loved one’s Porch number from a regular phone. Anyone
           else is turned away and listed under <UI>Blocked numbers</UI>, where you can allow them.
         </p>
+      </>
+    ),
+  },
+  {
+    id: "labels",
+    title: "Put photos on the phone’s keys",
+    body: (
+      <>
+        <p>
+          A photo and name on each key shows your loved one who it calls, so they don’t have to remember numbers. The{" "}
+          <Link href="/labels">phone button label maker</Link> makes a sheet of labels for you to print. It works on a
+          computer, a tablet or a phone, and the photos stay on your device.
+        </p>
+        <ol>
+          <li>
+            Under <UI>Choose your contacts</UI>, pick how many people to put on the phone, one for each of keys 1 to 8
+            you set up.
+          </li>
+          <li>
+            Under <UI>Add names and photos</UI>, tap <UI>Add photo</UI> for each person and type a short name, in the
+            same order as their keys. A clear, close-up face works best. <UI>Preview &amp; adjust</UI> lets you move
+            and zoom the photo.
+          </li>
+          <li>
+            Under <UI>Set the label size and quantity</UI>, measure the top of one of the phone’s buttons, including
+            the space for a name, and enter it.
+          </li>
+          <li>
+            Check the <UI>Print preview</UI>, then tap <UI>Download print-ready PDF</UI>.
+          </li>
+          <li>
+            Print it in color at <UI>Actual Size</UI> or 100%, so the labels fit the keys. A print shop does this well:
+            see the tip below.
+          </li>
+          <li>
+            Cut out each label and put it on its key. Most picture phones have a clear cover on each key that lifts
+            off, with room for a photo underneath.
+          </li>
+        </ol>
+        <Tip label="Where to print, and on what">
+          <p>
+            <a href={fedExCopies}>FedEx Office</a> prints color copies from a PDF. Upload it online and pick it up at a
+            store nearby, or bring it in. Ask for <strong>Matte Cover (100 lb.)</strong> paper: it’s stiff enough to
+            handle and cut, and it doesn’t shine under the key covers. Remind them to print at 100%, not fit to page.
+          </p>
+        </Tip>
+        <Tip>
+          <p>
+            Check each label against the keypad in caregiver mode, under <UI>People</UI> on the tablet, so the photo on
+            key 1 is the person key 1 calls.
+          </p>
+        </Tip>
       </>
     ),
   },
@@ -460,6 +515,10 @@ const parts: GuidePart[] = [
           If Porch says no voice is available for that language, add one in Android’s <UI>Settings</UI>, under{" "}
           <UI>Accessibility</UI>, then <UI>Text-to-speech output</UI>.
         </p>
+        <p>
+          The voice, the clock and every other setting are in{" "}
+          <Link href="/pilot/features#language">Every Porch feature</Link>.
+        </p>
       </>
     ),
   },
@@ -541,8 +600,9 @@ const parts: GuidePart[] = [
             q: "Something else.",
             a: (
               <p>
-                Tell me what happened. You can <Contact />. A photo of the screen helps. This is a pilot, and I
-                want to hear about anything that’s confusing.
+                <Link href="/pilot/features">Every Porch feature</Link> explains each setting and how to change it.
+                Otherwise, tell me what happened. You can <Contact />. A photo of the screen helps. This is a
+                pilot, and I want to hear about anything that’s confusing.
               </p>
             ),
           },
@@ -567,7 +627,12 @@ export default function AndroidGuide() {
           get the family calling from their own phones.
         </p>
       }
-      aside={<>Using the other kind? <Link href="/pilot/ios">The iPad and iPhone guide</Link></>}
+      aside={
+        <>
+          Using the other kind? <Link href="/pilot/ios">The iPad and iPhone guide</Link>. Once you’re set up, see{" "}
+          <Link href="/pilot/features">every Porch feature</Link>.
+        </>
+      }
       kit={{
         intro: "Android tablets read the phone through the Cell2Jack directly, so there’s no adapter to wait for.",
         parts: kit,
@@ -575,7 +640,10 @@ export default function AndroidGuide() {
           "Wi-Fi where your loved one lives, and its password.",
           "Your private setup link, and the link to join Porch’s Google Play test. I’ll send you both.",
           "Your own phone, iPhone or Android, to pair as the caregiver’s phone.",
-          "A few photos of the people your loved one calls most, for their keys.",
+          <>
+            A few photos of the people your loved one calls most, to print as labels for their keys with the{" "}
+            <Link href="/labels">phone button label maker</Link>.
+          </>,
         ],
       }}
       parts={parts}
