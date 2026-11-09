@@ -322,6 +322,17 @@ const parts: GuidePart[] = [
             Tap <UI>Save</UI>. Repeat for each key.
           </li>
         </ol>
+        <Tip label="When someone joins Porch later">
+          <p>
+            A key can start with someone’s regular phone number and switch to their Porch app once they join. In{" "}
+            <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose them. Their phone
+            number stays as the one Porch tries when they miss a call.
+          </p>
+          <p>
+            To invite them from there, tap <UI>Invite</UI> with their name. Their key switches to their Porch app on
+            its own when they join.
+          </p>
+        </Tip>
       </>
     ),
   },
