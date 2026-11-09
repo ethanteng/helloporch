@@ -1,6 +1,7 @@
 package com.ethanteng.helloporch
 
 import android.animation.ValueAnimator
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -114,11 +115,13 @@ class MessageNotice(app: PorchApplication, count: Int) {
 }
 
 /** The clock's messages notice, while there is one. Porch leaving the front, or the clock going, ends it without putting
- * anything off, as iOS's clock does. */
+ * anything off, as iOS's clock does. Turning the tablet, or plugging the keypad in, recreates the activity and is still
+ * the same clock, so the notice goes on, as messages playing do. */
 @Composable
 fun ClockMessageNotice(app: PorchApplication, covered: Boolean) {
     val messages = app.messages
-    LifecycleResumeEffect(messages) { onPauseOrDispose { messages.endNotice() } }
+    val activity = LocalActivity.current
+    LifecycleResumeEffect(messages) { onPauseOrDispose { if (activity?.isChangingConfigurations != true) messages.endNotice() } }
     // Something over the clock, such as an error, ends it too.
     LaunchedEffect(covered) { if (covered) messages.endNotice() }
     messages.notice?.Overlay(app)

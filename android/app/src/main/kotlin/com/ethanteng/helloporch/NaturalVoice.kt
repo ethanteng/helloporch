@@ -59,7 +59,7 @@ object NaturalVoice {
 
     /**
      * Prepares what the bedside may say next, one sentence at a time: drop-in announcements for everyone who may drop
-     * in, who it's calling for everyone it can call, how many messages are waiting while presence autoplay is on, who each
+     * in, who it's calling for everyone it can call, how many messages are waiting, for presence autoplay's notice, who each
      * waiting message is from, and each waiting text. The
      * voicemail recorder's prompts come with their part of phase 5.
      */
@@ -87,10 +87,9 @@ object NaturalVoice {
         if (state.messagesEnabled != false) {
             val waiting = state.messages.orEmpty().filter { it.held != true }
             val waitingTexts = state.texts.orEmpty().filter { !it.held }
-            // Presence autoplay's notice, while it's on: texts count with the messages there.
-            if (MessageAutoplay.load(app.settings).enabled) {
-                for (count in MessageAutoplay.noticeCounts(waiting.size + waitingTexts.size, app.messages.waitingCount)) texts += MessageNotice.text(app, count)
-            }
+            // Presence autoplay's notice, as iOS has it ready whether or not autoplay is on, so the first one after a
+            // caregiver turns it on is in the natural voice too. Texts count with the messages there.
+            for (count in MessageAutoplay.noticeCounts(waiting.size + waitingTexts.size, app.messages.waitingCount)) texts += MessageNotice.text(app, count)
             for (message in waiting) texts += BedsideMessages.announcement(app, message, slots)
             for (text in waitingTexts) texts += BedsideMessages.textAnnouncement(app, text.from, text.sentAt, slots)
             // The server reads up to 600 characters of a text's words in a natural voice (`textLimits.spokenCharacters`).
