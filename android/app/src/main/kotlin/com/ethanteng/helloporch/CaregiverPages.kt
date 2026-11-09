@@ -414,6 +414,8 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     val refused = "Allow camera access in Settings → Apps → Porch → Permissions to tell family when someone is at the tablet."
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
+            // The activity may have been recreated while Android's question was up, which drops the switch's own state.
+            camera = true
             BedsideAttendance.setCameraEnabled(true, app.settings)
         } else {
             camera = false
