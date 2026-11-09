@@ -80,6 +80,16 @@ board("ios-keypad", "tablet", "Set up the phone’s number keys", [
     I("Key 1 now calls David. Pressing 1 on the phone rings him.", "m10-saved"),
 ])
 
+board("ios-switch", "tablet", "When someone joins Porch later", [
+    I("A key can start with someone’s regular phone number. Key 1 calls Sarah’s phone.", "s01-keypad-phone", (513, 218)),
+    I("Her page says she’s not on Porch yet. Invite her when she’s ready.", "s03-reach-not-on-porch"),
+    I("Once she joins, she shows under Family on Porch. Her key still calls her phone.", "s04-joined-family", (513, 120)),
+    I("Tap her key, then Choose from Family on Porch.", "s05-choose-offered", (562, 362)),
+    I("Choose her.", "s06-choose-menu", (1003, 359)),
+    I("Her key now calls her Porch app. If she doesn’t answer, Porch calls her phone.", "s07-connected"),
+    I("Key 1 shows Porch app instead of Phone.", "s08-keypad-porch"),
+])
+
 board("ios-language", "tablet", "Change the language or voice", [
     I("On the clock, tap the gear in the top right corner.", "g00-clock", (1131, 44)),
     I("Enter your PIN and tap Open caregiver mode.", "g02-gate-typed", (590, 299)),
@@ -155,6 +165,16 @@ board("android-invite", "phone", "Invite family members", [
     F("Tap Share invitation and send it by text or email. Nearby, they can scan the code.", "d09-p-share", (540, 2040)),
     F("Then tap Done.", "d09-p-share", (97, 207)),
     F("Each invitation works once and expires after 24 hours.", "d11-p-family-after"),
+])
+
+board("android-switch", "tablet", "When someone joins Porch later", [
+    T("A key can start with someone’s regular phone number. Key 1 calls Sarah’s phone.", "s01-keypad-phone", (1160, 450)),
+    T("Her page says she’s not on Porch yet. Invite her when she’s ready.", "s03-reach-not-on-porch"),
+    T("Once she joins, she shows under Family on Porch. Her key still calls her phone.", "s04-joined-family"),
+    T("Tap her key, then Choose from Family on Porch.", "s05-choose-offered", (1177, 817)),
+    T("Choose her.", "s06-choose-menu", (1041, 937)),
+    T("Her key now calls her Porch app. If she doesn’t answer, Porch calls her phone.", "s07-connected"),
+    T("Key 1 shows Porch app instead of Phone.", "s08-keypad-porch"),
 ])
 
 board("android-language", "tablet", "Change the language or voice", [
