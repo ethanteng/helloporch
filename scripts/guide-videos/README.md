@@ -14,4 +14,5 @@ from the real apps against `scripts/local-family-server.mjs` with a made-up hous
    `<name>.jpg` (1280×960, H.264, no sound). The optional contact sheet shows every beat with its tap ring.
 4. Copy the `.mp4` and `.jpg` files into `public/pilot/videos/`.
 
-Captions sit at the top of the frame, where video players don't put their controls.
+Captions sit at the top of the frame, where video players don't put their controls. The frame is dark green
+(`background` and `dark` in each storyboard), so the videos stand apart from the cream page.

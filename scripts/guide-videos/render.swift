@@ -11,7 +11,11 @@ import UniformTypeIdentifiers
 
 struct Tap: Codable { var on: String?; var x: Double; var y: Double }
 struct Beat: Codable { var label: String?; var caption: String; var main: String; var side: String?; var tap: Tap?; var hold: Double? }
-struct Board: Codable { var output: String; var poster: String?; var layout: String; var beats: [Beat]; var width: Int?; var height: Int? }
+/// background: the frame's color as "#RRGGBB"; dark: light captions for a dark background.
+struct Board: Codable {
+  var output: String; var poster: String?; var layout: String; var beats: [Beat]; var width: Int?; var height: Int?
+  var background: String?; var dark: Bool?
+}
 
 let boardURL = URL(fileURLWithPath: CommandLine.arguments[1])
 let board = try JSONDecoder().decode(Board.self, from: Data(contentsOf: boardURL))
@@ -23,7 +27,10 @@ let fade = 0.45
 func color(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
   CGColor(srgbRed: CGFloat((hex >> 16) & 0xff) / 255, green: CGFloat((hex >> 8) & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: a)
 }
-let bg = color(0xF9EFDA), ink = color(0x2E1D15), muted = color(0x5F4C42), tomato = color(0xE05D3D), tomatoDeep = color(0xC0401F)
+let dark = board.dark ?? false
+let bg = color(board.background.flatMap { UInt32($0.dropFirst(), radix: 16) } ?? 0xF9EFDA)
+let ink = dark ? color(0xFDFBF6) : color(0x2E1D15), tomato = color(0xE05D3D)
+let tomatoDeep = dark ? color(0xF29A7E) : color(0xC0401F)
 let bezel = color(0x1F1A17)
 
 var cache: [String: CGImage] = [:]

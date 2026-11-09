@@ -24,7 +24,9 @@ def beat(caption, main, tap=None, size=None, side=None, on="main", label=None):
 def board(name, layout, label, beats):
     for b in beats:
         b.setdefault("label", label)
-    json.dump({"output": f"{name}.mp4", "poster": f"{name}.jpg", "layout": layout, "beats": beats},
+    # Dark green, Porch's button color, so each video stands apart from the guide's cream page.
+    json.dump({"output": f"{name}.mp4", "poster": f"{name}.jpg", "layout": layout, "beats": beats,
+               "background": "#1F3B33", "dark": True},
               open(f"{out}/{name}.json", "w"), indent=1, ensure_ascii=False)
 
 # iPad and iPhone ------------------------------------------------------------------------------------------------
