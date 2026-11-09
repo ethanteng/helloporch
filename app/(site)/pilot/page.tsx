@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
@@ -65,6 +66,10 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Do I need a special phone?",
     a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it. With an iPad, it also goes through a Porch phone adapter, which I’ll provide.",
+  },
+  {
+    q: "How do I put photos on the phone buttons?",
+    a: <>Use the <Link href="/labels">phone button label maker</Link> to add photos and names, set the size of your buttons, and download a PDF to print.</>,
   },
   {
     q: "What is the Porch phone adapter?",

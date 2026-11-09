@@ -167,6 +167,8 @@ Phone fallback needs a LiveKit outbound SIP trunk connected to Twilio, with its 
 
 The site at helloporch.store has the home page, [features](https://helloporch.store/features), the [pilot](https://helloporch.store/pilot) guide, the [story](https://helloporch.store/story) and the [privacy policy](https://helloporch.store/privacy).
 
+The [phone button label maker](https://helloporch.store/labels) lets families choose up to eight contacts, add photos or names, and download a US Letter PDF with cut marks. Cutouts default to 1 × 1.5 inches and can be resized. Families can print up to ten sets of labels. The editor builds the PDF in the browser without uploading photos or names.
+
 - **Waitlist.** Both waitlist forms post to `/api/waitlist`, which adds the email to MailerLite. The follow-up "who would use Porch?" answer goes in the subscriber's `porch_who` field. Each request is also logged as JSON (`waitlist_signup` / `waitlist_who`), but Vercel keeps those logs only briefly, so MailerLite is the record.
 - **3-way calling.** The features page plays a 24-second film drawn from the app's 3-way calling screens, with the faces from `public/features/three-way/mom.jpg` and `ethan.jpg`. To remake it, run `npm run dev`, then `node scripts/render-three-way-film.mjs film.mp4` (it needs macOS and Google Chrome). Upload the file to the clips' Blob store under a new name, since browsers cache Blob files by name, and point `FILM` in `app/(site)/features/ThreeWayCalling.tsx` at it.
 - **Demo video.** It defaults to the v2 file on Vercel Blob. To change it, set `NEXT_PUBLIC_DEMO_VIDEO_URL` to the new `.mp4` URL and redeploy. The value is built into the page.

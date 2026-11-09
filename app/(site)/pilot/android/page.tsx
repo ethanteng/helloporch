@@ -343,6 +343,7 @@ const parts: GuidePart[] = [
           <p>
             Keys 0 and 9 control calls: 0 answers and hangs up, and 9 turns video on and off. Use 1 to 8 for people.
             Many big-button phones have room for a photo on each key, which makes them easier for your loved one to find.
+            Use the <Link href="/labels">phone button label maker</Link> to print photos and names at the right size.
           </p>
         </Tip>
         <p>
