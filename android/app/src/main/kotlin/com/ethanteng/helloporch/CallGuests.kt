@@ -58,6 +58,8 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
     var keysPressed by mutableStateOf(""); private set
     /** Why a ring, a dial or a hang-up didn't go through, until it's dismissed. */
     var error by mutableStateOf<String?>(null)
+    /** Why the phone form's dial didn't go through. It survives the phone turning, unlike the form's own message. */
+    var dialProblem by mutableStateOf<String?>(null)
 
     /** The family member just rung in, until the household's call shows them, and how each invitation last looked. */
     private var invited: FamilyPorchGuest? = null
@@ -70,7 +72,10 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
     private var leg: PhoneGuestLeg? = null
     /** Phones this one already saw end, so a check-in from before the hang-up can't bring one back. */
     private val finished = mutableSetOf<String>()
-    private var dialing = false
+    /** True from the moment a dial is asked for until it has settled, so a second tap can't start another. */
+    private var startingDial = false
+    var dialing by mutableStateOf(false)
+        private set
     /** The phone this one is hanging up. The server takes it out of the room before it answers, so its leaving isn't the
      * other end hanging up. */
     private var hangingUpID: String? = null
@@ -120,16 +125,21 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
         val people = CallGuestRules.ringable(state?.family.orEmpty(), invited ?: state?.call?.takeIf { it.id == callID }?.porchGuest)
         val canDial = canDial()
         when {
-            people.isEmpty() && canDial -> phoneForm = true
+            people.isEmpty() && canDial -> { dialProblem = null; phoneForm = true }
             people.isNotEmpty() -> { choicesIncludePhone = canDial; choices = people }
         }
     }
 
     fun closeChoices() { choices = null }
 
-    fun choosePhone() { choices = null; phoneForm = true }
+    fun choosePhone() { choices = null; dialProblem = null; phoneForm = true }
 
-    fun closePhoneForm() { phoneForm = false }
+    /** Closes the form once a dial isn't in flight. Closing it must not cancel a number that may already be ringing. */
+    fun closePhoneForm() {
+        if (dialing) return
+        phoneForm = false
+        dialProblem = null
+    }
 
     fun ring(person: FamilyRelative) {
         choices = null
@@ -154,14 +164,41 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
     }
 
     /**
-     * Dials `number` (E.164) into the call as `label`, such as "Bank". Throws why it couldn't, for the form to show. A
-     * dial that fails on the server's side may still be ringing, and the server keeps tracking it, so another number
-     * waits for the next check-in to show it here first.
+     * Dials `number` (E.164) into the call as `label`, such as "Bank", on this call's own scope. The form's composition
+     * is cancelled when the phone turns or the form closes, and that must not cancel the request: it may already be ringing.
      */
-    suspend fun dial(label: String, number: String) {
-        if (dialing) throw FamilyServiceException("Porch is still checking the last number. Try again in a moment.", 409)
+    fun beginDial(label: String, number: String) {
+        if (startingDial || dialing) return
+        val current = phone
+        if (current != null) {
+            dialProblem = "Hang up ${current.label} before adding another number."
+            return
+        }
+        dialProblem = null
+        // Set before the request is launched, so Cancel can't dismiss the form in the gap and hide a failure.
+        startingDial = true
         dialing = true
         adding = true
+        scope.launch {
+            try {
+                dial(label, number)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FamilyServiceException) {
+                dialProblem = e.message
+            } finally {
+                startingDial = false
+            }
+        }
+    }
+
+    /**
+     * A dial that fails on the server's side, or is cancelled as the call ends, may still be ringing. The server keeps
+     * tracking it, so another number waits for the next check-in to show it here first.
+     */
+    private suspend fun dial(label: String, number: String) {
+        val current = phone
+        if (current != null) throw FamilyServiceException("Hang up ${current.label} before adding another number.", 409)
         var settle = 0L
         try {
             val response = try {
@@ -172,6 +209,7 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
                 if (e.status >= 500 || e.status == 0) settle = 6_000
                 throw e
             } catch (e: CancellationException) {
+                settle = 6_000
                 throw e
             } catch (e: Exception) {
                 settle = 6_000
@@ -179,7 +217,6 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
             }
             app.coordinator.update(response)
             track(response.phoneGuest ?: throw FamilyServiceException("Couldn't add that phone number.", 502))
-            phoneForm = false
         } finally {
             val wait = settle
             scope.launch {
@@ -234,6 +271,11 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
     private fun canDial() = app.coordinator.state(session.credential)?.canAddPhoneGuests == true && phone == null && !dialing
 
     private fun track(added: FamilyPhoneGuest) {
+        // The number is on the call, so the form is finished even if this was found on a later check-in.
+        phoneForm = false
+        dialProblem = null
+        // Following the same phone again, such as when the dial's answer arrives after a check-in, must not restart its clock.
+        if (phone?.id == added.id && leg != null) return
         phone = added
         phoneAnswered = false
         phoneNotice = null

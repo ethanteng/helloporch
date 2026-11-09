@@ -1,5 +1,6 @@
 package com.ethanteng.helloporch
 
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,10 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.ethanteng.helloporch.core.FamilyServiceException
 import com.ethanteng.helloporch.core.PhoneNumberNormalization
 import com.ethanteng.helloporch.core.ValidationException
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /** What adding someone to a call opens over the call screen: who can be rung in, the form for a phone number, the added
@@ -63,6 +62,7 @@ fun CallGuestDialogs(guests: CallGuests, video: Boolean) {
             dismissButton = { TextButton(onClick = guests::closeChoices) { Text("Cancel") } })
     }
     if (guests.phoneForm) PhoneGuestForm(guests)
+    else PorchErrorDialog(guests.dialProblem) { guests.dialProblem = null }
     if (guests.keypad) PhoneGuestKeypad(guests)
     PorchErrorDialog(guests.error) { guests.error = null }
 }
@@ -83,7 +83,6 @@ fun PhoneGuestControls(app: PorchApplication, guests: CallGuests, modifier: Modi
 private fun PhoneGuestForm(guests: CallGuests) {
     var name by rememberSaveable { mutableStateOf("") }
     var number by rememberSaveable { mutableStateOf("") }
-    var calling by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -100,35 +99,29 @@ private fun PhoneGuestForm(guests: CallGuests) {
         if (label.isEmpty()) { problem = "Enter who you're calling, such as Bank."; return }
         // Numbers without a country code are North American, wherever this phone is set up.
         val e164 = try { PhoneNumberNormalization.e164(number, "US") } catch (e: ValidationException) { problem = e.message; return }
-        calling = true
-        scope.launch {
-            try {
-                guests.dial(label.take(40), e164)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: FamilyServiceException) {
-                problem = e.message
-            } finally {
-                calling = false
-            }
-        }
+        guests.beginDial(label.take(40), e164)
     }
-    Dialog(onDismissRequest = guests::closePhoneForm, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        FormScreen("Add a phone", navigation = { TextButton(onClick = guests::closePhoneForm) { Text("Cancel") } }) {
+    fun chooseContact() {
+        // A phone with no contacts app must not crash the call. The number can be typed instead.
+        try { pickContact.launch(Unit) } catch (_: ActivityNotFoundException) { problem = "This phone has no contacts app. Type the number instead." }
+    }
+    // Closing or turning the phone doesn't cancel a dial that may already be ringing, so Cancel waits until it settles.
+    Dialog(onDismissRequest = { if (!guests.dialing) guests.closePhoneForm() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        FormScreen("Add a phone", navigation = { TextButton(onClick = guests::closePhoneForm, enabled = !guests.dialing) { Text("Cancel") } }) {
             FormSection("Who should join the call?", "Porch calls this number and adds them to your call. If you hang up, their call ends too.") {
-                FormField(name, { name = it.take(40) }, "Who are you calling?", "For example, Bank",
+                FormField(name, { name = it.take(40) }, "Who are you calling?", "For example, Bank", enabled = !guests.dialing,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
                 Text("The bedside shows this name.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FormField(number, { number = it }, "Their phone number", "(800) 555-0123",
+                FormField(number, { number = it }, "Their phone number", "(800) 555-0123", enabled = !guests.dialing,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
                 Text("US and Canadian numbers, including toll-free numbers.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FormButton("Choose from Contacts", filled = false, onClick = { pickContact.launch(Unit) })
-                FormButton(if (calling) "Calling…" else "Call and add to this call", enabled = !calling, onClick = ::dial)
+                FormButton("Choose from Contacts", filled = false, enabled = !guests.dialing, onClick = ::chooseContact)
+                FormButton(if (guests.dialing) "Calling…" else "Call and add to this call", enabled = !guests.dialing, onClick = ::dial)
             }
         }
     }
-    PorchErrorDialog(problem) { problem = null }
+    PorchErrorDialog(problem ?: guests.dialProblem) { problem = null; guests.dialProblem = null }
 }
 
 /** Sends key presses to the added phone, for menus such as "press 1 for your account balance". */
