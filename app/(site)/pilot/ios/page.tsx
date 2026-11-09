@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Chain, Contact, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Guide, guideMetadata, Questions, Says, Screenshot, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
   "Set up Porch on an iPad | HelloPorch",
@@ -12,12 +13,12 @@ const testFlight = process.env.NEXT_PUBLIC_TESTFLIGHT_URL;
 const testFlightApp = "https://apps.apple.com/app/testflight/id899247664";
 
 const kit: KitPart[] = [
-  { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
-  { name: "A big-button corded phone", rule: "Set to tone dialing", photo: "/pilot/phone.jpg" },
-  { name: "A Cell2Jack", rule: "Connects the phone to the adapter", photo: "/pilot/cell2jack.jpg" },
-  { name: "The Porch phone adapter", rule: "I’ll send it, set up and tested", photo: "/pilot/adapter.jpg" },
-  { name: "A USB-C hub", rule: "With a port for the iPad’s charger", photo: "/pilot/hub.jpg" },
-  { name: "A sturdy stand", rule: "Optional", photo: "/pilot/stand.jpg" },
+  { name: "An iPad", rule: "iPadOS 15 or later", ...shopping.tablet, photo: "/pilot/ipad.jpg" },
+  { name: "A big-button corded phone", rule: "Set to tone dialing", ...shopping.phone, photo: "/pilot/phone.jpg" },
+  { name: "A Cell2Jack", rule: "Connects the phone to the adapter", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
+  { name: "The Porch phone adapter", rule: "Set up and tested", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A USB-C hub", rule: "With a port for the iPad’s charger", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
 
 function GetPorch({ device }: { device: string }) {
@@ -94,8 +95,13 @@ const parts: GuidePart[] = [
         </ol>
         <Tip label="An older iPad?">
           <p>
-            An iPad with a Lightning charging port needs a different adapter. If you’re unsure which port your iPad
-            has, ask me before you buy a hub.
+            An iPad with a Lightning charging port needs a Lightning hub with a port for the charger instead of a
+            USB-C hub, such as{" "}
+            <a href={shopping.lightningHub.href} target="_blank" rel="noopener noreferrer">
+              this one on Amazon
+            </a>{" "}
+            ({shopping.lightningHub.price.toLowerCase()}). If you’re unsure which port your iPad has, ask me
+            before you buy a hub.
           </p>
         </Tip>
       </>
@@ -212,6 +218,14 @@ const parts: GuidePart[] = [
             Hang up. Porch says <Says>Porch heard you hang up. The phone is ready.</Says> Tap <UI>Continue</UI>.
           </li>
         </ol>
+        <Screenshot
+          src="/pilot/screens/ipad-connect-phone.png"
+          width={1600}
+          height={1112}
+          device="tablet"
+          alt="The Connect the phone screen on an iPad, with three numbered steps and the message: Porch heard 3. Now put the receiver back."
+          caption="The phone check after pressing 3. Hang up next."
+        />
         <Tip label="If the phone keys don’t respond">
           <ul>
             <li>Check the hub’s charger is plugged in, so the iPad can power the adapter and the Cell2Jack.</li>
@@ -280,6 +294,14 @@ const parts: GuidePart[] = [
           </li>
         </ul>
         <h3>On your iPhone</h3>
+        <Screenshot
+          src="/pilot/screens/iphone-home.png"
+          width={690}
+          height={1500}
+          device="phone"
+          alt="Porch on an iPhone after joining Rose’s Porch: Audio call, Video call, Drop in with audio, Drop in with video, Send a message, Messages with Rose, and Rose’s Porch number."
+          caption="Porch on your iPhone once you’ve joined."
+        />
         <ul>
           <li>
             Under <UI>[Name]’s Porch number</UI>, tap <UI>Add to Contacts</UI>, so you recognize their Porch when it calls you.
@@ -301,6 +323,14 @@ const parts: GuidePart[] = [
           Set up keys 1 to 8 on the iPad, one person per key. Key 0 answers and hangs up. Key 9 turns the camera
           off and on during video calls.
         </p>
+        <Screenshot
+          src="/pilot/screens/ipad-clock.png"
+          width={1600}
+          height={1112}
+          device="tablet"
+          alt="Porch’s clock on the iPad, with a gear in the top right corner and a Call someone button."
+          caption="The gear in the top right corner of the clock opens caregiver mode."
+        />
         <ol>
           <li>
             Setup ends on <UI>[Name]’s Porch is ready</UI>. Tap <UI>Put people on the keypad</UI>. Later, tap the gear on
@@ -328,6 +358,14 @@ const parts: GuidePart[] = [
             Tap <UI>Save</UI>. Repeat for each key.
           </li>
         </ol>
+        <Screenshot
+          src="/pilot/screens/ipad-keypad.png"
+          width={1600}
+          height={1112}
+          device="tablet"
+          alt="Caregiver mode on the iPad with People open. The keypad shows David on key 1, Sarah on 2, Maria on 3 and James on 4, Video on / off on 9, Answer / hang up on 0, and Add on the empty keys."
+          caption="People in caregiver mode. Tap Add on an empty key to set it up."
+        />
         <p>
           Porch blocks calls from unknown numbers by default. To let a number through, open <UI>Calls</UI> in
           caregiver mode, then <UI>Blocked numbers</UI>, and tap <UI>Allow</UI> next to the number.

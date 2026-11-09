@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Contact, Email, Guide, guideMetadata, Questions, Says, Screenshot, Tip, UI, Warn, type GuidePart, type KitPart } from "../_guide/parts";
+import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
   "Set up Porch on an Android tablet | HelloPorch",
@@ -13,11 +14,11 @@ const testFlight = process.env.NEXT_PUBLIC_TESTFLIGHT_URL;
 const testFlightApp = "https://apps.apple.com/app/testflight/id899247664";
 
 const kit: KitPart[] = [
-  { name: "An Android tablet", rule: "Android 15 or later", photo: "/pilot/ipad.jpg" },
-  { name: "A big-button corded phone", rule: "Set to tone dialing", photo: "/pilot/phone.jpg" },
-  { name: "A Cell2Jack", rule: "Connects the phone to the tablet", photo: "/pilot/cell2jack.jpg" },
-  { name: "A USB-C hub", rule: "With a port for the tablet’s charger", photo: "/pilot/hub.jpg" },
-  { name: "A sturdy stand", rule: "Optional", photo: "/pilot/stand.jpg" },
+  { name: "An Android tablet", rule: "Android 15 or later", ...shopping.tablet, photo: "/pilot/ipad.jpg" },
+  { name: "A big-button corded phone", rule: "Set to tone dialing", ...shopping.phone, photo: "/pilot/phone.jpg" },
+  { name: "A Cell2Jack", rule: "Connects the phone to the tablet", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
+  { name: "A USB-C hub", rule: "With a port for the tablet’s charger", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
 
 function GetPorch({ device }: { device: string }) {
@@ -259,6 +260,14 @@ const parts: GuidePart[] = [
             On the tablet, tap <UI>Send the invitation instead</UI> and send the link to your phone.
           </li>
         </ul>
+        <Screenshot
+          src="/pilot/screens/android-phone-home.png"
+          width={675}
+          height={1500}
+          device="phone"
+          alt="Porch on an Android phone after joining Rose’s Porch: Audio call, Video call, Send a message, Messages with Rose, Rose’s Porch number with Add to Contacts and Share this number, Your name and photo, and Leave this family."
+          caption="Porch on your Android phone once you’ve joined."
+        />
         <h3 id="ring">Let calls ring your Android phone</h3>
         <p>Look for these options at the top of the Porch app on your phone.</p>
         <ul>
@@ -285,6 +294,14 @@ const parts: GuidePart[] = [
           On the tablet’s clock, tap <UI>Make Porch this tablet’s home screen</UI>, choose <UI>Porch</UI> and confirm.
           The tablet opens Porch when it restarts or when someone presses Home.
         </p>
+        <Screenshot
+          src="/pilot/screens/android-clock.png"
+          width={1600}
+          height={1000}
+          device="tablet"
+          alt="Porch’s clock on an Android tablet, with a gear in the top right corner, a Call someone button, and the link Make Porch this tablet’s home screen under it."
+          caption="The home screen link is under Call someone. The gear in the top right corner opens caregiver mode."
+        />
         <p>
           To reach Android’s own settings later, open caregiver mode, then <UI>This tablet</UI> and{" "}
           <UI>Tablet settings</UI>.
@@ -303,8 +320,7 @@ const parts: GuidePart[] = [
         </p>
         <ol>
           <li>
-            On the clock, tap <UI>Caregiver mode</UI> in the top right corner. Enter your PIN and tap{" "}
-            <UI>Open caregiver mode</UI>.
+            On the clock, tap the gear in the top right corner. Enter your PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
             Open <UI>People</UI>. The keypad is laid out like the phone’s. Tap a key, such as 1.
@@ -328,6 +344,14 @@ const parts: GuidePart[] = [
             Tap <UI>Save</UI>. Repeat for each key.
           </li>
         </ol>
+        <Screenshot
+          src="/pilot/screens/android-keypad.png"
+          width={1600}
+          height={1000}
+          device="tablet"
+          alt="Caregiver mode on an Android tablet with People open. The keypad shows David on key 1, Sarah on 2, Maria on 3 and James on 4, Video on / off on 9, Answer / hang up on 0, and Add on the empty keys."
+          caption="People in caregiver mode. Tap Add on an empty key to set it up."
+        />
         <p>
           Porch blocks calls from unknown numbers by default. To let a number through, open <UI>Calls</UI> in
           caregiver mode, then <UI>Blocked numbers</UI>, and tap <UI>Allow</UI> next to the number.
