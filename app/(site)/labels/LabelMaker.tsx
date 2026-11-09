@@ -145,8 +145,8 @@ export default function LabelMaker() {
   }
 
   return (
-    <form className={styles.workspace} onSubmit={download} noValidate>
-      <div className={styles.editor}>
+    <form className={styles.workspace} onSubmit={download} noValidate aria-busy={busy}>
+      <div className={styles.editor} inert={busy}>
         <Step number={1} title="Choose your contacts">
           <div className={styles.contactCount}>
             <p className={styles.hint}>Pick how many people you’d like to put on the phone. Porch uses keys 1–8 for contacts.</p>

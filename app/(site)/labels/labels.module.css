@@ -23,6 +23,7 @@
 
 .workspace { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(0, 0.9fr); align-items: start; gap: 24px; }
 .editor { display: grid; gap: 14px; min-width: 0; }
+.editor[inert] { opacity: 0.65; }
 .step, .review { background: #fffdf8; border: 1px solid var(--label-border); border-radius: 19px; }
 .step { padding: 20px 22px; }
 .stepTitle { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
