@@ -80,18 +80,6 @@ board("ios-keypad", "tablet", "Set up the phone’s number keys", [
     I("Key 1 now calls David. Pressing 1 on the phone rings him.", "m10-saved"),
 ])
 
-board("ios-invite", "phone", "Invite family members", [
-    P("In Porch on your iPhone, tap the person icon in the top right corner.", "k04-p-home", (364, 84)),
-    P("Tap Caregiver mode.", "p01-menu", (201, 570)),
-    P("Enter the PIN and tap Open caregiver mode.", "p03-gate-typed", (201, 367)),
-    P("Open Family.", "p04-caregiver", (201, 336)),
-    P("Tap Invite someone.", "p05-family", (131, 254)),
-    P("Enter their name. Turn off drop-in if their calls should ring first.", "p07-invite-filled"),
-    P("Turn on Caregiver mode for people who should change settings. Tap Create invitation.", "p07-invite-filled", (201, 724)),
-    P("Send the invitation by text or email, then tap Done.", "p09-ready", (349, 84)),
-    P("Each invitation works once and expires after 24 hours.", "p10-family-after"),
-])
-
 board("ios-language", "tablet", "Change the language or voice", [
     I("On the clock, tap the gear in the top right corner.", "g00-clock", (1131, 44)),
     I("Enter your PIN and tap Open caregiver mode.", "g02-gate-typed", (590, 299)),

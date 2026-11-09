@@ -211,37 +211,15 @@ const parts: GuidePart[] = [
           invitation. Send it with the <Link href="/pilot/phone">phone guide</Link>, which shows them how to get Porch
           and join.
         </p>
-        <h3>On an iPhone</h3>
-        <StepVideo
-          name="ios-invite"
-          label="Video: inviting a relative from an iPhone"
-          caption="Inviting a relative from an iPhone."
-        />
-        <ol>
-          <li>
-            In Porch, tap the person icon in the top right corner, then <UI>Caregiver mode</UI>. Enter the PIN and tap{" "}
-            <UI>Open caregiver mode</UI>.
-          </li>
-          <li>
-            Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
-          </li>
-          <li>
-            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
-            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
-          </li>
-          <li>
-            Tap <UI>Create invitation</UI>, send it by text or email, then tap <UI>Done</UI>.
-          </li>
-        </ol>
-        <h3>On an Android phone</h3>
         <StepVideo
           name="android-invite"
-          label="Video: inviting a relative from an Android phone"
-          caption="Inviting a relative from an Android phone."
+          label="Video: inviting a relative from your phone"
+          caption="Inviting a relative from your phone."
         />
         <ol>
           <li>
-            In Porch, scroll down and tap <UI>Caregiver mode</UI>. Enter the PIN and tap <UI>Open caregiver mode</UI>.
+            In Porch on your phone, tap <UI>Caregiver mode</UI>, enter the PIN and tap <UI>Open caregiver mode</UI>.
+            On an iPhone, <UI>Caregiver mode</UI> is under the person icon in the top right corner.
           </li>
           <li>
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
@@ -251,8 +229,7 @@ const parts: GuidePart[] = [
             first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
           </li>
           <li>
-            Tap <UI>Create invitation</UI>, then <UI>Share invitation</UI>, and send it by text or email. If they’re
-            next to you, they can scan the code. Then tap <UI>Done</UI>.
+            Tap <UI>Create invitation</UI> and send it by text or email. Then tap <UI>Done</UI>.
           </li>
         </ol>
         <p>
