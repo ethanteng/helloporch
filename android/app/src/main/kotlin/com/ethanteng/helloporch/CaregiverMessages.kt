@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.FamilyText
@@ -97,8 +99,9 @@ private fun AutoplayGroup(app: PorchApplication, admin: CaregiverAdmin) {
         if (granted) save(settings.copy(enabled = true))
         else admin.error = refused
     }
-    // Camera access taken away in Settings since it was turned on: the clock can't watch, so the switch says so.
-    LaunchedEffect(Unit) {
+    // Camera access taken away in Settings since it was turned on: the clock can't watch, so the switch says so. Checked
+    // as the page opens and each time it comes back, as Privacy does.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         if (settings.enabled && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             save(settings.copy(enabled = false))
             admin.error = refused
