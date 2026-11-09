@@ -112,6 +112,12 @@
   font-style: italic;
 }
 
+/* The link to the matching pilot guide, under the steps. */
+.guide {
+  margin-top: 24px;
+  text-align: center;
+}
+
 .problem {
   margin-top: 28px;
   padding: 16px 20px;

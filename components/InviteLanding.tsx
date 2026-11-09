@@ -119,6 +119,15 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
             </li>
           </ol>
         )}
+
+        {/* A new tab: this page has already taken the code out of its address, so leaving it would lose the link. */}
+        <p className={styles.guide}>
+          Step by step, with videos:{" "}
+          <a href={kind === "family" ? "/pilot/phone" : androidReady ? "/pilot/android" : "/pilot/ios"}
+            target="_blank" rel="noopener">
+            {kind === "family" ? "the phone guide" : androidReady ? "the Android tablet guide" : "the iPad guide"}
+          </a>
+        </p>
       </main>
     </div>
   );

@@ -13,7 +13,9 @@ export function guideMetadata(title: string, description: string): Metadata {
 
 /** A part to buy: what it is, what to look for, and, where I give them, roughly what it costs and the listing I use. */
 export type KitPart = { name: string; rule: string; price?: string; href?: string; photo: string };
-export type GuidePart = { id: string; title: string; body: ReactNode };
+/** Where a part of a bedside guide happens: on the loved one's bedside tablet, on your own phone, or both. */
+export type Device = "bedside" | "phone";
+export type GuidePart = { id: string; title: string; on?: Device[]; body: ReactNode };
 
 type GuideProps = {
   eyebrow: string;
@@ -24,10 +26,13 @@ type GuideProps = {
   /** The parts to have ready, for a getting-started guide. */
   kit?: { intro: ReactNode; parts: KitPart[]; ready: ReactNode[] };
   parts: GuidePart[];
+  /** The bedside device, such as "iPad" or "tablet", for a bedside guide's device tags. */
+  bedside?: string;
 };
 
 /** A whole guide: the hero, what to have ready, a contents list and the numbered parts. */
-export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
+export function Guide({ eyebrow, title, lede, aside, kit, parts, bedside }: GuideProps) {
+  const tags = (part: GuidePart) => part.on && bedside && <DeviceTags on={part.on} bedside={bedside} />;
   return (
     <div className={`page ${styles.page}`}>
       <a href="#guide" className={styles.skip}>Skip to the guide</a>
@@ -73,6 +78,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
             {parts.map((part) => (
               <li key={part.id}>
                 <a href={`#${part.id}`}>{part.title}</a>
+                {tags(part)}
               </li>
             ))}
           </ol>
@@ -85,6 +91,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
                 <span className={styles.partNum} aria-hidden="true">{i + 1}</span>
                 <h2 id={`${part.id}-title`}>{part.title}</h2>
               </div>
+              {tags(part)}
               {part.body}
             </section>
           ))}
@@ -93,6 +100,19 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
 
       <SiteFooter />
     </div>
+  );
+}
+
+/** Which device a part happens on: "Bedside iPad", "Your phone", or both. */
+function DeviceTags({ on, bedside }: { on: Device[]; bedside: string }) {
+  return (
+    <span className={styles.tags}>
+      {on.map((device) => (
+        <span key={device} className={`${styles.tag} ${device === "bedside" ? styles.tagBedside : styles.tagPhone}`}>
+          {device === "bedside" ? `Bedside ${bedside}` : "Your phone"}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -182,6 +202,64 @@ export function Screenshot({ src, alt, width, height, device, caption }: {
         sizes={device === "phone" ? "(max-width: 700px) 70vw, 300px" : "(max-width: 800px) 100vw, 760px"} />
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
+  );
+}
+
+/**
+ * A short video of a few steps in Porch, from public/pilot/videos/<name>.mp4 with its poster <name>.jpg. Its captions
+ * are part of the picture, so it has no sound and needs no caption track. It loads only when played.
+ */
+export function StepVideo({ name, label, caption }: { name: string; label: string; caption?: ReactNode }) {
+  const src = `/pilot/videos/${name}.mp4`;
+  return (
+    <figure className={styles.video}>
+      <video controls muted playsInline preload="none" width={1280} height={960} poster={`/pilot/videos/${name}.jpg`}
+        aria-label={label}>
+        <source src={src} type="video/mp4" />
+        <a href={src}>Watch the video</a>
+      </video>
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
+  );
+}
+
+/**
+ * A link a family opens during setup: what it is, which device to open it on, and what to do first. `sent` stands in
+ * for a link that isn't set yet, or one I send each family, such as "I’ll send you this link."
+ */
+export type GuideLink = { name: string; href?: string; qr?: string; sent?: ReactNode; device: ReactNode; how: ReactNode };
+
+/** The links a family uses, one card each, with the link written out and, where there is one, a QR code to scan. */
+export function Links({ items }: { items: GuideLink[] }) {
+  return (
+    <ul className={styles.links}>
+      {items.map((link) => (
+        <li key={link.name} className={styles.link}>
+          <div className={styles.linkText}>
+            <h3>{link.name}</h3>
+            {link.href ? (
+              <a className={styles.linkUrl} href={link.href}>
+                {link.href.replace(/^https:\/\//, "")}
+              </a>
+            ) : (
+              link.sent && <span className={styles.linkSent}>{link.sent}</span>
+            )}
+            <p>
+              <strong>Open it on</strong> {link.device}.
+            </p>
+            <p>{link.how}</p>
+          </div>
+          {link.qr && (
+            <figure className={styles.linkQr}>
+              {/* A small SVG: no need for image optimization. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={link.qr} alt={`QR code for ${link.name}`} width={112} height={112} />
+              <figcaption>Scan with the device’s camera</figcaption>
+            </figure>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -781,8 +781,9 @@ How to make calls, send messages and change settings on your loved one’s table
       }
       aside={
         <>
-          For first-time setup, use the <Link href="/pilot/ios">iPad and iPhone guide</Link> or the{" "}
-          <Link href="/pilot/android">Android guide</Link>.
+          For first-time setup, use the <Link href="/pilot/ios">iPad guide</Link> or the{" "}
+          <Link href="/pilot/android">Android tablet guide</Link>, and the <Link href="/pilot/phone">phone guide</Link>{" "}
+          for family phones.
         </>
       }
       parts={parts}
