@@ -402,9 +402,7 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          The <Link href="/pilot/features">features guide</Link>, at{" "}
-          <Link href="/pilot/features">helloporch.store/pilot/features</Link>, explains every feature and setting in
-          detail.
+          For more on any feature or setting, see the <Link href="/pilot/features">features guide</Link>.
         </p>
         <Questions
           items={[
@@ -468,17 +466,11 @@ const parts: GuidePart[] = [
             {
               q: "How do I get help?",
               a: (
-                <>
-                  <p>
-                    Check the <Link href="/pilot/features">features guide</Link> at{" "}
-                    <Link href="/pilot/features">helloporch.store/pilot/features</Link> for how each feature and setting
-                    works.
-                  </p>
-                  <p>
-                    Or tell me what happened and which device you were using. You can <Contact />. If there’s an error
-                    on the screen, a photo helps.
-                  </p>
-                </>
+                <p>
+                  The <Link href="/pilot/features">features guide</Link> may have your answer. If not, tell me what
+                  happened and which device you were using. You can <Contact />. If there’s an error on the screen, a
+                  photo helps.
+                </p>
               ),
             },
           ]}
