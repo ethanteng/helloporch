@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const SITE_URL = "https://helloporch.store";
 
 // The public pages search engines should list. Pricing, the invitation pages and admin stay out (they're noindex).
-export const PUBLIC_PATHS = ["/", "/features", "/pilot", "/story", "/privacy"];
+export const PUBLIC_PATHS = ["/", "/features", "/pilot", "/labels", "/story", "/privacy"];
 
 type PageMetadata = {
   path: string;
