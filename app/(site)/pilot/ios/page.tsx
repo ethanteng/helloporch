@@ -13,7 +13,7 @@ const testFlight = process.env.NEXT_PUBLIC_TESTFLIGHT_URL;
 const testFlightApp = "https://apps.apple.com/app/testflight/id899247664";
 
 const kit: KitPart[] = [
-  { name: "An iPad", rule: "iPadOS 15 or later", ...shopping.tablet, photo: "/pilot/ipad.jpg" },
+  { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Set to tone dialing", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Connects the phone to the adapter", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
   { name: "The Porch phone adapter", rule: "Set up and tested", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
