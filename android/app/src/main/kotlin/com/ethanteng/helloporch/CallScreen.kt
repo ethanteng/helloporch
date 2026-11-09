@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -132,13 +134,15 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
                 }
             }
             // As wide as the screen allows, up to a comfortable width on a tablet, with each button an equal share. Four
-            // don't fit a phone's width with their words, so there they take two rows.
+            // don't fit a phone's width with their words, and nor does Add someone beside two others, so there they take
+            // two rows. Mute, Camera and End call stay on one.
             val buttons = mutableListOf<@Composable (Modifier) -> Unit>()
             buttons += { CallButton(if (call.microphoneOn) "Mute" else "Unmute", call.controlsEnabled, onClick = call::toggleMicrophone, app = app, modifier = it) }
             if (call.video) buttons += { CallButton(if (call.cameraOn) "Camera off" else "Camera on", call.controlsEnabled, onClick = call::toggleCamera, app = app, modifier = it) }
-            call.guests?.takeIf { it.showsAdd }?.let { guests -> buttons += { CallButton("Add someone", !guests.adding, onClick = guests::add, app = app, modifier = it) } }
+            val adding = call.guests?.takeIf { it.showsAdd }
+            adding?.let { guests -> buttons += { CallButton("Add someone", !guests.adding, onClick = guests::add, app = app, modifier = it) } }
             buttons += { CallButton(call.endTitle, call.endEnabled, onClick = call::endCall, color = CallColors.end, translated = true, app = app, modifier = it) }
-            val rows = if (buttons.size > 3 && narrow) buttons.chunked(2) else listOf(buttons)
+            val rows = if (narrow && (buttons.size > 3 || (adding != null && buttons.size > 2))) buttons.chunked(2) else listOf(buttons)
             Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 rows.forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -162,7 +166,8 @@ private fun AddSomeone(guests: CallGuests, video: Boolean) {
         AlertDialog(onDismissRequest = guests::closeChoices,
             title = { Text("Add someone to this call") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // A large family scrolls, so everyone stays reachable on a short phone.
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (video) Text("Family join on Porch with video.")
                     people.forEach { person ->
                         TextButton(onClick = { guests.ring(person) }, Modifier.fillMaxWidth()) { Text(person.name, fontSize = 20.sp) }
