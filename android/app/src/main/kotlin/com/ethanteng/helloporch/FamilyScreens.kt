@@ -326,6 +326,8 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
     // The family being left, by device ID, while the phone asks to be sure.
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
     var leaveError by rememberSaveable { mutableStateOf<String?>(null) }
+    // A family that removed this phone, by device ID, while the phone asks before taking it off.
+    var removing by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     // As on iOS, the microphone and, for video, the camera are asked for before the call starts. Asking after would
     // leave the bedside ringing while the question is up, or after it's refused.
@@ -362,7 +364,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 link?.accessRemoved == true -> {
                     Status("This phone was removed from this family. Ask a caregiver for a new invitation.")
                     FormPlainButton(if (several) "Remove $name from this phone" else "Remove this family from this phone",
-                        onClick = { app.coordinator.forget(family); onChanged() }, color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
+                        onClick = { removing = family.deviceID }, color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
                 }
                 state == null -> Status(error ?: "Connecting…")
                 else -> {
@@ -434,5 +436,17 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
                 }
             }) { Text("Leave") } },
             dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } })
+    }
+    families.firstOrNull { it.deviceID == removing }?.let { family ->
+        // As on iOS (confirmRemoval): only a new invitation brings the family back. With one family it isn't named,
+        // since the page doesn't name it either.
+        val name = if (several) app.device.familyName(family) ?: links.state(family)?.householdName else null
+        AlertDialog(onDismissRequest = { removing = null },
+            title = { Text("Remove ${name ?: "this family"} from this phone?") },
+            text = { Text("They've already removed this phone. To join again, you'll need a new invitation.") },
+            confirmButton = { TextButton(onClick = { removing = null; app.coordinator.forget(family); onChanged() }) {
+                Text("Remove", color = MaterialTheme.colorScheme.error)
+            } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } })
     }
 }

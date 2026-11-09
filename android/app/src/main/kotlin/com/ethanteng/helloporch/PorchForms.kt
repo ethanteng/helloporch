@@ -9,18 +9,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -42,13 +41,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.ethanteng.helloporch.core.RemoteCaregiverSession
@@ -96,10 +102,11 @@ fun FormSection(title: String, detail: String? = null, content: @Composable Colu
 }
 
 /** A card of its own on the page, as iOS's `section` is: a centered heading, what it's about, and what goes with it,
- * centered under them. */
+ * centered under them. Raised as CaregiverGroup's cards are, so it stands out on Material's page as well as PorchTheme's,
+ * which keeps it white. */
 @Composable
 fun FormCard(title: String, detail: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest) {
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), tonalElevation = 2.dp) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(title, Modifier.fillMaxWidth().semantics { heading() }, style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
@@ -134,15 +141,25 @@ fun FormPlainButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
     }
 }
 
-/** A button's icon and words, in the button's color unless `color` says otherwise. The icon is decoration: the words say
- * what the button does. */
+/** A button's icon and words, in the button's color unless `color` says otherwise. The icon starts the text itself, so
+ * it stays beside the words when they wrap, as iOS's does, rather than at the edge of a full-width line. It's
+ * decoration: a screen reader hears only the words. */
 @Composable
 private fun ButtonLabel(text: String, @DrawableRes icon: Int?, color: Color = Color.Unspecified) {
-    icon?.let {
-        Icon(painterResource(it), contentDescription = null, Modifier.size(22.dp), tint = color.takeOrElse { LocalContentColor.current })
-        Spacer(Modifier.width(10.dp))
+    val style = MaterialTheme.typography.titleMedium
+    if (icon == null) { Text(text, textAlign = TextAlign.Center, style = style, color = color); return }
+    val label = buildAnnotatedString {
+        appendInlineContent("icon", " ")
+        append(" ")
+        append(text)
     }
-    Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium, color = color)
+    // Sized in em, so it grows with the words under a larger font setting.
+    val inline = mapOf("icon" to InlineTextContent(Placeholder(1.4.em, 1.4.em, PlaceholderVerticalAlign.TextCenter)) {
+        Icon(painterResource(icon), contentDescription = null, Modifier.fillMaxSize(), tint = color.takeOrElse { LocalContentColor.current })
+    })
+    val words = AnnotatedString(text)
+    Text(label, Modifier.clearAndSetSemantics { this.text = words }, textAlign = TextAlign.Center, style = style,
+        color = color, inlineContent = inline)
 }
 
 /** A quieter choice, such as Do this later. */
