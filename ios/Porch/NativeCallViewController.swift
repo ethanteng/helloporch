@@ -338,7 +338,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var controlTask: Task<Void, Never>?
     private var fallbackTask: Task<Void, Never>?
     private var inactivityTask: Task<Void, Never>?
-    private var inactivity = CallInactivityTimer(timeout: CallPreferences.disconnectAfterSilence() ? TimeInterval(CallPreferences.silenceSeconds()) : nil)
+    /// Read once the call knows whose it is: `familySession` is set before the view loads.
+    private lazy var inactivity = CallInactivityTimer(timeout: CallPreferences.silenceTimeout(as: familySession?.credential.role ?? .bedside))
     private var phoneControlToken: String?
     private var isPhoneCall = false
     private var isSwitchingToPhone = false

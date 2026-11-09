@@ -21,6 +21,12 @@ public enum CallPreferences {
         defaults.object(forKey: silenceEnabledKey) as? Bool ?? true
     }
 
+    /// How long a call on this device waits through silence before hanging up, or nil when it doesn't. Only the
+    /// bedside hangs up: a family phone has no switch for it, so the bedside's choice holds for the call.
+    public static func silenceTimeout(as role: PorchExperience, in defaults: UserDefaults = .standard) -> TimeInterval? {
+        role == .bedside && disconnectAfterSilence(in: defaults) ? TimeInterval(silenceSeconds(in: defaults)) : nil
+    }
+
     public static func silenceSeconds(in defaults: UserDefaults = .standard) -> Int {
         let seconds = defaults.integer(forKey: silenceSecondsKey)
         return silenceRange.contains(seconds) ? seconds : defaultSilenceSeconds

@@ -19,6 +19,11 @@ object CallPreferences {
 
     fun disconnectAfterSilence(settings: PorchSettings): Boolean = settings.getBoolean(silenceEnabledKey) ?: true
 
+    /** How long a call on this device waits through silence before hanging up, or null when it doesn't. Only the
+     * bedside hangs up: a family phone has no switch for it, so the bedside's choice holds for the call. */
+    fun silenceTimeout(role: PorchExperience, settings: PorchSettings): Double? =
+        if (role == PorchExperience.BEDSIDE && disconnectAfterSilence(settings)) silenceSeconds(settings).toDouble() else null
+
     fun silenceSeconds(settings: PorchSettings): Int = settings.getInt(silenceSecondsKey)?.takeIf { it in silenceRange } ?: defaultSilenceSeconds
 
     fun saveSilence(enabled: Boolean, seconds: Int, settings: PorchSettings) {

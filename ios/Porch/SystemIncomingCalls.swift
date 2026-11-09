@@ -201,7 +201,7 @@ extension Notification.Name {
         if !rejected {
             uuid = id; incomingName = String(name.prefix(80)); self.mode = mode
             expiry = expiresAt; credential = profile; callingFamily = family
-            inactivity = CallInactivityTimer(timeout: CallPreferences.disconnectAfterSilence() ? TimeInterval(CallPreferences.silenceSeconds()) : nil)
+            inactivity = CallInactivityTimer(timeout: CallPreferences.silenceTimeout(as: profile?.role ?? PorchDevice.experience))
             ending = false; answered = false; connected = false; wantsCamera = false; status = "Incoming Porch call"
         }
         let update = CXCallUpdate()
