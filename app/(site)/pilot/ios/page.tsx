@@ -16,7 +16,7 @@ const kit: KitPart[] = [
   { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Set to tone dialing", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Connects the phone to the adapter", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "The Porch phone adapter", rule: "Set up and tested", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "The Porch phone adapter", rule: "Custom component", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", rule: "With a port for the iPad’s charger", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
@@ -58,8 +58,8 @@ const parts: GuidePart[] = [
             I’ll email or text you a <strong>private setup link</strong>. It works on one iPad and expires after 14 days.
           </li>
           <li>
-            I’ll mail you the <strong>Porch phone adapter</strong> or bring it in person. You can set up the iPad now
-            and connect the phone when the adapter arrives.
+            I’ll mail you the <strong>Porch phone adapter.</strong> Or, if you are in the Bay Area, I can bring it to
+            you in-person. You can set up the iPad now and connect the phone when the adapter arrives.
           </li>
         </ul>
         <Tip>

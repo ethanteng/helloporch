@@ -25,7 +25,7 @@ const KIT: { name: string; rule: string; price: string; optional?: boolean; phot
   { name: "A tablet", rule: "iPad or Android", ...shopping.tablet, photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Any brand", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Must be a Cell2Jack", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "A Porch phone adapter", rule: "For an iPad only", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A Porch phone adapter", rule: "For iPads only", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", rule: "Any brand, with a charging port", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Any brand", ...shopping.stand, optional: true, photo: "/pilot/stand.jpg" },
 ];
@@ -33,7 +33,7 @@ const KIT: { name: string; rule: string; price: string; optional?: boolean; phot
 // Each step's text, one paragraph per entry.
 const STEPS: { title: string; text: string[] }[] = [
   {
-    title: "Leave your email.",
+    title: "Sign up with your email.",
     text: ["I’ll reach out with an invitation and instructions for getting started."],
   },
   {
@@ -135,7 +135,7 @@ export default function PilotPage() {
                 Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
               </p>
               <p className={styles.glanceText}>
-                With an iPad, the phone also needs a Porch phone adapter. I’ll provide it, already set up and tested,
+                For iPads, the phone also needs a Porch phone adapter. I’ll provide this, already set up and tested,
                 and mail it to you, or drop it off if you live nearby.
               </p>
               <p className={styles.glanceText}>
