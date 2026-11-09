@@ -20,7 +20,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,7 +32,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,7 +50,8 @@ import com.ethanteng.helloporch.core.RemoteCaregiverSession
 @Composable
 fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, actions: (@Composable () -> Unit)? = null,
     scrolls: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxSize()) {
+    // The page, which FormCard's cards sit on. Material's own theme makes it the same color as a surface.
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
             // The title takes the room between the button and the bar's far end, so a narrow pane never overlaps them. It gets
             // smaller before it's cut short, as beside Back to clock in caregiver mode's list on a 10-inch tablet.
@@ -80,12 +87,41 @@ fun FormSection(title: String, detail: String? = null, content: @Composable Colu
     }
 }
 
+/** A card of its own on the page, as iOS's `section` is: a centered heading, what it's about, and what goes with it,
+ * centered under them. */
+@Composable
+fun FormCard(title: String, detail: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, Modifier.fillMaxWidth().semantics { heading() }, style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            detail?.let {
+                Text(it, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center)
+            }
+            content()
+        }
+    }
+}
+
 /** A full-width button: filled for the way on, outlined for another choice. */
 @Composable
 fun FormButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = true) {
     val label: @Composable () -> Unit = { Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium) }
     val size = modifier.fillMaxWidth().heightIn(min = 50.dp)
-    if (filled) Button(onClick, size, enabled = enabled) { label() } else OutlinedButton(onClick, size, enabled = enabled) { label() }
+    val shape = LocalFormButtonShape.current
+    if (filled) Button(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.shape) { label() }
+    else OutlinedButton(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.outlinedShape) { label() }
+}
+
+/** A full-width button that's only its words, as iOS's plain buttons are: one of several things to do, such as Send a
+ * message under the call buttons. `color` is for one that removes something. */
+@Composable
+fun FormPlainButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = Color.Unspecified) {
+    TextButton(onClick, modifier.fillMaxWidth().heightIn(min = 50.dp), enabled = enabled,
+        shape = LocalFormButtonShape.current ?: ButtonDefaults.textShape) {
+        Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium, color = color)
+    }
 }
 
 /** A quieter choice, such as Do this later. */

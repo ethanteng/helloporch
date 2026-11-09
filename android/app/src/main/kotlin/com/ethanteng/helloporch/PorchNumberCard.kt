@@ -7,27 +7,27 @@ import android.content.Intent
 import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.FileProvider
 import com.ethanteng.helloporch.core.PorchContactCard
 import com.ethanteng.helloporch.core.PorchNumber
 import java.io.File
 import java.util.UUID
 
-/** Anyone can call the bedside on its own number, from any phone, so a family phone offers to save it and share it.
- * `name` is who the Porch is for. */
+/** Anyone can call the bedside on its own number, from any phone, so a family phone offers to save it and share it, on a
+ * card of its own as on iOS. `name` is who the Porch is for. */
 @Composable
 fun PorchNumberCard(name: String, number: String) {
     val context = LocalContext.current
-    Text("$name's Porch number", style = MaterialTheme.typography.titleMedium)
-    Text("Be sure to add this to your Contacts and share it with friends & loved ones.")
-    Text(PorchNumber.display(number), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-    OutlinedButton(onClick = { addToContacts(context, name, number) }) { Text("Add to Contacts") }
-    OutlinedButton(onClick = { shareNumber(context, name, number) }) { Text("Share this number") }
+    FormCard("$name's Porch number", "Be sure to add this to your Contacts and share it with friends & loved ones.") {
+        Text(PorchNumber.display(number), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        FormPlainButton("Add to Contacts", onClick = { addToContacts(context, name, number) })
+        FormPlainButton("Share this number", onClick = { shareNumber(context, name, number) })
+    }
 }
 
 /** A new contact for the Porch number, which they can change before saving. Porch never reads Contacts. */
