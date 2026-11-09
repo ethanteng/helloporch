@@ -1,7 +1,11 @@
 package com.ethanteng.helloporch
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.icu.text.DateFormat
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,12 +23,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.FamilyText
+import com.ethanteng.helloporch.core.MessageAutoplay
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -36,7 +46,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * messages when someone is in front of the tablet comes with presence (android/PLAN.md, phase 5).
  */
 @Composable
-fun MessagesPages(admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
+fun MessagesPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
     var reviewing by rememberSaveable { mutableStateOf(false) }
     // A family phone reads the household again as the review opens, as it does for each page.
     LaunchedEffect(reviewing) { if (reviewing) admin.refresh() }
@@ -62,6 +72,61 @@ fun MessagesPages(admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit
                 Text(if (total == 0) "None" else "$total", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (total > 0) Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        // Starting messages when someone sits down uses this tablet's camera, so it's set on the tablet itself.
+        if (admin.onBedside) AutoplayGroup(app, admin)
+    }
+}
+
+/** Presence autoplay, as iOS's Messages page has it: kept on this tablet, off until a caregiver turns it on, and only
+ * between the hours chosen. Turning it on asks for the camera; refused, it stays off. The clock reads it again when
+ * caregiver mode closes. */
+@Composable
+private fun AutoplayGroup(app: PorchApplication, admin: CaregiverAdmin) {
+    var settings by remember { mutableStateOf(MessageAutoplay.load(app.settings)) }
+    fun save(changed: MessageAutoplay) {
+        changed.save(app.settings)
+        settings = MessageAutoplay.load(app.settings)
+    }
+    // On while Android asks, and back off if it's refused.
+    var asking by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val refused = "Allow camera access in Settings → Apps → Porch → Permissions to start messages when someone is in front of the tablet."
+    val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        asking = false
+        if (granted) save(settings.copy(enabled = true))
+        else admin.error = refused
+    }
+    // Camera access taken away in Settings since it was turned on: the clock can't watch, so the switch says so.
+    LaunchedEffect(Unit) {
+        if (settings.enabled && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            save(settings.copy(enabled = false))
+            admin.error = refused
+        }
+    }
+    val locale = LocalConfiguration.current.locales[0]
+    fun hour(value: Int) = DateFormat.getInstanceForSkeleton("j", locale)
+        .format(Date.from(LocalDate.of(2026, 1, 1).atTime(value, 0).atZone(ZoneId.systemDefault()).toInstant()))
+    val range = MessageAutoplay.hourRange
+    CaregiverGroup {
+        ToggleRow("Play when someone is in front of the tablet", settings.enabled || asking, detail = "Uses the camera. Nothing is recorded.",
+            onChange = { on ->
+                when {
+                    !on -> save(settings.copy(enabled = false))
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED ->
+                        save(settings.copy(enabled = true))
+                    else -> { asking = true; askCamera.launch(Manifest.permission.CAMERA) }
+                }
+            })
+        if (settings.enabled) {
+            HorizontalDivider()
+            StepperRow("Starting at", hour(settings.startHour),
+                onMinus = if (settings.startHour > range.first) ({ save(settings.copy(startHour = settings.startHour - 1)) }) else null,
+                onPlus = if (settings.startHour < range.last) ({ save(settings.copy(startHour = settings.startHour + 1)) }) else null)
+            HorizontalDivider()
+            StepperRow("Until", hour(settings.endHour),
+                onMinus = if (settings.endHour > range.first) ({ save(settings.copy(endHour = settings.endHour - 1)) }) else null,
+                onPlus = if (settings.endHour < range.last) ({ save(settings.copy(endHour = settings.endHour + 1)) }) else null)
         }
     }
 }

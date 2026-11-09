@@ -44,6 +44,25 @@ data class MessageAutoplay(
             val started = startedWith.toSet()
             return stillReady.filter { it in started }.toSet()
         }
+
+        /** The counts the notice may say, for natural voices to have ready: what's ready (downloaded and not played),
+         * which is below the inbox's `total` while a message is still downloading or was played here before the server
+         * drops it, then `total`. */
+        fun noticeCounts(total: Int, ready: Int): List<Int> =
+            (if (total > 1 && ready in 1 until total) listOf(ready) else emptyList()) + (if (total > 0) listOf(total) else emptyList())
+    }
+}
+
+/** After Not now or Stop: the messages that were waiting, left alone `until` (seconds on any steady clock) unless a new
+ * one arrives, as iOS's clock keeps it. */
+data class AutoplaySnooze(val until: Double, val ids: Set<String>) {
+    /** Whether it still holds back `waiting` at `now`. */
+    fun holds(waiting: List<String>, now: Double): Boolean = now < until && ids.containsAll(waiting)
+
+    companion object {
+        /** From `now`, for what's `waiting`, or null when nothing is. */
+        fun of(waiting: Collection<String>, now: Double): AutoplaySnooze? =
+            if (waiting.isEmpty()) null else AutoplaySnooze(now + MessageAutoplay.snoozeSeconds, waiting.toSet())
     }
 }
 
