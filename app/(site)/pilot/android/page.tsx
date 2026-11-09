@@ -367,86 +367,92 @@ const parts: GuidePart[] = [
     id: "help",
     title: "If something isn’t working",
     body: (
-      <Questions
-        items={[
-          {
-            q: "The phone’s keys don’t do anything.",
-            a: (
-              <p>
-                Lift the receiver before pressing a key. Check that the switch on the phone is set to <UI>T</UI> or{" "}
-                <UI>Tone</UI>. Then open caregiver mode, <UI>This tablet</UI>, and run <UI>Connect the phone</UI> again, or tap{" "}
-                <UI>Retry phone connection</UI>.
-              </p>
-            ),
-          },
-          {
-            q: "My phone says the tablet isn’t checking in.",
-            a: (
-              <p>
-                Check that the tablet is on, plugged in and connected to Wi-Fi. Open Porch and leave the clock showing.
-              </p>
-            ),
-          },
-          {
-            q: "Google Play says Porch isn’t available.",
-            a: (
-              <p>
-                In Google Play, tap your profile picture and check the email address. If it’s different from the one
-                you sent me, switch accounts or send me that address.
-              </p>
-            ),
-          },
-          {
-            q: "The setup link opens a web page instead of Porch.",
-            a: (
-              <p>
-                Tap <UI>Open setup in Porch</UI>. If that doesn’t work, tap <UI>Copy setup link</UI>, open Porch, tap{" "}
-                <UI>Set up Porch for someone</UI>, paste the link into <UI>Setup link</UI> and tap <UI>Continue</UI>.
-              </p>
-            ),
-          },
-          {
-            q: "Porch says no voice is available for a language.",
-            a: (
-              <p>
-                Add one in Android’s <UI>Settings</UI>, under <UI>Accessibility</UI>, then{" "}
-                <UI>Text-to-speech output</UI>.
-              </p>
-            ),
-          },
-          {
-            q: "The setup link stopped working.",
-            a: <p>It works once and expires after 14 days. Ask me for a new one.</p>,
-          },
-          {
-            q: "Someone can’t call my loved one’s Porch number.",
-            a: (
-              <p>
-                Save their number to a key or open <UI>Calls</UI> in caregiver mode. Tap <UI>Blocked numbers</UI>, then{" "}
-                <UI>Allow</UI> next to the number.
-              </p>
-            ),
-          },
-          {
-            q: "How do I add someone later?",
-            a: (
-              <p>
-                Any time, from Porch on your phone: open caregiver mode, then <UI>Family</UI>, and tap{" "}
-                <UI>Invite someone</UI>. Send them the invitation and the <Link href="/pilot/phone">phone guide</Link>.
-              </p>
-            ),
-          },
-          {
-            q: "How do I get help?",
-            a: (
-              <p>
-                Tell me what happened and which device you were using. You can <Contact />. If there’s an error on the
-                screen, a photo helps.
-              </p>
-            ),
-          },
-        ]}
-      />
+      <>
+        <p>
+          For more on any feature or setting, see the <Link href="/pilot/features">features guide</Link>.
+        </p>
+        <Questions
+          items={[
+            {
+              q: "The phone’s keys don’t do anything.",
+              a: (
+                <p>
+                  Lift the receiver before pressing a key. Check that the switch on the phone is set to <UI>T</UI> or{" "}
+                  <UI>Tone</UI>. Then open caregiver mode, <UI>This tablet</UI>, and run <UI>Connect the phone</UI> again, or tap{" "}
+                  <UI>Retry phone connection</UI>.
+                </p>
+              ),
+            },
+            {
+              q: "My phone says the tablet isn’t checking in.",
+              a: (
+                <p>
+                  Check that the tablet is on, plugged in and connected to Wi-Fi. Open Porch and leave the clock showing.
+                </p>
+              ),
+            },
+            {
+              q: "Google Play says Porch isn’t available.",
+              a: (
+                <p>
+                  In Google Play, tap your profile picture and check the email address. If it’s different from the one
+                  you sent me, switch accounts or send me that address.
+                </p>
+              ),
+            },
+            {
+              q: "The setup link opens a web page instead of Porch.",
+              a: (
+                <p>
+                  Tap <UI>Open setup in Porch</UI>. If that doesn’t work, tap <UI>Copy setup link</UI>, open Porch, tap{" "}
+                  <UI>Set up Porch for someone</UI>, paste the link into <UI>Setup link</UI> and tap <UI>Continue</UI>.
+                </p>
+              ),
+            },
+            {
+              q: "Porch says no voice is available for a language.",
+              a: (
+                <p>
+                  Add one in Android’s <UI>Settings</UI>, under <UI>Accessibility</UI>, then{" "}
+                  <UI>Text-to-speech output</UI>.
+                </p>
+              ),
+            },
+            {
+              q: "The setup link stopped working.",
+              a: <p>It works once and expires after 14 days. Ask me for a new one.</p>,
+            },
+            {
+              q: "Someone can’t call my loved one’s Porch number.",
+              a: (
+                <p>
+                  Save their number to a key or open <UI>Calls</UI> in caregiver mode. Tap <UI>Blocked numbers</UI>, then{" "}
+                  <UI>Allow</UI> next to the number.
+                </p>
+              ),
+            },
+            {
+              q: "How do I add someone later?",
+              a: (
+                <p>
+                  Any time, from Porch on your phone: open caregiver mode, then <UI>Family</UI>, and tap{" "}
+                  <UI>Invite someone</UI>. Send them the invitation and the <Link href="/pilot/phone">phone guide</Link>.
+                </p>
+              ),
+            },
+            {
+              q: "How do I get help?",
+              a: (
+                <p>
+                  The <Link href="/pilot/features">features guide</Link> may have your answer. If not, tell me what
+                  happened and which device you were using. You can <Contact />. If there’s an error on the screen, a
+                  photo helps.
+                </p>
+              ),
+            },
+          ]}
+        />
+      </>
     ),
   },
 ];
