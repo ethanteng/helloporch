@@ -195,13 +195,18 @@ const parts: GuidePart[] = [
           label="Video: putting a family member on key 1"
           caption="Putting a family member who has joined on key 1."
         />
-        <p>Keys 1 to 8 call people. Key 0 answers and hangs up, and key 9 turns the camera off and on.</p>
+        <p>
+          Any key, including * and #, can <UI>Call a person</UI>, <UI>Answer / decline / hang up</UI>,{" "}
+          <UI>Turn video off / on</UI> or <UI>Play / stop messages</UI>. To start, 0 answers and hangs up, 9 turns video
+          off and on, and the other keys have no action. You can change any of them.
+        </p>
         <ol>
           <li>
             On the clock, tap the gear in the top right corner. Enter your PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
-            Open <UI>People</UI> and tap a key, such as 1. Choose <UI>Call a person</UI>.
+            Open <UI>People</UI> and tap the key you want to set up, such as 1. To have it call someone, choose{" "}
+            <UI>Call a person</UI>.
           </li>
           <li>
             If they’ve joined, tap <UI>Choose from Family on Porch</UI> and choose them. For anyone else, type their

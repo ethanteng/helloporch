@@ -66,8 +66,9 @@ board("ios-your-phone", "pair", "Add your own phone", [
 
 board("ios-keypad", "tablet", "Set up the phone’s number keys", [
     I("When setup ends, tap Put people on the keypad.", "j05-ready", (590, 344)),
-    I("Keys 1 to 8 are for people. Tap a key, such as 1.", "m01-people", (513, 218)),
-    I("Choose Call a person.", "m02-key1", (513, 254)),
+    I("Tap the key you want to set up, such as 1.", "m01-people", (513, 218)),
+    I("Any key can call a person, answer and hang up, turn video off and on, or play messages.", "m02-key1"),
+    I("To have it call someone, choose Call a person.", "m02-key1", (513, 254)),
     I("If they’ve joined, tap Choose from Family on Porch.", "m03-call-person", (770, 576)),
     I("Choose them from the list.", "m04-family-pick", (945, 575)),
     I("Under Calls start as, choose Video or Voice.", "m05-david"),
@@ -141,8 +142,10 @@ board("android-your-phone", "pair", "Add your phone", [
 board("android-keypad", "tablet", "Set up the phone’s number keys", [
     T("On the clock, tap the gear in the top right corner.", "c01-clock", (2480, 80)),
     T("Enter your PIN and tap Open caregiver mode.", "c03-gate-typed", (1280, 524)),
-    T("People shows a keypad laid out like the phone’s. Tap a key, such as 1.", "c04-caregiver", (1160, 448)),
-    T("Choose Call a person.", "c05-key1", (1128, 484)),
+    T("People shows a keypad laid out like the phone’s. Tap the key you want to set up, such as 1.", "c04-caregiver",
+      (1160, 448)),
+    T("Any key can call a person, answer and hang up, turn video off and on, or play messages.", "c05-key1"),
+    T("To have it call someone, choose Call a person.", "c05-key1", (1128, 484)),
     T("If they’ve joined, tap Choose from Family on Porch.", "c06-call-person", (1641, 1068)),
     T("Choose them from the list.", "c07-family-pick", (1041, 1182)),
     T("Under Calls start as, choose Video or Voice.", "c08-david", (2023, 1358)),
