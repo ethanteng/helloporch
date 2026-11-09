@@ -246,14 +246,22 @@ class CallGuests(private val app: PorchApplication, private val session: FamilyC
                 throw e
             } catch (e: FamilyServiceException) {
                 error = e.message
+                keepFollowing(current)
             } catch (e: Exception) {
                 error = "Couldn't reach Porch. Check the connection and try again."
+                keepFollowing(current)
             } finally {
                 hangingUp = false
                 hangingUpID = null
                 refresh()
             }
         }
+    }
+
+    /** A hang-up that failed while the phone is still in the room: the room's dropping it a moment earlier counted as
+     * this hang-up, so it's followed again and Hang up comes back. */
+    private fun keepFollowing(current: FamilyPhoneGuest) {
+        if (peers.any { it.identity?.value == current.identity }) finished -= current.id
     }
 
     fun openKeypad() { if (phone != null && phoneAnswered) { keysPressed = ""; keypad = true } }
