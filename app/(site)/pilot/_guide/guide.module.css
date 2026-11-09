@@ -199,6 +199,39 @@
   color: var(--muted);
 }
 
+/* Which device a part happens on: the bedside tablet in Porch's green, your phone in tomato. */
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.contents .tags {
+  margin-left: 8px;
+  vertical-align: 2px;
+}
+
+.part > .tags {
+  margin-top: -8px;
+}
+
+.tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font: 600 13px / 1.5 var(--sans);
+  white-space: nowrap;
+}
+
+.tagBedside {
+  background: oklch(0.92 0.04 165);
+  color: #1f3b33;
+}
+
+.tagPhone {
+  background: oklch(0.93 0.04 45);
+  color: var(--tomato-deep);
+}
+
 .body {
   display: flex;
   flex-direction: column;

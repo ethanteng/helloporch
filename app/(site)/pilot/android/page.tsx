@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Chain, Contact, Email, Guide, guideMetadata, Links, Questions, Says, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
-import { playTesting, qrFor, testFlight, testFlightApp } from "../links";
+import { playTesting, qrFor } from "../links";
 import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
@@ -22,10 +22,7 @@ const parts: GuidePart[] = [
     title: "Before you start",
     body: (
       <>
-        <p>
-          During the pilot, Porch is a test app, so you’ll use a few links to set it up. Open each one on the device
-          it’s for.
-        </p>
+        <p>During the pilot, Porch is a test app. You’ll open two links on your loved one’s tablet.</p>
         <Links
           items={[
             {
@@ -33,25 +30,12 @@ const parts: GuidePart[] = [
               href: playTesting,
               qr: qrFor(playTesting),
               sent: "I’ll send you this link.",
-              device: "every Android phone and tablet, including your loved one’s tablet",
+              device: "your loved one’s tablet",
               how: (
                 <>
-                  First email me at <Email /> the address of the Google account each person uses in Google Play, including the one on the tablet.
-                  It’s usually a Gmail address, but any Google account works. Once I’ve added it, open this link,
-                  accept the invitation and tap <UI>Install</UI>.
-                </>
-              ),
-            },
-            {
-              name: "Porch on TestFlight",
-              href: testFlight,
-              qr: qrFor(testFlight),
-              sent: "I’ll send you this link.",
-              device: "every iPhone and iPad in the family",
-              how: (
-                <>
-                  First install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store. Then open
-                  this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                  First email me at <Email /> the address of the Google account signed in to Google Play on the
+                  tablet. It’s usually a Gmail address, but any Google account works. Once I’ve added it, open this
+                  link on the tablet, accept the invitation and tap <UI>Install</UI>.
                 </>
               ),
             },
@@ -61,14 +45,12 @@ const parts: GuidePart[] = [
               device: "your loved one’s tablet only",
               how: "It works on one tablet and expires after 14 days.",
             },
-            {
-              name: "Family invitations",
-              sent: "You make these in Porch.",
-              device: "each person’s own phone",
-              how: "Make them once the tablet is set up. Each works once and expires after 24 hours.",
-            },
           ]}
         />
+        <p>
+          You’ll also add Porch to your own phone partway through. The <Link href="/pilot/phone">phone guide</Link>{" "}
+          covers phones, for you and the rest of the family.
+        </p>
         <Tip>
           <p>Allow about 30 minutes. Have the tablet, corded phone and your own phone nearby.</p>
           <p>
@@ -81,6 +63,7 @@ const parts: GuidePart[] = [
   {
     id: "tablet",
     title: "Get the tablet ready",
+    on: ["bedside"],
     body: (
       <ol>
         <li>
@@ -102,6 +85,7 @@ const parts: GuidePart[] = [
   {
     id: "install",
     title: "Install and set up Porch",
+    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -142,6 +126,7 @@ const parts: GuidePart[] = [
   {
     id: "phone",
     title: "Connect the big-button phone",
+    on: ["bedside"],
     body: (
       <>
         <p>
@@ -184,6 +169,7 @@ const parts: GuidePart[] = [
   {
     id: "your-phone",
     title: "Add your phone",
+    on: ["bedside", "phone"],
     body: (
       <>
         <StepVideo
@@ -193,33 +179,35 @@ const parts: GuidePart[] = [
         />
         <ol>
           <li>
-            Install Porch on your phone first. On an Android phone, join the test and install Porch the same way you
-            did on the tablet. On an iPhone, install Apple’s <a href={testFlightApp}>TestFlight app</a>, then open{" "}
-            {testFlight ? <a href={testFlight}>Porch’s TestFlight link</a> : "the TestFlight link I sent you"} and tap{" "}
-            <UI>Accept</UI>, then <UI>Install</UI>.
+            <strong>On your phone:</strong> install Porch. See <Link href="/pilot/phone#get">Get Porch</Link> in the phone
+            guide, for an Android phone or an iPhone.
           </li>
           <li>
-            On the tablet, type your name, then tap <UI>Show QR code</UI>.
-          </li>
-          <li>Open the Camera app on your phone and point it at the code. Tap the link that appears.</li>
-          <li>
-            Porch opens on your phone. Tap <UI>Join family</UI>.
+            <strong>On the tablet:</strong> type your name, then tap <UI>Show QR code</UI>.
           </li>
           <li>
-            The tablet says your phone joined. Tap <UI>Continue</UI>, then <UI>Back to the clock</UI>.
+            <strong>On your phone:</strong> open the Camera app and point it at the code. Tap the link that appears,
+            then tap <UI>Join family</UI> in Porch.
           </li>
-          <li id="ring">
-            On an Android phone, look at the top of Porch so calls can ring while it’s closed. Under{" "}
-            <UI>Ring when Porch is closed</UI>, tap <UI>Allow</UI>. Under <UI>Show calls on the lock screen</UI>, tap{" "}
-            <UI>Open settings</UI> and allow full-screen notifications.
+          <li>
+            <strong>On your phone:</strong> allow what Porch asks for, so calls can ring. See{" "}
+            <Link href="/pilot/phone#ring">Let calls ring your phone</Link>.
+          </li>
+          <li>
+            <strong>On the tablet:</strong> it says your phone joined. Tap <UI>Continue</UI>, then <UI>Back to the clock</UI>.
           </li>
         </ol>
+        <p>
+          For the rest of the family, see <Link href="/pilot/phone#invite">Invite family members</Link> in the phone
+          guide.
+        </p>
       </>
     ),
   },
   {
     id: "keypad",
     title: "Set up the phone’s number keys",
+    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -259,42 +247,9 @@ const parts: GuidePart[] = [
     ),
   },
   {
-    id: "family",
-    title: "Invite family members",
-    body: (
-      <>
-        <StepVideo
-          name="android-invite"
-          label="Video: inviting a relative from your phone"
-          caption="Inviting a relative from your phone."
-        />
-        <ol>
-          <li>
-            In Porch on your phone, scroll down and tap <UI>Caregiver mode</UI>. Enter the PIN and tap{" "}
-            <UI>Open caregiver mode</UI>.
-          </li>
-          <li>
-            Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
-          </li>
-          <li>
-            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
-            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
-          </li>
-          <li>
-            Tap <UI>Create invitation</UI>, then <UI>Share invitation</UI>, and send it by text or email. If they’re
-            next to you, they can scan the code. Then tap <UI>Done</UI>.
-          </li>
-        </ol>
-        <p>
-          Each invitation works once and expires after 24 hours. Relatives with an Android phone need to be in the
-          Google Play test first, so send me their Google account before you invite them.
-        </p>
-      </>
-    ),
-  },
-  {
     id: "language",
     title: "Change the language or voice",
+    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -324,6 +279,7 @@ const parts: GuidePart[] = [
   {
     id: "settings",
     title: "Tablet settings that help",
+    on: ["bedside"],
     body: (
       <ul>
         <li>
@@ -366,15 +322,6 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "My phone doesn’t ring when my loved one calls.",
-            a: (
-              <p>
-                Open Porch on your phone and follow any card at the top, such as <UI>Ring when Porch is closed</UI>.
-                Check that Porch’s notifications are on in your phone’s settings, and that Do Not Disturb isn’t on.
-              </p>
-            ),
-          },
-          {
             q: "My phone says the tablet isn’t checking in.",
             a: (
               <p>
@@ -401,17 +348,6 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "My phone won’t join from the QR code.",
-            a: (
-              <p>
-                If the link opens a web page, tap <UI>Open invitation in Porch</UI>. Or tap <UI>Copy invitation</UI>,
-                open Porch, tap <UI>I’m joining my family</UI>, paste it into <UI>Invitation link</UI> and tap{" "}
-                <UI>Join family</UI>. You can also tap <UI>Send the invitation instead</UI> on the tablet and send the
-                link to your phone.
-              </p>
-            ),
-          },
-          {
             q: "Porch says no voice is available for a language.",
             a: (
               <p>
@@ -421,13 +357,8 @@ const parts: GuidePart[] = [
             ),
           },
           {
-            q: "An invitation or the setup link stopped working.",
-            a: (
-              <p>
-                Family invitations work once and expire after 24 hours. Create a new invitation in caregiver mode. If the
-                setup link for the tablet has expired, ask me for a new one.
-              </p>
-            ),
+            q: "The setup link stopped working.",
+            a: <p>It works once and expires after 14 days. Ask me for a new one.</p>,
           },
           {
             q: "Someone can’t call my loved one’s Porch number.",
@@ -469,8 +400,8 @@ export default function AndroidGuide() {
       }
       aside={
         <>
-          If your loved one uses an iPad, follow the{" "}
-          <Link href="/pilot/ios">iPad and iPhone setup guide</Link>.
+          If your loved one uses an iPad, follow the <Link href="/pilot/ios">iPad setup guide</Link>. For family
+          members’ phones, see the <Link href="/pilot/phone">phone guide</Link>.
         </>
       }
       kit={{
@@ -487,6 +418,7 @@ export default function AndroidGuide() {
         ],
       }}
       parts={parts}
+      bedside="tablet"
     />
   );
 }

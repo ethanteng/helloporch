@@ -13,7 +13,9 @@ export function guideMetadata(title: string, description: string): Metadata {
 
 /** A part to buy: what it is, what to look for, and, where I give them, roughly what it costs and the listing I use. */
 export type KitPart = { name: string; rule: string; price?: string; href?: string; photo: string };
-export type GuidePart = { id: string; title: string; body: ReactNode };
+/** Where a part of a bedside guide happens: on the loved one's bedside tablet, on your own phone, or both. */
+export type Device = "bedside" | "phone";
+export type GuidePart = { id: string; title: string; on?: Device[]; body: ReactNode };
 
 type GuideProps = {
   eyebrow: string;
@@ -24,10 +26,13 @@ type GuideProps = {
   /** The parts to have ready, for a getting-started guide. */
   kit?: { intro: ReactNode; parts: KitPart[]; ready: ReactNode[] };
   parts: GuidePart[];
+  /** The bedside device, such as "iPad" or "tablet", for a bedside guide's device tags. */
+  bedside?: string;
 };
 
 /** A whole guide: the hero, what to have ready, a contents list and the numbered parts. */
-export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
+export function Guide({ eyebrow, title, lede, aside, kit, parts, bedside }: GuideProps) {
+  const tags = (part: GuidePart) => part.on && bedside && <DeviceTags on={part.on} bedside={bedside} />;
   return (
     <div className={`page ${styles.page}`}>
       <a href="#guide" className={styles.skip}>Skip to the guide</a>
@@ -73,6 +78,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
             {parts.map((part) => (
               <li key={part.id}>
                 <a href={`#${part.id}`}>{part.title}</a>
+                {tags(part)}
               </li>
             ))}
           </ol>
@@ -85,6 +91,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
                 <span className={styles.partNum} aria-hidden="true">{i + 1}</span>
                 <h2 id={`${part.id}-title`}>{part.title}</h2>
               </div>
+              {tags(part)}
               {part.body}
             </section>
           ))}
@@ -93,6 +100,19 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
 
       <SiteFooter />
     </div>
+  );
+}
+
+/** Which device a part happens on: "Bedside iPad", "Your phone", or both. */
+function DeviceTags({ on, bedside }: { on: Device[]; bedside: string }) {
+  return (
+    <span className={styles.tags}>
+      {on.map((device) => (
+        <span key={device} className={`${styles.tag} ${device === "bedside" ? styles.tagBedside : styles.tagPhone}`}>
+          {device === "bedside" ? `Bedside ${bedside}` : "Your phone"}
+        </span>
+      ))}
+    </span>
   );
 }
 
