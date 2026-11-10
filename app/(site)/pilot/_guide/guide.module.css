@@ -127,27 +127,34 @@
   color: var(--muted);
 }
 
-/* Roughly what a part costs and where to buy it, in one quiet line at the bottom of its card. */
-.kitBuy {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  margin-top: auto;
-  padding-top: 6px;
-  font: 400 14px / 1.4 var(--sans);
-  color: var(--muted);
+/* Roughly what a part costs and where to buy it: a small tag in the photo's corner, so the card's text stays short. */
+.kitTag {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.92);
+  box-shadow: 0 2px 8px -3px oklch(0.3 0.05 50 / 0.45);
+  font: 600 13px / 1.4 var(--sans);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
 }
 
-.kitBuy a {
+a.kitTag span {
   color: var(--tomato-deep);
-  font-weight: 500;
-  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+a.kitTag:hover {
+  background: #fff;
+  text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.kitBuy a:hover {
-  text-decoration-color: currentColor;
+a.kitTag:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 2px;
 }
 
 .ready {

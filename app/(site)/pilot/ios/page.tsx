@@ -522,7 +522,7 @@ export default function IOSGuide() {
         </>
       }
       kit={{
-        intro: "I’ll send you the Porch phone adapter. Have the other parts ready before you connect the phone.",
+        intro: "I’ll send you the Porch phone adapter. Have the other parts ready before you connect the phone. Prices are approximate.",
         parts: kit,
         ready: [
           "Wi-Fi where your loved one lives, and its password.",

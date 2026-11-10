@@ -493,7 +493,7 @@ export default function AndroidGuide() {
         </>
       }
       kit={{
-        intro: "The Cell2Jack connects the corded phone to the tablet through the USB-C hub.",
+        intro: "The Cell2Jack connects the corded phone to the tablet through the USB-C hub. Prices are approximate.",
         parts: kit,
         ready: [
           "Wi-Fi where your loved one lives, and its password.",
