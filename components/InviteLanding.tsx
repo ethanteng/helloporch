@@ -32,7 +32,7 @@ const copy = {
 const androidBedside = {
   lede: "Open this page on the tablet that will stay with them. This link sets up one tablet.",
   needs: ["A tablet with Android 15 or later, and Wi-Fi.",
-    "A Cell2Jack, and a corded phone set to tone dialing, such as a big-button picture phone. A USB hub keeps the tablet charging with it plugged in. You can connect the phone later."],
+    "A Cell2Jack and a big-button corded phone. A USB hub keeps the tablet charging with it plugged in. You can connect the phone later."],
 };
 
 /** The page an invitation link opens when Porch isn't installed yet, or isn't opened by the link. */
@@ -84,7 +84,7 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
             <ul>
               {androidReady ? androidBedside.needs.map(need => <li key={need}>{need}</li>) : <>
                 <li>An iPad with iPadOS 15 or later, and Wi-Fi.</li>
-                <li>A corded phone set to tone dialing, such as a big-button picture phone, a Cell2Jack, and the Porch phone adapter HelloPorch sends you. A USB hub keeps the iPad charging with them plugged in. You can connect the phone later.</li>
+                <li>A big-button corded phone, a Cell2Jack, and the Porch phone adapter HelloPorch sends you. A USB hub keeps the iPad charging with them plugged in. You can connect the phone later.</li>
               </>}
             </ul>
           </section>
