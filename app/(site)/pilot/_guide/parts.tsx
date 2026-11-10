@@ -11,8 +11,9 @@ export function guideMetadata(title: string, description: string): Metadata {
   return { title, description, robots: { index: false, follow: false } };
 }
 
-/** A part to buy: what it is, what to look for, and, where I give them, roughly what it costs and the listing I use. */
-export type KitPart = { name: string; rule: string; price?: string; href?: string; photo: string };
+/** A part to buy: what it is, what to look for if it matters, and, where I give them, roughly what it costs and the
+ * listing I use. */
+export type KitPart = { name: string; rule?: string; price?: string; href?: string; photo: string };
 export type GuidePart = { id: string; title: string; body: ReactNode };
 
 type GuideProps = {
@@ -49,15 +50,17 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
               <li key={part.name}>
                 <span className={styles.kitPhoto}>
                   <Image src={part.photo} alt="" fill sizes="(max-width: 700px) 45vw, 230px" />
+                  {part.href ? (
+                    <a className={styles.kitTag} href={part.href} target="_blank" rel="noopener noreferrer"
+                      aria-label={`${part.name} on Amazon${part.price ? `, ${part.price.toLowerCase()}` : ""}`}>
+                      {part.price && <>{shortPrice(part.price)} · </>}Amazon<span aria-hidden="true"> ↗</span>
+                    </a>
+                  ) : (
+                    part.price && <span className={styles.kitTag}>{part.price}</span>
+                  )}
                 </span>
                 <strong className={styles.kitName}>{part.name}</strong>
-                <span className={styles.kitRule}>{part.rule}</span>
-                {part.price && <span className={styles.kitPrice}>{part.price}</span>}
-                {part.href && (
-                  <a className={styles.kitLink} href={part.href} target="_blank" rel="noopener noreferrer">
-                    See it on Amazon
-                  </a>
-                )}
+                {part.rule && <span className={styles.kitRule}>{part.rule}</span>}
               </li>
             ))}
           </ul>
@@ -94,6 +97,11 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
       <SiteFooter />
     </div>
   );
+}
+
+/** A price for a part's photo tag, such as "$28" for "About $28": the tag is small, and the intro says prices are rough. */
+function shortPrice(price: string) {
+  return price.replace(/^About /, "");
 }
 
 // How families reach me during the pilot.

@@ -127,16 +127,34 @@
   color: var(--muted);
 }
 
-.kitPrice {
-  margin-top: 4px;
-  font: 600 16px / 1.4 var(--sans);
+/* Roughly what a part costs and where to buy it: a small tag in the photo's corner, so the card's text stays short. */
+.kitTag {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.92);
+  box-shadow: 0 2px 8px -3px oklch(0.3 0.05 50 / 0.45);
+  font: 600 13px / 1.4 var(--sans);
   color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
 }
 
-.kitLink {
+a.kitTag span {
   color: var(--tomato-deep);
-  font: 600 15px / 1.4 var(--sans);
+}
+
+a.kitTag:hover {
+  background: #fff;
+  text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+a.kitTag:focus-visible {
+  outline: 2px solid var(--tomato-deep);
+  outline-offset: 2px;
 }
 
 .ready {
