@@ -127,16 +127,27 @@
   color: var(--muted);
 }
 
-.kitPrice {
-  margin-top: 4px;
-  font: 600 16px / 1.4 var(--sans);
-  color: var(--ink);
+/* Roughly what a part costs and where to buy it, in one quiet line at the bottom of its card. */
+.kitBuy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-top: auto;
+  padding-top: 6px;
+  font: 400 14px / 1.4 var(--sans);
+  color: var(--muted);
 }
 
-.kitLink {
+.kitBuy a {
   color: var(--tomato-deep);
-  font: 600 15px / 1.4 var(--sans);
+  font-weight: 500;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 3px;
+}
+
+.kitBuy a:hover {
+  text-decoration-color: currentColor;
 }
 
 .ready {
