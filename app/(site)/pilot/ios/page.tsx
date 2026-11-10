@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Chain, Contact, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Choices, Contact, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
 import { qrFor, testFlight, testFlightApp } from "../links";
 import { shopping } from "../shopping";
 
@@ -348,7 +348,7 @@ const parts: GuidePart[] = [
   },
   {
     id: "language",
-    title: "Change the language or voice (optional)",
+    title: "Change the language (optional)",
     body: (
       <>
         <p>
@@ -357,14 +357,17 @@ const parts: GuidePart[] = [
           in English.
         </p>
         <p>You can choose:</p>
-        <ul>
-          <li>English</li>
-          <li>Mandarin, in traditional or simplified characters</li>
-          <li>Cantonese</li>
-          <li>Spanish</li>
-          <li>Tagalog</li>
-          <li>Korean</li>
-        </ul>
+        <Choices
+          label="Languages you can choose"
+          items={[
+            { name: "English" },
+            { name: "Mandarin", note: "Traditional or simplified characters" },
+            { name: "Cantonese" },
+            { name: "Spanish" },
+            { name: "Tagalog" },
+            { name: "Korean" },
+          ]}
+        />
         <StepVideo
           name="ios-language"
           label="Video: changing the bedside language and voice"

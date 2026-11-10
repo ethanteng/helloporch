@@ -134,6 +134,20 @@ export function Path({ steps }: { steps: ReactNode[] }) {
   );
 }
 
+/** A short set of choices, such as Porch's languages, in a compact table three across. */
+export function Choices({ label, items }: { label: string; items: { name: string; note?: string }[] }) {
+  return (
+    <ul className={styles.choices} aria-label={label}>
+      {items.map(({ name, note }) => (
+        <li key={name}>
+          {name}
+          {note && <span>{note}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Each setting’s starting value and where to change it. */
 export function Defaults({ rows }: { rows: [feature: ReactNode, value: ReactNode, where: ReactNode][] }) {
   return (
