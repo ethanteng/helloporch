@@ -39,7 +39,6 @@ const parts: GuidePart[] = [
               name: "Porch on Google Play",
               href: playTesting,
               qr: qrFor(playTesting),
-              sent: "I’ll send you this link.",
               device: "your loved one’s tablet",
               how: (
                 <>
@@ -102,7 +101,7 @@ const parts: GuidePart[] = [
         <ol>
           <li>
             On the tablet, open{" "}
-            {playTesting ? <a href={playTesting}>Porch’s Google Play test</a> : "the Google Play test link I sent you"}.
+            <a href={playTesting}>Porch’s Google Play test</a>.
             Accept the invitation to test Porch, then tap <UI>Install</UI> in Google Play. Porch appears with the
             tablet’s apps.
           </li>
@@ -482,7 +481,7 @@ export default function AndroidGuide() {
         parts: kit,
         ready: [
           "Wi-Fi where your loved one lives, and its password.",
-          "Your private setup link, and the link to join Porch’s Google Play test. I’ll send you both.",
+          "Your private setup link, from me.",
           "Your own iPhone or Android phone.",
           <>
             A few photos of the people your loved one calls most, to print as labels for their keys with the{" "}

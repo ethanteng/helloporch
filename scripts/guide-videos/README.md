@@ -21,5 +21,5 @@ Captions sit at the top of the frame, where video players don't put their contro
 
 The guides' "Before you start" shows the TestFlight app, and the TestFlight and Google Play test links, with a QR code each, from
 `public/pilot/links/`. `swift qr.swift <url> <out.svg>` makes one and checks it reads back as that URL. The codes are
-tied to the exact links in `app/(site)/pilot/links.ts`: if a link changes on Vercel, the guide shows it without a code
-until you make a new one and update that list.
+tied to the exact links in `app/(site)/pilot/links.ts`: if a link changes, update it there and make its code again, or
+the guide shows it without one.

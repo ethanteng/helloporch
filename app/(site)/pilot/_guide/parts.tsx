@@ -205,8 +205,8 @@ export function StepVideo({ name, label, caption }: { name: string; label: strin
 
 /**
  * A link a family opens during setup: what it is, which device to open it on, and what to do first. `sent` stands in
- * for a link that isn't set yet, or one I send each family, such as "I’ll send you this link." A card without a link
- * or a device is a step to do before the links, such as emailing me.
+ * for a link I send each family, such as "I’ll email or text it to you." A card without a link or a device is a step
+ * to do before the links, such as emailing me.
  */
 export type GuideLink = { name: string; href?: string; qr?: string; sent?: ReactNode; device?: ReactNode; how: ReactNode };
 

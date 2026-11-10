@@ -37,7 +37,6 @@ const parts: GuidePart[] = [
               name: "Porch on TestFlight",
               href: testFlight,
               qr: qrFor(testFlight),
-              sent: "I’ll send you this link.",
               device: "your iPhone",
               how: (
                 <>
@@ -63,7 +62,6 @@ const parts: GuidePart[] = [
               name: "Porch on Google Play",
               href: playTesting,
               qr: qrFor(playTesting),
-              sent: "I’ll send you this link.",
               device: "your Android phone",
               how: (
                 <>

@@ -44,7 +44,6 @@ const parts: GuidePart[] = [
               name: "Porch on TestFlight",
               href: testFlight,
               qr: qrFor(testFlight),
-              sent: "I’ll send you this link.",
               device: "your loved one’s iPad",
               how: (
                 <>
@@ -129,7 +128,7 @@ const parts: GuidePart[] = [
         <ol>
           <li>
             On the iPad, install Apple’s free <a href={testFlightApp}>TestFlight app</a>. Then open{" "}
-            {testFlight ? <a href={testFlight}>Porch’s TestFlight link</a> : "the TestFlight link I sent you"} and tap{" "}
+            <a href={testFlight}>Porch’s TestFlight link</a> and tap{" "}
             <UI>Accept</UI>, then <UI>Install</UI>. Porch appears on the Home Screen.
           </li>
           <li>
