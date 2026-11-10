@@ -12,7 +12,7 @@ const kit: KitPart[] = [
   { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Connects the phone to the adapter", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "The Porch phone adapter", rule: "I will mail this to you", price: "Free", photo: "/pilot/adapter.jpg" },
+  { name: "The Porch phone adapter", rule: "I will mail this to you", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
