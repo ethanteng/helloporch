@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Chain, Contact, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Choices, Contact, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
 import { qrFor, testFlight, testFlightApp } from "../links";
 import { shopping } from "../shopping";
 
@@ -23,19 +23,31 @@ const parts: GuidePart[] = [
     title: "Before you start",
     body: (
       <>
-        <p>During the pilot, Porch is a test app. You’ll open two links on your loved one’s iPad.</p>
+        <p>
+          During the pilot, Porch is a test app that comes through Apple’s TestFlight app. Open these on your loved
+          one’s iPad, in this order.
+        </p>
         <Links
           items={[
+            {
+              name: "TestFlight on the App Store",
+              href: testFlightApp,
+              qr: qrFor(testFlightApp),
+              device: "your loved one’s iPad",
+              how: (
+                <>
+                  Install this first. Tap <UI>Get</UI> to install Apple’s free TestFlight app. You don’t need to open it.
+                </>
+              ),
+            },
             {
               name: "Porch on TestFlight",
               href: testFlight,
               qr: qrFor(testFlight),
-              sent: "I’ll send you this link.",
               device: "your loved one’s iPad",
               how: (
                 <>
-                  First install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store. Then open
-                  this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                  Once TestFlight is installed, open this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
                 </>
               ),
             },
@@ -67,7 +79,6 @@ const parts: GuidePart[] = [
   {
     id: "ipad",
     title: "Get the iPad ready",
-    on: ["bedside"],
     body: (
       <>
         <ol>
@@ -107,7 +118,6 @@ const parts: GuidePart[] = [
   {
     id: "install",
     title: "Install and set up Porch",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -118,7 +128,7 @@ const parts: GuidePart[] = [
         <ol>
           <li>
             On the iPad, install Apple’s free <a href={testFlightApp}>TestFlight app</a>. Then open{" "}
-            {testFlight ? <a href={testFlight}>Porch’s TestFlight link</a> : "the TestFlight link I sent you"} and tap{" "}
+            <a href={testFlight}>Porch’s TestFlight link</a> and tap{" "}
             <UI>Accept</UI>, then <UI>Install</UI>. Porch appears on the Home Screen.
           </li>
           <li>
@@ -146,7 +156,6 @@ const parts: GuidePart[] = [
   {
     id: "phone",
     title: "Connect the big-button phone",
-    on: ["bedside"],
     body: (
       <>
         <p>
@@ -204,7 +213,6 @@ const parts: GuidePart[] = [
   {
     id: "your-phone",
     title: "Add your own phone",
-    on: ["bedside", "phone"],
     body: (
       <>
         <StepVideo
@@ -238,7 +246,6 @@ const parts: GuidePart[] = [
   {
     id: "family",
     title: "Invite family members",
-    on: ["phone"],
     body: (
       <>
         <p>
@@ -285,7 +292,6 @@ const parts: GuidePart[] = [
   {
     id: "keypad",
     title: "Set up the phone’s number keys",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -342,10 +348,26 @@ const parts: GuidePart[] = [
   },
   {
     id: "language",
-    title: "Change the language or voice",
-    on: ["bedside"],
+    title: "Change the language (optional)",
     body: (
       <>
+        <p>
+          Porch starts in English. You only need this step if your loved one is more comfortable in another
+          language. Once you switch, the iPad shows and speaks that language. Caregiver mode and family phones stay
+          in English.
+        </p>
+        <p>You can choose:</p>
+        <Choices
+          label="Languages you can choose"
+          items={[
+            { name: "English" },
+            { name: "Mandarin", note: "Traditional or simplified characters" },
+            { name: "Cantonese" },
+            { name: "Spanish" },
+            { name: "Tagalog" },
+            { name: "Korean" },
+          ]}
+        />
         <StepVideo
           name="ios-language"
           label="Video: changing the bedside language and voice"
@@ -356,8 +378,7 @@ const parts: GuidePart[] = [
             On the clock, tap the gear in the top right corner. Enter your PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
-            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose English, Mandarin, Cantonese,
-            Spanish, Tagalog or Korean.
+            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose your loved one’s language.
           </li>
           <li>
             To pick a voice, use the menu under <UI>Announcement voice</UI>. <UI>Preview announcement</UI> lets you
@@ -373,7 +394,6 @@ const parts: GuidePart[] = [
   {
     id: "settings",
     title: "iPad settings that help",
-    on: ["bedside"],
     body: (
       <ul>
         <li>
@@ -515,7 +535,6 @@ export default function IOSGuide() {
         ],
       }}
       parts={parts}
-      bedside="iPad"
     />
   );
 }

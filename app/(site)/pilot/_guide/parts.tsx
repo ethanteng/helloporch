@@ -13,9 +13,7 @@ export function guideMetadata(title: string, description: string): Metadata {
 
 /** A part to buy: what it is, what to look for, and, where I give them, roughly what it costs and the listing I use. */
 export type KitPart = { name: string; rule: string; price?: string; href?: string; photo: string };
-/** Where a part of a bedside guide happens: on the loved one's bedside tablet, on your own phone, or both. */
-export type Device = "bedside" | "phone";
-export type GuidePart = { id: string; title: string; on?: Device[]; body: ReactNode };
+export type GuidePart = { id: string; title: string; body: ReactNode };
 
 type GuideProps = {
   eyebrow: string;
@@ -26,13 +24,10 @@ type GuideProps = {
   /** The parts to have ready, for a getting-started guide. */
   kit?: { intro: ReactNode; parts: KitPart[]; ready: ReactNode[] };
   parts: GuidePart[];
-  /** The bedside device, such as "iPad" or "tablet", for a bedside guide's device tags. */
-  bedside?: string;
 };
 
 /** A whole guide: the hero, what to have ready, a contents list and the numbered parts. */
-export function Guide({ eyebrow, title, lede, aside, kit, parts, bedside }: GuideProps) {
-  const tags = (part: GuidePart) => part.on && bedside && <DeviceTags on={part.on} bedside={bedside} />;
+export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
   return (
     <div className={`page ${styles.page}`}>
       <a href="#guide" className={styles.skip}>Skip to the guide</a>
@@ -78,7 +73,6 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts, bedside }: Guid
             {parts.map((part) => (
               <li key={part.id}>
                 <a href={`#${part.id}`}>{part.title}</a>
-                {tags(part)}
               </li>
             ))}
           </ol>
@@ -91,7 +85,6 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts, bedside }: Guid
                 <span className={styles.partNum} aria-hidden="true">{i + 1}</span>
                 <h2 id={`${part.id}-title`}>{part.title}</h2>
               </div>
-              {tags(part)}
               {part.body}
             </section>
           ))}
@@ -100,19 +93,6 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts, bedside }: Guid
 
       <SiteFooter />
     </div>
-  );
-}
-
-/** Which device a part happens on: "Bedside iPad", "Your phone", or both. */
-function DeviceTags({ on, bedside }: { on: Device[]; bedside: string }) {
-  return (
-    <span className={styles.tags}>
-      {on.map((device) => (
-        <span key={device} className={`${styles.tag} ${device === "bedside" ? styles.tagBedside : styles.tagPhone}`}>
-          {device === "bedside" ? `Bedside ${bedside}` : "Your phone"}
-        </span>
-      ))}
-    </span>
   );
 }
 
@@ -151,6 +131,20 @@ export function Path({ steps }: { steps: ReactNode[] }) {
         </Fragment>
       ))}
     </span>
+  );
+}
+
+/** A short set of choices, such as Porch's languages, in a compact table three across. */
+export function Choices({ label, items }: { label: string; items: { name: string; note?: string }[] }) {
+  return (
+    <ul className={styles.choices} aria-label={label}>
+      {items.map(({ name, note }) => (
+        <li key={name}>
+          {name}
+          {note && <span>{note}</span>}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -225,9 +219,10 @@ export function StepVideo({ name, label, caption }: { name: string; label: strin
 
 /**
  * A link a family opens during setup: what it is, which device to open it on, and what to do first. `sent` stands in
- * for a link that isn't set yet, or one I send each family, such as "I’ll send you this link."
+ * for a link I send each family, such as "I’ll email or text it to you." A card without a link or a device is a step
+ * to do before the links, such as emailing me.
  */
-export type GuideLink = { name: string; href?: string; qr?: string; sent?: ReactNode; device: ReactNode; how: ReactNode };
+export type GuideLink = { name: string; href?: string; qr?: string; sent?: ReactNode; device?: ReactNode; how: ReactNode };
 
 /** The links a family uses, one card each, with the link written out and, where there is one, a QR code to scan. */
 export function Links({ items }: { items: GuideLink[] }) {
@@ -244,9 +239,11 @@ export function Links({ items }: { items: GuideLink[] }) {
             ) : (
               link.sent && <span className={styles.linkSent}>{link.sent}</span>
             )}
-            <p>
-              <strong>Open it on</strong> {link.device}.
-            </p>
+            {link.device && (
+              <p>
+                <strong>Open it on</strong> {link.device}.
+              </p>
+            )}
             <p>{link.how}</p>
           </div>
           {link.qr && (

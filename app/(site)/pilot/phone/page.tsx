@@ -17,20 +17,44 @@ const parts: GuidePart[] = [
       <>
         <p>
           Someone in your family has set up Porch for your loved one and invited you. During the pilot, Porch is a
-          test app: get it from the link for your phone, then open your invitation.
+          test app. Follow the steps for your phone, then open your invitation.
         </p>
+        <h3>On an iPhone</h3>
         <Links
           items={[
+            {
+              name: "TestFlight on the App Store",
+              href: testFlightApp,
+              qr: qrFor(testFlightApp),
+              device: "your iPhone",
+              how: (
+                <>
+                  Install this first. Tap <UI>Get</UI> to install Apple’s free TestFlight app. You don’t need to open it.
+                </>
+              ),
+            },
             {
               name: "Porch on TestFlight",
               href: testFlight,
               qr: qrFor(testFlight),
-              sent: "I’ll send you this link.",
-              device: "an iPhone",
+              device: "your iPhone",
               how: (
                 <>
-                  First install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store. Then open
-                  this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                  Once TestFlight is installed, open this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                </>
+              ),
+            },
+          ]}
+        />
+        <h3>On an Android phone</h3>
+        <Links
+          items={[
+            {
+              name: "Email me your Google account",
+              how: (
+                <>
+                  Do this first. Email me at <Email /> the address of the Google account you use in Google Play.
+                  It’s usually a Gmail address, but any Google account works. The next link works once I’ve added it.
                 </>
               ),
             },
@@ -38,16 +62,18 @@ const parts: GuidePart[] = [
               name: "Porch on Google Play",
               href: playTesting,
               qr: qrFor(playTesting),
-              sent: "I’ll send you this link.",
-              device: "an Android phone",
+              device: "your Android phone",
               how: (
                 <>
-                  First email me at <Email /> the address of the Google account you use in Google Play. It’s usually a
-                  Gmail address, but any Google account works. Once I’ve added it, open this link, accept the
-                  invitation and tap <UI>Install</UI>.
+                  Once I’ve added your Google account, open this link, accept the invitation and tap <UI>Install</UI>.
                 </>
               ),
             },
+          ]}
+        />
+        <h3>Then, on either phone</h3>
+        <Links
+          items={[
             {
               name: "Your invitation",
               sent: "From whoever invited you, or the code on your loved one’s iPad or tablet.",

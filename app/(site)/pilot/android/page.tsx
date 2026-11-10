@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Chain, Contact, Email, Guide, guideMetadata, Links, Questions, Says, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Choices, Contact, Email, Guide, guideMetadata, Links, Questions, Says, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
 import { playTesting, qrFor } from "../links";
 import { shopping } from "../shopping";
 
@@ -22,20 +22,27 @@ const parts: GuidePart[] = [
     title: "Before you start",
     body: (
       <>
-        <p>During the pilot, Porch is a test app. You’ll open two links on your loved one’s tablet.</p>
+        <p>During the pilot, Porch is a test app on Google Play. Do these in this order.</p>
         <Links
           items={[
+            {
+              name: "Email me the tablet’s Google account",
+              how: (
+                <>
+                  Do this first. Email me at <Email /> the address of the Google account signed in to Google Play on
+                  the tablet. It’s usually a Gmail address, but any Google account works. The next link works once
+                  I’ve added it.
+                </>
+              ),
+            },
             {
               name: "Porch on Google Play",
               href: playTesting,
               qr: qrFor(playTesting),
-              sent: "I’ll send you this link.",
               device: "your loved one’s tablet",
               how: (
                 <>
-                  First email me at <Email /> the address of the Google account signed in to Google Play on the
-                  tablet. It’s usually a Gmail address, but any Google account works. Once I’ve added it, open this
-                  link on the tablet, accept the invitation and tap <UI>Install</UI>.
+                  Once I’ve added your Google account, open this link, accept the invitation and tap <UI>Install</UI>.
                 </>
               ),
             },
@@ -63,7 +70,6 @@ const parts: GuidePart[] = [
   {
     id: "tablet",
     title: "Get the tablet ready",
-    on: ["bedside"],
     body: (
       <ol>
         <li>
@@ -85,7 +91,6 @@ const parts: GuidePart[] = [
   {
     id: "install",
     title: "Install and set up Porch",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -96,7 +101,7 @@ const parts: GuidePart[] = [
         <ol>
           <li>
             On the tablet, open{" "}
-            {playTesting ? <a href={playTesting}>Porch’s Google Play test</a> : "the Google Play test link I sent you"}.
+            <a href={playTesting}>Porch’s Google Play test</a>.
             Accept the invitation to test Porch, then tap <UI>Install</UI> in Google Play. Porch appears with the
             tablet’s apps.
           </li>
@@ -126,7 +131,6 @@ const parts: GuidePart[] = [
   {
     id: "phone",
     title: "Connect the big-button phone",
-    on: ["bedside"],
     body: (
       <>
         <p>
@@ -169,7 +173,6 @@ const parts: GuidePart[] = [
   {
     id: "your-phone",
     title: "Add your phone",
-    on: ["bedside", "phone"],
     body: (
       <>
         <StepVideo
@@ -203,7 +206,6 @@ const parts: GuidePart[] = [
   {
     id: "family",
     title: "Invite family members",
-    on: ["phone"],
     body: (
       <>
         <p>
@@ -250,7 +252,6 @@ const parts: GuidePart[] = [
   {
     id: "keypad",
     title: "Set up the phone’s number keys",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -306,10 +307,26 @@ const parts: GuidePart[] = [
   },
   {
     id: "language",
-    title: "Change the language or voice",
-    on: ["bedside"],
+    title: "Change the language (optional)",
     body: (
       <>
+        <p>
+          Porch starts in English. You only need this step if your loved one is more comfortable in another
+          language. Once you switch, the tablet shows and speaks that language. Caregiver mode and family phones stay
+          in English.
+        </p>
+        <p>You can choose:</p>
+        <Choices
+          label="Languages you can choose"
+          items={[
+            { name: "English" },
+            { name: "Mandarin", note: "Traditional or simplified characters" },
+            { name: "Cantonese" },
+            { name: "Spanish" },
+            { name: "Tagalog" },
+            { name: "Korean" },
+          ]}
+        />
         <StepVideo
           name="android-language"
           label="Video: changing the bedside language and voice"
@@ -320,8 +337,7 @@ const parts: GuidePart[] = [
             On the clock, tap the gear in the top right corner. Enter your PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
-            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose English, Mandarin, Cantonese,
-            Spanish, Tagalog or Korean.
+            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose your loved one’s language.
           </li>
           <li>
             To pick a voice, tap the menu under <UI>Announcement voice</UI>. <UI>Preview announcement</UI> lets you
@@ -337,7 +353,6 @@ const parts: GuidePart[] = [
   {
     id: "settings",
     title: "Tablet settings that help",
-    on: ["bedside"],
     body: (
       <ul>
         <li>
@@ -482,7 +497,7 @@ export default function AndroidGuide() {
         parts: kit,
         ready: [
           "Wi-Fi where your loved one lives, and its password.",
-          "Your private setup link, and the link to join Porch’s Google Play test. I’ll send you both.",
+          "Your private setup link, from me.",
           "Your own iPhone or Android phone.",
           <>
             A few photos of the people your loved one calls most, to print as labels for their keys with the{" "}
@@ -491,7 +506,6 @@ export default function AndroidGuide() {
         ],
       }}
       parts={parts}
-      bedside="tablet"
     />
   );
 }
