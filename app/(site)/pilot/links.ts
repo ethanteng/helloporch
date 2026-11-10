@@ -8,6 +8,7 @@ export const testFlightApp = "https://apps.apple.com/app/testflight/id899247664"
 // QR codes made for these exact links with scripts/guide-videos/qr.swift. If a link changes, the guides show it
 // without a code until its code is made again.
 const qrCodes: Record<string, string> = {
+  [testFlightApp]: "/pilot/links/testflight-app.svg",
   "https://testflight.apple.com/join/yM4JpBHC": "/pilot/links/testflight.svg",
   "https://play.google.com/apps/internaltest/4701338934153341848": "/pilot/links/google-play.svg",
 };

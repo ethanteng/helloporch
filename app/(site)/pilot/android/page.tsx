@@ -22,9 +22,19 @@ const parts: GuidePart[] = [
     title: "Before you start",
     body: (
       <>
-        <p>During the pilot, Porch is a test app. You’ll open two links on your loved one’s tablet.</p>
+        <p>During the pilot, Porch is a test app on Google Play. Do these in this order.</p>
         <Links
           items={[
+            {
+              name: "Email me the tablet’s Google account",
+              how: (
+                <>
+                  Do this first. Email me at <Email /> the address of the Google account signed in to Google Play on
+                  the tablet. It’s usually a Gmail address, but any Google account works. The next link works once
+                  I’ve added it.
+                </>
+              ),
+            },
             {
               name: "Porch on Google Play",
               href: playTesting,
@@ -33,9 +43,7 @@ const parts: GuidePart[] = [
               device: "your loved one’s tablet",
               how: (
                 <>
-                  First email me at <Email /> the address of the Google account signed in to Google Play on the
-                  tablet. It’s usually a Gmail address, but any Google account works. Once I’ve added it, open this
-                  link on the tablet, accept the invitation and tap <UI>Install</UI>.
+                  Once I’ve added your Google account, open this link, accept the invitation and tap <UI>Install</UI>.
                 </>
               ),
             },
@@ -63,7 +71,6 @@ const parts: GuidePart[] = [
   {
     id: "tablet",
     title: "Get the tablet ready",
-    on: ["bedside"],
     body: (
       <ol>
         <li>
@@ -85,7 +92,6 @@ const parts: GuidePart[] = [
   {
     id: "install",
     title: "Install and set up Porch",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -126,7 +132,6 @@ const parts: GuidePart[] = [
   {
     id: "phone",
     title: "Connect the big-button phone",
-    on: ["bedside"],
     body: (
       <>
         <p>
@@ -169,7 +174,6 @@ const parts: GuidePart[] = [
   {
     id: "your-phone",
     title: "Add your phone",
-    on: ["bedside", "phone"],
     body: (
       <>
         <StepVideo
@@ -203,7 +207,6 @@ const parts: GuidePart[] = [
   {
     id: "family",
     title: "Invite family members",
-    on: ["phone"],
     body: (
       <>
         <p>
@@ -250,7 +253,6 @@ const parts: GuidePart[] = [
   {
     id: "keypad",
     title: "Set up the phone’s number keys",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -307,7 +309,6 @@ const parts: GuidePart[] = [
   {
     id: "language",
     title: "Change the language or voice",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -337,7 +338,6 @@ const parts: GuidePart[] = [
   {
     id: "settings",
     title: "Tablet settings that help",
-    on: ["bedside"],
     body: (
       <ul>
         <li>
@@ -491,7 +491,6 @@ export default function AndroidGuide() {
         ],
       }}
       parts={parts}
-      bedside="tablet"
     />
   );
 }

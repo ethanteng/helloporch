@@ -23,9 +23,23 @@ const parts: GuidePart[] = [
     title: "Before you start",
     body: (
       <>
-        <p>During the pilot, Porch is a test app. You’ll open two links on your loved one’s iPad.</p>
+        <p>
+          During the pilot, Porch is a test app that comes through Apple’s TestFlight app. Open these on your loved
+          one’s iPad, in this order.
+        </p>
         <Links
           items={[
+            {
+              name: "TestFlight on the App Store",
+              href: testFlightApp,
+              qr: qrFor(testFlightApp),
+              device: "your loved one’s iPad",
+              how: (
+                <>
+                  Install this first. Tap <UI>Get</UI> to install Apple’s free TestFlight app. You don’t need to open it.
+                </>
+              ),
+            },
             {
               name: "Porch on TestFlight",
               href: testFlight,
@@ -34,8 +48,7 @@ const parts: GuidePart[] = [
               device: "your loved one’s iPad",
               how: (
                 <>
-                  First install Apple’s free <a href={testFlightApp}>TestFlight app</a> from the App Store. Then open
-                  this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                  Once TestFlight is installed, open this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
                 </>
               ),
             },
@@ -67,7 +80,6 @@ const parts: GuidePart[] = [
   {
     id: "ipad",
     title: "Get the iPad ready",
-    on: ["bedside"],
     body: (
       <>
         <ol>
@@ -107,7 +119,6 @@ const parts: GuidePart[] = [
   {
     id: "install",
     title: "Install and set up Porch",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -146,7 +157,6 @@ const parts: GuidePart[] = [
   {
     id: "phone",
     title: "Connect the big-button phone",
-    on: ["bedside"],
     body: (
       <>
         <p>
@@ -204,7 +214,6 @@ const parts: GuidePart[] = [
   {
     id: "your-phone",
     title: "Add your own phone",
-    on: ["bedside", "phone"],
     body: (
       <>
         <StepVideo
@@ -238,7 +247,6 @@ const parts: GuidePart[] = [
   {
     id: "family",
     title: "Invite family members",
-    on: ["phone"],
     body: (
       <>
         <p>
@@ -285,7 +293,6 @@ const parts: GuidePart[] = [
   {
     id: "keypad",
     title: "Set up the phone’s number keys",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -343,7 +350,6 @@ const parts: GuidePart[] = [
   {
     id: "language",
     title: "Change the language or voice",
-    on: ["bedside"],
     body: (
       <>
         <StepVideo
@@ -373,7 +379,6 @@ const parts: GuidePart[] = [
   {
     id: "settings",
     title: "iPad settings that help",
-    on: ["bedside"],
     body: (
       <ul>
         <li>
@@ -515,7 +520,6 @@ export default function IOSGuide() {
         ],
       }}
       parts={parts}
-      bedside="iPad"
     />
   );
 }
