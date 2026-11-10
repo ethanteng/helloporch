@@ -307,9 +307,23 @@ const parts: GuidePart[] = [
   },
   {
     id: "language",
-    title: "Change the language or voice",
+    title: "Change the language or voice (optional)",
     body: (
       <>
+        <p>
+          Porch starts in English. You only need this step if your loved one is more comfortable in another
+          language. Once you switch, the tablet shows and speaks that language. Caregiver mode and family phones stay
+          in English.
+        </p>
+        <p>You can choose:</p>
+        <ul>
+          <li>English</li>
+          <li>Mandarin, in traditional or simplified characters</li>
+          <li>Cantonese</li>
+          <li>Spanish</li>
+          <li>Tagalog</li>
+          <li>Korean</li>
+        </ul>
         <StepVideo
           name="android-language"
           label="Video: changing the bedside language and voice"
@@ -320,8 +334,7 @@ const parts: GuidePart[] = [
             On the clock, tap the gear in the top right corner. Enter your PIN and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
-            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose English, Mandarin, Cantonese,
-            Spanish, Tagalog or Korean.
+            Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose your loved one’s language.
           </li>
           <li>
             To pick a voice, tap the menu under <UI>Announcement voice</UI>. <UI>Preview announcement</UI> lets you
