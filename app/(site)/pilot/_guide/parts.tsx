@@ -50,14 +50,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
               <li key={part.name}>
                 <span className={styles.kitPhoto}>
                   <Image src={part.photo} alt="" fill sizes="(max-width: 700px) 45vw, 230px" />
-                  {part.href ? (
-                    <a className={styles.kitTag} href={part.href} target="_blank" rel="noopener noreferrer"
-                      aria-label={`${part.name} on Amazon${part.price ? `, ${part.price.toLowerCase()}` : ""}`}>
-                      {part.price && <>{shortPrice(part.price)} · </>}Amazon<span aria-hidden="true"> ↗</span>
-                    </a>
-                  ) : (
-                    part.price && <span className={styles.kitTag}>{part.price}</span>
-                  )}
+                  <KitTag part={part} />
                 </span>
                 <strong className={styles.kitName}>{part.name}</strong>
                 {part.rule && <span className={styles.kitRule}>{part.rule}</span>}
@@ -97,6 +90,22 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
       <SiteFooter />
     </div>
   );
+}
+
+/**
+ * Roughly what a part costs and, where I give one, its Amazon listing: a small tag in the corner of its photo. The
+ * pilot page's parts list uses it too. Its parent must be positioned.
+ */
+export function KitTag({ part }: { part: Pick<KitPart, "name" | "price" | "href"> }) {
+  if (part.href) {
+    return (
+      <a className={styles.kitTag} href={part.href} target="_blank" rel="noopener noreferrer"
+        aria-label={`${part.name} on Amazon${part.price ? `, ${part.price.toLowerCase()}` : ""}`}>
+        {part.price && <>{shortPrice(part.price)} · </>}Amazon<span aria-hidden="true"> ↗</span>
+      </a>
+    );
+  }
+  return part.price ? <span className={styles.kitTag}>{part.price}</span> : null;
 }
 
 /** A price for a part's photo tag, such as "$28" for "About $28": the tag is small, and the intro says prices are rough. */

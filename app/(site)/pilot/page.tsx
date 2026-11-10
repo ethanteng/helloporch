@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 import { pageMetadata } from "@/lib/site-metadata";
+import { KitTag } from "./_guide/parts";
 import PilotSignup from "./PilotSignup";
 import { shopping } from "./shopping";
 import styles from "./pilot.module.css";
@@ -20,13 +21,14 @@ export const metadata: Metadata = pageMetadata({
 
 // What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call. On an iPad it
 // also goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop off, so it
-// has no link. The links are the ones I use, on Amazon, and the prices are roughly what they cost there.
-const KIT: { name: string; rule: string; price: string; optional?: boolean; photo: string; href?: string }[] = [
-  { name: "A tablet", rule: "iPad or Android", ...shopping.tablet, photo: "/pilot/ipad.jpg" },
+// is free and has no link. The tablet has no price: most families use one they have. The links are the ones I use,
+// on Amazon, and the prices are roughly what they cost there.
+const KIT: { name: string; rule: string; price?: string; optional?: boolean; photo: string; href?: string }[] = [
+  { name: "A tablet", rule: "iPad or Android", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Any brand", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Must be a Cell2Jack", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "A Porch phone adapter", rule: "For iPads only", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
-  { name: "A USB-C hub", rule: "Any brand, with a charging port", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "A Porch phone adapter", rule: "For iPads only. I will mail this to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A USB-C hub", rule: "Any brand", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Any brand", ...shopping.stand, optional: true, photo: "/pilot/stand.jpg" },
 ];
 
@@ -147,18 +149,13 @@ export default function PilotPage() {
                 <li key={part.name}>
                   <span className={styles.kitPhoto}>
                     <Image src={part.photo} alt="" fill sizes="(max-width: 760px) 45vw, (max-width: 1140px) 30vw, 220px" />
+                    <KitTag part={part} />
                   </span>
                   <strong className={styles.kitName}>
                     {part.name}
                     {part.optional ? <em> (optional)</em> : null}
                   </strong>
                   <span className={styles.kitRule}>{part.rule}</span>
-                  <span className={styles.kitPrice}>{part.price}</span>
-                  {part.href ? (
-                    <a className={styles.kitLink} href={part.href} target="_blank" rel="noopener noreferrer">
-                      See it on Amazon
-                    </a>
-                  ) : null}
                 </li>
               ))}
             </ul>

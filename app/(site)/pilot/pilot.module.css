@@ -79,7 +79,7 @@
   color: var(--tomato);
 }
 
-/* ---------- What you'll need: a row of photo tiles, each with its rule, rough price and link ---------- */
+/* ---------- What you'll need: a row of photo tiles, each with its rule, and its rough price and link in a tag on the photo ---------- */
 /* Paired with .glanceCard, which is defined further down, so these need the extra class to win. */
 .glanceCard.kitCard {
   gap: 28px;
@@ -138,18 +138,6 @@
 .kitRule {
   font: 400 15px/1.4 var(--sans);
   color: var(--muted);
-}
-
-.kitPrice {
-  margin-top: 4px;
-  font: 600 16px/1.4 var(--sans);
-  color: var(--ink);
-}
-
-.kitLink {
-  color: var(--tomato-deep);
-  font: 600 15px/1.4 var(--sans);
-  text-underline-offset: 3px;
 }
 
 /* ---------- What I'll ask of you: a short card, its heading beside the text ---------- */
