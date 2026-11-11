@@ -84,7 +84,7 @@ export default function InviteLanding({ kind }: { kind: InviteKind }) {
             <ul>
               {androidReady ? androidBedside.needs.map(need => <li key={need}>{need}</li>) : <>
                 <li>An iPad with iPadOS 15 or later, and Wi-Fi.</li>
-                <li>A big-button corded phone, a Cell2Jack, and the Porch phone adapter HelloPorch sends you. A USB hub keeps the iPad charging with them plugged in. You can connect the phone later.</li>
+                <li>A big-button corded phone, a Cell2Jack, and, if the iPad doesn&rsquo;t have an M chip, the Porch phone adapter HelloPorch sends you. A USB hub keeps the iPad charging with them plugged in. You can connect the phone later.</li>
               </>}
             </ul>
           </section>
