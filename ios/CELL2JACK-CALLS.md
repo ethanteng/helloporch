@@ -50,7 +50,8 @@ communication is an iPadOS facility.
   of the same driver. Enable the driver in the real **Porch** app's settings,
   disconnect Cell2Jack for ten seconds, then reconnect it.
 - Setup's **Connect the phone** step, or **Connect the phone** in Porch caregiver
-  mode → **This iPad**, turns on **Use Cell2Jack phone keypad** once the Cell2Jack
+  mode → **This iPad**, tries the driver while it also listens for the Porch phone
+  adapter. It turns on **Use Cell2Jack phone keypad** once a Cell2Jack on the driver
   answers, then checks a key and the receiver going back. The switch is also on
   **This iPad**. It takes effect immediately, separately from the existing Save
   button for silence settings. It is off by default. No launch argument automatically enables the normal app.
