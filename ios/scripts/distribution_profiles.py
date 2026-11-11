@@ -39,10 +39,12 @@ def validate_profile(profile, team, bundle, driver=False, now=None, communicates
     if driver:
         require(ent.get(DRIVER) is True, "Driver: Apple has not authorized the DriverKit distribution entitlement")
         grants = ent.get(USB, [])
-        require(isinstance(grants, list) and any(
-            isinstance(g, dict) and g.get("idVendor") == 6790
-            and ("idProduct" not in g or g["idProduct"] == 29987) for g in grants),
-            "Driver: profile lacks USB distribution permission for Cell2Jack (VID 0x1A86, PID 0x7523)")
+        cell2jack = lambda g: (isinstance(g, dict) and set(g) <= {"idVendor", "idProduct"}
+                               and g.get("idVendor") == 6790 and g.get("idProduct", 29987) == 29987)
+        require(isinstance(grants, list) and any(cell2jack(g) for g in grants),
+                "Driver: profile lacks USB distribution permission for Cell2Jack (VID 0x1A86, PID 0x7523)")
+        # The driver's signature asks for exactly this list, so a grant for other hardware would be signed into it.
+        require(all(cell2jack(g) for g in grants), "Driver: profile grants USB access beyond the Cell2Jack")
     else:
         require(ent.get("aps-environment") == "production", "App: production Push Notifications are missing")
         # Invitation links from helloporch.store open the app. App Store profiles grant the capability as "*".
@@ -106,8 +108,20 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
             else:
                 require(ent.get(COMMUNICATES) is True, "App signature is missing driver communication")
         else:
-            require(ent.get(DRIVER) is True and ent.get(USB) == [{"idVendor": 6790, "idProduct": 29987}],
-                    "Driver signature must contain DriverKit and the exact Cell2Jack USB restriction")
+            # App Store validation rejects a signature that asks for anything but what Apple granted. Apple granted
+            # the Cell2Jack's vendor only. PID 0x7523 is a generic CH340, so the personality keeps the driver on
+            # this device: vendor, product, device release, configuration, and interface, on a USB interface.
+            require(ent.get(DRIVER) is True and ent.get(USB) == profile["Entitlements"].get(USB),
+                    "Driver signature must contain DriverKit and request exactly the USB access its profile grants")
+            personalities = info.get("IOKitPersonalities")
+            cell2jack = {"IOProviderClass": "IOUSBHostInterface", "idVendor": 6790, "idProduct": 29987,
+                         "bcdDevice": 612, "bConfigurationValue": 1, "bInterfaceNumber": 0}
+            require(isinstance(personalities, dict) and bool(personalities) and all(
+                isinstance(personality, dict) and all(personality.get(key) == value for key, value in cell2jack.items())
+                for personality in personalities.values()),
+                    "Driver must match only the Cell2Jack (VID 0x1A86, PID 0x7523, release 612, interface 0)")
+            # Settings → Porch shows the driver by this name, and App Store validation requires it.
+            require(bool(info.get("CFBundleDisplayName")), "Driver Info.plist needs a CFBundleDisplayName")
         with tempfile.TemporaryDirectory() as tmp:
             prefix = str(Path(tmp) / "signer-")
             subprocess.run(["codesign", "-d", f"--extract-certificates={prefix}", str(product)],

@@ -1,8 +1,9 @@
 # Development and family TestFlight builds
 
 Use the same feature branches and shared application code for both builds. Apple
-DriverKit distribution approval is pending; it must not block testing unrelated
-features through TestFlight.
+approved Cell2Jack DriverKit distribution on 2026-11-10 (request 8AR5R3NKZD), so
+`Porch` can now go to TestFlight too. Until a `Porch` TestFlight build has been
+checked on an iPhone and an iPad without an M chip, `PorchFamily` stays the default.
 
 | Use | Xcode scheme | Cell2Jack driver | Installation |
 | --- | --- | --- | --- |
@@ -44,9 +45,14 @@ invite testers or publish to the App Store. Keep existing internal/external
 TestFlight groups and beta review requirements.
 
 `variant=cell2jack` selects `Porch` and retains the stricter app/driver profile,
-certificate, signature, USB restriction, and matching build-number checks.
-It remains blocked until Apple approves DriverKit/USB distribution and the
-approved driver profile is configured as `IOS_DRIVER_APPSTORE_PROFILE`.
+certificate, signature, USB matching, and matching build-number checks. Its
+driver profile, **Porch Cell2Jack TestFlight**, was regenerated with Apple's grant
+on 2026-11-10 and is the `IOS_DRIVER_APPSTORE_PROFILE` secret. Apple granted the
+Cell2Jack's vendor (`idVendor` 6790) without a product, and App Store validation
+rejects a driver signature that asks for anything else, so the driver's
+distribution entitlement names only the vendor. The driver's `IOKitPersonalities`
+still match only the Cell2Jack (product 29987, device release 612, configuration 1,
+interface 0), and the check requires that.
 
 Do not strip a driver from an already signed archive or reuse a development
 profile for TestFlight. Build the intended variant from the start.

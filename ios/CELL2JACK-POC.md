@@ -75,6 +75,8 @@ entitlement. Its matching personality remains restricted to
 1A86:7523/interface 0; the Release entitlement file retains the vendor/product
 restriction and requires separate distribution approval.
 This does **not** establish approval for TestFlight/App Store distribution.
+Since Apple's vendor-only grant on 2026-11-10, the Release entitlement names only
+vendor 6790; see [Distribution approval](CELL2JACK-CALLS.md#distribution-approval-2026-11-10).
 
 | Target | Required entitlement |
 | --- | --- |

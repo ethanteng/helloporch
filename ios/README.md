@@ -104,7 +104,7 @@ Under **Calls → All calls**, **End calls after silence** and **After no one ta
 
 The normal **Porch** scheme now includes optional [Cell2Jack phone keypad support](CELL2JACK-CALLS.md). It starts **off**, under caregiver mode → **This iPad**. Standard USB/Bluetooth keyboards and numeric keypads keep their existing input path and need no Cell2Jack switch or driver. Touchscreen controls remain available alongside either input. On the bedside screen, the Phone keypad ready confirmation appears beneath Call someone for three seconds, then hides while input stays active.
 
-Cell2Jack requires an M-series iPad with iPadOS 16 or later and its driver enabled in Porch's app settings. The universal app keeps its existing iOS 15 minimum for ordinary keyboard/touch operation; USB driver communication is gated and IOKit is weak-linked. DriverKit distribution approval is still needed before distributing the driver through TestFlight or the App Store.
+Cell2Jack requires an M-series iPad with iPadOS 16 or later and its driver enabled in Porch's app settings. The universal app keeps its existing iOS 15 minimum for ordinary keyboard/touch operation; USB driver communication is gated and IOKit is weak-linked. Apple approved DriverKit distribution on 2026-11-10, so a `Porch` build can go to TestFlight. `PorchFamily` stays the default until that build is checked on an iPhone and an iPad without an M chip.
 
 The earlier [USB version/keypad test](CELL2JACK-POC.md), [no-call Preview](KEYPAD-PREVIEW.md), and `PorchCell2JackCalls` scheme remain as historical development fixtures. Build and install **Porch** for the integrated app.
 
@@ -113,6 +113,7 @@ Porch App Store profile. The app profile includes production push and driver
 communication, but the generated driver App Store profile contains neither
 `com.apple.developer.driverkit` nor `com.apple.developer.driverkit.transport.usb`.
 The signed archive attempt was rejected by Xcode for those missing entitlements.
-Apple DriverKit distribution authorization, a regenerated driver profile, and
-`IOS_DRIVER_APPSTORE_PROFILE` are still required. No Cell2Jack TestFlight upload
-has been validated. See [distribution evidence](CELL2JACK-CALLS.md#distribution-verification-2026-10-18).
+Apple approved DriverKit distribution on 2026-11-10. The regenerated driver profile
+is `IOS_DRIVER_APPSTORE_PROFILE`, and a verify-only archive passed App Store
+validation. The TestFlight upload is still the next step. See
+[distribution approval](CELL2JACK-CALLS.md#distribution-approval-2026-11-10).
