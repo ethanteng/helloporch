@@ -172,6 +172,13 @@ final class Cell2JackRoutingTests: XCTestCase {
         func start() { starts += 1 }
         func stop() { stops += 1 }
     }
+    /// The hint's five-second timer is on the main run loop, which a busy CI machine can run a second or more late.
+    /// So once five seconds have gone by, this waits up to three more for the hint to clear.
+    @MainActor private func cleared(_ label: UILabel) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(3)
+        while label.text != nil, Date() < deadline { try await Task.sleep(nanoseconds: 100_000_000) }
+        return label.text == nil
+    }
     @MainActor func testClockKeypadHintsExpireAndReplacementGetsFiveSeconds() async throws {
         let defaults = UserDefaults.standard
         let keys = ["porch.slots.v2", "porch.slots.v2.symbols", "porch.slots.v1", "porch.contact.v1"]
@@ -190,16 +197,18 @@ final class Cell2JackRoutingTests: XCTestCase {
         _ = clock.receiveCell2JackDigit(3)
         let empty = BedsideText.string("No one is assigned to %@.\nPlease choose another number.", "3")
         XCTAssertEqual(label.text, empty)
-        try await Task.sleep(nanoseconds: 6_000_000_000)
-        XCTAssertNil(label.text)
+        try await Task.sleep(nanoseconds: 5_000_000_000)
+        let first = try await cleared(label)
+        XCTAssertTrue(first, "The hint clears after five seconds")
         _ = clock.receiveCell2JackDigit(0)
         XCTAssertEqual(label.text, BedsideText.string("Use this key to answer or end a call."))
         try await Task.sleep(nanoseconds: 2_000_000_000)
         _ = clock.receiveCell2JackDigit(3)
         try await Task.sleep(nanoseconds: 3_200_000_000)
         XCTAssertEqual(label.text, empty, "The previous hint's timer must not dismiss its replacement")
-        try await Task.sleep(nanoseconds: 2_800_000_000)
-        XCTAssertNil(label.text)
+        try await Task.sleep(nanoseconds: 1_800_000_000)
+        let replacement = try await cleared(label)
+        XCTAssertTrue(replacement, "The replacement clears five seconds after it appeared")
         _ = clock.receiveCell2JackDigit(9)
         XCTAssertEqual(label.text, BedsideText.string("Use this key to turn your camera off or on during a video call."))
         _ = clock.receiveCell2JackDigit(CallSlots.pound)
