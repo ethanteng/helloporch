@@ -474,7 +474,14 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// can't wait for `viewDidLoad`.
     var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = "Connect the phone" } } }
     private enum Progress: Equatable { case waiting, connected, heard(String), done(String) }
+    /// Which path sent the key. The hang-up has to come back the same way: the adapter's
+    /// hang-up key is a keyboard key, and the driver's hang-up is not.
+    private enum HeardFrom { case keyboard, driver }
     private var progress = Progress.waiting
+    private var heardFrom: HeardFrom?
+    /// The connected wording named the driver. A retry that doesn't change this must not render:
+    /// rendering restarts the wait for the tips.
+    private var showedDriverReady = false
     private var checked: Bool { if case .done = progress { return true } else { return false } }
     private let keypad: Cell2JackKeypad
     /// Also tries a Cell2Jack plugged straight into the iPad, on the driver.
@@ -538,9 +545,24 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         progress = connected ? .connected : .waiting
         render(announce: false)
     }
+    /// The Cell2Jack is answering on the driver, as opposed to a keyboard the iPad can see.
+    private var driverReady: Bool { tryDriver && keypad.isReady }
     /// The phone can be heard: through the adapter, or on the driver.
-    private var connected: Bool { keyboardConnected() || (tryDriver && keypad.isReady) }
-    @objc private func keyboardChanged() { connectionChanged() }
+    private var connected: Bool { keyboardConnected() || driverReady }
+    /// The path that sent the key is still up, so its hang-up can still arrive.
+    private var heardPathIsUp: Bool {
+        switch heardFrom {
+        case .keyboard: return keyboardConnected()
+        case .driver: return driverReady
+        case nil: return false
+        }
+    }
+    @objc private func keyboardChanged() {
+        // Leaving, so a disconnect while the screen is going away doesn't put the waiting text back up.
+        // Appearing checks the keyboard again.
+        if leaving { return }
+        connectionChanged()
+    }
     @objc private func keypadChanged() {
         if leaving { return }
         // Turned on for them: from now on the phone is Mom's keypad, here and on the clock.
@@ -548,13 +570,28 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         connectionChanged()
     }
     /// The driver retries every few seconds on an iPad without an M chip, so only a change of state renders: rendering
-    /// restarts the wait for the tips.
+    /// restarts the wait for the tips. A keyboard that is still attached does not keep a driver key's hang-up, and the
+    /// driver staying up does not keep an adapter key's hang-up.
     private func connectionChanged(announce: Bool = true) {
         switch progress {
         case .done: break
         case .waiting: if connected { progress = .connected; render(announce: announce) }
-        // Unplugged, or the driver turned off, before the check finished: a hang-up meanwhile went unheard.
-        case .connected, .heard: if !connected { progress = .waiting; render(announce: announce) }
+        case .connected:
+            if !connected {
+                progress = .waiting
+                render(announce: announce)
+            } else if showedDriverReady != driverReady {
+                // A keyboard was already enough to leave waiting. The driver answering, or dropping while that
+                // keyboard remains, still changes what we tell them.
+                render(announce: announce)
+            }
+        case .heard:
+            // Unplugged, or the driver turned off, before the check finished: a hang-up meanwhile went unheard.
+            if !heardPathIsUp {
+                heardFrom = nil
+                progress = connected ? .connected : .waiting
+                render(announce: announce)
+            }
         }
     }
     // Keys come here while the screen is open, so pressing one never calls anyone.
@@ -588,17 +625,23 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         keys.resetKeys(); super.pressesCancelled(presses, with: event)
     }
     /// Shows the key the phone sent, without acting on it.
-    func receiveKey(_ digit: Int) {
+    func receiveKey(_ digit: Int, fromDriver: Bool = false) {
         guard !checked else { return }
         let symbol = CallSlots.symbol(for: digit)
         // Without hanging up on the receiver, there's no hang-up to check.
-        progress = keypad.receiverHangUp ? .heard(symbol) : .done("Porch heard \(symbol). The phone is ready.")
+        if keypad.receiverHangUp {
+            progress = .heard(symbol)
+            heardFrom = fromDriver ? .driver : .keyboard
+        } else {
+            heardFrom = nil
+            progress = .done("Porch heard \(symbol). The phone is ready.")
+        }
         render()
     }
     /// A Cell2Jack on the driver checks the phone here as well.
     func receiveCell2JackDigit(_ digit: Int) -> String {
         if checked { return "setup: phone already checked" }
-        receiveKey(digit)
+        receiveKey(digit, fromDriver: true)
         return "setup: heard \(CallSlots.symbol(for: digit))"
     }
     func receiveCell2JackHangUp() -> String {
@@ -609,9 +652,13 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     }
     private func render(announce: Bool = true) {
         switch progress {
-        case .waiting: status.text = "Waiting for the phone…"
+        case .waiting:
+            showedDriverReady = false
+            status.text = "Waiting for the phone…"
         // A keyboard may be something else, such as a keyboard case, so only the driver says the phone is connected.
-        case .connected: status.text = tryDriver && keypad.isReady ? "The phone is connected. Lift the receiver and press a key." : "Lift the receiver and press a key."
+        case .connected:
+            showedDriverReady = driverReady
+            status.text = driverReady ? "The phone is connected. Lift the receiver and press a key." : "Lift the receiver and press a key."
         case .heard(let symbol): status.text = "Porch heard \(symbol). Now put the receiver back."
         case .done(let text): status.text = text
         }

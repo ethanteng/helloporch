@@ -2186,6 +2186,50 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertFalse(step.keypad.trying)
     }
 
+    @MainActor func testTheDriverGivingUpDoesNotUndoAKeyFromTheAdapter() throws {
+        var keyboard = false
+        let step = try phoneStep { keyboard }
+        keyboard = true
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        step.screen.receiveKey(4)
+        step.connections()[0].update(.finished("No running Cell2Jack driver service"))
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 4. Now put the receiver back.", "The driver giving up doesn't undo a key from the adapter")
+        _ = step.screen.receiveCell2JackHangUp()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
+    }
+
+    @MainActor func testTheDriverAnsweringAfterAKeyboardStillSaysThePhoneIsConnected() throws {
+        var keyboard = true
+        let step = try phoneStep { keyboard }
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertEqual(phoneStatus(step.screen), "Lift the receiver and press a key.")
+        step.connections()[0].update(.ready)
+        XCTAssertEqual(phoneStatus(step.screen), "The phone is connected. Lift the receiver and press a key.")
+        XCTAssertTrue(step.keypad.enabled)
+        _ = step.screen.receiveCell2JackDigit(3)
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 3. Now put the receiver back.")
+        // The keyboard case cannot send the hang-up, so unplugging the Cell2Jack means the key has to be heard again.
+        step.connections()[0].update(.finished("Phone keypad stopped"))
+        XCTAssertEqual(phoneStatus(step.screen), "Lift the receiver and press a key.")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+    }
+
+    @MainActor func testUnpluggingTheAdapterDuringTheCheckKeepsADriverThatIsStillAnswering() throws {
+        var keyboard = true
+        let step = try phoneStep { keyboard }
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        step.connections()[0].update(.ready)
+        step.screen.receiveKey(4)
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 4. Now put the receiver back.")
+        keyboard = false
+        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
+        XCTAssertEqual(phoneStatus(step.screen), "The phone is connected. Lift the receiver and press a key.")
+        XCTAssertEqual(step.screen.receiveCell2JackHangUp(), "setup: hang-up before a key")
+        _ = step.screen.receiveCell2JackDigit(4)
+        _ = step.screen.receiveCell2JackHangUp()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
+    }
+
     @MainActor func testSetupAsksHowTheyCallWithTheTouchscreenToFallBackOn() throws {
         let setup = BedsideSetup(); setup.name = "Mom"
         let choice = SetupCallingViewController(setup)
