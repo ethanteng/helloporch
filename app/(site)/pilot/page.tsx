@@ -19,15 +19,16 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/pilot.jpg", alt: "HelloPorch: Join the Porch pilot. Beside the Porch prototype, a tablet and a big-button phone." },
 });
 
-// What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call. On an iPad it
-// also goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop off, so it
-// is free and has no link. The tablet has no price: most families use one they have. The links are the ones I use,
-// on Amazon, and the prices are roughly what they cost there.
+// What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call. On an iPad without
+// an M chip it also goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop
+// off, so it is free and has no link. An iPad with an M chip takes the Cell2Jack straight in, through Porch's USB
+// driver. The tablet has no price: most families use one they have. The links are the ones I use, on Amazon, and the
+// prices are roughly what they cost there.
 const KIT: { name: string; rule: string; price?: string; optional?: boolean; photo: string; href?: string }[] = [
   { name: "A tablet", rule: "iPad or Android", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Any brand", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Must be a Cell2Jack", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "A Porch phone adapter", rule: "For iPads only. I will mail this to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A Porch phone adapter", rule: "Only for iPads without an M chip. I will mail this to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", rule: "Any brand", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Any brand", ...shopping.stand, optional: true, photo: "/pilot/stand.jpg" },
 ];
@@ -60,7 +61,7 @@ const STEPS: { title: string; text: string[] }[] = [
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Do I need to buy a tablet from HelloPorch?",
-    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack and a USB-C hub. With an iPad, I’ll provide one more small adapter.",
+    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack and a USB-C hub. With an iPad that doesn’t have an M chip, I’ll provide one more small adapter.",
   },
   {
     q: "Can I use a tablet I already own?",
@@ -68,7 +69,7 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Do I need a special phone?",
-    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it. With an iPad, it also goes through a Porch phone adapter, which I’ll provide.",
+    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it. With an iPad that doesn’t have an M chip, it also goes through a Porch phone adapter, which I’ll provide.",
   },
   {
     q: "How do I put photos on the phone buttons?",
@@ -76,7 +77,11 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "What is the Porch phone adapter?",
-    a: "A small board that lets an iPad read the buttons on the phone through the Cell2Jack. I’ll provide it, already set up and tested. I’ll mail it to you, or drop it off if you live nearby. Android tablets don’t need it.",
+    a: "A small board that lets an iPad without an M chip read the buttons on the phone through the Cell2Jack. I’ll provide it, already set up and tested. I’ll mail it to you, or drop it off if you live nearby. iPads with an M chip and Android tablets don’t need it.",
+  },
+  {
+    q: "Does my iPad have an M chip?",
+    a: "The iPad Pro from 2021 on and the iPad Air from 2022 on have an M chip. The standard iPad and the iPad mini don’t. To see which iPad you have, open Settings, then General and About, and look at Model Name. If you’re unsure, ask me.",
   },
   {
     q: "How do family members call?",
@@ -137,8 +142,9 @@ export default function PilotPage() {
                 Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
               </p>
               <p className={styles.glanceText}>
-                For iPads, the phone also needs a Porch phone adapter. I’ll provide this, already set up and tested,
-                and mail it to you, or drop it off if you live nearby.
+                For iPads without an M chip, the phone also needs a Porch phone adapter. I’ll provide this, already
+                set up and tested, and mail it to you, or drop it off if you live nearby. An iPad with an M chip, such
+                as an iPad Pro from 2021 on or an iPad Air from 2022 on, doesn’t need it.
               </p>
               <p className={styles.glanceText}>
                 You may already have some of what you need. Here’s the hardware for the current pilot.

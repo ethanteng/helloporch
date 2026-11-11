@@ -11,8 +11,8 @@ export const metadata = guideMetadata(
 const kit: KitPart[] = [
   { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", ...shopping.phone, photo: "/pilot/phone.jpg" },
-  { name: "A Cell2Jack", rule: "Connects the phone to the adapter", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "The Porch phone adapter", rule: "I will mail this to you", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A Cell2Jack", rule: "Connects the phone to the iPad", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
+  { name: "The Porch phone adapter", rule: "Only for iPads without an M chip. I will mail this to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
@@ -64,11 +64,20 @@ const parts: GuidePart[] = [
           covers phones, for you and the rest of the family.
         </p>
         <p>
-          I’ll mail you the <strong>Porch phone adapter.</strong> Or, if you are in the Bay Area, I can bring it to
-          you in-person. You can set up the iPad now and connect the phone when the adapter arrives.
+          An iPad with an M chip takes the Cell2Jack straight into its hub. Other iPads need the{" "}
+          <strong>Porch phone adapter</strong> in between, which I’ll mail to you. Or, if you are in the Bay Area, I
+          can bring it to you in-person. You can set up the iPad now and connect the phone when the adapter arrives.
+        </p>
+        <p>
+          The iPad Pro from 2021 on and the iPad Air from 2022 on have an M chip. The standard iPad and the iPad mini
+          don’t. To see which iPad it is, open <UI>Settings</UI>, then <UI>General</UI> and <UI>About</UI>, and look at{" "}
+          <UI>Model Name</UI>. If you’re unsure, ask me.
         </p>
         <Tip>
-          <p>Allow about 30 minutes. Have the iPad, corded phone, adapter and your own phone nearby.</p>
+          <p>
+            Allow about 30 minutes. Have the iPad, corded phone, Cell2Jack and your own phone nearby, and the adapter
+            if the iPad needs one.
+          </p>
           <p>
             If you get stuck at any point, <Contact />.
           </p>
@@ -147,7 +156,8 @@ const parts: GuidePart[] = [
             Tap <UI>Continue</UI> and allow the microphone and camera.
           </li>
           <li>
-            Choose <UI>Corded phone</UI>. If the phone adapter hasn’t arrived yet, tap <UI>Do this later</UI>.
+            Choose <UI>Corded phone</UI>. If the iPad needs the phone adapter and it hasn’t arrived yet, tap{" "}
+            <UI>Do this later</UI>.
           </li>
         </ol>
       </>
@@ -162,7 +172,12 @@ const parts: GuidePart[] = [
           When Porch shows <UI>Connect the phone</UI>, follow the steps below. You’ll use the corded phone’s keys to
           make and answer calls. You’ll see and hear the caller on the iPad and speak into the iPad’s microphone.
         </p>
-        <Chain label="How it connects" items={["Corded phone", "Cell2Jack", "Porch phone adapter", "USB-C hub", "iPad"]} />
+        <p>How you plug the phone in depends on whether the iPad has an M chip.</p>
+        <h3>An iPad without an M chip</h3>
+        <Chain
+          label="How it connects without an M chip"
+          items={["Corded phone", "Cell2Jack", "Porch phone adapter", "USB-C hub", "iPad"]}
+        />
         <ol>
           <li>
             <strong>Plug the iPad’s charger into the hub first,</strong> and the hub into the iPad. The charger powers
@@ -173,6 +188,26 @@ const parts: GuidePart[] = [
             Plug the adapter’s USB-C cable into the hub. The adapter’s red light blinks, then stays on. That takes a few
             seconds.
           </li>
+        </ol>
+        <h3>An iPad with an M chip</h3>
+        <Chain label="How it connects with an M chip" items={["Corded phone", "Cell2Jack", "USB-C hub", "iPad"]} />
+        <ol>
+          <li>
+            <strong>Plug the iPad’s charger into the hub first,</strong> and the hub into the iPad. The charger powers
+            the Cell2Jack as well as the iPad.
+          </li>
+          <li>Plug the phone’s cord into the Cell2Jack, and the Cell2Jack’s USB cable into the hub.</li>
+          <li>
+            On the <UI>Connect the phone</UI> screen, tap <UI>Open Settings</UI>. Turn on{" "}
+            <UI>Cell2Jack USB Driver</UI>, then go back to Porch.
+          </li>
+          <li>
+            Unplug the Cell2Jack from the hub for ten seconds and plug it back in. Porch shows{" "}
+            <UI>The phone is connected.</UI>
+          </li>
+        </ol>
+        <h3>Then test the phone</h3>
+        <ol>
           <li>
             When Porch asks, lift the receiver and press a key, such as 3. Listen for{" "}
             <Says>Porch heard 3. Now put the receiver back.</Says> This is a test.
@@ -191,11 +226,16 @@ const parts: GuidePart[] = [
         />
         <Tip label="If the phone keys don’t respond">
           <ul>
-            <li>Check the hub’s charger is plugged in, so the iPad can power the adapter and the Cell2Jack.</li>
+            <li>Check the hub’s charger is plugged in, so the iPad can power the Cell2Jack, and the adapter if it has one.</li>
             <li>
               If the adapter’s light keeps blinking, unplug the Cell2Jack from it for ten seconds and plug it back in.
             </li>
-            <li>If the light never comes on, try another USB-C cable. Some cables only charge.</li>
+            <li>If the adapter’s light never comes on, try another USB-C cable. Some cables only charge.</li>
+            <li>
+              Plugged straight into the hub, the Cell2Jack works only on an iPad with an M chip and iPadOS 16 or later.
+              Tap <UI>Open Settings</UI> and check that <UI>Cell2Jack USB Driver</UI> is on. Then unplug the Cell2Jack for
+              ten seconds and plug it back in.
+            </li>
             <li>Check that the switch on the phone is set to <UI>T</UI> or <UI>Tone</UI>.</li>
             <li>The keys only work while the receiver is lifted.</li>
             <li>
@@ -430,9 +470,10 @@ const parts: GuidePart[] = [
               q: "The phone’s keys don’t do anything.",
               a: (
                 <p>
-                  Lift the receiver before pressing a key. Check that the adapter’s red light is on and the charger
-                  is plugged into the hub. Then open caregiver mode, <UI>This iPad</UI>, and run{" "}
-                  <UI>Connect the phone</UI> again.
+                  Lift the receiver before pressing a key, and check that the charger is plugged into the hub. If the
+                  iPad uses the adapter, check that its red light is on. Then open caregiver mode, <UI>This iPad</UI>,
+                  and run <UI>Connect the phone</UI> again. On an iPad with an M chip, tap <UI>Open Settings</UI> there
+                  and check that <UI>Cell2Jack USB Driver</UI> is on.
                 </p>
               ),
             },
@@ -522,7 +563,8 @@ export default function IOSGuide() {
         </>
       }
       kit={{
-        intro: "I’ll send you the Porch phone adapter. Have the other parts ready before you connect the phone. Prices are approximate.",
+        intro:
+          "If the iPad doesn’t have an M chip, I’ll send you the Porch phone adapter. Have the other parts ready before you connect the phone. Prices are approximate.",
         parts: kit,
         ready: [
           "Wi-Fi where your loved one lives, and its password.",
