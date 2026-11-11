@@ -21,7 +21,7 @@ function seen(row: PorchRow, now: number) {
   return ago(row.lastSeenAt, now);
 }
 
-const full = "The history this comes from was full, so earlier ones in this range may have dropped off.";
+const full = "Some of this range may be missing from Porch's records, so this is a minimum.";
 const total = (tally: Tally) => <span title={tally.partial ? full : undefined}>{tally.count}{tally.partial ? "+" : ""}</span>;
 // How many things, and from (or to) how many different people.
 function tallied(tally: Tally, people: (n: number) => string, extra?: string) {
@@ -119,7 +119,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
         <p className="note">
           Contacts are family members on the Porch app plus the phone numbers a household knows: saved on the keypad, approved to drop in, or allowed by a caregiver.
           A contact is active if they called, left a recorded message or texted. Calls come from each Porch&rsquo;s call history, which keeps its newest 100 calls for up to 90 days.
-          Texts, and who left phone voicemail, are counted from November 2026, when Porch started keeping them. A + means that history was full, so the count is a minimum.
+          Texts, and who left phone voicemail, are counted from November 2026, when Porch started keeping them. A + means some of that range may be missing from Porch&rsquo;s records, so the count is a minimum.
           Callers who hide their number aren&rsquo;t counted as senders.
         </p>
       </>}

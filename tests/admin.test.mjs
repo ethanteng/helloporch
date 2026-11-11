@@ -487,3 +487,43 @@ test('Activity marks counts as minimums once a history is full', async () => {
   // The newest 100 cover the last 100 hours, so a range inside them is whole.
   assert.deepEqual(await usage(50), { count: 50, people: 1, answered: 0 });
 });
+
+test('Activity counts archived message records, and marks counts that may miss archive pages nothing lists', async () => {
+  const f = await fixture();
+  const { session } = await f.session();
+  const household = async () => {
+    const made = await handleFamily(new Request('https://porch.example/api/family', { method: 'POST', headers: { 'X-Porch-Setup-Code': env.PORCH_CONTACT_SETUP_CODE },
+      body: JSON.stringify({ action: 'createHousehold', name: 'Mom', deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') }) }), { store: f.store, now: f.now }).then(r => r.json());
+    return made.state.householdID;
+  };
+  const day = 86400, media = new FakeMedia();
+  const [listed, unlisted] = [await household(), await household()];
+  f.advance(400 * day);
+  const record = (n, ago, extra = {}) => ({ id: `r-${n}`, kind: 'voicemail', mode: 'audio', contentType: 'audio/mpeg', pathname: 'x', durationSeconds: 5, sizeBytes: 1, createdAt: f.now() - ago, sentAt: f.now() - ago, state: 'played', ...extra });
+  const old = n => Array.from({ length: n }, (_, i) => record(i, (300 - i) * day));
+  const voicemail = id => receivePhoneVoicemail(f.store, media, id, { id: randomUUID(), callerNumber: '+14155550001', audio: new Uint8Array(10), durationSeconds: 4 }, f.now());
+  const usage = async (id, from) => (await porchUsage(session, f.store, { from: f.now() - from * day, to: f.now() + 1 }, f.now())).find(row => row.id === id);
+
+  // A record document made now lists its archive pages, so every record still counts once some move to one.
+  await f.store.create(`messages:${listed}:phone`, JSON.stringify({ records: old(200), archives: [] }));
+  assert.equal(await voicemail(listed), true);
+  const doc = JSON.parse(await f.store.get(`messages:${listed}:phone`));
+  assert.deepEqual([doc.records.length, doc.archives.length, doc.unlistedArchives], [101, 1, undefined]);
+  assert.deepEqual((await usage(listed, 365)).audioMessages, { count: 201, people: 1, voicemails: 201 });
+
+  // One made before Porch listed them may have older pages that can't be found, so a range reaching past its oldest
+  // record is only a minimum. One that big that never moved any yet might have, as far as the page can tell.
+  await f.store.create(`messages:${unlisted}:phone`, JSON.stringify({ records: old(200) }));
+  assert.deepEqual((await usage(unlisted, 365)).audioMessages, { count: 200, people: 0, voicemails: 200, partial: true });
+  assert.equal(await voicemail(unlisted), true);
+  const before = JSON.parse(await f.store.get(`messages:${unlisted}:phone`));
+  assert.deepEqual([before.records.length, before.archives.length, before.unlistedArchives], [101, 1, true]);
+  assert.deepEqual((await usage(unlisted, 365)).audioMessages, { count: 201, people: 1, voicemails: 201, partial: true });
+  assert.deepEqual((await usage(unlisted, 250)).audioMessages, { count: 151, people: 1, voicemails: 151 });
+  // A small one from before never had an archive page.
+  const raw = await f.store.get(`house:${listed}`), house = JSON.parse(raw), ben = randomUUID();
+  house.members.push({ id: ben, name: 'Ben', role: 'family', secretHash: 'x', permissions: { audio: true, video: true }, revoked: false, seenAt: f.now(), available: false });
+  await f.store.compareAndSet(`house:${listed}`, raw, JSON.stringify(house));
+  await f.store.create(`messages:${listed}:${ben}`, JSON.stringify({ records: old(100).map(r => ({ ...r, kind: 'message', mode: 'video' })) }));
+  assert.deepEqual((await usage(listed, 365)).videoMessages, { count: 100, people: 1 });
+});

@@ -1,6 +1,6 @@
 import { savedCalls } from "../family/call-log.ts";
 import type { Household } from "../family/household.ts";
-import { phoneSender, sentRecords, type MessageState } from "../family/messages.ts";
+import { allSentRecords, phoneSender, type MessageRecord, type MessageState } from "../family/messages.ts";
 import { readReceivedLog } from "../family/received-log.ts";
 import type { FamilyStore } from "../family/store.ts";
 import { readHouseholds } from "./porches.ts";
@@ -10,8 +10,9 @@ import { assertAdmin, type AdminSession } from "./session.ts";
 // keypad contents or what was said, and nothing that says who called whom.
 
 /** `count` things, from or to `people` different senders or recipients. Callers who hid their number count once each in
- * `count` but not in `people`. `partial`: the history this comes from has reached its size limit, so earlier ones in the
- * range may have dropped off and `count` is a minimum. */
+ * `count` but not in `people`. `partial`: earlier ones in the range may be missing, so `count` is a minimum. Call history
+ * and the received log drop their oldest entries once full, and a sender's oldest message records may be on archive
+ * pages made before Porch listed them. */
 export type Tally = { count: number; people: number; partial?: true };
 /** `contacts`: family members on the Porch app, and the phone numbers the household knows: saved on the bedside keypad,
  * approved to drop in, or allowed by a caregiver. `activeContacts`: those who called, left a recorded message or texted
@@ -86,11 +87,13 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
   const within = (at: number) => at >= from && at < to;
   const family = house.members.filter(m => m.role === "family");
   // Removed family members' messages are deleted with them, but any left still reached the bedside.
-  const [calls, received, phoneRecords, memberRecords] = await Promise.all([savedCalls(store, house, now), readReceivedLog(store, house.id, now),
-    sentRecords(store, house.id, phoneSender), Promise.all(family.map(async m => ({ id: m.id, records: await sentRecords(store, house.id, m.id) })))]);
-  // A full history whose oldest entry is inside the range may have dropped earlier ones in it.
+  const [calls, received, phone, members] = await Promise.all([savedCalls(store, house, now), readReceivedLog(store, house.id, now),
+    allSentRecords(store, house.id, phoneSender), Promise.all(family.map(async m => ({ id: m.id, ...await allSentRecords(store, house.id, m.id) })))]);
+  // A history that may be missing its oldest entries is whole for the range only if it still reaches back past its start.
   const callsPartial = calls.full && Math.min(...calls.entries.map(e => e.startedAt)) > from;
   const receivedPartial = received.full && Math.min(...received.entries.map(e => e.at)) > from;
+  const recordsPartial = ({ records, complete }: { records: MessageRecord[]; complete: boolean }) => !complete && Math.min(...records.map(r => r.createdAt)) > from;
+  const messagesPartial = members.some(recordsPartial), voicemailsPartial = recordsPartial(phone);
 
   const callsIn = new Set<string>(), callsOut = new Set<string>(), audio = new Set<string>(), video = new Set<string>(), texts = new Set<string>();
   const add = (people: Set<string>, key: string | undefined) => { if (key) people.add(key); };
@@ -102,14 +105,14 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
     callsInCount++; add(callsIn, key);
     if (call.outcome === "answered" || call.outcome === "ongoing") answered++;
   }
-  for (const { id, records } of memberRecords) for (const record of records) {
+  for (const { id, records } of members) for (const record of records) {
     // `to` marks the bedside's own messages for family, which family members' records don't have.
     if (record.to !== undefined || record.sentAt === undefined || !within(record.sentAt) || !reachedBedside.has(record.state)) continue;
     if (record.mode === "video") { videoCount++; video.add(memberKey(id)); } else { audioCount++; audio.add(memberKey(id)); }
   }
   // Phone voicemail records don't keep the caller's number. The received log does, for those left since it started.
   const callers = new Map(received.entries.filter(e => e.kind === "voicemail").map(e => [e.id, e.from]));
-  for (const record of phoneRecords) {
+  for (const record of phone.records) {
     if (record.sentAt === undefined || !within(record.sentAt) || !reachedBedside.has(record.state)) continue;
     audioCount++; voicemails++;
     const caller = callers.get(record.id);
@@ -126,6 +129,6 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
   const activeContacts = porchApp.filter(m => reachedOut.has(memberKey(m.id))).length + [...numbers].filter(n => reachedOut.has(numberKey(n))).length;
   return { id: house.id, contacts: { porchApp: porchApp.length, phoneNumbers: numbers.size }, activeContacts,
     callsReceived: { ...tallied(callsInCount, callsIn, callsPartial), answered },
-    audioMessages: { ...tallied(audioCount, audio, false), voicemails }, videoMessages: tallied(videoCount, video, false),
+    audioMessages: { ...tallied(audioCount, audio, messagesPartial || voicemailsPartial), voicemails }, videoMessages: tallied(videoCount, video, messagesPartial),
     texts: tallied(textCount, texts, receivedPartial), callsMade: tallied(callsOutCount, callsOut, callsPartial) };
 }
