@@ -18,6 +18,7 @@ import { pacificMidnight, porchUsage, usageRange } from '../lib/admin/usage.ts';
 import { recordCall } from '../lib/family/call-log.ts';
 import { receivePhoneVoicemail } from '../lib/family/messages.ts';
 import { receivedLogKey } from '../lib/family/received-log.ts';
+import { withheldCallerNumbers } from '../lib/family/screening.ts';
 import { receiveText } from '../lib/family/texts.ts';
 
 // Fake storage with lifetimes, so expired keys go away as in Redis. Nothing here reaches Redis, Twilio or LiveKit.
@@ -417,8 +418,8 @@ test('Activity counts contacts, what each Porch received and made, and who, with
   const bedside = house.members.find(m => m.role === 'bedside').id;
   const member = (name, revoked = false) => { const m = { id: randomUUID(), name, role: 'family', secretHash: 'x', permissions: { audio: true, video: true }, revoked, seenAt: f.now(), available: false }; house.members.push(m); return m.id; };
   const ann = member('Private Ann'), ben = member('Private Ben'), dee = member('Private Dee'), gone = member('Private Gone', true);
-  const keypad = '+14155550001', other = '+14155550002', allowed = '+14155550003', stranger = '+14155550004';
-  house.keypadNumbers = [keypad, other];
+  const keypad = '+14155550001', other = '+14155550002', allowed = '+14155550003', stranger = '+14155550004', withheld = [...withheldCallerNumbers][0];
+  house.keypadNumbers = [keypad, other, withheld];
   house.phoneDropIns = [{ number: keypad, name: 'Private keypad name' }];
   house.allowedCallers = [{ number: allowed, allowedAt: f.now() }];
   await f.store.compareAndSet(`house:${id}`, raw, JSON.stringify(house));
@@ -436,6 +437,7 @@ test('Activity counts contacts, what each Porch received and made, and who, with
   await call(7, 'outgoing', 'phone', other, 'dialed', day);
   await call(8, 'outgoing', 'phone', other, 'dialed', 3600);
   await call(9, 'incoming', 'porch', dee, 'answered', 20 * day);
+  await call(10, 'incoming', 'phone', withheld, 'missed', day);
   // Recorded messages, as their senders' records keep them. Unsent ones didn't count, nor do the bedside's own.
   const message = (n, mode, state, ago, extra = {}) => ({ id: `message-${n}`, kind: 'message', mode, contentType: 'audio/mp4', pathname: 'x', durationSeconds: 5, sizeBytes: 1, createdAt: f.now() - ago, sentAt: f.now() - ago, state, ...extra });
   await f.store.create(`messages:${id}:${ben}`, JSON.stringify({ records: [message(1, 'video', 'played', day), message(2, 'audio', 'queued', day), message(3, 'video', 'expired', 30 * day)] }));
@@ -462,16 +464,28 @@ test('Activity counts contacts, what each Porch received and made, and who, with
   const week = { from: f.now() - 7 * day, to: f.now() + 1 };
   const [row] = await porchUsage(session, f.store, week, f.now());
   assert.deepEqual(row, { id, contacts: { porchApp: 3, phoneNumbers: 3 }, activeContacts: 5,
-    callsReceived: { count: 5, people: 3, answered: 2 }, audioMessages: { count: 5, people: 3, voicemails: 3 }, videoMessages: { count: 1, people: 1 },
+    callsReceived: { count: 6, people: 3, answered: 2 }, audioMessages: { count: 5, people: 3, voicemails: 3 }, videoMessages: { count: 1, people: 1 },
     texts: { count: 3, people: 2 }, callsMade: { count: 3, people: 2 } });
   const shown = JSON.stringify(row);
-  for (const secret of ['Private', keypad, other, allowed, stranger, ann, ben, dee, gone, 'secretHash']) assert.ok(!shown.includes(secret), secret);
+  for (const secret of ['Private', keypad, other, allowed, stranger, withheld, ann, ben, dee, gone, 'secretHash']) assert.ok(!shown.includes(secret), secret);
 
   // Wider, the older call and video message count too. Before any of it, nothing does.
   const [month] = await porchUsage(session, f.store, { from: f.now() - 30 * day - 1, to: f.now() + 1 }, f.now());
-  assert.deepEqual([month.callsReceived.count, month.videoMessages.count, month.activeContacts], [6, 2, 6]);
+  assert.deepEqual([month.callsReceived.count, month.videoMessages.count, month.activeContacts], [7, 2, 6]);
   const [before] = await porchUsage(session, f.store, { from: start, to: start + day }, f.now());
   assert.deepEqual([before.callsReceived.count, before.audioMessages.count, before.texts.count, before.callsMade.count, before.activeContacts], [0, 0, 0, 0, 0]);
+
+  // Twilio retries the recording callback when the first request never answered. The voicemail is already saved;
+  // a lost activity-log write is filled in at the original time, and a further retry does not count it twice.
+  const recording = randomUUID(), sentAt = f.now();
+  const vm = now => receivePhoneVoicemail(f.store, media, id, { id: recording, callerNumber: allowed, audio: new Uint8Array(10), durationSeconds: 4 }, now);
+  assert.equal(await vm(sentAt), true);
+  f.store.values.delete(receivedLogKey(id));
+  f.advance(3600);
+  assert.equal(await vm(f.now()), true);
+  assert.deepEqual(JSON.parse(await f.store.get(receivedLogKey(id))).entries, [{ id: recording, kind: 'voicemail', from: allowed, at: sentAt }]);
+  assert.equal(await vm(f.now()), true);
+  assert.equal(JSON.parse(await f.store.get(receivedLogKey(id))).entries.length, 1);
 });
 
 test('Activity marks counts as minimums once a history is full', async () => {
