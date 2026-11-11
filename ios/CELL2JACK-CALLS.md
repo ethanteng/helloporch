@@ -357,9 +357,10 @@ export and signature checks, and App Store validation then reported two errors:
 
 The [build variants guide](BUILD-VARIANTS.md) describes `PorchFamily`, which shares
 feature sources/resources but excludes Cell2Jack transport, its driver and settings,
-and DriverKit signature entitlements. Until 2026-11-10 the TestFlight workflow
-defaulted to it. Since the approval it defaults to `variant=cell2jack`, the first
-upload being 0.1.0 (76.1), and `PorchFamily` is a fallback chosen by hand.
+and DriverKit signature entitlements. Until this change the TestFlight workflow
+defaulted to it. It now defaults to `variant=cell2jack`. The first driver upload,
+0.1.0 (76.1) on 2026-11-10, chose that variant by hand, and `PorchFamily` is a
+fallback chosen by hand.
 
 ## Picture phone pickup pulse 2026-10-22
 
