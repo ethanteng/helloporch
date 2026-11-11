@@ -2022,7 +2022,10 @@ final class BedsideSetupTests: XCTestCase {
         func start() { starts += 1 }
         func stop() { stops += 1 }
     }
-    @MainActor private func phoneStep() throws -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad, connections: () -> [Connection], done: () -> Int) {
+    /// Connect the phone on a build and iPad that also try the driver. `keyboard` says whether the iPad sees a keyboard,
+    /// such as the phone adapter.
+    @MainActor private func phoneStep(keyboard: @escaping () -> Bool = { false }) throws
+        -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad, connections: () -> [Connection], done: () -> Int) {
         let name = "setup-phone-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         addTeardownBlock { defaults.removePersistentDomain(forName: name) }
@@ -2032,7 +2035,7 @@ final class BedsideSetupTests: XCTestCase {
         }
         keypad.activate()
         let setup = BedsideSetup(); setup.name = "Mom"
-        let screen = SetupPhoneViewController(setup, keypad: keypad)
+        let screen = SetupPhoneViewController(setup, keypad: keypad, tryDriver: true, keyboardConnected: keyboard)
         screen.onContinue = { finished += 1 }
         screen.loadViewIfNeeded(); screen.viewDidAppear(false)
         return (screen, keypad, { connections }, { finished })
@@ -2161,17 +2164,42 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(step.connections()[0].stops, 0)
     }
 
+    @MainActor func testThePhoneScreenListensForTheAdapterWhileItTriesTheDriver() throws {
+        var keyboard = false
+        let step = try phoneStep { keyboard }
+        XCTAssertNotNil(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneSettings" },
+                        "A Cell2Jack plugged straight in needs the USB driver on in Settings")
+        XCTAssertEqual(step.connections().count, 1, "The screen tries the driver for a Cell2Jack plugged straight in")
+        // The adapter comes in while the driver finds nothing, as on an iPad without an M chip.
+        keyboard = true
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        XCTAssertEqual(phoneStatus(step.screen), "Lift the receiver and press a key.")
+        step.connections()[0].update(.finished("No running Cell2Jack driver service"))
+        XCTAssertEqual(phoneStatus(step.screen), "Lift the receiver and press a key.", "The driver giving up doesn't undo the adapter")
+        step.screen.receiveKey(4)
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 4. Now put the receiver back.")
+        _ = step.screen.receiveCell2JackHangUp()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
+        XCTAssertFalse(step.keypad.enabled, "Only a Cell2Jack on the driver turns the phone keypad on")
+        try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(step.done(), 1)
+        XCTAssertFalse(step.keypad.trying)
+    }
+
     @MainActor func testSetupAsksHowTheyCallWithTheTouchscreenToFallBackOn() throws {
         let setup = BedsideSetup(); setup.name = "Mom"
         let choice = SetupCallingViewController(setup)
         let navigation = UINavigationController(rootViewController: choice); choice.loadViewIfNeeded()
         XCTAssertTrue(labels(in: choice.view).contains { $0.text == "How will Mom call?" })
-        // The adapter needs no driver, so every build offers the corded phone and says what it needs.
+        // The adapter needs no driver, so every build offers the corded phone and says what it needs. Builds with the
+        // driver also say an iPad with an M chip can do without the adapter.
         let corded = try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.cordedPhone" })
-        XCTAssertEqual(corded.configuration?.subtitle, "A desk phone, through a Cell2Jack and the Porch phone adapter.")
+        XCTAssertEqual(corded.configuration?.subtitle, SetupPhoneViewController.offered
+                       ? "A desk phone, through a Cell2Jack and the Porch phone adapter. An iPad with an M chip doesn't need the adapter."
+                       : "A desk phone, through a Cell2Jack and the Porch phone adapter.")
         XCTAssertEqual(corded.configuration?.subtitleLineBreakMode, .byWordWrapping, "A one-line subtitle cuts off the parts it needs")
         corded.sendActions(for: .touchUpInside)
-        XCTAssertTrue(navigation.viewControllers.last is SetupAdapterPhoneViewController)
+        XCTAssertTrue(navigation.viewControllers.last is SetupPhoneViewController)
         navigation.popViewController(animated: false)
         let usb = try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.usbKeypad" })
         XCTAssertEqual(usb.configuration?.subtitleLineBreakMode, .byWordWrapping)
@@ -2255,8 +2283,9 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(keypadNav.viewControllers.first?.title, "Connect the USB keypad", "The view loads before onContinue is set")
     }
 
-    /// A key, then hanging up, as the driver's screen checks the phone. Returns the screen in a window on the app's scene.
-    @MainActor private func adapterStep(receiverHangUp: Bool = true) throws -> (screen: SetupAdapterPhoneViewController, keypad: Cell2JackKeypad,
+    /// Connect the phone on a build or device without the driver, so only the adapter can answer. Returns the screen in a
+    /// window on the app's scene.
+    @MainActor private func adapterStep(receiverHangUp: Bool = true) throws -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad,
                                                                              connected: (Bool) -> Void, done: () -> Int, window: UIWindow) {
         let name = "setup-adapter-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
@@ -2267,7 +2296,7 @@ final class BedsideSetupTests: XCTestCase {
         keypad.setReceiverHangUp(receiverHangUp)
         var connected = false, finished = 0
         let setup = BedsideSetup(); setup.name = "Mom"
-        let screen = SetupAdapterPhoneViewController(setup, keypad: keypad) { connected }
+        let screen = SetupPhoneViewController(setup, keypad: keypad, tryDriver: false) { connected }
         screen.onContinue = { finished += 1 }
         let navigation = UINavigationController(rootViewController: screen)
         let window = try showing(navigation)
@@ -2280,11 +2309,13 @@ final class BedsideSetupTests: XCTestCase {
     @MainActor func testTheAdapterPhoneScreenChecksAKeyThenTheReceiverGoingBack() throws {
         let step = try adapterStep()
         defer { step.window.isHidden = true }
-        let status = { self.labels(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.adapterStatus" }?.text }
-        let proceed = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.adapterDone" })
-        let later = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.adapterLater" })
+        let status = { self.phoneStatus(step.screen) }
+        let proceed = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" })
+        let later = try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" })
         XCTAssertTrue(labels(in: step.screen.view).contains { $0.text == "Connect the phone" })
-        XCTAssertEqual(status(), "Waiting for the adapter…")
+        XCTAssertFalse(buttons(in: step.screen.view).contains { $0.accessibilityIdentifier == "setup.phoneSettings" },
+                       "Without the driver there's no USB driver to turn on")
+        XCTAssertEqual(status(), "Waiting for the phone…")
         XCTAssertTrue(proceed.isHidden); XCTAssertFalse(later.isHidden)
         step.connected(true)
         XCTAssertEqual(status(), "Lift the receiver and press a key.")
@@ -2294,7 +2325,7 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertTrue(proceed.isHidden)
         // Unplugged before hanging up: the hang-up would go unheard, so the phone is checked again.
         step.connected(false)
-        XCTAssertEqual(status(), "Waiting for the adapter…")
+        XCTAssertEqual(status(), "Waiting for the phone…")
         step.connected(true)
         step.screen.receiveKey(3)
         // The adapter's hang-up key comes the way PorchWindow sends it, through the router to the visible screen.
@@ -2314,14 +2345,11 @@ final class BedsideSetupTests: XCTestCase {
         defer { step.window.isHidden = true }
         step.connected(true)
         step.screen.receiveKey(1)
-        XCTAssertEqual(labels(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.adapterStatus" }?.text, "Porch heard 1. The phone is ready.")
-        XCTAssertFalse(try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.adapterDone" }).isHidden)
-        // Builds with the driver also link to its screen, for a Cell2Jack plugged straight into the iPad.
-        let direct = buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.cell2jackDirect" }
-        XCTAssertEqual(direct != nil, SetupPhoneViewController.offered)
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard 1. The phone is ready.")
+        XCTAssertFalse(try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" }).isHidden)
         let skipped = try adapterStep()
         defer { skipped.window.isHidden = true }
-        try XCTUnwrap(buttons(in: skipped.screen.view).first { $0.accessibilityIdentifier == "setup.adapterLater" }).sendActions(for: .touchUpInside)
+        try XCTUnwrap(buttons(in: skipped.screen.view).first { $0.accessibilityIdentifier == "setup.phoneLater" }).sendActions(for: .touchUpInside)
         XCTAssertEqual(skipped.done(), 1, "Do this later goes on without the check")
     }
 
@@ -2341,10 +2369,11 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertFalse(keypad.receiverHangUp)
         try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectPhone" }).sendActions(for: .touchUpInside)
         let phoneNav = try XCTUnwrap(device.presentedViewController as? UINavigationController)
-        XCTAssertTrue(phoneNav.viewControllers.first is SetupAdapterPhoneViewController)
+        XCTAssertTrue(phoneNav.viewControllers.first is SetupPhoneViewController)
         XCTAssertEqual(phoneNav.viewControllers.first?.title, "Connect the phone", "The view loads before onContinue is set")
-        XCTAssertEqual(buttons(in: device.view).contains { $0.accessibilityIdentifier == "device.connectCell2Jack" }, SetupPhoneViewController.offered)
-        // Connect the Cell2Jack sets onContinue after building the navigation, which can load the view first. Whether
+        XCTAssertFalse(buttons(in: device.view).contains { $0.accessibilityIdentifier == "device.connectCell2Jack" },
+                       "Connect the phone covers a Cell2Jack on the driver too")
+        // Connect the phone sets onContinue after building the navigation, which can load the view first. Whether
         // it does depends on timing, so load it here: that's the case the title has to survive.
         let driver = SetupPhoneViewController(BedsideSetup())
         driver.loadViewIfNeeded()
