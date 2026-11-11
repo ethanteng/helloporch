@@ -79,7 +79,7 @@ Problems that appear as soon as there's a second real family:
         - Plug the phone into the Cell2Jack, the Cell2Jack into the adapter, and the adapter into the iPad's hub.
         - Lift the receiver and press a key: "Porch heard 3."
         - Put the receiver back: "Porch heard you hang up."
-        - Builds with the driver also link to the driver's steps, for a Cell2Jack plugged straight into an M-series iPad.
+        - On an iPad, builds with the driver also listen for a Cell2Jack plugged straight in, which needs an M chip, and turn the phone keypad on if that answers. Porch goes on with whichever answers.
       - **Connect the USB keypad:** plug it in and press a number key: "Porch heard 3. The keypad is ready."
    6. **Add your phone.** A QR code to scan with their iPhone camera, or **Send an invite instead**. This first invite has caregiver access on.
    7. **Done**, showing the number and how calls to it work: "Only people on the keypad and numbers you allow can call this number. Anyone else is turned away and listed under Blocked numbers, where you can allow them." Then **Put people on the keypad**.
