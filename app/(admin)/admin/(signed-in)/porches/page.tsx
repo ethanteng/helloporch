@@ -22,7 +22,10 @@ function seen(row: PorchRow, now: number) {
 }
 
 const full = "Some of this range may be missing from Porch's records, so this is a minimum.";
-const total = (tally: Tally) => <span title={tally.partial ? full : undefined}>{tally.count}{tally.partial ? "+" : ""}</span>;
+const minimum = (count: number, partial?: boolean) => <span title={partial ? full : undefined}>{count}{partial ? "+" : ""}</span>;
+const total = (tally: Tally) => minimum(tally.count, tally.partial);
+// Active contacts are counted from the same histories. When any of those is a minimum, so is this.
+const activePartial = (u: UsageRow) => !!(u.callsReceived.partial || u.audioMessages.partial || u.videoMessages.partial || u.texts.partial);
 // How many things, and from (or to) how many different people.
 function tallied(tally: Tally, people: (n: number) => string, extra?: string) {
   return <>{total(tally)}{tally.count ? <span className="sub">{people(tally.people)}</span> : null}{extra && <span className="sub">{extra}</span>}</>;
@@ -91,7 +94,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                 <tr key={row.id}>
                   <td title={row.id}>{row.bedsideName}{row.invitationLabel && <span className="sub">{row.invitationLabel}</span>}</td>
                   <td>{u.contacts.porchApp + u.contacts.phoneNumbers}<span className="sub">{u.contacts.porchApp} on Porch, {plural(u.contacts.phoneNumbers, "number", "numbers")}</span></td>
-                  <td>{u.activeContacts}<span className="sub">of {u.contacts.porchApp + u.contacts.phoneNumbers}</span></td>
+                  <td>{minimum(u.activeContacts, activePartial(u))}<span className="sub">of {u.contacts.porchApp + u.contacts.phoneNumbers}</span></td>
                   <td>{tallied(u.callsReceived, n => `from ${plural(n, "caller", "callers")}`, u.callsReceived.count ? `${u.callsReceived.answered} answered` : undefined)}</td>
                   <td>{tallied(u.audioMessages, n => `from ${plural(n, "sender", "senders")}`, u.audioMessages.voicemails ? plural(u.audioMessages.voicemails, "phone voicemail", "phone voicemails") : undefined)}</td>
                   <td>{tallied(u.videoMessages, n => `from ${plural(n, "sender", "senders")}`)}</td>
@@ -105,7 +108,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                 <tr>
                   <th scope="row">All Porches</th>
                   <td>{listed.reduce((n, { u }) => n + u.contacts.porchApp + u.contacts.phoneNumbers, 0)}</td>
-                  <td>{listed.reduce((n, { u }) => n + u.activeContacts, 0)}</td>
+                  <td>{minimum(listed.reduce((n, { u }) => n + u.activeContacts, 0), shown.some(activePartial))}</td>
                   <td>{total(sum(shown, u => u.callsReceived))}</td>
                   <td>{total(sum(shown, u => u.audioMessages))}</td>
                   <td>{total(sum(shown, u => u.videoMessages))}</td>
