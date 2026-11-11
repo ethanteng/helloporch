@@ -51,7 +51,8 @@ on 2026-11-10 and is the `IOS_DRIVER_APPSTORE_PROFILE` secret. Apple granted the
 Cell2Jack's vendor (`idVendor` 6790) without a product, and App Store validation
 rejects a driver signature that asks for anything else, so the driver's
 distribution entitlement names only the vendor. The driver's `IOKitPersonalities`
-still match only the Cell2Jack (product 29987), and the check requires that.
+still match only the Cell2Jack (product 29987, device release 612, configuration 1,
+interface 0), and the check requires that.
 
 Do not strip a driver from an already signed archive or reuse a development
 profile for TestFlight. Build the intended variant from the start.

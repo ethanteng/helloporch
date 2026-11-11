@@ -107,13 +107,17 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
                 require(ent.get(COMMUNICATES) is True, "App signature is missing driver communication")
         else:
             # App Store validation rejects a signature that asks for anything but what Apple granted. Apple granted
-            # the Cell2Jack's vendor, so the driver's matching, not this entitlement, keeps it to the Cell2Jack.
+            # the Cell2Jack's vendor only. PID 0x7523 is a generic CH340, so the personality keeps the driver on
+            # this device: vendor, product, device release, configuration, and interface, on a USB interface.
             require(ent.get(DRIVER) is True and ent.get(USB) == profile["Entitlements"].get(USB),
                     "Driver signature must contain DriverKit and request exactly the USB access its profile grants")
-            personalities = info.get("IOKitPersonalities", {})
-            require(bool(personalities) and all(p.get("idVendor") == 6790 and p.get("idProduct") == 29987
-                                                for p in personalities.values()),
-                    "Driver must match only the Cell2Jack (VID 0x1A86, PID 0x7523)")
+            personalities = info.get("IOKitPersonalities")
+            cell2jack = {"IOProviderClass": "IOUSBHostInterface", "idVendor": 6790, "idProduct": 29987,
+                         "bcdDevice": 612, "bConfigurationValue": 1, "bInterfaceNumber": 0}
+            require(isinstance(personalities, dict) and bool(personalities) and all(
+                isinstance(personality, dict) and all(personality.get(key) == value for key, value in cell2jack.items())
+                for personality in personalities.values()),
+                    "Driver must match only the Cell2Jack (VID 0x1A86, PID 0x7523, release 612, interface 0)")
             # Settings → Porch shows the driver by this name, and App Store validation requires it.
             require(bool(info.get("CFBundleDisplayName")), "Driver Info.plist needs a CFBundleDisplayName")
         with tempfile.TemporaryDirectory() as tmp:

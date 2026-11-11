@@ -315,7 +315,8 @@ APNs, app driver communication, and the driver's approved hardware grant; and
 checks the actual signatures and embedded profiles in both archive and exported
 IPA before App Store validation. The driver signature must request exactly the USB
 access its profile grants, and the driver's personalities must match only the
-Cell2Jack's VID/PID. A global product bundle ID override was removed because it
+Cell2Jack (vendor 6790, product 29987, device release 612, configuration 1, interface 0).
+A global product bundle ID override was removed because it
 would also rename the driver. Nine provisioning regressions cover missing grants,
 wildcard development permissions, incorrect devices/platforms/IDs/certificates,
 and a valid restricted or vendor-level distribution grant. These checks are also
@@ -347,7 +348,7 @@ export and signature checks, and App Store validation then reported two errors:
 - The driver's signature asked for vendor 6790 *and* product 29987, which the
   vendor-only grant doesn't contain. The distribution entitlement now names only
   the vendor. Matching still requires the Cell2Jack's vendor, product, device
-  release and interface.
+  release, configuration, and interface.
 - The driver's Info.plist had no `CFBundleDisplayName`. It is now **Cell2Jack USB
   Driver**, which Settings → Porch shows, and `OSBundleUsageDescription` describes
   the driver instead of the early firmware test.

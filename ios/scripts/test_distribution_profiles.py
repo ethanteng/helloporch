@@ -121,18 +121,22 @@ class DistributionProfileTests(unittest.TestCase):
         # Apple's grant on 2026-11-10 covers the Cell2Jack's vendor, without a product.
         driver_profile = profile(True)
         driver_profile["Entitlements"][USB] = [{"idVendor": 6790}]
-        cases = [("granted", [{"idVendor": 6790}], 29987, True, None),
-                 ("product in signature", [{"idVendor": 6790, "idProduct": 29987}], 29987, True, "exactly the USB access"),
-                 ("other product", [{"idVendor": 6790}], 1, True, "only the Cell2Jack"),
-                 ("no display name", [{"idVendor": 6790}], 29987, False, "CFBundleDisplayName")]
-        for name, signed_usb, product, display_name, error in cases:
+        cell2jack = {"IOProviderClass": "IOUSBHostInterface", "idVendor": 6790, "idProduct": 29987,
+                     "bcdDevice": 612, "bConfigurationValue": 1, "bInterfaceNumber": 0}
+        cases = [("granted", [{"idVendor": 6790}], cell2jack, True, None),
+                 ("product in signature", [{"idVendor": 6790, "idProduct": 29987}], cell2jack, True, "exactly the USB access"),
+                 ("other product", [{"idVendor": 6790}], {**cell2jack, "idProduct": 1}, True, "only the Cell2Jack"),
+                 ("no device release", [{"idVendor": 6790}],
+                  {key: value for key, value in cell2jack.items() if key != "bcdDevice"}, True, "only the Cell2Jack"),
+                 ("no display name", [{"idVendor": 6790}], cell2jack, False, "CFBundleDisplayName")]
+        for name, signed_usb, personality, display_name, error in cases:
             with self.subTest(name), tempfile.TemporaryDirectory() as folder:
                 bundle = Path(folder)
                 dext = bundle / "SystemExtensions" / (DRIVER_ID + ".dext")
                 dext.mkdir(parents=True)
                 (bundle / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": APP, "CFBundleVersion": "7"}))
                 driver_info = {"CFBundleIdentifier": DRIVER_ID, "CFBundleVersion": "7",
-                               "IOKitPersonalities": {"PorchCell2JackDriver": {"idVendor": 6790, "idProduct": product}}}
+                               "IOKitPersonalities": {"PorchCell2JackDriver": personality}}
                 if display_name:
                     driver_info["CFBundleDisplayName"] = "Cell2Jack USB Driver"
                 (dext / "Info.plist").write_bytes(plistlib.dumps(driver_info))
