@@ -213,7 +213,12 @@ export function voicemailOpen(house: Household, callerNumber: string | undefined
 export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStore, householdID: string, recording: { id: string; callerNumber?: string; callerVerified?: boolean; audio: Uint8Array; durationSeconds: number }, now: number) {
   const { id, callerNumber, callerVerified, audio } = recording;
   const existing = (await sentRecords(store, householdID, phoneSender)).find(r => r.id === id);
-  if (existing && existing.state !== "uploading") return existing.state === "queued";
+  if (existing && existing.state !== "uploading") {
+    // Twilio repeats the recording callback when the first request never answered. The voicemail is already saved;
+    // write the activity log anyway, at the original time, in case that write was what the first request lost.
+    if (existing.sentAt !== undefined) await recordReceived(store, householdID, { id, kind: "voicemail", ...(callerNumber ? { from: callerNumber } : {}), at: existing.sentAt }, now);
+    return existing.state === "queued";
+  }
   requireValue(audio.byteLength > 0 && audio.byteLength <= messageLimits.audioBytes, "This recording is too large.", 413);
   const durationSeconds = Math.max(1, Math.min(messageLimits.durationSeconds, Math.round(recording.durationSeconds)));
   const record: MessageRecord = { id, kind: "voicemail", mode: "audio", contentType: "audio/mpeg", pathname: `messages/${householdID}/${id}.mp3`, durationSeconds, sizeBytes: audio.byteLength, createdAt: now, state: "uploading" };
