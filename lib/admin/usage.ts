@@ -2,6 +2,7 @@ import { savedCalls } from "../family/call-log.ts";
 import type { Household } from "../family/household.ts";
 import { allSentRecords, phoneSender, type MessageRecord, type MessageState } from "../family/messages.ts";
 import { readReceivedLog } from "../family/received-log.ts";
+import { withheldCallerNumbers } from "../family/screening.ts";
 import type { FamilyStore } from "../family/store.ts";
 import { readHouseholds } from "./porches.ts";
 import { assertAdmin, type AdminSession } from "./session.ts";
@@ -76,6 +77,8 @@ export function usageRange(params: { range?: Param; from?: Param; to?: Param }, 
 // before it was played doesn't count, nor does one that never finished uploading.
 const reachedBedside = new Set<MessageState>(["queued", "played", "expired", "removed"]);
 const memberKey = (id: string) => `member:${id}`, numberKey = (number: string) => `number:${number}`;
+// Twilio's stand-ins for a withheld caller ID are not a person, and not a number the household knows.
+const realNumber = (number?: string): number is string => !!number && !withheldCallerNumbers.has(number);
 const tallied = (count: number, people: Set<string>, partial: boolean): Tally => ({ count, people: people.size, ...(partial ? { partial: true as const } : {}) });
 
 export async function porchUsage(session: AdminSession, store: FamilyStore, range: UsageRange, now: number): Promise<UsageRow[]> {
@@ -100,7 +103,7 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
   let callsInCount = 0, answered = 0, callsOutCount = 0, audioCount = 0, voicemails = 0, videoCount = 0, textCount = 0;
   for (const call of calls.entries) {
     if (!within(call.startedAt)) continue;
-    const key = call.memberID ? memberKey(call.memberID) : call.number ? numberKey(call.number) : undefined;
+    const key = call.memberID ? memberKey(call.memberID) : realNumber(call.number) ? numberKey(call.number) : undefined;
     if (call.direction === "outgoing") { callsOutCount++; add(callsOut, key); continue; }
     callsInCount++; add(callsIn, key);
     if (call.outcome === "answered" || call.outcome === "ongoing") answered++;
@@ -116,15 +119,15 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
     if (record.sentAt === undefined || !within(record.sentAt) || !reachedBedside.has(record.state)) continue;
     audioCount++; voicemails++;
     const caller = callers.get(record.id);
-    if (caller) audio.add(numberKey(caller));
+    if (realNumber(caller)) audio.add(numberKey(caller));
   }
   for (const entry of received.entries) {
     if (entry.kind !== "text" || !within(entry.at)) continue;
-    textCount++; if (entry.from) texts.add(numberKey(entry.from));
+    textCount++; if (realNumber(entry.from)) texts.add(numberKey(entry.from));
   }
 
   const porchApp = family.filter(m => !m.revoked);
-  const numbers = new Set([...house.keypadNumbers ?? [], ...(house.phoneDropIns ?? []).map(p => p.number), ...(house.allowedCallers ?? []).map(c => c.number)]);
+  const numbers = new Set([...house.keypadNumbers ?? [], ...(house.phoneDropIns ?? []).map(p => p.number), ...(house.allowedCallers ?? []).map(c => c.number)].filter(realNumber));
   const reachedOut = new Set([...callsIn, ...audio, ...video, ...texts]);
   const activeContacts = porchApp.filter(m => reachedOut.has(memberKey(m.id))).length + [...numbers].filter(n => reachedOut.has(numberKey(n))).length;
   return { id: house.id, contacts: { porchApp: porchApp.length, phoneNumbers: numbers.size }, activeContacts,
