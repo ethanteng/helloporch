@@ -1,15 +1,32 @@
 // Operator-only: node --env-file=.env.local scripts/prepare-app-review.mjs [origin]
+// For the driver-free PorchFamily fallback, set PORCH_DISTRIBUTION_VARIANT=family, as for testflight.sh.
 // Writes private drafts to .app-review/. Never prints links or the recovery secret.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-export const betaDescription = `Porch helps people who find smartphones difficult stay connected with their family through a simple bedside display and large call buttons.
+// What each TestFlight variant says about the Cell2Jack driver: cell2jack is the default build, family the fallback.
+const driverCopy = {
+  cell2jack: {
+    description: 'On an iPad with an M chip, an optional driver lets a corded phone plugged into a Cell2Jack act as the keypad; any iPad can use the Porch phone adapter instead.',
+    notes: 'This build includes an optional DriverKit driver for the Cell2Jack, a USB adapter that lets a corded desk phone act as the keypad on an iPad with an M chip. It stays off unless turned on in Settings → Porch, and the review needs no hardware.',
+  },
+  family: {
+    description: 'This build does not include the Cell2Jack driver; any iPad can use the Porch phone adapter for a corded phone.',
+    notes: 'This build excludes the optional Cell2Jack driver.',
+  },
+};
+function driver(variant) {
+  if (!Object.hasOwn(driverCopy, variant)) throw new Error('PORCH_DISTRIBUTION_VARIANT must be cell2jack or family.');
+  return driverCopy[variant];
+}
 
-One app has two modes: a bedside clock with configurable contact buttons, and a family mode for iPhone or iPad. A caregiver pairs devices using private invitations, chooses a six-digit PIN, and manages contacts, names, photos, calling preferences and separately approved audio/video drop-in. Touchscreen controls work without an accessory; standard USB/Bluetooth keypads are optional. On an iPad with an M chip, an optional driver lets a corded phone plugged into a Cell2Jack act as the keypad; any iPad can use the Porch phone adapter instead.
+export const betaDescription = (variant = 'cell2jack') => `Porch helps people who find smartphones difficult stay connected with their family through a simple bedside display and large call buttons.
+
+One app has two modes: a bedside clock with configurable contact buttons, and a family mode for iPhone or iPad. A caregiver pairs devices using private invitations, chooses a six-digit PIN, and manages contacts, names, photos, calling preferences and separately approved audio/video drop-in. Touchscreen controls work without an accessory; standard USB/Bluetooth keypads are optional. ${driver(variant).description}
 
 Test voice/video calls in both directions, incoming calls while a family phone is locked, caregiver permissions, drop-in announcements and cancellation, and audio/video messages in both directions. Phone fallback can call a caregiver-configured regular phone number. An internet connection is required. Porch is not an emergency calling or monitoring service.`;
 
-export function reviewNotes(links, expiresAt) {
+export function reviewNotes(links, expiresAt, variant = 'cell2jack') {
   const notes = `ACCESS FOR GUIDELINE 2.1(a)
 Porch uses device invitations and a caregiver PIN instead of a username/password. The private activation links below grant setup of fresh test families, separate from our users. Each link works for one bedside device; use a backup for another install. They expire ${new Date(expiresAt * 1000).toISOString().slice(0, 10)}. Pairing then stays saved. No email, SMS, developer account or operator assistance is needed.
 
@@ -26,7 +43,7 @@ Use TWO devices running this build: an iPad (bedside) and an iPhone or second iP
 Private bedside activation links:
 ${links.map((link, index) => `${index + 1}. ${link}`).join('\n')}
 
-If a link was already used on a different device, use the next backup. Keep the bedside open/unlocked for outgoing calls and drop-in. Allow microphone for voice and camera for video; camera stays off for voice calls. Phone/SIP fallback is voice only. This build includes an optional DriverKit driver for the Cell2Jack, a USB adapter that lets a corded desk phone act as the keypad on an iPad with an M chip. It stays off unless turned on in Settings → Porch, and the review needs no hardware.`;
+If a link was already used on a different device, use the next backup. Keep the bedside open/unlocked for outgoing calls and drop-in. Allow microphone for voice and camera for video; camera stays off for voice calls. Phone/SIP fallback is voice only. ${driver(variant).notes}`;
   if (notes.length > 4000) throw new Error('Review notes exceed App Store Connect’s 4,000-character limit.');
   return notes;
 }
@@ -39,8 +56,9 @@ export function reviewOrigin(value) {
   return url.origin;
 }
 
-export async function prepareReviewAccess({ origin, operatorSecret, fetcher = fetch, now = () => Math.floor(Date.now() / 1000) }) {
+export async function prepareReviewAccess({ origin, operatorSecret, variant = 'cell2jack', fetcher = fetch, now = () => Math.floor(Date.now() / 1000) }) {
   origin = reviewOrigin(origin);
+  driver(variant);
   if (typeof operatorSecret !== 'string' || operatorSecret.length < 16) throw new Error('Load PORCH_CONTACT_SETUP_CODE privately using --env-file, never a command-line argument.');
   const healthResponse = await fetcher(new URL('/api/calls/health', origin), { redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(15000) });
   if (!healthResponse.ok) throw new Error('Calling server is not ready; do not submit for review.');
@@ -70,7 +88,7 @@ export async function prepareReviewAccess({ origin, operatorSecret, fetcher = fe
     links.push(link.href); expirations.push(data.expiresAt);
   }
   const expiresAt = Math.min(...expirations);
-  return { origin, commit: health.commit, expiresAt, activationLinks: links, reviewNotes: reviewNotes(links, expiresAt), betaDescription,
+  return { origin, commit: health.commit, expiresAt, activationLinks: links, variant, reviewNotes: reviewNotes(links, expiresAt, variant), betaDescription: betaDescription(variant),
     status: 'DRAFT: complete two-device QA with a separate activation pack before sharing with Apple' };
 }
 
@@ -80,7 +98,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     // Exclusive directory creation avoids overwriting or following a prior output symlink.
     // Move a QA pack somewhere private before generating the final review pack.
     await mkdir('.app-review', { mode: 0o700 });
-    const pack = await prepareReviewAccess({ origin, operatorSecret: process.env.PORCH_CONTACT_SETUP_CODE });
+    const pack = await prepareReviewAccess({ origin, operatorSecret: process.env.PORCH_CONTACT_SETUP_CODE, variant: process.env.PORCH_DISTRIBUTION_VARIANT || 'cell2jack' });
     for (const [file, content] of [['access.json', JSON.stringify(pack, null, 2)], ['review-notes.txt', pack.reviewNotes], ['beta-description.txt', pack.betaDescription]]) {
       await writeFile(`.app-review/${file}`, content + '\n', { mode: 0o600, flag: 'wx' });
     }

@@ -77,6 +77,8 @@ After deploying the server change, prepare a private pack from the repository ro
 node --env-file=.env.local scripts/prepare-app-review.mjs
 ```
 
+The drafts describe the default `cell2jack` build, with its optional driver. For the driver-free `PorchFamily` fallback, run it with `PORCH_DISTRIBUTION_VARIANT=family` so the notes and beta description say the build has no driver.
+
 The local environment needs the calling server's operator recovery secret, `PORCH_CONTACT_SETUP_CODE`. The script checks the server's calling/storage/push readiness, then creates one review activation and two backups. It rejects older servers that still issue only 24-hour links, refuses redirects, and writes `access.json`, `review-notes.txt`, and `beta-description.txt` inside ignored `.app-review/` with private file permissions. It never prints the links or recovery secret, changes App Store Connect, or places calls. A failed run may leave an incomplete private directory; inspect it before retrying. The readiness check verifies configuration and storage, not successful calls, push delivery or message playback.
 
 1. Generate a **QA pack first**. Move it to a private location outside the repository. On two clean devices running the exact proposed TestFlight build, follow its review notes from an unpaired state. Use fictional names, your own test media and consenting test phone numbers. Test both iPad and iPhone mode-switch paths, setup, inviting/linking, both calling directions, locked-phone ringing, permitted/denied drop-in, messages both ways, photo/profile changes and caregiver settings. Test phone fallback only with an authorized number. Reopen both apps to verify saved pairing. Do not use a real family or the operator secret as the reviewer account.

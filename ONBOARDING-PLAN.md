@@ -21,7 +21,7 @@ Settled on 2026-10-24.
 | --- | --- |
 | Cell2Jack for every family | Part of setup, with **Do this later** for families still waiting on hardware. The touchscreen works meanwhile, and the checklist reminds them |
 | Invitation lifetime | 14 days |
-| TestFlight builds after the driver is approved | One `Porch` build with the driver for every device; `PorchFamily` retires |
+| TestFlight builds after the driver is approved | One `Porch` build with the driver for every device; `PorchFamily` retires (until CI's iPhone tests move to `Porch`, it stays as a fallback chosen by hand) |
 | Offline households | Keep the number until a caregiver or the administrator deletes the household. Nothing is deleted or released automatically |
 | Administration | A protected admin page at `admin.helloporch.store`, signed in with a password, for use from a computer. Nothing for the administrator in the phone app. A password replaced the planned passkey on 2026-10-29 |
 | Keypad backup | Yes. The bedside keeps a copy of its keypad and settings on the server, restored on a replacement iPad (phase 6) |
