@@ -8,7 +8,7 @@ if [[ "$verify_only" != true && "$verify_only" != false ]]; then
   exit 1
 fi
 export IOS_DRIVER_BUNDLE_ID="${IOS_DRIVER_BUNDLE_ID:-com.ethanteng.helloporch.usbdriver}"
-variant="${PORCH_DISTRIBUTION_VARIANT:-family}"
+variant="${PORCH_DISTRIBUTION_VARIANT:-cell2jack}"
 case "$variant" in
   family) scheme=PorchFamily; product=PorchFamily ;;
   cell2jack) scheme=Porch; product=Porch ;;

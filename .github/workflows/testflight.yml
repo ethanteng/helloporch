@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: Family excludes Cell2Jack; Cell2Jack requires approved driver distribution entitlements
+        description: Cell2Jack is the app with its USB driver, for every device; family is the driver-free fallback
         type: choice
-        options: [family, cell2jack]
-        default: family
+        options: [cell2jack, family]
+        default: cell2jack
       verify_only:
         description: Verify profiles, signed archive, and App Store validation without uploading
         type: boolean

@@ -1,20 +1,25 @@
-# Development and family TestFlight builds
+# TestFlight, development and fallback builds
 
-Use the same feature branches and shared application code for both builds. Apple
+Use the same feature branches and shared application code for every build. Apple
 approved Cell2Jack DriverKit distribution on 2026-11-10 (request 8AR5R3NKZD), so
-`Porch` can now go to TestFlight too. Until a `Porch` TestFlight build has been
-checked on an iPhone and an iPad without an M chip, `PorchFamily` stays the default.
+the TestFlight build is now `Porch`, with the driver, for every device: iPhones and
+iPads, bedside or family. The first was 0.1.0 (76.1). `PorchFamily`, the same app
+without the driver, stays only as a fallback that has to be chosen by hand.
 
 | Use | Xcode scheme | Cell2Jack driver | Installation |
 | --- | --- | --- | --- |
-| Mom's bedside iPad | `Porch` | Included; optional and off by default | Development signing, install from the Mac |
-| Family iPhones/iPads | `PorchFamily` | Excluded | Normal TestFlight; no Developer Mode |
+| Every TestFlight tester | `Porch` | Included; optional and off by default | TestFlight (`variant=cell2jack`, the default); no Developer Mode |
+| Mom's bedside iPad, for now | `Porch` | Included; optional and off by default | Development signing, install from the Mac |
+| Fallback only | `PorchFamily` | Excluded | TestFlight (`variant=family`), chosen by hand |
 
-Both use the existing `com.ethanteng.helloporch` app identity and ordinary Porch
-UI. They replace one another on the same device. Do not install the family
-TestFlight build over Mom's Cell2Jack development installation. Update her app
-in place with a new `Porch` development build; do not uninstall it first. The Mac
-is needed for installation, not for everyday operation.
+All use the existing `com.ethanteng.helloporch` app identity and ordinary Porch
+UI. They replace one another on the same device. The driver only runs on an iPad
+with an M chip and iPadOS 16 or later, once it's turned on in Settings → Porch;
+iPhones and other iPads use the Porch phone adapter, a USB keypad or the
+touchscreen. Never install a `PorchFamily` build on a bedside that uses a Cell2Jack
+plugged straight in, since it has no driver. Mom's iPad keeps getting `Porch`
+development builds in place until it moves to TestFlight on a visit
+(ONBOARDING-PLAN.md, phase 0); do not uninstall it first.
 
 ## Developing features
 
@@ -27,22 +32,24 @@ is needed for installation, not for everyday operation.
 - Keep standard USB/Bluetooth keypad and touchscreen paths independent of
   Cell2Jack. Family builds compile out the USB transport/bridge, omit DriverKit
   entitlements and driver settings, and hide the Cell2Jack caregiver section.
-- Test new features normally. Use `PorchFamily` to verify the family package and
-  `Porch` for actual Cell2Jack hardware testing. Update configuration-specific
-  settings in both app targets when necessary.
+- Test new features normally, in `Porch`. CI still builds `PorchFamily` and runs
+  the family app's tests on an iPhone simulator with it, so keep it building.
+  Update configuration-specific settings in both app targets when necessary.
 
 ## TestFlight workflow
 
-**Upload Porch to TestFlight** defaults to `variant=family` and
-`verify_only=true`. Family verification needs only the existing app distribution
-profile and signing credentials; no driver profile is required. It verifies the
-signed archive and exported IPA contain no driver or driver settings and request
-no DriverKit entitlements, and then runs App Store validation.
+**Upload Porch to TestFlight** defaults to `variant=cell2jack` and
+`verify_only=true`. After verification succeeds, explicitly choose
+`verify_only=false` to upload. That run also deploys the calling server as before.
+Uploading does not itself invite testers or publish to the App Store. Keep existing
+internal/external TestFlight groups and beta review requirements.
 
-After verification succeeds, explicitly choose `verify_only=false` to upload.
-That run also deploys the calling server as before. Uploading does not itself
-invite testers or publish to the App Store. Keep existing internal/external
-TestFlight groups and beta review requirements.
+Don't upload `variant=family` in the normal course: its build number would be
+higher than the driver build's, so it would replace the driver build on every
+tester's device. Choose it only as a deliberate fallback, such as if a driver
+build can't pass beta review. Family verification needs only the app profile, and
+checks that the signed archive and exported IPA contain no driver or driver
+settings and request no DriverKit entitlements.
 
 `variant=cell2jack` selects `Porch` and retains the stricter app/driver profile,
 certificate, signature, USB matching, and matching build-number checks. Its

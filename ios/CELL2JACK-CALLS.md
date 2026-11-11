@@ -357,10 +357,9 @@ export and signature checks, and App Store validation then reported two errors:
 
 The [build variants guide](BUILD-VARIANTS.md) describes `PorchFamily`, which shares
 feature sources/resources but excludes Cell2Jack transport, its driver and settings,
-and DriverKit signature entitlements. The TestFlight workflow defaults to this
-family variant and needs only the app profile. The earlier distribution blocker
-above applies to `variant=cell2jack`; it does not prevent family-only TestFlight
-updates. Continue using the `Porch` development scheme on the bedside iPad.
+and DriverKit signature entitlements. Until 2026-11-10 the TestFlight workflow
+defaulted to it. Since the approval it defaults to `variant=cell2jack`, the first
+upload being 0.1.0 (76.1), and `PorchFamily` is a fallback chosen by hand.
 
 ## Picture phone pickup pulse 2026-10-22
 

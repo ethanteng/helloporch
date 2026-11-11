@@ -132,11 +132,11 @@ Size: small. It no longer blocks inviting families, since iPads connect the phon
 
 - Run **Upload Porch to TestFlight** with `variant=cell2jack` and `verify_only=true`, then upload once it passes. Its existing checks cover the driver's approved USB grant and signatures ([BUILD-VARIANTS.md](ios/BUILD-VARIANTS.md)).
 - **One build for every device.** Apple DTS says the same app runs on iOS, with DriverKit used only on iPadOS ([CELL2JACK-CALLS.md](ios/CELL2JACK-CALLS.md)). Confirm the `Porch` TestFlight build installs and works on an iPhone. Then:
-  - change the workflow's default `variant` to `cell2jack`
-  - stop uploading `PorchFamily` builds
-  - remove the `PorchFamily` scheme and target, and the variant checks for it
+  - change the workflow's default `variant` to `cell2jack` (done 2026-11-10; the first driver build is 0.1.0 (76.1))
+  - stop uploading `PorchFamily` builds (it stays as a fallback chosen by hand)
+  - later, remove the `PorchFamily` scheme and target, and the variant checks for it. CI's iPhone tests for the family app run on `PorchFamily`, so they move to `Porch` first; about 14 bedside tests assume an iPad.
 - **Mom's iPad** can then move from development builds to TestFlight. The driver's distribution signature replaces the development one, so re-check that the driver is on in Settings, replug the Cell2Jack, and check **Phone keypad ready**. Do it on another M-series iPad first if there is one. Otherwise do it at a quiet time with someone at her iPad. Until then, keep following the development-build steps.
-- App Review notes ([prepare-app-review.mjs](scripts/prepare-app-review.mjs)) stop saying the build excludes the driver. They explain that the Cell2Jack is optional hardware and that touch works without it.
+- App Review notes ([prepare-app-review.mjs](scripts/prepare-app-review.mjs)) stop saying the build excludes the driver. They explain that the Cell2Jack is optional hardware and that touch works without it. (Done 2026-11-10.)
 
 ## Phase 1: a phone number for every household (server)
 

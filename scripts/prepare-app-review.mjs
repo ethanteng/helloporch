@@ -26,7 +26,7 @@ Use TWO devices running this build: an iPad (bedside) and an iPhone or second iP
 Private bedside activation links:
 ${links.map((link, index) => `${index + 1}. ${link}`).join('\n')}
 
-If a link was already used on a different device, use the next backup. Keep the bedside open/unlocked for outgoing calls and drop-in. Allow microphone for voice and camera for video; camera stays off for voice calls. Phone/SIP fallback is voice only. This build excludes the optional Cell2Jack driver.`;
+If a link was already used on a different device, use the next backup. Keep the bedside open/unlocked for outgoing calls and drop-in. Allow microphone for voice and camera for video; camera stays off for voice calls. Phone/SIP fallback is voice only. This build includes an optional DriverKit driver for the Cell2Jack, a USB adapter that lets a corded desk phone act as the keypad on an iPad with an M chip. It stays off unless turned on in Settings → Porch, and the review needs no hardware.`;
   if (notes.length > 4000) throw new Error('Review notes exceed App Store Connect’s 4,000-character limit.');
   return notes;
 }
