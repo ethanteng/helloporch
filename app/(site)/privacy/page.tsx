@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 8, 2026";
+const updated = "November 10, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -57,6 +57,7 @@ const retention: [what: string, howLong: string][] = [
   ["Blocked callers", "Up to the 30 most recent numbers, until a caregiver clears the list."],
   ["When someone was last at the tablet", "Only the most recent time, which replaces the one before."],
   ["Call history", "The 100 most recent calls, for up to 90 days, including calls with someone who was later removed."],
+  ["Text and voicemail history", "The sender’s number and when it arrived, for the 200 most recent texts and phone voicemails, for up to 90 days. Not the words or the recording."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
   ["Waitlist and pilot email", "Until you unsubscribe or ask us to remove it."],
@@ -188,6 +189,11 @@ export default function PrivacyPage() {
                 how many pictures or other attachments came with it. We don’t keep the pictures or attachments
                 themselves. See “When someone texts a Porch number” below.
               </li>
+              <li>
+                <strong>Text and voicemail history.</strong> For each text and phone voicemail to a Porch number, the
+                sender’s number and when it arrived, so we can count how much each household uses Porch. It doesn’t
+                include the words or the recording.
+              </li>
             </ul>
             <p>Call audio and video travel live between devices through our calling provider. We don’t record calls.</p>
 
@@ -271,7 +277,11 @@ export default function PrivacyPage() {
                 To keep it safe: check that requests come from your household’s devices, enforce caregiver permissions,
                 and limit misuse, for example with caps on messages and phone calls.
               </li>
-              <li>To find and fix problems, and to make Porch better.</li>
+              <li>
+                To find and fix problems, and to make Porch better. For example, we count how many calls, messages and
+                texts each household gets and makes, and from how many people. Those counts don’t say who called or
+                texted whom, or what anyone said.
+              </li>
               <li>To contact you about the waitlist, the pilot, or important changes to Porch.</li>
             </ul>
             <p>

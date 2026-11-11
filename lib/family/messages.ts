@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { displayName, FamilyError, mutate, requireValue, type Household, type InboxEntry, type Member, type MessageKind, type MessageMode } from "./household.ts";
 import type { MediaStore } from "./media.ts";
+import { recordReceived } from "./received-log.ts";
 import type { FamilyStore } from "./store.ts";
 
 export type MessageState = "uploading" | "queued" | "played" | "expired" | "removed" | "unsent" | "failed";
@@ -63,7 +64,8 @@ async function update<D, T>(store: FamilyStore, key: string, empty: () => D, cha
 }
 const updateSent = <T>(store: FamilyStore, householdID: string, memberID: string, change: (records: MessageRecord[]) => T) =>
   update(store, sentKey(householdID, memberID), () => ({ records: [] as MessageRecord[] }), doc => change(doc.records));
-async function sentRecords(store: FamilyStore, householdID: string, memberID: string): Promise<MessageRecord[]> {
+/** A sender's message records, oldest first, without their archive pages. */
+export async function sentRecords(store: FamilyStore, householdID: string, memberID: string): Promise<MessageRecord[]> {
   const raw = await store.get(sentKey(householdID, memberID));
   return raw ? JSON.parse(raw).records : [];
 }
@@ -210,7 +212,8 @@ export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStor
     const r = records.find(r => r.id === id);
     if (r?.state === "uploading") { r.state = queued ? "queued" : "failed"; if (queued) r.sentAt = now; else r.endedAt = now; }
   });
-  if (!queued) await media.remove([record.pathname]);
+  if (queued) await recordReceived(store, householdID, { id, kind: "voicemail", ...(callerNumber ? { from: callerNumber } : {}), at: now }, now);
+  else await media.remove([record.pathname]);
   try { await archive(store, householdID, phoneSender, now); } catch { /* housekeeping only */ }
   return queued;
 }

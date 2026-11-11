@@ -14,6 +14,11 @@ import { listPorches } from '../lib/admin/porches.ts';
 import { adminHeaders, adminRoute, isAdminHost } from '../lib/admin/routing.ts';
 import { AdminError } from '../lib/admin/session.ts';
 import { systemStatus } from '../lib/admin/system.ts';
+import { pacificMidnight, porchUsage, usageRange } from '../lib/admin/usage.ts';
+import { recordCall } from '../lib/family/call-log.ts';
+import { receivePhoneVoicemail } from '../lib/family/messages.ts';
+import { receivedLogKey } from '../lib/family/received-log.ts';
+import { receiveText } from '../lib/family/texts.ts';
 
 // Fake storage with lifetimes, so expired keys go away as in Redis. Nothing here reaches Redis, Twilio or LiveKit.
 class MemoryStore {
@@ -163,7 +168,7 @@ test('signed out, every admin read and change refuses', async () => {
   const f = await fixture();
   const forged = Object.create((await f.session()).session.constructor.prototype);
   for (const work of [() => createInvitation(forged, f.store, f.now(), 'Lee family'), () => listInvitations(forged, f.store, f.now()),
-    () => cancelInvitation(forged, f.store, f.now(), 'x'), () => sendAgain(forged, f.store, f.now(), 'x'), () => listPorches(forged, f.store),
+    () => cancelInvitation(forged, f.store, f.now(), 'x'), () => sendAgain(forged, f.store, f.now(), 'x'), () => listPorches(forged, f.store), () => porchUsage(forged, f.store, { from: 0, to: f.now() }, f.now()),
     () => systemStatus(forged, f.store), () => readActivity(forged, f.store), () => signOut(forged, f.store, f.now()), () => signOutEverywhere(forged, f.store, f.now()),
     () => listPorches({}, f.store), () => listCountries(forged, fakeCountries().permissions),
     () => setCountry(forged, f.store, f.now(), fakeCountries().permissions, 'HK', true)]) await refused(work, 401);
@@ -375,4 +380,110 @@ test("Countries switches Twilio's Geo Permissions, never turns the US and Canada
   assert.equal(twilio.calls.length, 2);
   const log = await readActivity(session, f.store);
   assert.deepEqual(log.slice(0, 3).map(e => [e.action, e.detail]), [['Allowed calls to a country', 'United States/Canada'], ['Stopped calls to a country', 'United Kingdom'], ['Allowed calls to a country', 'Hong Kong']]);
+});
+
+test('Activity ranges: presets, and custom Pacific dates that include their last day', () => {
+  const now = Date.parse('2026-11-10T20:00:00Z') / 1000;
+  assert.deepEqual(usageRange({}, now), { from: now - 30 * 86400, to: now, preset: '1m' });
+  assert.deepEqual(usageRange({ range: '2w' }, now), { from: now - 14 * 86400, to: now, preset: '2w' });
+  assert.deepEqual(usageRange({ range: ['1w', '3m'] }, now), { from: now - 30 * 86400, to: now, preset: '1m' });
+  assert.equal(usageRange({ range: '3m' }, now).from, now - 90 * 86400);
+  // Daylight saving time ended at 2am on November 1, 2026, so that day was 25 hours long.
+  assert.equal(pacificMidnight('2026-11-01'), Date.parse('2026-11-01T07:00:00Z') / 1000);
+  assert.equal(pacificMidnight('2026-11-02'), Date.parse('2026-11-02T08:00:00Z') / 1000);
+  assert.equal(pacificMidnight('2026-03-08'), Date.parse('2026-03-08T08:00:00Z') / 1000);
+  assert.equal(pacificMidnight('2026-02-30'), undefined);
+  assert.deepEqual(usageRange({ from: '2026-11-01', to: '2026-11-01' }, now),
+    { from: Date.parse('2026-11-01T07:00:00Z') / 1000, to: Date.parse('2026-11-02T08:00:00Z') / 1000, custom: { from: '2026-11-01', to: '2026-11-01' } });
+  // A range that runs into today ends now.
+  assert.equal(usageRange({ from: '2026-11-01', to: '2026-11-10' }, now).to, now);
+  for (const [params, error] of [[{ from: '2026-11-05', to: '2026-11-01' }, 'The start date needs to be on or before the end date.'], [{ from: '2026-11-01' }, 'Choose both a start and an end date.'],
+    [{ from: '2026-11-01', to: 'soon' }, "Those dates aren't valid."], [{ from: '2026-12-01', to: '2026-12-02' }, "The start date can't be in the future."], [{ from: '', to: '', range: '1w' }, 'Choose both a start and an end date.']]) {
+    const range = usageRange(params, now);
+    assert.equal(range.error, error);
+    assert.equal(range.preset, params.range ?? '1m');
+  }
+});
+
+class FakeMedia {
+  async put() {} async remove() {} async stat() { return null; } async downloadURL() { return 'https://blob.test/x'; }
+}
+test('Activity counts contacts, what each Porch received and made, and who, without saying who', async () => {
+  const f = await fixture();
+  const { session } = await f.session();
+  const made = await handleFamily(new Request('https://porch.example/api/family', { method: 'POST', headers: { 'X-Porch-Setup-Code': env.PORCH_CONTACT_SETUP_CODE },
+    body: JSON.stringify({ action: 'createHousehold', name: 'Mom', deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') }) }), { store: f.store, now: f.now }).then(r => r.json());
+  const id = made.state.householdID, raw = await f.store.get(`house:${id}`), house = JSON.parse(raw);
+  const bedside = house.members.find(m => m.role === 'bedside').id;
+  const member = (name, revoked = false) => { const m = { id: randomUUID(), name, role: 'family', secretHash: 'x', permissions: { audio: true, video: true }, revoked, seenAt: f.now(), available: false }; house.members.push(m); return m.id; };
+  const ann = member('Private Ann'), ben = member('Private Ben'), dee = member('Private Dee'), gone = member('Private Gone', true);
+  const keypad = '+14155550001', other = '+14155550002', allowed = '+14155550003', stranger = '+14155550004';
+  house.keypadNumbers = [keypad, other];
+  house.phoneDropIns = [{ number: keypad, name: 'Private keypad name' }];
+  house.allowedCallers = [{ number: allowed, allowedAt: f.now() }];
+  await f.store.compareAndSet(`house:${id}`, raw, JSON.stringify(house));
+
+  const day = 86400, start = f.now();
+  f.advance(40 * day);
+  const call = (n, direction, via, who, outcome, ago) => recordCall(f.store, id, { id: `call-${n}`, direction, via, name: 'Private call name', ...(via === 'porch' ? { memberID: who } : who ? { number: who } : {}),
+    mode: 'voice', startedAt: f.now() - ago, outcome }, f.now());
+  await call(1, 'incoming', 'porch', ann, 'answered', 2 * day);
+  await call(2, 'incoming', 'porch', ann, 'missed', day);
+  await call(3, 'incoming', 'phone', keypad, 'answered', day);
+  await call(4, 'incoming', 'phone', stranger, 'missed', day);
+  await call(5, 'incoming', 'phone', undefined, 'declined', day);
+  await call(6, 'outgoing', 'porch', dee, 'answered', day);
+  await call(7, 'outgoing', 'phone', other, 'dialed', day);
+  await call(8, 'outgoing', 'phone', other, 'dialed', 3600);
+  await call(9, 'incoming', 'porch', dee, 'answered', 20 * day);
+  // Recorded messages, as their senders' records keep them. Unsent ones didn't count, nor do the bedside's own.
+  const message = (n, mode, state, ago, extra = {}) => ({ id: `message-${n}`, kind: 'message', mode, contentType: 'audio/mp4', pathname: 'x', durationSeconds: 5, sizeBytes: 1, createdAt: f.now() - ago, sentAt: f.now() - ago, state, ...extra });
+  await f.store.create(`messages:${id}:${ben}`, JSON.stringify({ records: [message(1, 'video', 'played', day), message(2, 'audio', 'queued', day), message(3, 'video', 'expired', 30 * day)] }));
+  await f.store.create(`messages:${id}:${ann}`, JSON.stringify({ records: [message(4, 'audio', 'unsent', day)] }));
+  await f.store.create(`messages:${id}:${gone}`, JSON.stringify({ records: [message(5, 'audio', 'removed', day)] }));
+  await f.store.create(`messages:${id}:${bedside}`, JSON.stringify({ records: [message(6, 'audio', 'played', day, { to: dee })] }));
+  // A phone voicemail from before Porch kept who left them.
+  await f.store.create(`messages:${id}:phone`, JSON.stringify({ records: [{ ...message(7, 'audio', 'played', 5 * day), kind: 'voicemail' }] }));
+  // Texts and phone voicemail, through the same steps Twilio's webhooks take. A repeated webhook counts once.
+  const media = new FakeMedia();
+  const text = (sid, from) => receiveText(f.store, () => media, id, { messageSID: 'SM' + String(sid).padStart(32, '0'), from, body: 'Private text words', pictures: 0, attachments: 0 }, f.now());
+  assert.equal(await text(1, other), true);
+  assert.equal(await text(1, other), true);
+  assert.equal(await text(2, stranger), true);
+  assert.equal(await text(3, stranger), true);
+  const voicemail = callerNumber => receivePhoneVoicemail(f.store, media, id, { id: randomUUID(), ...(callerNumber ? { callerNumber } : {}), audio: new Uint8Array(10), durationSeconds: 4 }, f.now());
+  assert.equal(await voicemail(allowed), true);
+  assert.equal(await voicemail(undefined), true);
+  // The log keeps who and when, never the words.
+  const log = await f.store.get(receivedLogKey(id));
+  assert.deepEqual(JSON.parse(log).entries.map(e => [e.kind, e.from]), [['text', other], ['text', stranger], ['text', stranger], ['voicemail', allowed], ['voicemail', undefined]]);
+  assert.ok(!log.includes('Private text words'));
+
+  const week = { from: f.now() - 7 * day, to: f.now() + 1 };
+  const [row] = await porchUsage(session, f.store, week, f.now());
+  assert.deepEqual(row, { id, contacts: { porchApp: 3, phoneNumbers: 3 }, activeContacts: 5,
+    callsReceived: { count: 5, people: 3, answered: 2 }, audioMessages: { count: 5, people: 3, voicemails: 3 }, videoMessages: { count: 1, people: 1 },
+    texts: { count: 3, people: 2 }, callsMade: { count: 3, people: 2 } });
+  const shown = JSON.stringify(row);
+  for (const secret of ['Private', keypad, other, allowed, stranger, ann, ben, dee, gone, 'secretHash']) assert.ok(!shown.includes(secret), secret);
+
+  // Wider, the older call and video message count too. Before any of it, nothing does.
+  const [month] = await porchUsage(session, f.store, { from: f.now() - 30 * day - 1, to: f.now() + 1 }, f.now());
+  assert.deepEqual([month.callsReceived.count, month.videoMessages.count, month.activeContacts], [6, 2, 6]);
+  const [before] = await porchUsage(session, f.store, { from: start, to: start + day }, f.now());
+  assert.deepEqual([before.callsReceived.count, before.audioMessages.count, before.texts.count, before.callsMade.count, before.activeContacts], [0, 0, 0, 0, 0]);
+});
+
+test('Activity marks counts as minimums once a history is full', async () => {
+  const f = await fixture();
+  const { session } = await f.session();
+  const made = await handleFamily(new Request('https://porch.example/api/family', { method: 'POST', headers: { 'X-Porch-Setup-Code': env.PORCH_CONTACT_SETUP_CODE },
+    body: JSON.stringify({ action: 'createHousehold', name: 'Mom', deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') }) }), { store: f.store, now: f.now }).then(r => r.json());
+  const id = made.state.householdID;
+  f.advance(10 * 86400);
+  for (let n = 0; n < 105; n++) await recordCall(f.store, id, { id: `call-${n}`, direction: 'incoming', via: 'phone', name: 'x', number: '+14155550001', mode: 'voice', startedAt: f.now() - (105 - n) * 3600, outcome: 'missed' }, f.now());
+  const usage = async hours => (await porchUsage(session, f.store, { from: f.now() - hours * 3600, to: f.now() }, f.now()))[0].callsReceived;
+  assert.deepEqual(await usage(200), { count: 100, people: 1, answered: 0, partial: true });
+  // The newest 100 cover the last 100 hours, so a range inside them is whole.
+  assert.deepEqual(await usage(50), { count: 50, people: 1, answered: 0 });
 });

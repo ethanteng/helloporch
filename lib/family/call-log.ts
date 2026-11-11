@@ -65,6 +65,17 @@ export async function recordCallAfter(store: FamilyStore, householdID: string, e
   if (afterResponse) afterResponse(save); else await save();
 }
 
+/** The household's calls within the last 90 days, without changing anything: the saved ones oldest first, then the current
+ * or most recent call if it isn't saved yet. `full`: the history holds as many calls as it keeps, so older ones may have
+ * dropped off. */
+export async function savedCalls(store: FamilyStore, house: Household, now: number): Promise<{ entries: CallLogEntry[]; full: boolean }> {
+  const raw = await store.get(logKey(house.id));
+  const saved: CallLogEntry[] = raw ? (JSON.parse(raw) as CallLog).entries : [];
+  const current = house.call ? callLogEntry(house, house.call) : undefined;
+  const entries = [...saved.filter(e => e.id !== current?.id), ...(current ? [current] : [])].filter(e => e.startedAt + callLogLimits.keepSeconds > now);
+  return { entries, full: saved.length >= callLogLimits.entries };
+}
+
 /** The household's calls, newest first. The current or most recent call is still in the household itself, and is
  * recorded once the next call replaces it. Reading deletes calls past 90 days rather than only hiding them, and the
  * rest is kept only until its newest call is 90 days old. */
