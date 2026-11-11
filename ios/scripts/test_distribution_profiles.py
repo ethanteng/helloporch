@@ -117,6 +117,45 @@ class DistributionProfileTests(unittest.TestCase):
                         self.assertEqual(len(result), 1)
                         self.assertIn("signerSHA256", result[0])
 
+    def test_cell2jack_signed_bundle_requests_what_apple_granted_and_matches_only_the_cell2jack(self):
+        # Apple's grant on 2026-11-10 covers the Cell2Jack's vendor, without a product.
+        driver_profile = profile(True)
+        driver_profile["Entitlements"][USB] = [{"idVendor": 6790}]
+        cases = [("granted", [{"idVendor": 6790}], 29987, True, None),
+                 ("product in signature", [{"idVendor": 6790, "idProduct": 29987}], 29987, True, "exactly the USB access"),
+                 ("other product", [{"idVendor": 6790}], 1, True, "only the Cell2Jack"),
+                 ("no display name", [{"idVendor": 6790}], 29987, False, "CFBundleDisplayName")]
+        for name, signed_usb, product, display_name, error in cases:
+            with self.subTest(name), tempfile.TemporaryDirectory() as folder:
+                bundle = Path(folder)
+                dext = bundle / "SystemExtensions" / (DRIVER_ID + ".dext")
+                dext.mkdir(parents=True)
+                (bundle / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": APP, "CFBundleVersion": "7"}))
+                driver_info = {"CFBundleIdentifier": DRIVER_ID, "CFBundleVersion": "7",
+                               "IOKitPersonalities": {"PorchCell2JackDriver": {"idVendor": 6790, "idProduct": product}}}
+                if display_name:
+                    driver_info["CFBundleDisplayName"] = "Cell2Jack USB Driver"
+                (dext / "Info.plist").write_bytes(plistlib.dumps(driver_info))
+                signatures = {
+                    str(bundle): {"application-identifier": TEAM + "." + APP, "com.apple.developer.team-identifier": TEAM,
+                                  "aps-environment": "production", COMMUNICATES: True,
+                                  "com.apple.developer.associated-domains": ["applinks:helloporch.store"]},
+                    str(dext): {"application-identifier": TEAM + "." + DRIVER_ID, "com.apple.developer.team-identifier": TEAM,
+                                DRIVER: True, USB: signed_usb}}
+                def codesign(command, **kwargs):
+                    for value in command:
+                        if value.startswith("--extract-certificates="):
+                            Path(value.split("=", 1)[1] + "0").write_bytes(profile()["DeveloperCertificates"][0])
+                    return SimpleNamespace(stdout=plistlib.dumps(signatures.get(command[-1], {})))
+                decode = lambda path: driver_profile if path.name == "embedded.provisionprofile" else profile()
+                with patch("distribution_profiles.decode_profile", side_effect=decode), \
+                     patch("distribution_profiles.subprocess.run", side_effect=codesign):
+                    if error:
+                        with self.assertRaisesRegex(ValueError, error):
+                            verify_bundle(bundle, TEAM, APP, DRIVER_ID)
+                    else:
+                        self.assertEqual(len(verify_bundle(bundle, TEAM, APP, DRIVER_ID)), 2)
+
     def test_separate_profiles_keep_both_bundle_ids(self):
         result = validate_pair(profile(), profile(True), TEAM, APP, DRIVER_ID)
         self.assertEqual([item["bundleID"] for item in result], [APP, DRIVER_ID])

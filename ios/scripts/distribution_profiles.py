@@ -106,8 +106,16 @@ def verify_bundle(bundle, team, app_id, driver_id, variant="cell2jack"):
             else:
                 require(ent.get(COMMUNICATES) is True, "App signature is missing driver communication")
         else:
-            require(ent.get(DRIVER) is True and ent.get(USB) == [{"idVendor": 6790, "idProduct": 29987}],
-                    "Driver signature must contain DriverKit and the exact Cell2Jack USB restriction")
+            # App Store validation rejects a signature that asks for anything but what Apple granted. Apple granted
+            # the Cell2Jack's vendor, so the driver's matching, not this entitlement, keeps it to the Cell2Jack.
+            require(ent.get(DRIVER) is True and ent.get(USB) == profile["Entitlements"].get(USB),
+                    "Driver signature must contain DriverKit and request exactly the USB access its profile grants")
+            personalities = info.get("IOKitPersonalities", {})
+            require(bool(personalities) and all(p.get("idVendor") == 6790 and p.get("idProduct") == 29987
+                                                for p in personalities.values()),
+                    "Driver must match only the Cell2Jack (VID 0x1A86, PID 0x7523)")
+            # Settings → Porch shows the driver by this name, and App Store validation requires it.
+            require(bool(info.get("CFBundleDisplayName")), "Driver Info.plist needs a CFBundleDisplayName")
         with tempfile.TemporaryDirectory() as tmp:
             prefix = str(Path(tmp) / "signer-")
             subprocess.run(["codesign", "-d", f"--extract-certificates={prefix}", str(product)],

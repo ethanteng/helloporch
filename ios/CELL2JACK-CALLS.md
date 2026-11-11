@@ -313,8 +313,9 @@ deployment or upload. It requires independent app and driver profiles; checks
 team, bundle IDs, expiration, App Store type, shared signing certificate, production
 APNs, app driver communication, and the driver's approved hardware grant; and
 checks the actual signatures and embedded profiles in both archive and exported
-IPA before App Store validation. The driver signature must retain the exact USB
-VID/PID restriction. A global product bundle ID override was removed because it
+IPA before App Store validation. The driver signature must request exactly the USB
+access its profile grants, and the driver's personalities must match only the
+Cell2Jack's VID/PID. A global product bundle ID override was removed because it
 would also rename the driver. Nine provisioning regressions cover missing grants,
 wildcard development permissions, incorrect devices/platforms/IDs/certificates,
 and a valid restricted or vendor-level distribution grant. These checks are also
@@ -324,11 +325,32 @@ With user authorization, a request was submitted on 2026-10-18 through [Apple's 
 requesting `com.apple.developer.driverkit` and USB transport covering vendor 6790
 (`0x1A86`), product 29987 (`0x7523`). The request must disclose that Cell2Jack
 is third-party hardware and the developer does not own the shared vendor ID.
-Apple confirmed receipt; approval remains pending. After Apple grants the entitlements, regenerate the driver App Store profile,
+Apple confirmed receipt and approved the request on 2026-11-10 (see below). After Apple grants the entitlements, regenerate the driver App Store profile,
 configure `IOS_DRIVER_APPSTORE_PROFILE`, and run verification-only archive/export
 and App Store validation with the GitHub-held signing identity. Upload only after
 those checks pass. Apple's [entitlement instructions](https://developer.apple.com/documentation/driverkit/requesting-entitlements-for-driverkit-development)
 describe the required approved entitlement group and distribution profile.
+
+## Distribution approval 2026-11-10
+
+Apple approved request 8AR5R3NKZD. On the driver's App ID,
+`com.ethanteng.helloporch.usbdriver`, **DriverKit** and **DriverKit USB Transport -
+VendorID** were then switched on next to the development capabilities, and
+**Porch Cell2Jack TestFlight** was regenerated. Its entitlements grant
+`com.apple.developer.driverkit` and USB transport for `idVendor` 6790, with no
+product and no development permissions. It is the `IOS_DRIVER_APPSTORE_PROFILE`
+secret in the `testflight` environment.
+
+The first verify-only `variant=cell2jack` run passed the profile checks, archive,
+export and signature checks, and App Store validation then reported two errors:
+
+- The driver's signature asked for vendor 6790 *and* product 29987, which the
+  vendor-only grant doesn't contain. The distribution entitlement now names only
+  the vendor. Matching still requires the Cell2Jack's vendor, product, device
+  release and interface.
+- The driver's Info.plist had no `CFBundleDisplayName`. It is now **Cell2Jack USB
+  Driver**, which Settings → Porch shows, and `OSBundleUsageDescription` describes
+  the driver instead of the early firmware test.
 
 ## Separate family TestFlight builds
 
