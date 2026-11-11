@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 export const betaDescription = `Porch helps people who find smartphones difficult stay connected with their family through a simple bedside display and large call buttons.
 
-One app has two modes: a bedside clock with configurable contact buttons, and a family mode for iPhone or iPad. A caregiver pairs devices using private invitations, chooses a six-digit PIN, and manages contacts, names, photos, calling preferences and separately approved audio/video drop-in. Touchscreen controls work without an accessory; standard USB/Bluetooth keypads are optional. This family build does not include the Cell2Jack driver.
+One app has two modes: a bedside clock with configurable contact buttons, and a family mode for iPhone or iPad. A caregiver pairs devices using private invitations, chooses a six-digit PIN, and manages contacts, names, photos, calling preferences and separately approved audio/video drop-in. Touchscreen controls work without an accessory; standard USB/Bluetooth keypads are optional. On an iPad with an M chip, an optional driver lets a corded phone plugged into a Cell2Jack act as the keypad; any iPad can use the Porch phone adapter instead.
 
 Test voice/video calls in both directions, incoming calls while a family phone is locked, caregiver permissions, drop-in announcements and cancellation, and audio/video messages in both directions. Phone fallback can call a caregiver-configured regular phone number. An internet connection is required. Porch is not an emergency calling or monitoring service.`;
 
