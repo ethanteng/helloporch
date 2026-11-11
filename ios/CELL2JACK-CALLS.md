@@ -317,7 +317,7 @@ IPA before App Store validation. The driver signature must request exactly the U
 access its profile grants, and the driver's personalities must match only the
 Cell2Jack (vendor 6790, product 29987, device release 612, configuration 1, interface 0).
 A global product bundle ID override was removed because it
-would also rename the driver. Nine provisioning regressions cover missing grants,
+would also rename the driver. Provisioning regressions cover missing grants,
 wildcard development permissions, incorrect devices/platforms/IDs/certificates,
 and a valid restricted or vendor-level distribution grant. These checks are also
 part of normal simulator CI.

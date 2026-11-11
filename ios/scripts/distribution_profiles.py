@@ -39,10 +39,12 @@ def validate_profile(profile, team, bundle, driver=False, now=None, communicates
     if driver:
         require(ent.get(DRIVER) is True, "Driver: Apple has not authorized the DriverKit distribution entitlement")
         grants = ent.get(USB, [])
-        require(isinstance(grants, list) and any(
-            isinstance(g, dict) and g.get("idVendor") == 6790
-            and ("idProduct" not in g or g["idProduct"] == 29987) for g in grants),
-            "Driver: profile lacks USB distribution permission for Cell2Jack (VID 0x1A86, PID 0x7523)")
+        cell2jack = lambda g: (isinstance(g, dict) and set(g) <= {"idVendor", "idProduct"}
+                               and g.get("idVendor") == 6790 and g.get("idProduct", 29987) == 29987)
+        require(isinstance(grants, list) and any(cell2jack(g) for g in grants),
+                "Driver: profile lacks USB distribution permission for Cell2Jack (VID 0x1A86, PID 0x7523)")
+        # The driver's signature asks for exactly this list, so a grant for other hardware would be signed into it.
+        require(all(cell2jack(g) for g in grants), "Driver: profile grants USB access beyond the Cell2Jack")
     else:
         require(ent.get("aps-environment") == "production", "App: production Push Notifications are missing")
         # Invitation links from helloporch.store open the app. App Store profiles grant the capability as "*".

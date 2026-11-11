@@ -182,6 +182,12 @@ class DistributionProfileTests(unittest.TestCase):
         candidate["Entitlements"][USB] = [{"idVendor": 6790}]
         validate_profile(candidate, TEAM, DRIVER_ID, True)
 
+    def test_a_grant_beyond_the_cell2jack_is_rejected(self):
+        candidate = profile(True)
+        candidate["Entitlements"][USB] = [{"idVendor": 6790}, {"idVendor": 1}]
+        with self.assertRaisesRegex(ValueError, "beyond the Cell2Jack"):
+            validate_profile(candidate, TEAM, DRIVER_ID, True)
+
     def test_other_vendor_or_product_cannot_authorize_cell2jack(self):
         for grant in [{"idVendor": 1, "idProduct": 29987}, {"idVendor": 6790, "idProduct": 1}]:
             with self.subTest(grant=grant):
