@@ -79,6 +79,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
           </div>
           {/* Keyed by its dates, so choosing a preset after typing shows the preset's dates, not what was typed. */}
           <form key={`${fields.from} ${fields.to}`} className="custom-range" action="/porches#activity" method="get" aria-label="Custom range">
+            {"preset" in range && <input type="hidden" name="range" value={range.preset} />}
             <label className="field"><span>From</span><input type="date" name="from" required max={today} defaultValue={fields.from} /></label>
             <label className="field"><span>To</span><input type="date" name="to" required max={today} defaultValue={fields.to} /></label>
             <button type="submit" className="small secondary">Show</button>
