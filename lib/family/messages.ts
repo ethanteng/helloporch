@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { displayName, FamilyError, mutate, requireValue, type Household, type InboxEntry, type Member, type MessageKind, type MessageMode } from "./household.ts";
 import type { MediaStore } from "./media.ts";
+import { recordReceived } from "./received-log.ts";
 import type { FamilyStore } from "./store.ts";
 
 export type MessageState = "uploading" | "queued" | "played" | "expired" | "removed" | "unsent" | "failed";
@@ -61,23 +62,46 @@ async function update<D, T>(store: FamilyStore, key: string, empty: () => D, cha
   }
   throw new FamilyError("Porch is busy. Please try again.", 409);
 }
+/** A sender's records. `archives` lists the archive pages older ones moved to. A record document made before Porch listed
+ * them has none until its next archive page, which sets `unlistedArchives`: that sender may have older pages that can't
+ * be found, since nothing lists them and the store can't search for keys. */
+type SentDocument = { records: MessageRecord[]; archives?: string[]; unlistedArchives?: true };
+const newSentDocument = (): SentDocument => ({ records: [], archives: [] });
 const updateSent = <T>(store: FamilyStore, householdID: string, memberID: string, change: (records: MessageRecord[]) => T) =>
-  update(store, sentKey(householdID, memberID), () => ({ records: [] as MessageRecord[] }), doc => change(doc.records));
-async function sentRecords(store: FamilyStore, householdID: string, memberID: string): Promise<MessageRecord[]> {
+  update(store, sentKey(householdID, memberID), newSentDocument, doc => change(doc.records));
+/** A sender's message records, oldest first, without their archive pages. */
+export async function sentRecords(store: FamilyStore, householdID: string, memberID: string): Promise<MessageRecord[]> {
   const raw = await store.get(sentKey(householdID, memberID));
-  return raw ? JSON.parse(raw).records : [];
+  return raw ? (JSON.parse(raw) as SentDocument).records : [];
 }
-// Records are kept for good; once a sender has many, older finished ones move to archive pages.
-// The bedside's messages stay while their recipient can still play them.
+// Records are kept for good; once a sender has more than `archiveAt`, finished ones among their oldest `archivePage` move
+// to an archive page. The bedside's messages stay while their recipient can still play them.
+const archiveAt = 200, archivePage = 100;
 async function archive(store: FamilyStore, householdID: string, memberID: string, now: number) {
   const key = sentKey(householdID, memberID);
   const records = await sentRecords(store, householdID, memberID);
-  if (records.length <= 200) return;
-  const old = records.slice(0, 100).filter(r => !["uploading", "queued"].includes(r.state) && !(r.to !== undefined && kept(r, now)));
+  if (records.length <= archiveAt) return;
+  const old = records.slice(0, archivePage).filter(r => !["uploading", "queued"].includes(r.state) && !(r.to !== undefined && kept(r, now)));
   if (!old.length) return;
-  await store.create(`${key}:archive:${old[0].id}`, JSON.stringify({ records: old }));
+  const page = `${key}:archive:${old[0].id}`;
+  await store.create(page, JSON.stringify({ records: old }));
   const moved = new Set(old.map(r => r.id));
-  await update(store, key, () => ({ records: [] as MessageRecord[] }), doc => { doc.records = doc.records.filter(r => !moved.has(r.id)); });
+  await update(store, key, newSentDocument, doc => {
+    doc.records = doc.records.filter(r => !moved.has(r.id));
+    if (doc.archives === undefined) doc.unlistedArchives = true;
+    if (!(doc.archives ??= []).includes(page)) doc.archives.push(page);
+  });
+}
+/** Every record a sender has, archive pages included, oldest first. `complete` is false when older ones may be on archive
+ * pages made before Porch listed them, or a listed page is gone. A sender with fewer records than an archive leaves behind
+ * never had one. */
+export async function allSentRecords(store: FamilyStore, householdID: string, memberID: string): Promise<{ records: MessageRecord[]; complete: boolean }> {
+  const raw = await store.get(sentKey(householdID, memberID));
+  const doc: SentDocument = raw ? JSON.parse(raw) : newSentDocument();
+  const pages = await Promise.all((doc.archives ?? []).map(page => store.get(page)));
+  const archived = pages.flatMap(page => page ? (JSON.parse(page) as SentDocument).records : []);
+  const complete = doc.archives === undefined ? doc.records.length <= archiveAt - archivePage : !doc.unlistedArchives && pages.every(page => page !== null);
+  return { records: [...archived, ...doc.records], complete };
 }
 
 async function schedulePurge(store: FamilyStore, householdID: string, pathnames: string[], at: number) {
@@ -190,7 +214,12 @@ export function voicemailOpen(house: Household, callerNumber: string | undefined
 export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStore, householdID: string, recording: { id: string; callerNumber?: string; callerVerified?: boolean; audio: Uint8Array; durationSeconds: number }, now: number) {
   const { id, callerNumber, callerVerified, audio } = recording;
   const existing = (await sentRecords(store, householdID, phoneSender)).find(r => r.id === id);
-  if (existing && existing.state !== "uploading") return existing.state === "queued";
+  if (existing && existing.state !== "uploading") {
+    // Twilio repeats the recording callback when the first request never answered. The voicemail is already saved;
+    // write the activity log anyway, at the original time, in case that write was what the first request lost.
+    if (existing.sentAt !== undefined) await recordReceived(store, householdID, { id, kind: "voicemail", ...(callerNumber ? { from: callerNumber } : {}), at: existing.sentAt }, now);
+    return existing.state === "queued";
+  }
   requireValue(audio.byteLength > 0 && audio.byteLength <= messageLimits.audioBytes, "This recording is too large.", 413);
   const durationSeconds = Math.max(1, Math.min(messageLimits.durationSeconds, Math.round(recording.durationSeconds)));
   const record: MessageRecord = { id, kind: "voicemail", mode: "audio", contentType: "audio/mpeg", pathname: `messages/${householdID}/${id}.mp3`, durationSeconds, sizeBytes: audio.byteLength, createdAt: now, state: "uploading" };
@@ -210,7 +239,8 @@ export async function receivePhoneVoicemail(store: FamilyStore, media: MediaStor
     const r = records.find(r => r.id === id);
     if (r?.state === "uploading") { r.state = queued ? "queued" : "failed"; if (queued) r.sentAt = now; else r.endedAt = now; }
   });
-  if (!queued) await media.remove([record.pathname]);
+  if (queued) await recordReceived(store, householdID, { id, kind: "voicemail", ...(callerNumber ? { from: callerNumber } : {}), at: now }, now);
+  else await media.remove([record.pathname]);
   try { await archive(store, householdID, phoneSender, now); } catch { /* housekeeping only */ }
   return queued;
 }

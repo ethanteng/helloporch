@@ -9,24 +9,27 @@ import { assertAdmin, type AdminSession } from "./session.ts";
 export type PorchRow = { id: string; bedsideName: string; invitationLabel?: string; porchNumber?: string; numberPending: boolean;
   setUpAt?: number; lastSeenAt?: number; familyPhones: number; androidBedside?: true; androidPhones?: number; setupFinished: boolean };
 
+/** Every listed household that still exists. */
+export async function readHouseholds(store: FamilyStore): Promise<Household[]> {
+  const raws = await Promise.all((await householdIDs(store)).map(id => store.get(`house:${id}`)));
+  return raws.flatMap(raw => raw ? [JSON.parse(raw) as Household] : []);
+}
+
 export async function listPorches(session: AdminSession, store: FamilyStore): Promise<PorchRow[]> {
   assertAdmin(session);
-  const [ids, rawInvitations] = await Promise.all([householdIDs(store), store.get(invitationsKey)]);
+  const [houses, rawInvitations] = await Promise.all([readHouseholds(store), store.get(invitationsKey)]);
   const invitations: BedsideInvitation[] = JSON.parse(rawInvitations ?? "[]");
-  const houses = await Promise.all(ids.map(async id => store.get(`house:${id}`)));
-  return houses.flatMap(raw => {
-    if (!raw) return [];
-    const house: Household = JSON.parse(raw);
+  return houses.map(house => {
     const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
     const invitation = invitations.find(i => i.householdID === house.id);
     const phones = house.members.filter(m => m.role === "family" && !m.revoked), familyPhones = phones.length;
     const androidPhones = phones.filter(m => m.platform === "android").length;
-    return [{ id: house.id, bedsideName: bedside?.name ?? house.name, ...(invitation ? { invitationLabel: invitation.label } : {}),
+    return { id: house.id, bedsideName: bedside?.name ?? house.name, ...(invitation ? { invitationLabel: invitation.label } : {}),
       ...(house.porchNumber ? { porchNumber: house.porchNumber.number } : {}), numberPending: !house.porchNumber && !!house.phoneSetup,
       ...(house.createdAt ?? invitation?.setUpAt ? { setUpAt: house.createdAt ?? invitation?.setUpAt } : {}),
       ...(bedside ? { lastSeenAt: bedside.seenAt } : {}), familyPhones,
       ...(bedside?.platform === "android" ? { androidBedside: true as const } : {}), ...(androidPhones ? { androidPhones } : {}),
       // Until the setup screens have a checklist, a Porch is set up once it has its number and a family phone.
-      setupFinished: !!house.porchNumber && familyPhones > 0 }];
+      setupFinished: !!house.porchNumber && familyPhones > 0 };
   }).sort((a, b) => (b.setUpAt ?? 0) - (a.setUpAt ?? 0));
 }

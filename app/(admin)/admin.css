@@ -134,6 +134,28 @@ table.narrow td.actions .error { white-space: normal; min-width: 10rem; text-ali
 table.narrow td:first-child { overflow-wrap: anywhere; }
 @media (max-width: 640px) { table.narrow th, table.narrow td { padding: 10px; } }
 .sub { display: block; color: var(--muted); font-size: 0.9rem; }
+tfoot th, tfoot td { border-top: 1px solid var(--line); border-bottom: none; font-weight: 600; }
+tfoot th { font-size: inherit; color: inherit; }
+.note { color: var(--muted); font-size: 0.9rem; max-width: 80ch; margin-top: 12px; }
+
+/* The Porches page's time range: presets, or a custom pair of dates. */
+.range-picker { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 24px; margin-bottom: 12px; }
+.range-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.range-links a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.95rem;
+}
+.range-links a:hover { color: var(--ink); }
+.range-links a[aria-current="true"] { color: var(--ink); background: var(--tag-bg); border-color: var(--tag-bg); font-weight: 600; }
+.custom-range { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.custom-range .field { width: 10.5rem; }
+.custom-range .field > span { font-size: 0.85rem; color: var(--muted); }
+.custom-range input { padding: 5px 10px; }
 
 .tag {
   display: inline-block;

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { bedsideLanguage, FamilyError, mutate, requireValue, type BedsideLanguage, type Household, type Member, type TextEntry } from "./household.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
 import { discardMedia, purgeLater } from "./messages.ts";
+import { recordReceived } from "./received-log.ts";
 import { knownCaller } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { claudeTranslate, translationConfigured, type Translate, type Translation } from "./translate.ts";
@@ -130,7 +131,8 @@ export async function receiveText(store: FamilyStore, media: () => MediaStore, h
       ...(holding ? { held: true } : {}) });
     return true;
   });
-  if (!queued) await endText(store, media, householdID, id, now);
+  if (queued) await recordReceived(store, householdID, { id, kind: "text", from: text.from, at: now }, now);
+  else await endText(store, media, householdID, id, now);
   return queued;
 }
 
