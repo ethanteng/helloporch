@@ -93,13 +93,14 @@ async function archive(store: FamilyStore, householdID: string, memberID: string
   });
 }
 /** Every record a sender has, archive pages included, oldest first. `complete` is false when older ones may be on archive
- * pages made before Porch listed them. A sender with fewer records than an archive leaves behind never had one. */
+ * pages made before Porch listed them, or a listed page is gone. A sender with fewer records than an archive leaves behind
+ * never had one. */
 export async function allSentRecords(store: FamilyStore, householdID: string, memberID: string): Promise<{ records: MessageRecord[]; complete: boolean }> {
   const raw = await store.get(sentKey(householdID, memberID));
   const doc: SentDocument = raw ? JSON.parse(raw) : newSentDocument();
   const pages = await Promise.all((doc.archives ?? []).map(page => store.get(page)));
   const archived = pages.flatMap(page => page ? (JSON.parse(page) as SentDocument).records : []);
-  const complete = doc.archives === undefined ? doc.records.length <= archiveAt - archivePage : !doc.unlistedArchives;
+  const complete = doc.archives === undefined ? doc.records.length <= archiveAt - archivePage : !doc.unlistedArchives && pages.every(page => page !== null);
   return { records: [...archived, ...doc.records], complete };
 }
 

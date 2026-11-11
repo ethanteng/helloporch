@@ -13,8 +13,9 @@ import { assertAdmin, type AdminSession } from "./session.ts";
 /** `count` things, from or to `people` different senders or recipients. Callers who hid their number count once each in
  * `count` but not in `people`. `partial`: earlier ones in the range may be missing, so `count` is a minimum. Call history
  * and the received log drop their oldest entries once full, and a sender's oldest message records may be on archive
- * pages made before Porch listed them. */
-export type Tally = { count: number; people: number; partial?: true };
+ * pages made before Porch listed them. `peoplePartial`: `count` is whole but `people` may not be, because the received
+ * log no longer says who left some phone voicemail in the range. */
+export type Tally = { count: number; people: number; partial?: true; peoplePartial?: true };
 /** `contacts`: family members on the Porch app, and the phone numbers the household knows: saved on the bedside keypad,
  * approved to drop in, or allowed by a caregiver. `activeContacts`: those who called, left a recorded message or texted
  * the bedside in the range. `voicemails`: how many audio messages were left by phone callers. */
@@ -79,7 +80,8 @@ const reachedBedside = new Set<MessageState>(["queued", "played", "expired", "re
 const memberKey = (id: string) => `member:${id}`, numberKey = (number: string) => `number:${number}`;
 // Twilio's stand-ins for a withheld caller ID are not a person, and not a number the household knows.
 const realNumber = (number?: string): number is string => !!number && !withheldCallerNumbers.has(number);
-const tallied = (count: number, people: Set<string>, partial: boolean): Tally => ({ count, people: people.size, ...(partial ? { partial: true as const } : {}) });
+const tallied = (count: number, people: Set<string>, partial: boolean, peoplePartial = false): Tally =>
+  ({ count, people: people.size, ...(partial ? { partial: true as const } : peoplePartial ? { peoplePartial: true as const } : {}) });
 
 export async function porchUsage(session: AdminSession, store: FamilyStore, range: UsageRange, now: number): Promise<UsageRow[]> {
   assertAdmin(session);
@@ -100,7 +102,7 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
 
   const callsIn = new Set<string>(), callsOut = new Set<string>(), audio = new Set<string>(), video = new Set<string>(), texts = new Set<string>();
   const add = (people: Set<string>, key: string | undefined) => { if (key) people.add(key); };
-  let callsInCount = 0, answered = 0, callsOutCount = 0, audioCount = 0, voicemails = 0, videoCount = 0, textCount = 0;
+  let callsInCount = 0, answered = 0, callsOutCount = 0, audioCount = 0, voicemails = 0, videoCount = 0, textCount = 0, callersDropped = false;
   for (const call of calls.entries) {
     if (!within(call.startedAt)) continue;
     const key = call.memberID ? memberKey(call.memberID) : realNumber(call.number) ? numberKey(call.number) : undefined;
@@ -120,6 +122,8 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
     audioCount++; voicemails++;
     const caller = callers.get(record.id);
     if (realNumber(caller)) audio.add(numberKey(caller));
+    // Not in a full log: who left it may have dropped off with the log's oldest entries.
+    else if (receivedPartial && !callers.has(record.id)) callersDropped = true;
   }
   for (const entry of received.entries) {
     if (entry.kind !== "text" || !within(entry.at)) continue;
@@ -132,6 +136,6 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
   const activeContacts = porchApp.filter(m => reachedOut.has(memberKey(m.id))).length + [...numbers].filter(n => reachedOut.has(numberKey(n))).length;
   return { id: house.id, contacts: { porchApp: porchApp.length, phoneNumbers: numbers.size }, activeContacts,
     callsReceived: { ...tallied(callsInCount, callsIn, callsPartial), answered },
-    audioMessages: { ...tallied(audioCount, audio, messagesPartial || voicemailsPartial), voicemails }, videoMessages: tallied(videoCount, video, messagesPartial),
+    audioMessages: { ...tallied(audioCount, audio, messagesPartial || voicemailsPartial, callersDropped), voicemails }, videoMessages: tallied(videoCount, video, messagesPartial),
     texts: tallied(textCount, texts, receivedPartial), callsMade: tallied(callsOutCount, callsOut, callsPartial) };
 }

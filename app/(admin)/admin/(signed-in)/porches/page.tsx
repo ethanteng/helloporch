@@ -25,10 +25,13 @@ const full = "Some of this range may be missing from Porch's records, so this is
 const minimum = (count: number, partial?: boolean) => <span title={partial ? full : undefined}>{count}{partial ? "+" : ""}</span>;
 const total = (tally: Tally) => minimum(tally.count, tally.partial);
 // Active contacts are counted from the same histories. When any of those is a minimum, so is this.
-const activePartial = (u: UsageRow) => !!(u.callsReceived.partial || u.audioMessages.partial || u.videoMessages.partial || u.texts.partial);
-// How many things, and from (or to) how many different people.
-function tallied(tally: Tally, people: (n: number) => string, extra?: string) {
-  return <>{total(tally)}{tally.count ? <span className="sub">{people(tally.people)}</span> : null}{extra && <span className="sub">{extra}</span>}</>;
+const activePartial = (u: UsageRow) => !!(u.callsReceived.partial || u.audioMessages.partial || u.audioMessages.peoplePartial || u.videoMessages.partial || u.texts.partial);
+// How many things, and from (or to) how many different people, such as "from 3 callers". Each is a minimum when the
+// count is; the people can be one even when the count isn't.
+function tallied(tally: Tally, [word, one, many]: [string, string, string], extra?: (plus: string) => string) {
+  const plus = tally.partial ? "+" : "", peoplePlus = tally.partial || tally.peoplePartial ? "+" : "";
+  return <>{total(tally)}{tally.count ? <span className="sub" title={peoplePlus ? full : undefined}>{word} {tally.people}{peoplePlus} {tally.people === 1 ? one : many}</span> : null}
+    {tally.count && extra ? <span className="sub">{extra(plus)}</span> : null}</>;
 }
 function sum(rows: UsageRow[], pick: (row: UsageRow) => Tally): Tally {
   return { count: rows.reduce((n, row) => n + pick(row).count, 0), people: 0, ...(rows.some(row => pick(row).partial) ? { partial: true as const } : {}) };
@@ -96,11 +99,11 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                   <td title={row.id}>{row.bedsideName}{row.invitationLabel && <span className="sub">{row.invitationLabel}</span>}</td>
                   <td>{u.contacts.porchApp + u.contacts.phoneNumbers}<span className="sub">{u.contacts.porchApp} on Porch, {plural(u.contacts.phoneNumbers, "number", "numbers")}</span></td>
                   <td>{minimum(u.activeContacts, activePartial(u))}<span className="sub">of {u.contacts.porchApp + u.contacts.phoneNumbers}</span></td>
-                  <td>{tallied(u.callsReceived, n => `from ${plural(n, "caller", "callers")}`, u.callsReceived.count ? `${u.callsReceived.answered} answered` : undefined)}</td>
-                  <td>{tallied(u.audioMessages, n => `from ${plural(n, "sender", "senders")}`, u.audioMessages.voicemails ? plural(u.audioMessages.voicemails, "phone voicemail", "phone voicemails") : undefined)}</td>
-                  <td>{tallied(u.videoMessages, n => `from ${plural(n, "sender", "senders")}`)}</td>
-                  <td>{tallied(u.texts, n => `from ${plural(n, "sender", "senders")}`)}</td>
-                  <td>{tallied(u.callsMade, n => `to ${plural(n, "contact", "contacts")}`)}</td>
+                  <td>{tallied(u.callsReceived, ["from", "caller", "callers"], plus => `${u.callsReceived.answered}${plus} answered`)}</td>
+                  <td>{tallied(u.audioMessages, ["from", "sender", "senders"], u.audioMessages.voicemails ? plus => `${u.audioMessages.voicemails}${plus} phone ${u.audioMessages.voicemails === 1 ? "voicemail" : "voicemails"}` : undefined)}</td>
+                  <td>{tallied(u.videoMessages, ["from", "sender", "senders"])}</td>
+                  <td>{tallied(u.texts, ["from", "sender", "senders"])}</td>
+                  <td>{tallied(u.callsMade, ["to", "contact", "contacts"])}</td>
                 </tr>
               ))}
             </tbody>

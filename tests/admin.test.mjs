@@ -500,6 +500,14 @@ test('Activity marks counts as minimums once a history is full', async () => {
   assert.deepEqual(await usage(200), { count: 100, people: 1, answered: 0, partial: true });
   // The newest 100 cover the last 100 hours, so a range inside them is whole.
   assert.deepEqual(await usage(50), { count: 50, people: 1, answered: 0 });
+
+  // Once the received log is full, who left an older phone voicemail may have dropped off it. The voicemail itself
+  // still counts from its record, so only the number of senders is a minimum.
+  await f.store.create(`messages:${id}:phone`, JSON.stringify({ records: [{ id: 'vm-old', kind: 'voicemail', mode: 'audio', contentType: 'audio/mpeg', pathname: 'x',
+    durationSeconds: 5, sizeBytes: 1, createdAt: f.now() - 10 * 86400, sentAt: f.now() - 10 * 86400, state: 'played' }], archives: [] }));
+  await f.store.create(receivedLogKey(id), JSON.stringify({ entries: Array.from({ length: 200 }, (_, n) => ({ id: `t-${n}`, kind: 'text', from: '+14155550002', at: f.now() - (200 - n) * 600 })) }));
+  const [row] = await porchUsage(session, f.store, { from: f.now() - 30 * 86400, to: f.now() }, f.now());
+  assert.deepEqual([row.audioMessages, row.texts], [{ count: 1, people: 0, voicemails: 1, peoplePartial: true }, { count: 200, people: 1, partial: true }]);
 });
 
 test('Activity counts archived message records, and marks counts that may miss archive pages nothing lists', async () => {
@@ -540,4 +548,7 @@ test('Activity counts archived message records, and marks counts that may miss a
   await f.store.compareAndSet(`house:${listed}`, raw, JSON.stringify(house));
   await f.store.create(`messages:${listed}:${ben}`, JSON.stringify({ records: old(100).map(r => ({ ...r, kind: 'message', mode: 'video' })) }));
   assert.deepEqual((await usage(listed, 365)).videoMessages, { count: 100, people: 1 });
+  // A listed page that's gone leaves the count a minimum.
+  f.store.values.delete(doc.archives[0]);
+  assert.deepEqual((await usage(listed, 365)).audioMessages, { count: 101, people: 1, voicemails: 101, partial: true });
 });
