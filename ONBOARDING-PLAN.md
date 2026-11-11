@@ -21,7 +21,7 @@ Settled on 2026-10-24.
 | --- | --- |
 | Cell2Jack for every family | Part of setup, with **Do this later** for families still waiting on hardware. The touchscreen works meanwhile, and the checklist reminds them |
 | Invitation lifetime | 14 days |
-| TestFlight builds after the driver is approved | One `Porch` build with the driver for every device; `PorchFamily` retires |
+| TestFlight builds after the driver is approved | One `Porch` build with the driver for every device; `PorchFamily` retires (until CI's iPhone tests move to `Porch`, it stays as a fallback chosen by hand) |
 | Offline households | Keep the number until a caregiver or the administrator deletes the household. Nothing is deleted or released automatically |
 | Administration | A protected admin page at `admin.helloporch.store`, signed in with a password, for use from a computer. Nothing for the administrator in the phone app. A password replaced the planned passkey on 2026-10-29 |
 | Keypad backup | Yes. The bedside keeps a copy of its keypad and settings on the server, restored on a replacement iPad (phase 6) |
@@ -38,7 +38,7 @@ Settled on 2026-10-24.
 | Step | Today | After this plan |
 | --- | --- | --- |
 | Create a household | `scripts/create-bedside-invite.mjs` makes a one-use activation link with the recovery secret ([service.ts:160](lib/family/service.ts:160)) | You click **Invite a new family** on the admin page and send the link |
-| Get Porch onto the bedside iPad | Mom's iPad gets development builds from the Mac, because TestFlight builds can't include the Cell2Jack driver | One TestFlight build with the driver, for every device |
+| Get Porch onto the bedside iPad | Mom's iPad still gets `Porch` development builds from the Mac, until a visit moves it onto the TestFlight build | One TestFlight build with the driver, for every device |
 | Phone number | Buy it, run `scripts/configure-inbound.mjs`, set the Twilio voice webhook and LiveKit by hand | Bought and routed during setup |
 | Get Porch onto relatives' phones | Invites are `porch://pair?…` links, which do nothing without the app, so the TestFlight link goes out separately | Invites are `https://helloporch.store/join#…` links that open Porch or explain how to get it |
 | Replace a bedside iPad, forgotten PIN, delete a household | Not possible without you | Caregivers do it from their phone or the iPad. You can also do each of them from the admin page |
@@ -131,12 +131,11 @@ None of this repeats per family.
 Size: small. It no longer blocks inviting families, since iPads connect the phone through the Porch phone adapter until then.
 
 - Run **Upload Porch to TestFlight** with `variant=cell2jack` and `verify_only=true`, then upload once it passes. Its existing checks cover the driver's approved USB grant and signatures ([BUILD-VARIANTS.md](ios/BUILD-VARIANTS.md)).
-- **One build for every device.** Apple DTS says the same app runs on iOS, with DriverKit used only on iPadOS ([CELL2JACK-CALLS.md](ios/CELL2JACK-CALLS.md)). Confirm the `Porch` TestFlight build installs and works on an iPhone. Then:
-  - change the workflow's default `variant` to `cell2jack`
-  - stop uploading `PorchFamily` builds
-  - remove the `PorchFamily` scheme and target, and the variant checks for it
+- **One build for every device.** Apple DTS says the same app runs on iOS, with DriverKit used only on iPadOS ([CELL2JACK-CALLS.md](ios/CELL2JACK-CALLS.md)). The workflow's default `variant` is now `cell2jack`. The first driver build, 0.1.0 (76.1), uploaded on 2026-11-10 with that variant chosen by hand. It still needs a check on an iPhone, and on an iPad without an M chip using the adapter.
+  - `PorchFamily` stays as a fallback chosen by hand. Don't upload it in the normal course: a newer build number would replace the driver build on testers' devices.
+  - Later, remove the `PorchFamily` scheme and target, and the variant checks for it. CI's iPhone tests for the family app run on `PorchFamily`, so they move to `Porch` first; about 14 bedside tests assume an iPad.
 - **Mom's iPad** can then move from development builds to TestFlight. The driver's distribution signature replaces the development one, so re-check that the driver is on in Settings, replug the Cell2Jack, and check **Phone keypad ready**. Do it on another M-series iPad first if there is one. Otherwise do it at a quiet time with someone at her iPad. Until then, keep following the development-build steps.
-- App Review notes ([prepare-app-review.mjs](scripts/prepare-app-review.mjs)) stop saying the build excludes the driver. They explain that the Cell2Jack is optional hardware and that touch works without it.
+- App Review notes ([prepare-app-review.mjs](scripts/prepare-app-review.mjs)) stop saying the build excludes the driver. They explain that the Cell2Jack is optional hardware and that touch works without it. (Done.)
 
 ## Phase 1: a phone number for every household (server)
 

@@ -40,6 +40,21 @@ test('review pack contains distinct compatible activation links and private meta
   assert.match(pack.status, /DRAFT/);
 });
 
+test('review text describes the driver for the default build and its absence for the family fallback', async () => {
+  const driver = await prepareReviewAccess({ origin, operatorSecret, fetcher: server().fetcher, now: () => now });
+  assert.equal(driver.variant, 'cell2jack');
+  assert.match(driver.reviewNotes, /includes an optional DriverKit driver/);
+  assert.match(driver.betaDescription, /optional driver/);
+  assert.doesNotMatch(driver.betaDescription + driver.reviewNotes, /does not include|excludes/);
+  const family = await prepareReviewAccess({ origin, operatorSecret, variant: 'family', fetcher: server().fetcher, now: () => now });
+  assert.match(family.reviewNotes, /excludes the optional Cell2Jack driver/);
+  assert.match(family.betaDescription, /does not include the Cell2Jack driver/);
+  assert.ok(family.reviewNotes.length <= 4000 && family.betaDescription.length <= 4000);
+  const unknown = server();
+  await assert.rejects(prepareReviewAccess({ origin, operatorSecret, variant: 'other', fetcher: unknown.fetcher, now: () => now }), /cell2jack or family/);
+  assert.equal(unknown.requests.length, 0, 'an unknown variant stops before asking the server for review links');
+});
+
 test('review pack fails closed on an older server, broken readiness or duplicated links', async () => {
   for (const options of [{ lifetime: 86400 }, { lifetime: 91 * 86400 }, { duplicate: true }, { healthBody: { ...health, pushConfigured: false } }, { healthBody: { ...health, commit: undefined } }]) {
     const f = server(options);

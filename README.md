@@ -106,8 +106,8 @@ Open `ios/Porch.xcodeproj` in Xcode 26 or newer. The app runs on iOS and iPadOS 
 
 | Scheme | Use |
 |---|---|
-| `Porch` | The full app with the optional Cell2Jack USB driver. Bedside iPads that use Cell2Jack get this as a development build. |
-| `PorchFamily` | The same app without the driver. This is the TestFlight build for family devices and touchscreen or number-pad bedsides. |
+| `Porch` | The full app with the optional Cell2Jack USB driver. This is the TestFlight build for every device, and Mom's bedside iPad gets it as a development build. |
+| `PorchFamily` | The same app without the driver. A fallback TestFlight build, chosen by hand; CI also runs the family app's iPhone tests with it. |
 | `PorchCell2Jack`, `PorchCell2JackCalls`, `PorchKeypadPreview` | Earlier experiments and test fixtures. CI still runs some of their tests. |
 
 See [ios/README.md](ios/README.md) for building, Debug preview flags, TestFlight and App Review. [ios/BUILD-VARIANTS.md](ios/BUILD-VARIANTS.md) explains which build goes where.
@@ -130,7 +130,7 @@ The Node tests use fake LiveKit and Twilio clients and never place real calls. U
 | Calling server checks | Pushes and PRs that touch the server | `npm test`, typecheck and build |
 | iPhone and iPad build | Pushes and PRs that touch `ios/` | Simulator builds, UIKit and Cell2Jack tests, and Release builds of both variants |
 | Deploy calling server | Server changes merged to `main`, or before each TestFlight upload | Stages a production deployment, checks `/api/calls/health` for the expected commit, then promotes it |
-| Upload Porch to TestFlight | Manually | Deploys the matching server, then builds and uploads the `family` (default) or `cell2jack` variant |
+| Upload Porch to TestFlight | Manually | Deploys the matching server, then builds and uploads the `cell2jack` (default) or `family` fallback variant |
 
 See [RELEASING.md](RELEASING.md) for setup and recovery.
 
