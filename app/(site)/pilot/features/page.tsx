@@ -294,25 +294,26 @@ const parts: GuidePart[] = [
             In Porch on your phone, tap <UI>Send a message</UI>.
           </li>
           <li>
-            Tap <UI>Record a video</UI> or <UI>Record audio</UI>. Messages can be up to two minutes.
+            Choose <UI>Record a video</UI> or <UI>Record audio</UI>. A message can be up to two minutes long.
           </li>
           <li>
             Tap <UI>Play it back</UI> to check it, then <UI>Send to [Name]</UI>.
           </li>
         </ol>
         <p>
-          <UI>Messages with [Name]</UI> shows whether each one has played. Until it plays, you can <UI>Unsend</UI> it.
+          Under <UI>Messages with [Name]</UI>, you can see whether a message has been played.
+          You can also <UI>Unsend</UI> one that hasn’t been played yet.
         </p>
         <h3>Play messages</h3>
         <ul>
           <li>
-            Tap <UI>Play 1 message</UI> on the clock screen, or press a key set to <UI>Play / stop messages</UI>.
-            Tap <UI>Stop</UI> to stop playback.
+            On the clock screen, tap <UI>Play 1 message</UI>, or press a phone button assigned to{" "}
+            <UI>Play / stop messages</UI>. Tap <UI>Stop</UI> to end playback.
           </li>
           <li>
             Porch says who each message is from and when it was sent.
           </li>
-          <li>A message that isn’t played within a week is removed.</li>
+          <li>Messages that aren’t played within a week are removed.</li>
         </ul>
         <Setting
           rows={[
@@ -331,14 +332,17 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            With <Path steps={["Messages", "Play when someone is in front of the iPad"]} /> on, Porch uses the camera
-            to see if someone is there, then announces and plays waiting messages. It doesn’t record video.
+            When <Path steps={["Messages", "Play when someone is in front of the iPad"]} /> is on,
+            Porch checks whether someone is in front of the tablet. If so, it announces and plays
+            waiting messages. It does not record video.
           </li>
           <li>
-            Choose the hours with <UI>Starting at</UI> and <UI>Until</UI>, so messages don’t play in the night.
+            Set the hours using <UI>Starting at</UI> and <UI>Until</UI>, so messages won’t play
+            during the night.
           </li>
           <li>
-            If your loved one taps <UI>Not now</UI> or <UI>Stop</UI>, Porch waits 30 minutes before trying again.
+            If your loved one taps <UI>Not now</UI> or <UI>Stop</UI>, Porch won’t try again
+            for another 30 minutes.
           </li>
         </ul>
         <Setting
@@ -358,14 +362,16 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            <strong>From the tablet.</strong> If the call stays in Porch, the tablet asks your loved one to speak after
-            the beep. Press 0 when finished, then tap <UI>Send message</UI> or <UI>Don’t send</UI>. Sent messages appear
-            under <UI>Messages with [Name]</UI> on the family member’s phone. If Porch tried a regular phone, that
-            phone’s voicemail can take the message.
+            <strong>When your loved one calls someone:</strong> If nobody answers in Porch, the tablet
+            asks them to speak after the beep. They press 0 when finished, then tap{" "}
+            <UI>Send message</UI> or <UI>Don’t send</UI>. The message appears under{" "}
+            <UI>Messages with [Name]</UI> on the family member’s phone. If Porch called
+            a regular phone instead, that phone’s voicemail may answer.
           </li>
           <li>
-            <strong>From a family phone.</strong> When Porch asks <Says>Leave a message?</Says>, tap{" "}
-            <UI>Leave a message</UI> to record one or <UI>Not now</UI>.
+            <strong>When you call your loved one:</strong> If they don’t answer, Porch asks{" "}
+            <Says>Leave a message?</Says>. Tap <UI>Leave a message</UI> to record one or{" "}
+            <UI>Not now</UI> to skip it.
           </li>
         </ul>
         <Setting
@@ -384,14 +390,16 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            Porch gets a US phone number during setup. Keep it in your contacts so you know who’s calling.
+            Porch gets its own US phone number during setup. Save it to your contacts so you
+            recognize calls from your loved one.
           </li>
           <li>
             On a family phone, under <UI>[Name]’s Porch number</UI>, tap <UI>Add to Contacts</UI> or{" "}
             <UI>Share this number</UI>, which sends it by text with a contact card.
           </li>
           <li>
-            A call to the Porch number rings on the tablet. If nobody answers, the caller can leave a voicemail.
+            People can call this number from a regular phone. The tablet rings, and if nobody
+            answers, the caller may leave a voicemail.
           </li>
           <li>
             Porch <a href="#blocking">blocks unknown numbers</a> by default.
@@ -412,8 +420,8 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            Porch lets through numbers saved on the keypad, numbers approved for drop-ins and numbers you allow.
-            It blocks calls with a hidden number.
+            By default, Porch accepts calls from numbers on the keypad, numbers approved for drop-ins
+            and numbers you’ve allowed. Calls with hidden numbers are blocked.
           </li>
           <li>
             To let a blocked number through, open <Path steps={["Calls", "Blocked numbers"]} /> and tap <UI>Allow</UI>{" "}
@@ -423,7 +431,8 @@ const parts: GuidePart[] = [
             Allowed numbers are listed under <UI>Allowed</UI>, each with <UI>Remove</UI>.
           </li>
           <li>
-            <UI>Clear this list</UI> only empties the list. Those numbers stay blocked.
+            <UI>Clear this list</UI> clears the blocked-call list, but it doesn’t allow those
+            callers through.
           </li>
         </ul>
         <Setting
@@ -442,22 +451,25 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            <strong>Voicemail</strong> from a number on the keypad plays on the tablet like a family message. Voicemail
-            from anyone else waits for a caregiver.
+            <strong>Voicemail:</strong> Messages from numbers on the keypad play on the tablet
+            like family messages. Other voicemail waits for a caregiver to approve it.
           </li>
           <li>
-            <strong>Texts</strong> from numbers saved on the keypad, approved for drop-ins or allowed by a caregiver
-            appear on the tablet. Porch reads them aloud and translates them if needed. Porch can show text only.
+            <strong>Texts:</strong> Messages from numbers on the keypad, numbers approved for
+            drop-ins or numbers you’ve allowed appear on the tablet. Porch can read them aloud
+            and translate them. It only receives texts; it doesn’t send replies.
             Texts from other numbers wait for a caregiver to review.
           </li>
           <li>
-            A caregiver’s phone shows <UI>1 phone voicemail needs your review</UI> or <UI>1 text needs your review</UI>.
+            When something needs approval, a caregiver’s phone shows a notice such as{" "}
+            <UI>1 phone voicemail needs your review</UI> or <UI>1 text needs your review</UI>.
           </li>
           <li>
-            In <Path steps={["Messages", "Waiting messages"]} />, tap <UI>Listen first</UI>, then{" "}
-            <UI>Let it play on Porch</UI> or <UI>Let it show on Porch</UI>, or <UI>Remove</UI>.
+            Open <Path steps={["Messages", "Waiting messages"]} /> to review them. For voicemail,
+            tap <UI>Listen first</UI>. Then choose <UI>Let it play on Porch</UI>,
+            <UI>Let it show on Porch</UI> or <UI>Remove</UI>, as appropriate.
           </li>
-          <li>Texts nobody reads within a week are removed.</li>
+          <li>Unread texts are removed after a week.</li>
         </ul>
         <Setting
           rows={[
@@ -478,13 +490,12 @@ const parts: GuidePart[] = [
             During a call with your loved one, tap <UI>Add someone</UI> on your phone.
           </li>
           <li>
-            Choose a family member to call. If you’re a caregiver, you can also choose{" "}
-            <UI>A phone number…</UI>, enter who you’re calling and their number, and tap{" "}
-            <UI>Call and add to this call</UI>.
+            Choose a family member to call. Caregivers can also choose <UI>A phone number…</UI>,
+            enter a name and number, and tap <UI>Call and add to this call</UI>.
           </li>
           <li>
-            To remove someone, tap <UI>Hang up [their name]</UI>. If you hang up, anyone you added by phone number is
-            disconnected too.
+            To disconnect someone, tap <UI>Hang up [their name]</UI>. If you end your own call,
+            anyone you added by regular phone number is disconnected too.
           </li>
         </ol>
         <Setting
@@ -502,13 +513,13 @@ const parts: GuidePart[] = [
     body: (
       <>
         <ul>
-          <li>You can call between Porch apps over the internet, including from other countries.</li>
+          <li>Porch-to-Porch calls work over the internet, including when family members are abroad.</li>
           <li>
-            To save a phone number outside the US on a key, start it with + and the country code. Porch checks it when
-            you tap <UI>Save</UI>.
+            For a regular phone number outside the US, enter + followed by the country code and
+            number. Porch checks it when you tap <UI>Save</UI>.
           </li>
           <li>
-            If Porch says it can’t call numbers in that country yet, <Contact /> and I can turn that country on.
+            If Porch says calling that country isn’t available yet, <Contact />. I can enable it.
           </li>
           <li>
             Calls from a regular phone abroad ring on the tablet. You can only add US and Canadian phone numbers to a
@@ -533,12 +544,12 @@ const parts: GuidePart[] = [
             On the tablet, open <Path steps={["Display & voice"]} />.
           </li>
           <li>
-            Under <UI>Bedside language</UI>, choose English, Mandarin (traditional or simplified characters),
-            Cantonese, Spanish, Tagalog or Korean.
+            Under <UI>Bedside language</UI>, choose English, Mandarin (traditional or simplified
+            characters), Cantonese, Spanish, Tagalog or Korean.
           </li>
           <li>
-            Under <UI>Announcement voice</UI>, choose a Porch voice (listed as Natural) or one of the tablet’s voices. Tap{" "}
-            <UI>Preview announcement</UI> to hear it.
+            Under <UI>Announcement voice</UI>, choose one of Porch’s voices (marked Natural)
+            or a voice on the tablet. Tap <UI>Preview announcement</UI> to listen.
           </li>
           <li>
             Under <UI>Clock</UI>, choose <UI>Dark</UI> or <UI>Day &amp; night</UI>. With <UI>Day &amp; night</UI>,
@@ -549,8 +560,8 @@ const parts: GuidePart[] = [
           </li>
         </ol>
         <p>
-          The language also sets how Porch greets people who reach voicemail on the Porch number, and which language
-          texts are translated into. Caregiver mode and the family apps stay in English.
+          The language you choose also controls the voicemail greeting and the language Porch
+          translates incoming texts into. Caregiver mode and the apps on family phones stay in English.
         </p>
         <Setting
           rows={[
@@ -565,18 +576,19 @@ const parts: GuidePart[] = [
   },
   {
     id: "presence",
-    title: "Share when someone uses the tablet",
+    title: "See when someone is at the tablet",
     body: (
       <>
         <ul>
           <li>
-            Family phones show <UI>Someone is at the iPad</UI>, or <UI>Someone was at the iPad 12 minutes ago</UI>.
-            Android says “tablet”.
+            Family phones can show <UI>Someone is at the iPad</UI> or{" "}
+            <UI>Someone was at the iPad 12 minutes ago</UI>. On Android, the message says
+            “tablet” instead of “iPad”.
           </li>
-          <li>Porch updates this status when someone touches the screen or presses a key.</li>
+          <li>The status updates when someone touches the screen or presses a phone button.</li>
           <li>
-            With <UI>Check with the camera</UI> on, Porch also checks for someone in front of the tablet about every
-            30 seconds. It doesn’t record video.
+            With <UI>Check with the camera</UI> on, Porch also looks for someone in front of
+            the tablet about every 30 seconds. It does not record video.
           </li>
         </ul>
         <Setting
@@ -595,16 +607,17 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            <Path steps={["Calls", "Call history"]} /> lists the last 90 days of calls: who called whom, how long they
-            talked, and missed or declined calls. It’s on the tablet and caregivers’ phones.
+            <Path steps={["Calls", "Call history"]} /> shows the last 90 days of calls: who called,
+            how long they talked and which calls were missed or declined. You can see it on the
+            tablet or a caregiver’s phone.
           </li>
           <li>
-            <Path steps={["Calls", "End calls after silence"]} /> hangs up a call after nobody has talked for a while.
-            Choose how long with <UI>After no one talks for</UI>.
+            <Path steps={["Calls", "End calls after silence"]} /> ends a call after a period
+            with no one speaking. Set the wait under <UI>After no one talks for</UI>.
           </li>
           <li>
-            <Path steps={["Calls", "Test sounds"]} /> plays the ringing and the drop-in announcement, to check the
-            volume. Tablet only.
+            <Path steps={["Calls", "Test sounds"]} /> plays the ringtone and drop-in announcement
+            so you can check the volume. This is on the tablet only.
           </li>
         </ul>
         <Setting
@@ -622,15 +635,16 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Use the phone’s keys to call, answer or hang up. You’ll see and hear the caller on the tablet and speak
-          into the tablet’s microphone.
+          Your loved one uses the big-button phone to start, answer and end calls. They see
+          and hear the caller on the tablet and speak into the tablet’s microphone, not the phone receiver.
         </p>
         <ul>
           <li>To answer, lift the receiver and press 0.</li>
           <li>Putting the receiver back hangs up.</li>
           <li>
-            To check the phone again, open <Path steps={["This iPad", "Connect the phone"]} />. On Android it’s{" "}
-            <UI>This tablet</UI>.
+            If the phone buttons stop working, you can run the connection test again under{" "}
+            <Path steps={["This iPad", "Connect the phone"]} />. On Android, use <UI>This tablet</UI>
+            instead of <UI>This iPad</UI>.
           </li>
         </ul>
         <Setting
