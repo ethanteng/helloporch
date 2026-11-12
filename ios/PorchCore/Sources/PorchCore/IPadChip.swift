@@ -12,6 +12,7 @@ public enum IPadChip {
         "iPad14,1", "iPad14,2",   // iPad mini (6th generation), A15
         "iPad15,7", "iPad15,8",   // iPad (A16)
         "iPad16,1", "iPad16,2",   // iPad mini (A17 Pro)
+        "iPad19,1", "iPad19,2",   // iPad mini (A20 Pro)
     ]
 
     /// True only for an iPad known to have no M chip. A model this doesn't know, such as one newer than the list, or an
