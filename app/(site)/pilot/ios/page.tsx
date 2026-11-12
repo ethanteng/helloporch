@@ -145,7 +145,7 @@ const parts: GuidePart[] = [
           <li>
             Enter a name your family will recognize, such as Grandpa Joe, and tap <UI>Continue</UI>.
           </li>
-          <li>Choose a six-digit caregiver PIN. You’ll use it to change Porch’s settings, so keep it somewhere safe.</li>
+          <li>Choose a six-digit caregiver PIN and enter it twice. You’ll use it to change Porch’s settings, so keep it somewhere safe.</li>
           <li>
             Tap <UI>Get number</UI>. Porch will assign a phone number people can call. When it appears, tap{" "}
             <UI>Continue</UI>.
