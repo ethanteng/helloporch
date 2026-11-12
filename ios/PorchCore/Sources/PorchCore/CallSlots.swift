@@ -147,7 +147,8 @@ public struct CallSlots: Equatable {
                 invitationID: invitation.id, memberName: invitation.name, buttonColorHex: contact.buttonColorHex).preservingCaregiverPhoto(from: contact), for: key.digit)
         }
     }
-    /// A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same.
+    /// A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. Android's `CallSlots.matchingName`
+    /// folds names the same way: full case folding ("Straße" is "strasse"), no accents, and any space between words.
     static func matchingName(_ name: String) -> String {
         name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }

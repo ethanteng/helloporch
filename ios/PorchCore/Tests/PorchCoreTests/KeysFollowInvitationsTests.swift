@@ -139,5 +139,10 @@ final class KeysFollowInvitationsTests: XCTestCase {
         XCTAssertEqual(CallSlots.matchingName("  Lísa   Chen "), CallSlots.matchingName("lisa chen"))
         XCTAssertNotEqual(CallSlots.matchingName("Lisa"), CallSlots.matchingName("Lisa Chen"))
         XCTAssertEqual(CallSlots.matchingName("家駿"), "家駿")
+        // The same list as Android's test, so a name matches on either bedside.
+        for (name, folded) in [("Straße", "strasse"), ("STRASSE", "strasse"), ("Lisa\u{00A0}Chen", "lisa chen"), ("İsmail", "ismail"),
+                               ("ﬁona", "fiona"), ("Zoë\tO’Neil", "zoe o’neil"), ("Ｌｉｓａ", "ｌｉｓａ")] {
+            XCTAssertEqual(CallSlots.matchingName(name), folded, name)
+        }
     }
 }

@@ -138,5 +138,10 @@ class KeysFollowInvitationsTest {
         assertEquals(CallSlots.matchingName("lisa chen"), CallSlots.matchingName("  Lísa   Chen "))
         assertNotEquals(CallSlots.matchingName("Lisa"), CallSlots.matchingName("Lisa Chen"))
         assertEquals("家駿", CallSlots.matchingName("家駿"))
+        // The same list as iOS's test, so a name matches on either bedside.
+        for ((name, folded) in listOf("Straße" to "strasse", "STRASSE" to "strasse", "Lisa\u00A0Chen" to "lisa chen", "İsmail" to "ismail",
+            "ﬁona" to "fiona", "Zoë\tO’Neil" to "zoe o’neil", "Ｌｉｓａ" to "ｌｉｓａ")) {
+            assertEquals(folded, CallSlots.matchingName(name), name)
+        }
     }
 }

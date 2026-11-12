@@ -185,10 +185,12 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
          * It covers a bedside that was offline the whole time the invitation was open. */
         const val joinedRecentlySeconds = 86_400L
 
-        /** A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. */
+        /** A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. It folds names as iOS's
+         * `CallSlots.matchingName` does, so a name matches on both bedsides: full case folding ("Straße" is "strasse"),
+         * no accents, and any space between words, a non-breaking one included. */
         fun matchingName(name: String): String =
-            Normalizer.normalize(name, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase(Locale.ROOT)
-                .split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+            Normalizer.normalize(name.uppercase(Locale.ROOT).lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+                .split(Regex("[\\s\\p{Z}]+")).filter { it.isNotEmpty() }.joinToString(" ")
 
         /** The key as the keypad labels it. */
         fun symbol(digit: Int): String = when (digit) {
