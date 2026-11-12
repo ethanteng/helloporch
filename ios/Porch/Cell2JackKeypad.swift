@@ -90,6 +90,9 @@ final class Cell2JackKeypad {
     /// A connection to the driver is open and hasn't answered yet, as the first one is for a few seconds after the
     /// Cell2Jack is found. Between tries, after one found no Cell2Jack, there's none.
     var connecting: Bool { worker != nil && !isReady }
+    /// The last connection to the driver ended on its own before it answered, as when no Cell2Jack is plugged straight
+    /// in. One Porch stopped, such as when it left the screen, didn't find anything out, so it doesn't count.
+    private(set) var lastTryFoundNothing = false
     var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
 
     init(defaults: UserDefaults = .standard,
@@ -143,6 +146,7 @@ final class Cell2JackKeypad {
         if !wanted { stop(); return }
         guard worker == nil else { return }
         cancelRetry()
+        lastTryFoundNothing = false
         let token = UUID(); generation = token; connectionID = token
         let startedAt = uptime()
         changeStatus("Connecting phone keypad…")
@@ -202,6 +206,7 @@ final class Cell2JackKeypad {
                 guard self.connectionID == token else { return }
                 let restart = self.stopping && self.wanted
                 let recoverable = self.worker?.supportsRecovery == true
+                self.lastTryFoundNothing = !self.stopping && !self.isReady
                 self.worker = nil; self.connectionID = nil; self.stopping = false
                 self.generation = UUID(); self.isReady = false
                 self.changeStatus(message); self.record(["kind": "usbStopped", "result": message])

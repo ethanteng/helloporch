@@ -701,8 +701,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private func checkedWithoutDriver() {
         // Ready, or nothing was on: the decision is made. A later drop must not be treated as the adapter replacing it.
         guard keypad.enabled, !keypad.isReady else { checkedThroughAdapter = false; return }
-        // Still the first try. `keypadChanged` calls this again when that try finishes.
-        if keypad.connecting { return }
+        // Still the first try. `keypadChanged` calls this again when that try finishes. One that Porch stopped itself,
+        // such as for Open Settings or switching apps, found nothing out: the next try, back in Porch, decides.
+        if keypad.connecting || !keypad.lastTryFoundNothing { return }
         checkedThroughAdapter = false
         keypad.record(["kind": "phoneKeypadOff", "reason": "phone checked through the adapter"])
         keypad.setEnabled(false); enabledHere = false

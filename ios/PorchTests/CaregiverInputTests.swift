@@ -2319,6 +2319,29 @@ final class BedsideSetupTests: XCTestCase {
         }
     }
 
+    @MainActor func testLeavingPorchDuringTheDriversFirstTryIsNotTheDriverFindingNothing() throws {
+        // Open Settings, or switching apps, while the first try is still open: Porch stops that try itself, which
+        // says nothing about whether a Cell2Jack is plugged straight in.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(step.keypad.connecting, "\(hangUp)")
+            step.keypad.pause()
+            step.connections()[0].update(.finished("Phone keypad stopped"))
+            XCTAssertTrue(step.keypad.enabled, "Porch stopped the try, so it found nothing out (\(hangUp))")
+            // Back in Porch, the next try finds nothing: that decides it.
+            step.keypad.activate()
+            XCTAssertEqual(step.connections().count, 2, "\(hangUp)")
+            step.connections()[1].update(.finished("No running Cell2Jack driver service"))
+            XCTAssertFalse(step.keypad.enabled, "\(hangUp)")
+        }
+    }
+
     @MainActor func testAKeyboardKeyWhileTheDriverAnswersLeavesThePhoneKeypadOn() throws {
         // A keyboard case on an iPad whose Cell2Jack is plugged straight in.
         let step = try phoneStep { true }
