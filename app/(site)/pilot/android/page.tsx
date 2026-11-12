@@ -229,8 +229,9 @@ const parts: GuidePart[] = [
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
           </li>
           <li>
-            Enter their name. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls should ring
-            first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
+            Enter their name. If they’re already on the keypad, use the name on their key, so their key switches to
+            their Porch app when they join. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls
+            should ring first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
           </li>
           <li>
             Tap <UI>Create invitation</UI> and send it by text or email. Then tap <UI>Done</UI>.
@@ -276,7 +277,7 @@ const parts: GuidePart[] = [
           </li>
           <li>
             If they’ve joined, tap <UI>Choose from Family on Porch</UI> and choose them. For anyone else, type their
-            name or tap <UI>Choose from Contacts</UI>.
+            name or tap <UI>Choose from Contacts</UI>. If you’ve invited them, use the name on their invitation.
           </li>
           <li>
             Under <UI>Calls start as</UI>, choose <UI>Video</UI> or <UI>Voice</UI>.
@@ -290,20 +291,23 @@ const parts: GuidePart[] = [
           </li>
         </ol>
         <h3>When someone joins Porch later</h3>
+        <p>
+          A key can start with someone’s regular phone number and switch to their Porch app once they join. It switches
+          on its own when their invitation has the same name as their key, such as Sarah on key 1 and an invitation for
+          Sarah. Capital letters and extra spaces don’t matter, and it works however you invite them: from your phone,
+          from <UI>People</UI>, or by tapping her key and then <UI>Invite Sarah</UI>. If you send her a second invitation,
+          her key takes whichever one she uses. Her phone number stays as the one Porch tries when she misses a call.
+        </p>
+        <p>
+          If their key doesn’t switch, switch it yourself. That happens when their invitation has another name, when two
+          keys or two people who joined share their name, or when the tablet was off for more than a day after they
+          joined. In <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose them.
+        </p>
         <StepVideo
           name="android-switch"
-          label="Video: switching a key from someone’s phone number to their Porch app"
-          caption="Switching key 1 from Sarah’s phone number to her Porch app."
+          label="Video: switching a key from someone’s phone number to their Porch app by hand"
+          caption="Switching key 1 from Sarah’s phone number to her Porch app by hand."
         />
-        <p>
-          A key can start with someone’s regular phone number and switch to their Porch app once they join. In{" "}
-          <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose them. Their phone number
-          stays as the one Porch tries when they miss a call.
-        </p>
-        <p>
-          If you invite them from their key’s page instead, with <UI>Invite</UI> and their name, their key switches to
-          their Porch app on its own when they join.
-        </p>
       </>
     ),
   },

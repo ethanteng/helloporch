@@ -29,6 +29,8 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let canReceiveCalls: Bool?
     public let online: Bool
     public let invitationID: String?
+    /// Bedside only: when they accepted `invitationID`, in server time. Members who joined before servers kept it don't have it.
+    public let joinedAt: TimeInterval?
     /// Family devices only: approved to open caregiver mode with the PIN.
     public let caregiver: Bool?
 }

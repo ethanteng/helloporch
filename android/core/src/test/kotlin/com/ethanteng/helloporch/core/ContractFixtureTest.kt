@@ -20,6 +20,8 @@ class ContractFixtureTest {
         assertEquals(PorchExperience.BEDSIDE, bedside.me.role)
         assertEquals(listOf("Ethan" to "ios", "Lee" to "android"), bedside.people.map { it.name to it.platform })
         assertEquals(listOf("Sam"), bedside.invitations?.map { it.name })
+        // Keys follow invitations accepted in the last day, so the bedside learns when each person joined.
+        assertEquals(listOf(bedside.serverTime, bedside.serverTime), bedside.people.map { it.joinedAt })
         val family = snapshot("family-poll")
         assertEquals(true, family.me.caregiver); assertNull(family.call)
         val ringing = snapshot("family-incoming-call")

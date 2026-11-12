@@ -75,12 +75,14 @@ public struct CallSlots: Equatable {
         }
         slots[index] = Slot(action: .person, contact: validated)
     }
-    /// Pair by the server-issued invitation identity, never a person's name.
+    /// Pair by the server-issued invitation identity, never a name the person chose.
     /// Removal of a member also removes their stale calling target.
     /// Also keeps each contact showing its family member's current name and photo, once the
     /// photo is in `memberPhotos`. A removed member's last name and photo stay until the caregiver edits the key.
+    /// First, a key still waiting for someone takes up the invitation sent for them (see `followInvitations`).
     public mutating func reconcile(with state: FamilySnapshot, memberPhotos: ContactPhotoStore = ContactPhotoStore.standard.familyMembers) throws {
         guard state.me.role == .bedside else { return }
+        try followInvitations(state)
         for digit in Self.digits {
             guard let contact = contact(for: digit), let native = contact.nativeCall else { continue }
             let member = Self.member(for: contact, in: state)
@@ -100,6 +102,57 @@ public struct CallSlots: Equatable {
                     .preservingPhoto(from: contact).showingMember(name: name, photoID: photoID, photos: memberPhotos), for: digit)
             }
         }
+    }
+    /// How long after someone accepts an invitation a key can still take it up: a day, as long as an invitation lasts.
+    /// It covers a bedside that was offline the whole time the invitation was open.
+    public static let joinedRecentlySeconds: TimeInterval = 86400
+    /// A key waiting for someone takes up the invitation sent for them, wherever it was sent from: People, a caregiver's
+    /// phone, or again after the key's own invitation ran out or went astray. Once they join, the key calls their Porch app,
+    /// so no caregiver has to link them by hand.
+    ///
+    /// A key is waiting when no family member on Porch is on it. It goes by the name a caregiver gave an invitation,
+    /// ignoring case, accents and spacing, never by one the person chose, and only when no other key has that name.
+    /// Someone who accepted an invitation with the key's name in the last day takes the key, even over an invitation still
+    /// open for it: an invitation sent again is most often for the same person. Otherwise a key with no open invitation of
+    /// its own takes up an open one with its name. Either way exactly one person, or one invitation, must have the name.
+    /// The key then goes by their Porch name, as one linked by hand does, and follows the invitation's identity from then on.
+    mutating func followInvitations(_ state: FamilySnapshot) throws {
+        let keyed = contacts.compactMap { $0 }
+        let open = state.invitations ?? []
+        func onKey(invitation: String, member: String? = nil) -> Bool {
+            keyed.contains { $0.invitationID == invitation || (member != nil && $0.familyMemberID == member) }
+        }
+        let pending: [(id: String, name: String)] = open.compactMap { invitation in
+            guard let name = invitation.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty, !onKey(invitation: invitation.id) else { return nil }
+            return (invitation.id, name)
+        }
+        let joined: [(id: String, name: String)] = state.people.compactMap { person in
+            guard person.role == .family, let id = person.invitationID, let at = person.joinedAt, state.serverTime - at < Self.joinedRecentlySeconds,
+                  let name = person.invitedName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
+                  !onKey(invitation: id, member: person.id) else { return nil }
+            return (id, name)
+        }
+        guard !pending.isEmpty || !joined.isEmpty else { return }
+        // Two keys with one name, such as two Lisas, leave an invitation for "Lisa" to the caregiver, even if one is linked.
+        let names = keyed.map { Self.matchingName($0.name) }
+        for digit in Self.digits {
+            guard let contact = contact(for: digit), let native = contact.nativeCall, Self.member(for: contact, in: state) == nil else { continue }
+            let name = Self.matchingName(contact.name)
+            guard !name.isEmpty, names.filter({ $0 == name }).count == 1 else { continue }
+            func named(_ invitations: [(id: String, name: String)]) -> [(id: String, name: String)] { invitations.filter { Self.matchingName($0.name) == name } }
+            let ownOpen = open.contains { $0.id == contact.invitationID }
+            let people = named(joined)
+            let matches = !people.isEmpty ? people : ownOpen ? [] : named(pending)
+            guard matches.count == 1, let invitation = matches.first else { continue }
+            try setContact(CallContact(name: "", nativeCall: native, phoneNumber: contact.phoneNumber, otherPhoneNumbers: contact.otherPhoneNumbers,
+                invitationID: invitation.id, memberName: invitation.name, buttonColorHex: contact.buttonColorHex).preservingCaregiverPhoto(from: contact), for: digit)
+        }
+    }
+    /// A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. Android's `CallSlots.matchingName`
+    /// folds names the same way: case folded fully ("Straße" and "GROẞ" are "strasse" and "gross", while a dotless "ı"
+    /// stays), no accents, and any space between words. Letters such as "ø" and "ł" aren't accented letters, and stay.
+    static func matchingName(_ name: String) -> String {
+        name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
     /// The caregiver's saved name also labels incoming calls and announcements.
     /// Resolve through the same identities as pairing, including newly accepted invites.

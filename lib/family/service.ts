@@ -98,8 +98,10 @@ function adminState(house: Household, now: number, pushable: Pushable) {
     people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushable, true)), invitations: pendingInvites(house, now) };
 }
 function snapshot(house: Household, me: Member, now: number, pushable: Pushable = pushConfigured) {
-  // The bedside is a caregiver device; a family member edits their own profile.
-  const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushable, me.role === "bedside" || m.id === me.id), ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID } : {}) });
+  // The bedside is a caregiver device; a family member edits their own profile. The bedside's keys follow invitations,
+  // so it learns which one each member accepted, and when: a key can take up an invitation accepted in the last day.
+  const publicMember = (m: Member) => ({ ...publicPerson(m, now, pushable, me.role === "bedside" || m.id === me.id),
+    ...(me.role === "bedside" && m.invitationID ? { invitationID: m.invitationID, ...(m.joinedAt !== undefined ? { joinedAt: m.joinedAt } : {}) } : {}) });
   const call = house.call;
   const bedside = house.members.find(m => m.role === "bedside");
   const invited = call && ![call.from, call.to].includes(me.id) ? call.porchGuests?.filter(g => g.memberID === me.id).at(-1) : undefined;
@@ -278,7 +280,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         }
         requireValue(!house.members.some(m => m.id === deviceID), "This device identity is already in use.", 409);
         requireValue(house.members.filter(m => !m.revoked).length < 20, "This household has reached its device limit.");
-        const me: Member = { invitationID: invite.id, id: deviceID, name: invite.name, role: "family", ...platform, secretHash: hash(secret), permissions: invite.permissions, ...(invite.caregiver ? { caregiver: true } : {}), revoked: false, seenAt: now, available: false };
+        const me: Member = { invitationID: invite.id, joinedAt: now, id: deviceID, name: invite.name, role: "family", ...platform, secretHash: hash(secret), permissions: invite.permissions, ...(invite.caregiver ? { caregiver: true } : {}), revoked: false, seenAt: now, available: false };
         house.members.push(me); invite.claimedBy = deviceID;
       });
       await store.create(`device:${deviceID}`, JSON.stringify({ householdID }));

@@ -1,6 +1,8 @@
 package com.ethanteng.helloporch.core
 
+import java.text.Normalizer
 import java.time.Instant
+import java.util.Locale
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
@@ -61,12 +63,14 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         slots[index] = Slot(KeypadAction.PERSON, validated)
     }
 
-    /** Pair by the server-issued invitation identity, never a person's name.
+    /** Pair by the server-issued invitation identity, never a name the person chose.
      * Removal of a member also removes their stale calling target.
      * Also keeps each contact showing its family member's current name and photo, once the
-     * photo is in `memberPhotos`. A removed member's last name and photo stay until the caregiver edits the key. */
+     * photo is in `memberPhotos`. A removed member's last name and photo stay until the caregiver edits the key.
+     * First, a key still waiting for someone takes up the invitation sent for them (see [followInvitations]). */
     fun reconcile(state: FamilySnapshot, memberPhotos: ContactPhotoStore) {
         if (state.me.role != PorchExperience.BEDSIDE) return
+        followInvitations(state)
         for (digit in digits) {
             val contact = contact(digit) ?: continue
             val member = member(contact, state)
@@ -85,6 +89,48 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
                     otherPhoneNumbers = contact.otherPhoneNumbers, familyMemberID = member?.id, invitationID = contact.invitationID, memberName = name,
                     buttonColorHex = contact.buttonColorHex).preservingPhoto(contact).showingMember(name, photoID, memberPhotos), digit)
             }
+        }
+    }
+
+    /** A key waiting for someone takes up the invitation sent for them, wherever it was sent from: People, a caregiver's
+     * phone, or again after the key's own invitation ran out or went astray. Once they join, the key calls their Porch app,
+     * so no caregiver has to link them by hand.
+     *
+     * A key is waiting when no family member on Porch is on it. It goes by the name a caregiver gave an invitation,
+     * ignoring case, accents and spacing, never by one the person chose, and only when no other key has that name.
+     * Someone who accepted an invitation with the key's name in the last day takes the key, even over an invitation still
+     * open for it: an invitation sent again is most often for the same person. Otherwise a key with no open invitation of
+     * its own takes up an open one with its name. Either way exactly one person, or one invitation, must have the name.
+     * The key then goes by their Porch name, as one linked by hand does, and follows the invitation's identity from then on. */
+    internal fun followInvitations(state: FamilySnapshot) {
+        val keyed = contacts.filterNotNull()
+        val open = state.invitations.orEmpty()
+        fun onKey(invitation: String, member: String? = null) = keyed.any { it.invitationID == invitation || (member != null && it.familyMemberID == member) }
+        val pending = open.mapNotNull { invitation ->
+            val name = invitation.name?.trim()
+            if (name.isNullOrEmpty() || onKey(invitation.id)) null else invitation.id to name
+        }
+        val joined = state.people.mapNotNull { person ->
+            val id = person.invitationID
+            val at = person.joinedAt
+            val name = person.invitedName?.trim()
+            if (person.role != PorchExperience.FAMILY || id == null || at == null || state.serverTime - at >= joinedRecentlySeconds ||
+                name.isNullOrEmpty() || onKey(id, person.id)) null else id to name
+        }
+        if (pending.isEmpty() && joined.isEmpty()) return
+        // Two keys with one name, such as two Lisas, leave an invitation for "Lisa" to the caregiver, even if one is linked.
+        val names = keyed.map { matchingName(it.name) }
+        for (digit in digits) {
+            val contact = contact(digit) ?: continue
+            if (member(contact, state) != null) continue
+            val name = matchingName(contact.name)
+            if (name.isEmpty() || names.count { it == name } != 1) continue
+            fun named(invitations: List<Pair<String, String>>) = invitations.filter { matchingName(it.second) == name }
+            val ownOpen = open.any { it.id == contact.invitationID }
+            val people = named(joined)
+            val (id, invited) = (if (people.isNotEmpty()) people else if (ownOpen) emptyList() else named(pending)).singleOrNull() ?: continue
+            setContact(CallContact(name = "", nativeCall = contact.nativeCall, phoneNumber = contact.phoneNumber, otherPhoneNumbers = contact.otherPhoneNumbers,
+                invitationID = id, memberName = invited, buttonColorHex = contact.buttonColorHex).preservingCaregiverPhoto(contact), digit)
         }
     }
 
@@ -134,6 +180,20 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         const val pound = 11
         val digits = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 0, star, pound)
         val count = digits.size
+
+        /** How long after someone accepts an invitation a key can still take it up: a day, as long as an invitation lasts.
+         * It covers a bedside that was offline the whole time the invitation was open. */
+        const val joinedRecentlySeconds = 86_400L
+
+        /** A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. It folds names as iOS's
+         * `CallSlots.matchingName` does, so a name matches on both bedsides: case folded fully ("Straße" and "GROẞ" are
+         * "strasse" and "gross", while a dotless "ı" stays), no accents, and any space between words, a non-breaking one
+         * included. Letters such as "ø" and "ł" aren't accented letters, and stay on both. */
+        fun matchingName(name: String): String {
+            val folded = name.split('ı').joinToString("ı") { it.uppercase(Locale.ROOT).lowercase(Locale.ROOT) }.replace("ß", "ss")
+            return Normalizer.normalize(folded, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+                .split(Regex("[\\s\\p{Z}]+")).filter { it.isNotEmpty() }.joinToString(" ")
+        }
 
         /** The key as the keypad labels it. */
         fun symbol(digit: Int): String = when (digit) {

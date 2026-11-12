@@ -14,8 +14,9 @@ export type PendingPhoto = { pathname: string; expiresAt: number };
 /** `name` is the name the caregiver gave the invitation. `profile` is the member's own choice and `override` a caregiver's.
  * `lastPoll`: the newest numbered poll that set `available` (see `takesAvailability`).
  * `attendedAt`: the bedside only, when it last noticed someone at the iPad (see `noteAttendance`).
- * `platform`: "android" for an Android device. Devices set up before Android existed have none: iOS. */
-export type Member = { platform?: "android"; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+ * `platform`: "android" for an Android device. Devices set up before Android existed have none: iOS.
+ * `joinedAt`: when a family member claimed their invitation. Members who joined before it was kept don't have it. */
+export type Member = { platform?: "android"; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; joinedAt?: number; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
