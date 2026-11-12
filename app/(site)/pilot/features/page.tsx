@@ -615,17 +615,14 @@ const parts: GuidePart[] = [
           <li>Putting the receiver back hangs up.</li>
           <li>
             To check the phone again, open <Path steps={["This iPad", "Connect the phone"]} />. On Android it’s{" "}
-            <UI>This tablet</UI>, which also has <UI>Retry phone connection</UI>.
-          </li>
-          <li>
-            To use a USB number keypad instead, tap <UI>Connect the USB keypad</UI> in the same menu.
+            <UI>This tablet</UI>.
           </li>
         </ul>
         <Setting
           rows={[
             ["Default", <>Putting the receiver back hangs up.</>],
             ["Change it", <><Path key="p" steps={["This iPad", "Hang up when the receiver is put back"]} />, tablet only. Turn it off to keep calls connected when someone puts the receiver back.</>],
-            ["Android", <>The phone switch is <UI>Use Cell2Jack phone keypad</UI> under <UI>This tablet</UI>. Setup turns it on.</>],
+            ["Android", <>The same switch is under <UI>This tablet</UI>.</>],
           ]}
         />
       </>

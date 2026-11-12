@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 
 /** One screen of setup. */
-enum class SetupStep { LINK, NAME, PIN, NUMBER, PERMISSIONS, CALLING, USB_KEYPAD, CORDED_PHONE, YOUR_PHONE, DONE }
+enum class SetupStep { LINK, NAME, PIN, NUMBER, PERMISSIONS, CALLING, CORDED_PHONE, YOUR_PHONE, DONE }
 
 /** The screens after the number, in order. Each is skipped when there's nothing to do on it. */
 enum class SetupStage { PERMISSIONS, PHONE, YOUR_PHONE, DONE }

@@ -91,7 +91,7 @@ enum class CaregiverPage(private val bedsideTitle: String, private val phoneTitl
 }
 
 /** Screens a caregiver opens over a page. */
-enum class CaregiverScreen { NAME, NUMBER, CHANGE_PIN, CONNECT_PHONE, CONNECT_KEYPAD }
+enum class CaregiverScreen { NAME, NUMBER, CHANGE_PIN, CONNECT_PHONE }
 
 /**
  * Caregiver mode's changes, as iOS's FamilyAdminViewController makes them: each one goes to the server with the caregiver

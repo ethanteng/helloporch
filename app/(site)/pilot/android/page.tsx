@@ -135,8 +135,9 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          When Porch shows <UI>Connect the phone</UI>, follow the steps below. You’ll use the corded phone’s keys to
-          make and answer calls. You’ll see and hear the caller on the tablet and speak into the tablet’s microphone.
+          When Porch shows <UI>Connect the phone</UI>, follow the steps below. Its <UI>Step-by-step instructions</UI>{" "}
+          link opens this page. You’ll use the corded phone’s keys to make and answer calls. You’ll see and hear the
+          caller on the tablet and speak into the tablet’s microphone.
         </p>
         <Chain label="How it connects" items={["Corded phone", "Cell2Jack", "USB-C hub", "Tablet"]} />
         <ol>
@@ -394,8 +395,7 @@ const parts: GuidePart[] = [
               a: (
                 <p>
                   Lift the receiver before pressing a key. Check that the switch on the phone is set to <UI>T</UI> or{" "}
-                  <UI>Tone</UI>. Then open caregiver mode, <UI>This tablet</UI>, and run <UI>Connect the phone</UI> again, or tap{" "}
-                  <UI>Retry phone connection</UI>.
+                  <UI>Tone</UI>. Then open caregiver mode, <UI>This tablet</UI>, and run <UI>Connect the phone</UI> again.
                 </p>
               ),
             },
