@@ -50,12 +50,21 @@ communication is an iPadOS facility.
   of the same driver. Enable the driver in the real **Porch** app's settings,
   disconnect Cell2Jack for ten seconds, then reconnect it.
 - Setup's **Connect the phone** step, or **Connect the phone** in Porch caregiver
-  mode → **This iPad**, tries the driver while it also listens for the Porch phone
-  adapter. It turns on **Use Cell2Jack phone keypad** once a Cell2Jack on the driver
-  answers, then checks a key and the receiver going back. The switch is also on
-  **This iPad**. It takes effect immediately, separately from the existing Save
-  button for silence settings. It is off by default. No launch argument automatically enables the normal app.
-  Once on, it persists until turned off again.
+  mode → **This iPad** → **Connect the physical phone**, tries the driver while it
+  also listens for the Porch phone adapter. It turns the Cell2Jack phone keypad
+  (`porch.cell2jack.enabled`) on once a Cell2Jack on the driver answers, then
+  checks a key and the receiver going back. **Do this later** before the check
+  turns it back off. Porch doesn't try the driver on an iPad it knows has no M
+  chip ([IPadChip](PorchCore/Sources/PorchCore/IPadChip.swift), by model
+  identifier); a model it doesn't know gets it. The setting is off by default and
+  has no switch in This iPad since 2026-11-11: Connect the phone is the only way
+  to turn it on, and once on it stays on. Unplugging the Cell2Jack, or turning the
+  USB driver off in Settings → Porch (**Open app settings** in that group), stops
+  it working, but Porch keeps looking for the Cell2Jack, backing off to every 15
+  seconds. Checking the phone through the Porch phone adapter on Connect the
+  phone, while nothing answers on the driver, turns the setting off, so an iPad
+  that moves from a Cell2Jack plugged straight in to the adapter stops looking.
+  No launch argument automatically enables the normal app.
 - Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
   disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.
@@ -76,7 +85,7 @@ communication is an iPadOS facility.
   client, invalidates pending callbacks, and cancels a pending outgoing request.
   Returning reconnects when enabled. Unexpected USB failures automatically retry
   after 1, 2, 4, 8, then 15 seconds while Porch is active in bedside mode.
-  **Retry phone connection** in This iPad can retry immediately. Touch call
+  Opening **Connect the phone** in This iPad retries immediately. Touch call
   controls remain available when USB is disconnected.
 
 Picking up the receiver is never routed to an app action; putting it back is

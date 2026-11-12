@@ -87,6 +87,12 @@ final class Cell2JackKeypad {
     private(set) var trying = false
     /// The Cell2Jack is answering: the phone is plugged in and the driver is on.
     private(set) var isReady = false
+    /// A connection to the driver is open and hasn't answered yet, as the first one is for a few seconds after the
+    /// Cell2Jack is found. Between tries, after one found no Cell2Jack, there's none.
+    var connecting: Bool { worker != nil && !isReady }
+    /// The last connection to the driver ended on its own before it answered, as when no Cell2Jack is plugged straight
+    /// in. One Porch stopped, such as when it left the screen, didn't find anything out, so it doesn't count.
+    private(set) var lastTryFoundNothing = false
     var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
 
     init(defaults: UserDefaults = .standard,
@@ -99,11 +105,15 @@ final class Cell2JackKeypad {
         self.defaults = defaults; self.isBedside = isBedside; self.makeConnection = makeConnection
         self.uptime = uptime; self.enqueueRetry = enqueueRetry
     }
+    /// A build with the driver, on an iPad that may have an M chip. An iPad known to have none can take the phone only
+    /// through the adapter, so Porch never tries the driver there.
     static var supportsDriverPlatform: Bool {
         #if PORCH_NO_CELL2JACK
         return false
         #else
-        if #available(iOS 16.0, *) { return UIDevice.current.userInterfaceIdiom == .pad }
+        if #available(iOS 16.0, *) {
+            return UIDevice.current.userInterfaceIdiom == .pad && !IPadChip.lacksMChip(model: PorchDevice.model)
+        }
         return false
         #endif
     }
@@ -136,6 +146,7 @@ final class Cell2JackKeypad {
         if !wanted { stop(); return }
         guard worker == nil else { return }
         cancelRetry()
+        lastTryFoundNothing = false
         let token = UUID(); generation = token; connectionID = token
         let startedAt = uptime()
         changeStatus("Connecting phone keypad…")
@@ -195,6 +206,7 @@ final class Cell2JackKeypad {
                 guard self.connectionID == token else { return }
                 let restart = self.stopping && self.wanted
                 let recoverable = self.worker?.supportsRecovery == true
+                self.lastTryFoundNothing = !self.stopping && !self.isReady
                 self.worker = nil; self.connectionID = nil; self.stopping = false
                 self.generation = UUID(); self.isReady = false
                 self.changeStatus(message); self.record(["kind": "usbStopped", "result": message])
@@ -292,7 +304,7 @@ private final class Cell2JackUnavailableConnection: Cell2JackKeypadConnection {
     let supportsRecovery = false
     private let update: (Cell2JackKeypadUpdate) -> Void
     init(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) { self.update = update }
-    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack needs an iPad with an M chip. A regular USB keypad and the touchscreen still work.")) } }
+    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack needs an iPad with an M chip. The Porch phone adapter and the touchscreen still work.")) } }
     func stop() {}
 }
 
@@ -364,7 +376,7 @@ private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
                 primaryDigits += digits.filter { $0.kind == .digit }.count
                 if !digits.isEmpty { emit(.digits(digits, ProcessInfo.processInfo.systemUptime)) }
             } else if !ready, ProcessInfo.processInfo.systemUptime - attemptTime >= 2 {
-                guard attempts < 3 else { throw failure("No device logs after three attempts. Check the driver and reconnect, then tap Retry.") }
+                guard attempts < 3 else { throw failure("No device logs after three attempts. Check the USB driver in Settings → Porch, then unplug the Cell2Jack for ten seconds and plug it back in.") }
                 _ = try unpack(session.endLogs()); try begin()
             }
             let now = ProcessInfo.processInfo.systemUptime

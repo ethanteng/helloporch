@@ -51,9 +51,8 @@ fun BedsideSetupFlow(app: PorchApplication, setup: BedsideSetup, cordedPhoneSetu
             SetupStep.CALLING -> SetupScreen(setup) {
                 val usbHost = LocalContext.current.packageManager.hasSystemFeature(PackageManager.FEATURE_USB_HOST)
                 SetupCallingScreen(lovedOne, offersCordedPhone = usbHost, onCordedPhone = { setup.push(SetupStep.CORDED_PHONE) },
-                    onUSBKeypad = { setup.push(SetupStep.USB_KEYPAD) }, onTouchscreen = { setup.show(SetupStage.YOUR_PHONE) })
+                    onTouchscreen = { setup.show(SetupStage.YOUR_PHONE) })
             }
-            SetupStep.USB_KEYPAD -> SetupScreen(setup) { SetupUSBKeypadScreen(lovedOne, onContinue = { setup.show(SetupStage.YOUR_PHONE) }) }
             SetupStep.CORDED_PHONE -> cordedPhoneSetup({ setup.show(SetupStage.YOUR_PHONE) }, { setup.back() })
             SetupStep.YOUR_PHONE -> SetupScreen(setup) {
                 setup.yourPhone?.let { SetupYourPhoneScreen(it, lovedOne, onContinue = { setup.show(SetupStage.DONE) }) }

@@ -206,6 +206,14 @@ fun openPrivacyPolicy(context: Context) {
     catch (_: ActivityNotFoundException) {}
 }
 
+/** The Android setup guide, at its part on the desk phone: the steps for plugging it in, the parts and the tips. */
+const val androidGuideURL = "https://helloporch.store/pilot/android#phone"
+
+fun openAndroidGuide(context: Context) {
+    try { staysInCaregiverMode { context.startActivity(Intent(Intent.ACTION_VIEW, androidGuideURL.toUri())) } }
+    catch (_: ActivityNotFoundException) {}
+}
+
 /** Before Porch opens another app's screen for the caregiver, such as the photo picker, the share sheet or the privacy
  * policy: caregiver mode on a family phone stays open behind it. A picker `answers`, so coming back without its answer
  * ends caregiver mode (RemoteCaregiverSession). If the screen doesn't open, the next time Porch leaves is still the

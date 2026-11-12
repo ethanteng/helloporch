@@ -16,7 +16,7 @@ All use the existing `com.ethanteng.helloporch` app identity and ordinary Porch
 UI. They replace one another on the same device. The driver only runs on an iPad
 with an M chip and iPadOS 16 or later, once it's turned on in Settings → Porch.
 Family iPhones use the touchscreen. A bedside iPad without an M chip uses the
-Porch phone adapter, a USB keypad, or the touchscreen. Never install a
+Porch phone adapter or the touchscreen, and Porch doesn't try the driver there. Never install a
 `PorchFamily` build on a bedside that uses a Cell2Jack plugged straight in,
 since it has no driver. Mom's iPad keeps getting `Porch`
 development builds in place until it moves to TestFlight on a visit

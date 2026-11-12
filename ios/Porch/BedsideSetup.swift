@@ -45,7 +45,7 @@ final class BedsideOnIPadViewController: CaregiverFormViewController {
 
 /// Setting up a new bedside iPad, one screen at a time: the setup link, unless Porch was opened from it; who it's for;
 /// the caregiver PIN, which sets the iPad up; its own phone number; the microphone and camera; how they'll call, with a
-/// desk phone, a USB keypad or the touchscreen; the caregiver's own phone; then Done. Until the iPad is set up, the clock's caregiver button opens this instead of
+/// desk phone or the touchscreen; the caregiver's own phone; then Done. Until the iPad is set up, the clock's caregiver button opens this instead of
 /// caregiver mode.
 @MainActor final class BedsideSetup {
     /// Who this Porch is for, such as "Mom", once it's chosen.
@@ -414,21 +414,21 @@ final class SetupPermissionsViewController: BedsideSetupStep {
     }
 }
 
-/// How they'll call: a corded phone through a Cell2Jack, or a USB keypad, each with a screen to connect and check it,
-/// or just the touchscreen, which needs nothing. The Porch phone adapter needs no driver, so every build and every iPad
-/// offers the corded phone; builds with the driver also take a Cell2Jack plugged straight into an iPad with an M chip.
+/// How they'll call: the desk phone through the Porch phone adapter, which every family gets, with a screen to connect
+/// and check it, or just the touchscreen, which needs nothing. The adapter needs no driver, so every build and every iPad
+/// offers the desk phone.
 final class SetupCallingViewController: BedsideSetupStep {
     override func viewDidLoad() {
         super.viewDidLoad(); hideKeyboardControl()
         let options = [
             option("Corded phone", detail: SetupPhoneViewController.parts,
                    symbol: "phone.fill", identifier: "setup.cordedPhone") { SetupPhoneViewController($0) },
-            option("USB keypad", detail: "A number keypad plugged into this iPad.", symbol: "keyboard", identifier: "setup.usbKeypad") { SetupUSBKeypadViewController($0) },
         ]
         let touchscreen = textLink("Just the touchscreen") { [weak self] in
             guard let self else { return }
             self.navigationController?.setViewControllers([self.setup.screen(from: .yourPhone)], animated: true)
         }
+        touchscreen.contentHorizontalAlignment = .center
         touchscreen.accessibilityIdentifier = "setup.touchscreen"
         form.addArrangedSubview(section("How will \(lovedOne) call?", detail: "\(lovedOne) presses a key to call someone. The touchscreen works too, whichever you choose.",
                                         views: options + [touchscreen]))
@@ -438,8 +438,7 @@ final class SetupCallingViewController: BedsideSetupStep {
         let button = PorchStyle.button(title, symbol: symbol)
         button.configuration?.subtitle = detail
         button.configuration?.titlePadding = 4
-        // The card is at most 760 points wide, so a one-line subtitle cuts off the end, which names
-        // the parts the corded phone needs.
+        // The card is at most 760 points wide, so a one-line subtitle could cut off the end.
         button.configuration?.titleLineBreakMode = .byWordWrapping
         button.configuration?.subtitleLineBreakMode = .byWordWrapping
         button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
@@ -454,21 +453,21 @@ final class SetupCallingViewController: BedsideSetupStep {
     }
 }
 
-/// Connect the phone: the desk phone by the bed, through a Cell2Jack, becomes Porch's keypad. The Cell2Jack plugs into the
-/// Porch phone adapter (phone-adapter/README.md), which types the phone's keys into any iPad as a USB keypad does, and F24
-/// when the receiver goes back. Builds with the driver, on an iPad, also try a Cell2Jack plugged straight in, which needs
-/// an M chip. Porch doesn't look up the iPad's model, so the screen listens for both and goes on with whichever answers;
-/// a Cell2Jack on the driver turns the phone keypad on. Then the caregiver presses a key and hangs up, and neither acts.
+/// Connect the phone: the desk phone by the bed, through a Cell2Jack, becomes Porch's keypad. Every family gets the Porch
+/// phone adapter (phone-adapter/README.md), which types the phone's keys into any iPad as a USB keypad does, and F24 when
+/// the receiver goes back, so the screen says only that, and the guide at helloporch.store/pilot/ios has the steps, the
+/// parts and the tips. Builds with the driver also try a Cell2Jack plugged straight in, which needs an M chip, on any
+/// iPad not known to lack one (`IPadChip`). There the screen listens for both and goes on with whichever answers; a
+/// Cell2Jack on the driver turns the phone keypad on. On an iPad known to have an M chip, a footnote says the adapter
+/// isn't needed. Then the caregiver presses a key and hangs up, and neither acts.
 /// Do this later, or going back to choose another way, leaves the phone keypad off; This iPad in caregiver mode opens
-/// this screen again.
+/// this screen again. The phone checked through the adapter, with no Cell2Jack on the driver, turns the phone keypad
+/// off: an iPad that moves from a Cell2Jack plugged straight in to the adapter stops looking for it.
 final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving {
-    /// Builds without the Cell2Jack driver, and iPhones, listen only for the adapter.
+    /// Builds without the Cell2Jack driver, iPhones, and iPads without an M chip listen only for the adapter.
     static var offered: Bool { Cell2JackKeypad.supportsDriverPlatform }
-    /// What the corded phone needs, for setup's choice and This iPad.
-    static var parts: String {
-        offered ? "A desk phone, through a Cell2Jack and the Porch phone adapter. An iPad with an M chip doesn't need the adapter."
-                : "A desk phone, through a Cell2Jack and the Porch phone adapter."
-    }
+    /// The desk phone, for setup's choice and This iPad. Every family has the adapter, whatever the iPad.
+    static let parts = "A desk phone, plugged in with the Porch phone adapter."
     /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
     /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
     /// can't wait for `viewDidLoad`.
@@ -480,70 +479,111 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private var progress = Progress.waiting
     private var heardFrom: HeardFrom?
     /// The connected wording named the driver. A retry that doesn't change this must not render:
-    /// rendering restarts the wait for the tips.
+    /// rendering announces the status again.
     private var showedDriverReady = false
     private var checked: Bool { if case .done = progress { return true } else { return false } }
     private let keypad: Cell2JackKeypad
     /// Also tries a Cell2Jack plugged straight into the iPad, on the driver.
     private let tryDriver: Bool
+    /// The iPad is known to have an M chip (`IPadChip.hasMChip`). With the driver, it doesn't need the adapter.
+    private let mChip: Bool
     /// The adapter is a keyboard to the iPad. Any keyboard counts, such as a keyboard case, so a key is the check.
     private let keyboardConnected: () -> Bool
     private var keys = CallTrigger()
     /// This screen turned the keypad on. Do this later undoes that; one that was already on stays on.
     private var enabledHere = false
+    /// The phone was checked through the adapter, and the driver's first try was still open. That try may yet answer,
+    /// so the keypad is left alone until it does or that try ends. Cleared once the driver is ready or the try ends:
+    /// a later disconnect, such as the ten-second unplug, must not turn a working keypad off.
+    private var checkedThroughAdapter = false
     /// Leaving, so a stop callback doesn't put the waiting text back up.
     private var leaving = false
     private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
-    private let help = UIStackView()
+    /// The step the check is on, as a picture over the status: plug in, press a key, put the receiver back, done.
+    private let badge = UIView()
+    private let statusIcon = UIImageView()
     private let proceed = PorchStyle.button("Continue", symbol: "arrow.right")
     private var later: UIButton?
-    private var helpTimer: Timer?
     init(_ setup: BedsideSetup, keypad: Cell2JackKeypad = .shared, tryDriver: Bool = SetupPhoneViewController.offered,
+         mChip: Bool = IPadChip.hasMChip(model: PorchDevice.model),
          keyboardConnected: @escaping () -> Bool = { GCKeyboard.coalesced != nil }) {
-        self.keypad = keypad; self.tryDriver = tryDriver; self.keyboardConnected = keyboardConnected
+        self.keypad = keypad; self.tryDriver = tryDriver; self.mChip = mChip; self.keyboardConnected = keyboardConnected
         super.init(setup)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(_:keypad:tryDriver:keyboardConnected:)") }
-    deinit { helpTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
+    required init?(coder: NSCoder) { fatalError("Use init(_:keypad:tryDriver:mChip:keyboardConnected:)") }
+    deinit { NotificationCenter.default.removeObserver(self) }
     override func viewDidLoad() {
         super.viewDidLoad(); hideKeyboardControl()
         if onContinue != nil { title = "Connect the phone" }
         proceed.accessibilityIdentifier = "setup.phoneDone"
         proceed.addAction(UIAction { [weak self] _ in self?.finish() }, for: .touchUpInside)
-        let step = { (number: Int, text: String) -> UIView in PorchStyle.label("\(number). \(text)", size: 17, color: PorchStyle.ink) }
-        var views = [step(1, "Plug the phone into the Cell2Jack, and the Cell2Jack into the Porch phone adapter."),
-                     step(2, "Plug the adapter into this iPad's hub. Its red light blinks, then stays on.")]
-        if tryDriver {
-            views.append(PorchStyle.label("An iPad with an M chip doesn't need the adapter: plug the Cell2Jack straight into the hub, turn on the USB driver in Settings → Porch, then unplug the Cell2Jack for ten seconds and plug it back in.", size: 17))
-            let settings = PorchStyle.button("Open Settings", symbol: "gearshape", filled: false)
-            settings.accessibilityIdentifier = "setup.phoneSettings"
-            settings.addAction(UIAction { _ in if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }, for: .touchUpInside)
-            views.append(settings)
-        }
-        views.append(step(3, "Lift the receiver, press a key, then put the receiver back."))
         status.textAlignment = .center; status.accessibilityIdentifier = "setup.phoneStatus"
-        help.axis = .vertical; help.spacing = 8; help.isHidden = true
-        help.addArrangedSubview(PorchStyle.label("Not working?", size: 17, color: PorchStyle.ink, weight: .semibold))
-        var tips = ["Plug the hub's charger in, so the iPad can power the adapter and the Cell2Jack.",
-                    "If the adapter's light keeps blinking, unplug the Cell2Jack from it for ten seconds and plug it back in."]
-        if tryDriver {
-            tips.append("Straight into the iPad, the Cell2Jack works only with an M chip. Check that the USB driver is on in Settings → Porch, then unplug the Cell2Jack for ten seconds and plug it back in.")
-        }
-        tips += ["Set the phone to tone dialing. Porch can't hear pulse dialing.",
-                 "The keys work only while the receiver is lifted.",
-                 "If the Cell2Jack says the phone isn't connected when you lift the receiver, press a key and it stops."]
-        for tip in tips { help.addArrangedSubview(PorchStyle.label("• " + tip, size: 17)) }
+        // The steps, the parts and the tips are on the website, which can change without an update.
+        let guide = textLink("Step-by-step instructions") { [weak self] in if let self { showIPadGuide(on: self) } }
+        guide.configuration?.image = UIImage(systemName: "arrow.up.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold))
+        guide.configuration?.imagePlacement = .trailing; guide.configuration?.imagePadding = 6
+        guide.contentHorizontalAlignment = .center
+        guide.accessibilityHint = "Opens the iPad setup guide on helloporch.store."
+        guide.accessibilityIdentifier = "setup.phoneGuide"
         let later = textLink("Do this later") { [weak self] in self?.finish() }
+        later.contentHorizontalAlignment = .center
         later.accessibilityIdentifier = "setup.phoneLater"; self.later = later
-        let needs = tryDriver ? "You'll need the phone, a Cell2Jack and the Porch phone adapter, unless this iPad has an M chip."
-                              : "You'll need the phone, a Cell2Jack and the Porch phone adapter."
-        form.addArrangedSubview(section("Connect the phone", detail: "\(lovedOne) can call by pressing a key on the desk phone. \(needs)",
-                                        views: views + [status, help, proceed, later]))
+        var views: [UIView] = [guide, progressPanel(), proceed, later]
+        if tryDriver && mChip { views.append(mChipNote()) }
+        let card = section("Connect the phone", detail: "\(lovedOne) can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter.",
+                           views: views)
+        if let stack = card.subviews.first as? UIStackView, let detail = stack.arrangedSubviews.dropFirst().first {
+            // The link reads as part of the explanation above it, and the panel stands apart from both.
+            stack.setCustomSpacing(4, after: detail); stack.setCustomSpacing(24, after: guide)
+        }
+        form.addArrangedSubview(card)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidDisconnect, object: nil)
         if tryDriver { NotificationCenter.default.addObserver(self, selector: #selector(keypadChanged), name: .cell2JackKeypadChanged, object: nil) }
         progress = connected ? .connected : .waiting
         render(announce: false)
+    }
+    /// The status, under a round badge whose icon shows the step it's on. It's the part of the screen that changes, so
+    /// it sits apart on the page colour.
+    private func progressPanel() -> UIView {
+        statusIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
+        statusIcon.isAccessibilityElement = false
+        badge.layer.cornerRadius = 36
+        let row = UIView()
+        for view in [badge, statusIcon] { view.translatesAutoresizingMaskIntoConstraints = false }
+        row.addSubview(badge); badge.addSubview(statusIcon)
+        NSLayoutConstraint.activate([
+            badge.widthAnchor.constraint(equalToConstant: 72), badge.heightAnchor.constraint(equalToConstant: 72),
+            badge.centerXAnchor.constraint(equalTo: row.centerXAnchor),
+            badge.topAnchor.constraint(equalTo: row.topAnchor), badge.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            statusIcon.centerXAnchor.constraint(equalTo: badge.centerXAnchor), statusIcon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
+        ])
+        let panel = UIStackView(arrangedSubviews: [row, status])
+        panel.axis = .vertical; panel.spacing = 16
+        panel.isLayoutMarginsRelativeArrangement = true
+        panel.directionalLayoutMargins = .init(top: 28, leading: 24, bottom: 28, trailing: 24)
+        panel.backgroundColor = PorchStyle.page; panel.layer.cornerRadius = 16
+        return panel
+    }
+    /// A footnote under a rule, for an iPad known to have an M chip: the Cell2Jack can plug straight in, with the USB
+    /// driver turned on in Settings. Porch can't tell that the driver is off, since a Cell2Jack plugged in then looks
+    /// like no Cell2Jack at all, so the note says when Open Settings is needed, and the replug that loads the driver.
+    private func mChipNote() -> UIView {
+        let rule = UIView()
+        rule.backgroundColor = PorchStyle.border
+        rule.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
+        let note = PorchStyle.label("This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.", size: 15)
+        note.textAlignment = .center
+        note.accessibilityIdentifier = "setup.phoneMChip"
+        let settings = textLink("Open Settings", size: 15) {
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        }
+        settings.contentHorizontalAlignment = .center
+        settings.accessibilityIdentifier = "setup.phoneSettings"
+        let stack = UIStackView(arrangedSubviews: [rule, note, settings])
+        stack.axis = .vertical; stack.spacing = 2
+        stack.setCustomSpacing(18, after: rule)
+        return stack
     }
     /// The Cell2Jack is answering on the driver, as opposed to a keyboard the iPad can see.
     private var driverReady: Bool { tryDriver && keypad.isReady }
@@ -567,10 +607,12 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         if leaving { return }
         // Turned on for them: from now on the phone is Mom's keypad, here and on the clock.
         if keypad.isReady, !keypad.enabled { keypad.setEnabled(true); enabledHere = true }
+        // The first try ended after the adapter checked the phone. A driver that already answered is left alone.
+        if checkedThroughAdapter { checkedWithoutDriver() }
         connectionChanged()
     }
-    /// The driver retries every few seconds on an iPad without an M chip, so only a change of state renders: rendering
-    /// restarts the wait for the tips. A keyboard that is still attached does not keep a driver key's hang-up, and the
+    /// The driver retries every few seconds while nothing answers on it, so only a change of state renders: rendering
+    /// announces the status again. A keyboard that is still attached does not keep a driver key's hang-up, and the
     /// driver staying up does not keep an adapter key's hang-up.
     private func connectionChanged(announce: Bool = true) {
         switch progress {
@@ -604,8 +646,6 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         // A drop while this screen was leaving never got to change the check: the stop notice is ignored then.
         // The phone has to be heard again, including a key that was already heard.
         connectionChanged(announce: false)
-        // Leaving invalidates the tips, including a back swipe that is then cancelled. The screen is still here.
-        if !checked, help.isHidden, helpTimer?.isValid != true { scheduleHelp() }
     }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
@@ -635,6 +675,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         } else {
             heardFrom = nil
             progress = .done("Porch heard \(symbol). The phone is ready.")
+            if !fromDriver { checkedThroughAdapter = true; checkedWithoutDriver() }
         }
         render()
     }
@@ -647,8 +688,25 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     func receiveCell2JackHangUp() -> String {
         guard case .heard = progress else { return "setup: hang-up before a key" }
         progress = .done("Porch heard you hang up. The phone is ready.")
+        if heardFrom == .keyboard { checkedThroughAdapter = true; checkedWithoutDriver() }
         render()
         return "setup: heard hang-up"
+    }
+    /// The phone was checked through the adapter while no Cell2Jack answers on the driver, so the driver isn't needed.
+    /// A phone keypad left on, such as from a Cell2Jack that used to be plugged straight in, would keep Porch looking
+    /// for one every 15 seconds and fill the call log with the tries, so it goes off. A keyboard case on an iPad whose
+    /// Cell2Jack is on the driver leaves it on, and a Cell2Jack that answers while this screen is open turns it back on.
+    /// A connection still making its first try, as for a few seconds after the screen opens, is the same: the keypad
+    /// goes off only if that try finds nothing. Once the driver has answered, a later disconnect is not another check.
+    private func checkedWithoutDriver() {
+        // Ready, or nothing was on: the decision is made. A later drop must not be treated as the adapter replacing it.
+        guard keypad.enabled, !keypad.isReady else { checkedThroughAdapter = false; return }
+        // Still the first try. `keypadChanged` calls this again when that try finishes. One that Porch stopped itself,
+        // such as for Open Settings or switching apps, found nothing out: the next try, back in Porch, decides.
+        if keypad.connecting || !keypad.lastTryFoundNothing { return }
+        checkedThroughAdapter = false
+        keypad.record(["kind": "phoneKeypadOff", "reason": "phone checked through the adapter"])
+        keypad.setEnabled(false); enabledHere = false
     }
     private func render(announce: Bool = true) {
         switch progress {
@@ -662,15 +720,19 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         case .heard(let symbol): status.text = "Porch heard \(symbol). Now put the receiver back."
         case .done(let text): status.text = text
         }
+        let symbol: String
+        switch progress {
+        case .waiting: symbol = "phone.connection"
+        case .connected: symbol = "circle.grid.3x3.fill"
+        case .heard: symbol = "phone.down.fill"
+        case .done: symbol = "checkmark"
+        }
+        statusIcon.image = UIImage(systemName: symbol)
+        // Done fills the badge in. Waiting is grey until the phone is there.
+        badge.backgroundColor = checked ? PorchStyle.accent : PorchStyle.surface
+        statusIcon.tintColor = checked ? .white : progress == .waiting ? PorchStyle.secondary : PorchStyle.accent
         proceed.isHidden = !checked; later?.isHidden = checked
-        // Help waits until about 30 seconds go by with nothing happening.
-        help.isHidden = true; helpTimer?.invalidate()
-        if !checked { scheduleHelp() }
         if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
-    }
-    /// Tips after about 30 seconds with the phone still unchecked.
-    private func scheduleHelp() {
-        helpTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in self?.help.isHidden = false }
     }
     private func finish() {
         // Do this later is the way out before the check finishes, and it leaves the keypad off.
@@ -692,116 +754,8 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// Stops the trial. `turnOff` undoes an enable this screen just did, which Do this later asks for.
     private func leaveTrial(turnOff: Bool) {
         leaving = true
-        helpTimer?.invalidate()
         if turnOff { keypad.setEnabled(false); enabledHere = false }
         if keypad.trying { keypad.endTrial() }
-    }
-}
-
-/// Connect the USB keypad: a number keypad plugged into the iPad is a keyboard to it, so there's nothing to turn on. The
-/// screen shows when the iPad sees a keyboard, then has the caregiver press a key and shows the one Porch heard, without
-/// acting on it. Do this later goes on all the same; This iPad in caregiver mode opens this screen again.
-final class SetupUSBKeypadViewController: BedsideSetupStep {
-    /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
-    /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
-    /// can't wait for `viewDidLoad`.
-    var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = "Connect the USB keypad" } } }
-    private enum Progress: Equatable { case waiting, connected, heard(String) }
-    private var progress = Progress.waiting
-    private var checked: Bool { if case .heard = progress { return true } else { return false } }
-    private let keyboardConnected: () -> Bool
-    private var keys = CallTrigger()
-    private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
-    private let help = UIStackView()
-    private let proceed = PorchStyle.button("Continue", symbol: "arrow.right")
-    private var later: UIButton?
-    private var helpTimer: Timer?
-    init(_ setup: BedsideSetup, keyboardConnected: @escaping () -> Bool = { GCKeyboard.coalesced != nil }) {
-        self.keyboardConnected = keyboardConnected
-        super.init(setup)
-    }
-    required init?(coder: NSCoder) { fatalError("Use init(_:keyboardConnected:)") }
-    deinit { helpTimer?.invalidate(); NotificationCenter.default.removeObserver(self) }
-    override func viewDidLoad() {
-        super.viewDidLoad(); hideKeyboardControl()
-        if onContinue != nil { title = "Connect the USB keypad" }
-        proceed.accessibilityIdentifier = "setup.keypadDone"
-        proceed.addAction(UIAction { [weak self] _ in self?.finish() }, for: .touchUpInside)
-        let steps = ["Plug the keypad into this iPad. If its plug doesn't fit, use an adapter for the iPad's port.",
-                     "Press a number key."].enumerated().map { index, text -> UIView in
-            PorchStyle.label("\(index + 1). \(text)", size: 17, color: PorchStyle.ink)
-        }
-        status.textAlignment = .center; status.accessibilityIdentifier = "setup.keypadStatus"
-        help.axis = .vertical; help.spacing = 8; help.isHidden = true
-        help.addArrangedSubview(PorchStyle.label("Not working?", size: 17, color: PorchStyle.ink, weight: .semibold))
-        for tip in ["Unplug the keypad and plug it back in, then press a number key.",
-                    "If the keypad has a Num Lock key, press it once, then press a number key again."] {
-            help.addArrangedSubview(PorchStyle.label("• " + tip, size: 17))
-        }
-        let later = textLink("Do this later") { [weak self] in self?.finish() }
-        later.accessibilityIdentifier = "setup.keypadLater"; self.later = later
-        form.addArrangedSubview(section("Connect the USB keypad", detail: "\(lovedOne) can call by pressing a key on a number keypad plugged into this iPad.",
-                                        views: steps + [status, help, proceed, later]))
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidConnect, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidDisconnect, object: nil)
-        progress = keyboardConnected() ? .connected : .waiting
-        render(announce: false)
-    }
-    // Keys come here while the screen is open, so pressing one never calls anyone.
-    override var canBecomeFirstResponder: Bool { true }
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated); keys.resetKeys(); becomeFirstResponder()
-        // Leaving invalidates the tips, including a back swipe that is then cancelled. The screen is still here.
-        if !checked, help.isHidden, helpTimer?.isValid != true { scheduleHelp() }
-    }
-    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); helpTimer?.invalidate() }
-    @objc private func keyboardChanged() {
-        // A key heard is the check; plugging and unplugging after it doesn't undo that.
-        guard !checked else { return }
-        progress = keyboardConnected() ? .connected : .waiting
-        render()
-    }
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        var unhandled = Set<UIPress>()
-        for press in presses {
-            guard let key = press.key, let digit = key.keypadDigit else { unhandled.insert(press); continue }
-            if keys.keyDown(Int(key.keyCode.rawValue)) { receiveKey(digit) }
-        }
-        if !unhandled.isEmpty { super.pressesBegan(unhandled, with: event) }
-    }
-    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        for press in presses { if let key = press.key { keys.keyUp(Int(key.keyCode.rawValue)) } }
-        super.pressesEnded(presses, with: event)
-    }
-    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        keys.resetKeys(); super.pressesCancelled(presses, with: event)
-    }
-    /// Shows the key the keypad sent, without acting on it. Each key after it shows too, to try them all.
-    func receiveKey(_ digit: Int) {
-        progress = .heard(CallSlots.symbol(for: digit))
-        render()
-    }
-    private func render(announce: Bool = true) {
-        switch progress {
-        case .waiting: status.text = "Waiting for the keypad…"
-        // Any keyboard counts, such as a keyboard case, so the key is the check.
-        case .connected: status.text = "A keypad or keyboard is connected. Press a number key."
-        case .heard(let symbol): status.text = "Porch heard \(symbol). The keypad is ready."
-        }
-        proceed.isHidden = !checked; later?.isHidden = checked
-        // Help waits until about 30 seconds go by with nothing happening.
-        help.isHidden = true; helpTimer?.invalidate()
-        if !checked { scheduleHelp() }
-        if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
-    }
-    /// Tips after about 30 seconds with the keypad still unchecked.
-    private func scheduleHelp() {
-        helpTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in self?.help.isHidden = false }
-    }
-    private func finish() {
-        helpTimer?.invalidate()
-        if let onContinue { onContinue(); return }
-        navigationController?.setViewControllers([setup.screen(from: .yourPhone)], animated: true)
     }
 }
 

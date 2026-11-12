@@ -2027,8 +2027,8 @@ final class BedsideSetupTests: XCTestCase {
         func stop() { stops += 1 }
     }
     /// Connect the phone on a build and iPad that also try the driver. `keyboard` says whether the iPad sees a keyboard,
-    /// such as the phone adapter.
-    @MainActor private func phoneStep(keyboard: @escaping () -> Bool = { false }) throws
+    /// such as the phone adapter. `mChip` says whether the iPad is known to have an M chip.
+    @MainActor private func phoneStep(mChip: Bool = true, keyboard: @escaping () -> Bool = { false }) throws
         -> (screen: SetupPhoneViewController, keypad: Cell2JackKeypad, connections: () -> [Connection], done: () -> Int) {
         let name = "setup-phone-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
@@ -2039,7 +2039,7 @@ final class BedsideSetupTests: XCTestCase {
         }
         keypad.activate()
         let setup = BedsideSetup(); setup.name = "Mom"
-        let screen = SetupPhoneViewController(setup, keypad: keypad, tryDriver: true, keyboardConnected: keyboard)
+        let screen = SetupPhoneViewController(setup, keypad: keypad, tryDriver: true, mChip: mChip, keyboardConnected: keyboard)
         screen.onContinue = { finished += 1 }
         screen.loadViewIfNeeded(); screen.viewDidAppear(false)
         return (screen, keypad, { connections }, { finished })
@@ -2080,8 +2080,8 @@ final class BedsideSetupTests: XCTestCase {
 
     @MainActor func testTheNewScreensUseTheWholeWidth() throws {
         let setup = BedsideSetup(); setup.name = "Mom"
-        let titles: Set<String> = ["How will Mom call?", "Connect the phone", "Connect the USB keypad", "Add your phone"]
-        for screen in [SetupCallingViewController(setup), try phoneStep().screen, SetupUSBKeypadViewController(setup), SetupYourPhoneViewController(setup)] as [UIViewController] {
+        let titles: Set<String> = ["How will Mom call?", "Connect the phone", "Add your phone"]
+        for screen in [SetupCallingViewController(setup), try phoneStep().screen, SetupYourPhoneViewController(setup)] as [UIViewController] {
             let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 834, height: 1194))
             window.rootViewController = UINavigationController(rootViewController: screen); window.makeKeyAndVisible()
             screen.view.layoutIfNeeded()
@@ -2173,6 +2173,7 @@ final class BedsideSetupTests: XCTestCase {
         let step = try phoneStep { keyboard }
         XCTAssertNotNil(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneSettings" },
                         "A Cell2Jack plugged straight in needs the USB driver on in Settings")
+        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text == "This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in." })
         XCTAssertEqual(step.connections().count, 1, "The screen tries the driver for a Cell2Jack plugged straight in")
         // The adapter comes in while the driver finds nothing, as on an iPad without an M chip.
         keyboard = true
@@ -2234,25 +2235,146 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
     }
 
+    /// Every family has the adapter, so the screen says only that and links to the guide for the steps, the parts and the
+    /// tips. Only an iPad known to have an M chip, in a build with the driver, says it doesn't need the adapter, with
+    /// Open Settings for the USB driver. A model Porch doesn't know may still try the driver but says nothing.
+    @MainActor func testConnectThePhoneLinksToTheGuideAndSaysOnlyAnMChipIPadDoesntNeedTheAdapter() throws {
+        for (tryDriver, mChip) in [(false, false), (false, true), (true, false), (true, true)] {
+            let name = "setup-phone-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+            defer { defaults.removePersistentDomain(forName: name) }
+            let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { false }, enqueueRetry: { _, _ in }) { Connection($0) }
+            let setup = BedsideSetup(); setup.name = "Mom"
+            let screen = SetupPhoneViewController(setup, keypad: keypad, tryDriver: tryDriver, mChip: mChip) { false }
+            screen.loadViewIfNeeded()
+            let texts = labels(in: screen.view).compactMap(\.text)
+            let case_ = "driver \(tryDriver), M chip \(mChip)"
+            XCTAssertTrue(texts.contains("Mom can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter."), case_)
+            let guide = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.phoneGuide" }, case_)
+            XCTAssertEqual(guide.configuration?.title, "Step-by-step instructions", "A link, not the address")
+            XCTAssertEqual(iPadGuideURL.absoluteString, "https://helloporch.store/pilot/ios#phone")
+            XCTAssertFalse(texts.contains { $0.hasPrefix("1. ") || $0.hasPrefix("• ") || $0 == "Not working?" || $0.contains("You'll need") },
+                           "The steps, parts and tips are on the guide: \(texts)")
+            let note = texts.contains("This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.")
+            let settings = buttons(in: screen.view).contains { $0.accessibilityIdentifier == "setup.phoneSettings" }
+            XCTAssertEqual(note, tryDriver && mChip, case_); XCTAssertEqual(settings, tryDriver && mChip, case_)
+        }
+    }
+
+    @MainActor func testCheckingThePhoneThroughTheAdapterTurnsOffADriverThatFindsNothing() throws {
+        // An iPad whose Cell2Jack used to be plugged straight in, moved to the adapter: with the hang-up check and without.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            step.connections()[0].update(.finished("No running Cell2Jack driver service"))
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(phoneStatus(step.screen)?.hasSuffix("The phone is ready.") == true, "\(hangUp)")
+            XCTAssertFalse(step.keypad.enabled, "The phone answered without the driver, so the keypad setting goes off (\(hangUp))")
+            try XCTUnwrap(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneDone" }).sendActions(for: .touchUpInside)
+            XCTAssertFalse(step.keypad.trying)
+            XCTAssertEqual(step.connections().last?.stops, 1, "Leaving the screen stops looking for a Cell2Jack on the driver (\(hangUp))")
+            step.connections().last?.update(.finished("Phone keypad stopped"))
+            let tries = step.connections().count
+            step.keypad.activate()
+            XCTAssertEqual(step.connections().count, tries, "Back on the clock, Porch doesn't look again (\(hangUp))")
+        }
+    }
+
+    @MainActor func testAnAdapterCheckWaitsForTheDriversFirstTryBeforeTurningTheKeypadOff() throws {
+        // The keypad was already on, and the driver is still making its first try when the adapter's check finishes,
+        // as for a few seconds after the screen opens: a Cell2Jack plugged straight in may yet answer.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(phoneStatus(step.screen)?.hasSuffix("The phone is ready.") == true, "\(hangUp)")
+            XCTAssertTrue(step.keypad.connecting, "\(hangUp)")
+            XCTAssertTrue(step.keypad.enabled, "The driver hasn't finished its first try (\(hangUp))")
+            // That try finds nothing while the screen is still open: now the keypad goes off.
+            step.connections()[0].update(.finished("No running Cell2Jack driver service"))
+            XCTAssertFalse(step.keypad.enabled, "The driver found nothing, so the adapter is the phone's way in (\(hangUp))")
+        }
+    }
+
+    @MainActor func testAnAdapterCheckThatSeesTheDriverAnswerLeavesTheKeypadOn() throws {
+        // The first try was still open when the keyboard key arrived, then the Cell2Jack answered. Unplugging it
+        // afterwards, as the note says to do for ten seconds, has to leave the keypad on.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(step.keypad.connecting, "\(hangUp)")
+            step.connections()[0].update(.ready)
+            XCTAssertTrue(step.keypad.enabled, "The Cell2Jack answered (\(hangUp))")
+            step.connections()[0].update(.finished("Phone keypad stopped"))
+            XCTAssertTrue(step.keypad.enabled, "That answer already decided it, so a later drop leaves the keypad on (\(hangUp))")
+        }
+    }
+
+    @MainActor func testLeavingPorchDuringTheDriversFirstTryIsNotTheDriverFindingNothing() throws {
+        // Open Settings, or switching apps, while the first try is still open: Porch stops that try itself, which
+        // says nothing about whether a Cell2Jack is plugged straight in.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(step.keypad.connecting, "\(hangUp)")
+            step.keypad.pause()
+            step.connections()[0].update(.finished("Phone keypad stopped"))
+            XCTAssertTrue(step.keypad.enabled, "Porch stopped the try, so it found nothing out (\(hangUp))")
+            // Back in Porch, the next try finds nothing: that decides it.
+            step.keypad.activate()
+            XCTAssertEqual(step.connections().count, 2, "\(hangUp)")
+            step.connections()[1].update(.finished("No running Cell2Jack driver service"))
+            XCTAssertFalse(step.keypad.enabled, "\(hangUp)")
+        }
+    }
+
+    @MainActor func testAKeyboardKeyWhileTheDriverAnswersLeavesThePhoneKeypadOn() throws {
+        // A keyboard case on an iPad whose Cell2Jack is plugged straight in.
+        let step = try phoneStep { true }
+        step.keypad.setEnabled(true)
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        step.connections()[0].update(.ready)
+        step.screen.receiveKey(4)
+        _ = step.screen.receiveCell2JackHangUp()
+        XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
+        XCTAssertTrue(step.keypad.enabled, "The Cell2Jack on the driver still needs it")
+        // The note says to unplug the Cell2Jack for ten seconds. That ends the connection the key already found answering.
+        step.connections()[0].update(.finished("Phone keypad stopped"))
+        XCTAssertTrue(step.keypad.enabled, "The driver had already answered, so unplugging it does not turn the keypad off")
+    }
+
     @MainActor func testSetupAsksHowTheyCallWithTheTouchscreenToFallBackOn() throws {
         let setup = BedsideSetup(); setup.name = "Mom"
         let choice = SetupCallingViewController(setup)
         let navigation = UINavigationController(rootViewController: choice); choice.loadViewIfNeeded()
         XCTAssertTrue(labels(in: choice.view).contains { $0.text == "How will Mom call?" })
-        // The adapter needs no driver, so every build offers the corded phone and says what it needs. Builds with the
-        // driver also say an iPad with an M chip can do without the adapter.
+        // Every family has the adapter, which needs no driver, so every build offers the corded phone the same way.
         let corded = try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.cordedPhone" })
-        XCTAssertEqual(corded.configuration?.subtitle, SetupPhoneViewController.offered
-                       ? "A desk phone, through a Cell2Jack and the Porch phone adapter. An iPad with an M chip doesn't need the adapter."
-                       : "A desk phone, through a Cell2Jack and the Porch phone adapter.")
-        XCTAssertEqual(corded.configuration?.subtitleLineBreakMode, .byWordWrapping, "A one-line subtitle cuts off the parts it needs")
+        XCTAssertEqual(corded.configuration?.subtitle, "A desk phone, plugged in with the Porch phone adapter.")
+        XCTAssertEqual(corded.configuration?.subtitle, SetupPhoneViewController.parts)
+        XCTAssertEqual(corded.configuration?.subtitleLineBreakMode, .byWordWrapping, "A one-line subtitle could cut off the end")
+        // A USB keypad was for testing: the corded phone is the only choice besides the touchscreen.
+        XCTAssertEqual(buttons(in: choice.view).compactMap { $0.configuration?.subtitle == nil ? nil : $0.configuration?.title }, ["Corded phone"])
         corded.sendActions(for: .touchUpInside)
         XCTAssertTrue(navigation.viewControllers.last is SetupPhoneViewController)
-        navigation.popViewController(animated: false)
-        let usb = try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.usbKeypad" })
-        XCTAssertEqual(usb.configuration?.subtitleLineBreakMode, .byWordWrapping)
-        usb.sendActions(for: .touchUpInside)
-        XCTAssertTrue(navigation.viewControllers.last is SetupUSBKeypadViewController)
 
         let again = SetupCallingViewController(setup)
         let shown = UINavigationController(rootViewController: again)
@@ -2286,49 +2408,6 @@ final class BedsideSetupTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         XCTAssertFalse(step.keypad.enabled, "Going back to choose another way is like Do this later")
         XCTAssertFalse(step.keypad.trying)
-    }
-
-    @MainActor func testTheUSBKeypadScreenWaitsForAKeyThenSaysItsReady() throws {
-        let setup = BedsideSetup(); setup.name = "Mom"
-        var connected = false, finished = 0
-        let screen = SetupUSBKeypadViewController(setup) { connected }
-        screen.onContinue = { finished += 1 }
-        screen.loadViewIfNeeded()
-        let status = { self.labels(in: screen.view).first { $0.accessibilityIdentifier == "setup.keypadStatus" }?.text }
-        let proceed = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.keypadDone" })
-        let later = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.keypadLater" })
-        XCTAssertEqual(status(), "Waiting for the keypad…")
-        XCTAssertTrue(proceed.isHidden); XCTAssertFalse(later.isHidden)
-        connected = true
-        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
-        XCTAssertEqual(status(), "A keypad or keyboard is connected. Press a number key.")
-        screen.receiveKey(7)
-        XCTAssertEqual(status(), "Porch heard 7. The keypad is ready.")
-        XCTAssertFalse(proceed.isHidden); XCTAssertTrue(later.isHidden)
-        screen.receiveKey(CallSlots.pound)
-        XCTAssertEqual(status(), "Porch heard #. The keypad is ready.", "Each key shows, to try them all")
-        connected = false
-        NotificationCenter.default.post(name: .GCKeyboardDidDisconnect, object: nil)
-        XCTAssertEqual(status(), "Porch heard #. The keypad is ready.", "Unplugging after a key doesn't undo the check")
-        proceed.sendActions(for: .touchUpInside)
-        XCTAssertEqual(finished, 1)
-
-        let skipped = SetupUSBKeypadViewController(setup) { false }
-        var skips = 0
-        skipped.onContinue = { skips += 1 }; skipped.loadViewIfNeeded()
-        try XCTUnwrap(buttons(in: skipped.view).first { $0.accessibilityIdentifier == "setup.keypadLater" }).sendActions(for: .touchUpInside)
-        XCTAssertEqual(skips, 1)
-    }
-
-    @MainActor func testThisIPadOpensTheUSBKeypadCheck() throws {
-        let device = DeviceSettingsViewController()
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 820, height: 1180))
-        window.rootViewController = device; window.makeKeyAndVisible()
-        defer { window.isHidden = true }
-        try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectKeypad" }).sendActions(for: .touchUpInside)
-        let keypadNav = try XCTUnwrap(device.presentedViewController as? UINavigationController)
-        XCTAssertTrue(keypadNav.viewControllers.first is SetupUSBKeypadViewController)
-        XCTAssertEqual(keypadNav.viewControllers.first?.title, "Connect the USB keypad", "The view loads before onContinue is set")
     }
 
     /// Connect the phone on a build or device without the driver, so only the adapter can answer. Returns the screen in a
@@ -2428,6 +2507,38 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertEqual(driver.title, "Set up Porch")
         driver.onContinue = {}
         XCTAssertEqual(driver.title, "Connect the phone")
+    }
+
+    /// This iPad has one group for the phone. On an iPad without an M chip, or in a build without the driver, it has what
+    /// the adapter needs. Where the driver can work it also has the way to the USB driver's switch. Connect the phone
+    /// connects to the driver right away and turns the Cell2Jack keypad on itself, so there's no separate retry or
+    /// switch, and the USB keypad, which was for testing, is gone.
+    @MainActor func testThisIPadShowsTheDriversSettingsOnlyWhereTheDriverCanWork() throws {
+        for (driver, mChip) in [(false, false), (false, true), (true, false), (true, true)] {
+            let name = "device-groups-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+            defer { defaults.removePersistentDomain(forName: name) }
+            let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { false }, enqueueRetry: { _, _ in }) { Connection($0) }
+            let device = DeviceSettingsViewController(phoneKeypad: keypad, driver: driver, mChip: mChip)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 820, height: 1180))
+            window.rootViewController = device; window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            let headings = labels(in: device.view).filter { $0.accessibilityTraits.contains(.header) }.compactMap(\.text)
+            XCTAssertTrue(headings.contains("Connect the physical phone"), "\(headings)")
+            for old in ["Desk phone", "Cell2Jack plugged into this iPad", "USB keypad"] { XCTAssertFalse(headings.contains(old), old) }
+            XCTAssertTrue(labels(in: device.view).contains { $0.text == SetupPhoneViewController.parts })
+            let phoneActions = ["Connect the phone", "Open app settings", "Retry phone connection", "Connect the USB keypad"]
+            XCTAssertEqual(buttons(in: device.view).compactMap { $0.configuration?.title }.filter(phoneActions.contains),
+                           driver ? ["Connect the phone", "Open app settings"] : ["Connect the phone"])
+            XCTAssertEqual(descendants(device.view).compactMap { ($0 as? UISwitch)?.accessibilityLabel }, ["Hang up when the receiver is put back"])
+            // Connect the phone mentions the M chip and the USB driver only on an iPad known to have one, with the driver.
+            try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectPhone" }).sendActions(for: .touchUpInside)
+            let phoneNav = try XCTUnwrap(device.presentedViewController as? UINavigationController)
+            let phone = try XCTUnwrap(phoneNav.viewControllers.first as? SetupPhoneViewController)
+            phone.loadViewIfNeeded()
+            XCTAssertEqual(buttons(in: phone.view).contains { $0.accessibilityIdentifier == "setup.phoneSettings" }, driver && mChip)
+            device.dismiss(animated: false)
+        }
     }
 
     @MainActor func testAddYourPhoneAsksForTheirNameAndItsCodeReadsAsTheInvitation() throws {
