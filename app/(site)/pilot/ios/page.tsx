@@ -377,13 +377,13 @@ const parts: GuidePart[] = [
           A key can start with someone’s regular phone number and switch to their Porch app once they join. It switches
           on its own when their invitation has the same name as their key, such as Sarah on key 1 and an invitation for
           Sarah. Capital letters and extra spaces don’t matter, and it works however you invite them: from your phone,
-          from <UI>People</UI>, or with <UI>Invite them</UI> on their key’s page. Their phone number stays as the one Porch
-          tries when they miss a call.
+          from <UI>People</UI>, or by tapping her key and then <UI>Invite Sarah</UI>. If you send her a second invitation,
+          her key takes whichever one she uses. Her phone number stays as the one Porch tries when she misses a call.
         </p>
         <p>
-          If their key doesn’t switch, such as when their invitation has another name or two keys share their name,
-          switch it yourself. In <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose
-          them.
+          If their key doesn’t switch, switch it yourself. That happens when their invitation has another name, when two
+          keys or two people who joined share their name, or when the iPad was off for more than a day after they
+          joined. In <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose them.
         </p>
         <StepVideo
           name="ios-switch"

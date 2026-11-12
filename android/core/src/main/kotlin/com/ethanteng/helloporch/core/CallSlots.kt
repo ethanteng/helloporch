@@ -93,42 +93,42 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
     }
 
     /** A key waiting for someone takes up the invitation sent for them, wherever it was sent from: People, a caregiver's
-     * phone, or again after the key's own invitation ran out. Once they join, the key calls their Porch app, so no
-     * caregiver has to link them by hand.
+     * phone, or again after the key's own invitation ran out or went astray. Once they join, the key calls their Porch app,
+     * so no caregiver has to link them by hand.
      *
-     * A key is waiting when no family member on Porch is on it and its own invitation, if it has one, isn't open. It takes
-     * up an invitation that's open, or was accepted in the last day by someone not on a key, when the invitation's name is
-     * the key's name, ignoring case, accents and spacing. Only the name a caregiver gave the invitation counts, never one
-     * the person chose, and only when that name belongs to exactly one key and one invitation. The key then goes by their
-     * Porch name and photo, as one linked by hand does, and follows the invitation's identity from then on. */
+     * A key is waiting when no family member on Porch is on it. It goes by the name a caregiver gave an invitation,
+     * ignoring case, accents and spacing, never by one the person chose, and only when no other key has that name.
+     * Someone who accepted an invitation with the key's name in the last day takes the key, even over an invitation still
+     * open for it: an invitation sent again is most often for the same person. Otherwise a key with no open invitation of
+     * its own takes up an open one with its name. Either way exactly one person, or one invitation, must have the name.
+     * The key then goes by their Porch name, as one linked by hand does, and follows the invitation's identity from then on. */
     internal fun followInvitations(state: FamilySnapshot) {
         val keyed = contacts.filterNotNull()
         val open = state.invitations.orEmpty()
         fun onKey(invitation: String, member: String? = null) = keyed.any { it.invitationID == invitation || (member != null && it.familyMemberID == member) }
-        val invitations = open.mapNotNull { invitation ->
+        val pending = open.mapNotNull { invitation ->
             val name = invitation.name?.trim()
             if (name.isNullOrEmpty() || onKey(invitation.id)) null else invitation.id to name
-        }.toMutableList()
-        for (person in state.people) {
-            if (person.role != PorchExperience.FAMILY) continue
-            val id = person.invitationID ?: continue
-            val joined = person.joinedAt ?: continue
-            val name = person.invitedName?.trim()
-            if (state.serverTime - joined >= joinedRecentlySeconds || name.isNullOrEmpty() || onKey(id, person.id)) continue
-            invitations += id to name
         }
-        if (invitations.isEmpty()) return
+        val joined = state.people.mapNotNull { person ->
+            val id = person.invitationID
+            val at = person.joinedAt
+            val name = person.invitedName?.trim()
+            if (person.role != PorchExperience.FAMILY || id == null || at == null || state.serverTime - at >= joinedRecentlySeconds ||
+                name.isNullOrEmpty() || onKey(id, person.id)) null else id to name
+        }
+        if (pending.isEmpty() && joined.isEmpty()) return
         // Two keys with one name, such as two Lisas, leave an invitation for "Lisa" to the caregiver, even if one is linked.
         val names = keyed.map { matchingName(it.name) }
-        val waiting = digits.mapNotNull { digit ->
-            val contact = contact(digit) ?: return@mapNotNull null
-            if (member(contact, state) != null || open.any { it.id == contact.invitationID }) return@mapNotNull null
-            matchingName(contact.name).takeIf { it.isNotEmpty() }?.let { digit to it }
-        }
-        for ((digit, name) in waiting) {
-            if (names.count { it == name } != 1) continue
-            val (id, invited) = invitations.filter { matchingName(it.second) == name }.singleOrNull() ?: continue
+        for (digit in digits) {
             val contact = contact(digit) ?: continue
+            if (member(contact, state) != null) continue
+            val name = matchingName(contact.name)
+            if (name.isEmpty() || names.count { it == name } != 1) continue
+            fun named(invitations: List<Pair<String, String>>) = invitations.filter { matchingName(it.second) == name }
+            val ownOpen = open.any { it.id == contact.invitationID }
+            val people = named(joined)
+            val (id, invited) = (if (people.isNotEmpty()) people else if (ownOpen) emptyList() else named(pending)).singleOrNull() ?: continue
             setContact(CallContact(name = "", nativeCall = contact.nativeCall, phoneNumber = contact.phoneNumber, otherPhoneNumbers = contact.otherPhoneNumbers,
                 invitationID = id, memberName = invited, buttonColorHex = contact.buttonColorHex).preservingCaregiverPhoto(contact), digit)
         }
@@ -186,11 +186,14 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         const val joinedRecentlySeconds = 86_400L
 
         /** A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. It folds names as iOS's
-         * `CallSlots.matchingName` does, so a name matches on both bedsides: full case folding ("Straße" is "strasse"),
-         * no accents, and any space between words, a non-breaking one included. */
-        fun matchingName(name: String): String =
-            Normalizer.normalize(name.uppercase(Locale.ROOT).lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+         * `CallSlots.matchingName` does, so a name matches on both bedsides: case folded fully ("Straße" and "GROẞ" are
+         * "strasse" and "gross", while a dotless "ı" stays), no accents, and any space between words, a non-breaking one
+         * included. Letters such as "ø" and "ł" aren't accented letters, and stay on both. */
+        fun matchingName(name: String): String {
+            val folded = name.split('ı').joinToString("ı") { it.uppercase(Locale.ROOT).lowercase(Locale.ROOT) }.replace("ß", "ss")
+            return Normalizer.normalize(folded, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
                 .split(Regex("[\\s\\p{Z}]+")).filter { it.isNotEmpty() }.joinToString(" ")
+        }
 
         /** The key as the keypad labels it. */
         fun symbol(digit: Int): String = when (digit) {

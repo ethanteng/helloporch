@@ -135,13 +135,43 @@ final class KeysFollowInvitationsTests: XCTestCase {
         XCTAssertEqual(followed.customPhotoData, keypad, "The caregiver's own photo of the key stays")
     }
 
+    func testAnInvitationSentAgainStillLinksWhoeverJoins() throws {
+        let again = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        // The key took up the first invitation, and the caregiver sent another for Lisa. She joins with the second.
+        var followed = CallSlots()
+        try followed.setContact(phoneKey("Lisa"), for: 2)
+        try followed.reconcile(with: snapshot(invitations: [invitation(lisaInvite, "Lisa")]))
+        XCTAssertEqual(followed.contact(for: 2)?.invitationID, lisaInvite)
+        try followed.reconcile(with: snapshot(invitations: [invitation(lisaInvite, "Lisa"), invitation(again, "Lisa")]))
+        XCTAssertEqual(followed.contact(for: 2)?.invitationID, lisaInvite, "The key keeps its own invitation while both are open")
+        try followed.reconcile(with: snapshot(invitations: [invitation(lisaInvite, "Lisa")],
+            people: [member(lisa, invitation: again, invited: "Lisa", joinedAt: now - 60)]))
+        XCTAssertEqual(followed.contact(for: 2)?.familyMemberID, lisa)
+        XCTAssertEqual(followed.contact(for: 2)?.invitationID, again)
+        // Two invitations for Lisa were open before the key was saved. It waits, then takes whichever she accepted.
+        var waiting = CallSlots()
+        try waiting.setContact(phoneKey("Lisa"), for: 2)
+        try waiting.reconcile(with: snapshot(invitations: [invitation(lisaInvite, "Lisa"), invitation(again, "Lisa")]))
+        XCTAssertNil(waiting.contact(for: 2)?.invitationID)
+        try waiting.reconcile(with: snapshot(invitations: [invitation(again, "Lisa")],
+            people: [member(lisa, invitation: lisaInvite, invited: "Lisa", joinedAt: now - 60)]))
+        XCTAssertEqual(waiting.contact(for: 2)?.familyMemberID, lisa)
+        // Two people who joined as Lisa are left to the caregiver.
+        var two = CallSlots()
+        try two.setContact(phoneKey("Lisa"), for: 2)
+        try two.reconcile(with: snapshot(people: [member(lisa, invitation: lisaInvite, invited: "Lisa", joinedAt: now - 60),
+            member("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", invitation: again, invited: "lisa", joinedAt: now - 30)]))
+        XCTAssertNil(two.contact(for: 2)?.familyMemberID)
+    }
+
     func testNamesMatchWithoutCaseAccentsOrExtraSpaces() {
         XCTAssertEqual(CallSlots.matchingName("  Lísa   Chen "), CallSlots.matchingName("lisa chen"))
         XCTAssertNotEqual(CallSlots.matchingName("Lisa"), CallSlots.matchingName("Lisa Chen"))
         XCTAssertEqual(CallSlots.matchingName("家駿"), "家駿")
         // The same list as Android's test, so a name matches on either bedside.
         for (name, folded) in [("Straße", "strasse"), ("STRASSE", "strasse"), ("Lisa\u{00A0}Chen", "lisa chen"), ("İsmail", "ismail"),
-                               ("ﬁona", "fiona"), ("Zoë\tO’Neil", "zoe o’neil"), ("Ｌｉｓａ", "ｌｉｓａ")] {
+                               ("ﬁona", "fiona"), ("Zoë\tO’Neil", "zoe o’neil"), ("Ｌｉｓａ", "ｌｉｓａ"), ("GROẞ", "gross"), ("Işıl", "isıl"),
+                               ("Søren", "søren"), ("Łukasz", "łukasz")] {
             XCTAssertEqual(CallSlots.matchingName(name), folded, name)
         }
     }

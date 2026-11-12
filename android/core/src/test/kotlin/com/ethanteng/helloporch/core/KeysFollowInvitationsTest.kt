@@ -134,13 +134,43 @@ class KeysFollowInvitationsTest {
         assertContentEquals(keypad, followed.customPhotoData, "The caregiver's own photo of the key stays")
     }
 
+    @Test fun anInvitationSentAgainStillLinksWhoeverJoins() {
+        val again = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        // The key took up the first invitation, and the caregiver sent another for Lisa. She joins with the second.
+        val followed = CallSlots()
+        followed.setContact(phoneKey("Lisa"), 2)
+        followed.reconcile(snapshot(invitations = listOf(invitation(lisaInvite, "Lisa"))))
+        assertEquals(lisaInvite, followed.contact(2)?.invitationID)
+        followed.reconcile(snapshot(invitations = listOf(invitation(lisaInvite, "Lisa"), invitation(again, "Lisa"))))
+        assertEquals(lisaInvite, followed.contact(2)?.invitationID, "The key keeps its own invitation while both are open")
+        followed.reconcile(snapshot(invitations = listOf(invitation(lisaInvite, "Lisa")),
+            people = listOf(member(lisa, again, invited = "Lisa", joinedAt = now - 60))))
+        assertEquals(lisa, followed.contact(2)?.familyMemberID)
+        assertEquals(again, followed.contact(2)?.invitationID)
+        // Two invitations for Lisa were open before the key was saved. It waits, then takes whichever she accepted.
+        val waiting = CallSlots()
+        waiting.setContact(phoneKey("Lisa"), 2)
+        waiting.reconcile(snapshot(invitations = listOf(invitation(lisaInvite, "Lisa"), invitation(again, "Lisa"))))
+        assertNull(waiting.contact(2)?.invitationID)
+        waiting.reconcile(snapshot(invitations = listOf(invitation(again, "Lisa")),
+            people = listOf(member(lisa, lisaInvite, invited = "Lisa", joinedAt = now - 60))))
+        assertEquals(lisa, waiting.contact(2)?.familyMemberID)
+        // Two people who joined as Lisa are left to the caregiver.
+        val two = CallSlots()
+        two.setContact(phoneKey("Lisa"), 2)
+        two.reconcile(snapshot(people = listOf(member(lisa, lisaInvite, invited = "Lisa", joinedAt = now - 60),
+            member("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", again, invited = "lisa", joinedAt = now - 30))))
+        assertNull(two.contact(2)?.familyMemberID)
+    }
+
     @Test fun namesMatchWithoutCaseAccentsOrExtraSpaces() {
         assertEquals(CallSlots.matchingName("lisa chen"), CallSlots.matchingName("  Lísa   Chen "))
         assertNotEquals(CallSlots.matchingName("Lisa"), CallSlots.matchingName("Lisa Chen"))
         assertEquals("家駿", CallSlots.matchingName("家駿"))
         // The same list as iOS's test, so a name matches on either bedside.
         for ((name, folded) in listOf("Straße" to "strasse", "STRASSE" to "strasse", "Lisa\u00A0Chen" to "lisa chen", "İsmail" to "ismail",
-            "ﬁona" to "fiona", "Zoë\tO’Neil" to "zoe o’neil", "Ｌｉｓａ" to "ｌｉｓａ")) {
+            "ﬁona" to "fiona", "Zoë\tO’Neil" to "zoe o’neil", "Ｌｉｓａ" to "ｌｉｓａ", "GROẞ" to "gross", "Işıl" to "isıl",
+            "Søren" to "søren", "Łukasz" to "łukasz")) {
             assertEquals(folded, CallSlots.matchingName(name), name)
         }
     }
