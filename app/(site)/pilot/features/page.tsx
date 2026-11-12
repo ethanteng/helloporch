@@ -3,7 +3,7 @@ import { Contact, Defaults, Guide, guideMetadata, Path, Says, Screenshot, Settin
 
 export const metadata = guideMetadata(
   "Porch features and settings | HelloPorch",
-  "How to make calls, send messages and change Porch settings on tablets and family phones.",
+  "Learn how Porch calls, messages and caregiver settings work on your loved one’s tablet and family phones.",
 );
 
 // Defaults come from household setup in lib/family/service.ts and from the apps' own settings.
@@ -15,17 +15,19 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Use the six-digit PIN you chose during setup to open <strong>caregiver mode</strong> and change settings.
+          <strong>Caregiver mode</strong> is where you change Porch’s settings. Open it using the six-digit
+          PIN you chose during setup.
         </p>
         <ul>
           <li>
-            <strong>On the tablet.</strong> Tap the gear in the top right corner of the clock. Enter the PIN and tap{" "}
-            <UI>Open caregiver mode</UI>. Tap <UI>Back to clock</UI> when you’re done.
+            <strong>On your loved one’s tablet:</strong> Tap the gear at the top right of the clock, enter
+            your PIN and tap <UI>Open caregiver mode</UI>. Tap <UI>Back to clock</UI> when you’re done.
           </li>
           <li>
-            <strong>On a caregiver’s phone.</strong> On an iPhone, tap your photo or the person icon in the top right,
-            then <UI>Caregiver mode</UI>. On Android, tap <UI>Caregiver mode</UI> under your loved one’s name. Enter
-            the PIN. Tap <UI>Done</UI> to close caregiver mode. It locks after 10 minutes without use.
+            <strong>On your phone:</strong> On iPhone, tap your photo or the person icon at the top right,
+            then <UI>Caregiver mode</UI>. On Android, tap <UI>Caregiver mode</UI> below your loved one’s
+            name. Enter your PIN. Tap <UI>Done</UI> to close it. It also locks automatically after 10 minutes
+            of inactivity.
           </li>
         </ul>
         <Screenshot
@@ -34,17 +36,18 @@ const parts: GuidePart[] = [
           height={1112}
           device="tablet"
           alt="Caregiver mode on the iPad. The menu on the left lists People, Calls, Drop-in, Messages, Display & voice, Privacy, Caregivers & PIN and This iPad, with People open on the right."
-          caption="Caregiver mode on the iPad. The settings in this guide start from the menu on the left."
+          caption="Caregiver mode on iPad. Choose a setting from the menu on the left."
         />
         <p>
-          Settings marked <em>tablet only</em> must be changed on your loved one’s tablet. On a caregiver’s phone,
-          they appear with a lock under <UI>On the bedside iPad</UI> or <UI>On the bedside tablet</UI>.
+          Some settings can only be changed on your loved one’s tablet. They’re marked <em>tablet only</em>
+          in this guide. On your phone, these settings appear locked under <UI>On the bedside iPad</UI> or{" "}
+          <UI>On the bedside tablet</UI>.
         </p>
-        <p>Where you see [Name] in this guide, Porch shows the name you entered during setup.</p>
+        <p>In buttons such as <UI>Send to [Name]</UI>, Porch shows your loved one’s name instead of [Name].</p>
         <Tip label="Return to the clock after changing settings">
           <p>
-            While caregiver mode is open on the tablet, drop-ins don’t connect. Tap <UI>Back to clock</UI> when
-            you’re finished.
+            Drop-in calls won’t connect while caregiver mode is open on the tablet. Tap{" "}
+            <UI>Back to clock</UI> when you’re done.
           </p>
         </Tip>
       </>
@@ -52,29 +55,34 @@ const parts: GuidePart[] = [
   },
   {
     id: "defaults",
-    title: "Settings when you first set up Porch",
+    title: "How Porch starts out",
     body: (
       <>
+        <p>
+          These are Porch’s starting settings. You can change them later. By default, people you
+          invite are allowed to <a href="#drop-in">drop in</a> without your loved one answering.
+          You can turn that off for each person.
+        </p>
         <Defaults
           rows={[
             ["Drop-in", "On", <Path key="p" steps={["Drop-in", "Allow drop-ins"]} />],
-            ["Who may drop in", "Everyone you invite, with audio and video", <>Each person’s page, or the invitation</>],
+            ["Who can drop in", "Everyone you invite, with audio and video", <>Each person’s page, or the invitation</>],
             ["Caregiver access for people you invite", "Off", <>Each person’s page</>],
             ["Calls from unknown numbers", "Blocked", <Path key="p" steps={["Calls", "Block unknown callers"]} />],
-            ["How long a call to the tablet rings", "45 seconds", <><Path steps={["Calls", "Ring before voicemail"]} />, tablet only</>],
-            ["Try a regular phone after a missed Porch call", "After 20 seconds, if the key has a phone number", <><Path steps={["Calls", "Try their phone after"]} />, tablet only</>],
-            ["Leave a message after an unanswered call from the tablet", "Offered unless the call went to a regular phone", <><Path steps={["Calls", "Leave a message if no one answers"]} />, tablet only</>],
+            ["How long calls ring", "45 seconds", <><Path steps={["Calls", "Ring before voicemail"]} />, tablet only</>],
+            ["Try their regular phone after a missed app call", "After 20 seconds, if the key has a phone number", <><Path steps={["Calls", "Try their phone after"]} />, tablet only</>],
+            ["Leave a message after an unanswered call", "Offered unless the call went to a regular phone", <><Path steps={["Calls", "Leave a message if no one answers"]} />, tablet only</>],
             ["End calls after silence", "On, after 2 minutes", <><Path steps={["Calls", "End calls after silence"]} />, tablet only</>],
             ["Family messages", "On", <Path key="p" steps={["Messages", "Allow family messages"]} />],
             ["Voicemail and texts from unknown numbers", "Held for a caregiver to review", <Path key="p" steps={["Messages", "Waiting messages"]} />],
-            ["Playing messages when someone is in front of the tablet", "On, from 8 AM until 9 PM", <><Path steps={["Messages", "Play when someone is in front of the iPad"]} />, tablet only</>],
-            ["Showing family when someone was at the tablet", "On, from touches and key presses", <Path key="p" steps={["Privacy", "Show family when someone is at the iPad"]} />],
-            ["Using the camera to notice someone", "On", <><Path steps={["Privacy", "Check with the camera"]} />, tablet only</>],
+            ["Play messages when someone is nearby", "On, from 8 AM until 9 PM", <><Path steps={["Messages", "Play when someone is in front of the iPad"]} />, tablet only</>],
+            ["Show family when someone was at the tablet", "On, from touches and key presses", <Path key="p" steps={["Privacy", "Show family when someone is at the iPad"]} />],
+            ["Check for someone using the camera", "On", <><Path steps={["Privacy", "Check with the camera"]} />, tablet only</>],
             ["Language", "English", <><Path steps={["Display & voice", "Bedside language"]} />, tablet only</>],
             ["Announcement voice", "Porch’s voice", <><Path steps={["Display & voice", "Announcement voice"]} />, tablet only</>],
             ["Clock", "Day & night", <><Path steps={["Display & voice", "Clock"]} />, tablet only</>],
             ["Keypad", "0 answers and hangs up, 9 turns video off and on, and the other keys are empty", <><Path steps={["People"]} />, tablet only</>],
-            ["A new keypad person’s calls", "Start as video", <>The key’s <UI>Calls start as</UI>, tablet only</>],
+            ["New keypad calls", "Start as video", <>The key’s <UI>Calls start as</UI>, tablet only</>],
             ["Putting the receiver back hangs up", "On", <><Path steps={["This iPad", "Hang up when the receiver is put back"]} />, tablet only</>],
             ["Your camera at the start of video calls", "On", <>Your own Porch settings: <UI>Start video calls with my camera on</UI></>],
           ]}
@@ -88,8 +96,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Lift the receiver and press the key for the person you want to call. On the tablet, you can also tap{" "}
-          <UI>Call someone</UI> and choose a name.
+          Once you’ve assigned people to the keypad, your loved one can lift the receiver and press
+          their button to call. They can also tap <UI>Call someone</UI> on the tablet and choose a name.
         </p>
         <h3>Put someone on a key</h3>
         <ol>
@@ -100,32 +108,34 @@ const parts: GuidePart[] = [
             Choose <UI>Call a person</UI> under the heading for that key, such as <UI>What key 1 does</UI>.
           </li>
           <li>
-            Under <UI>Their details</UI>, tap <UI>Choose from Family on Porch</UI> for someone who already uses Porch.
-            For anyone else, type their name or tap <UI>Choose from Contacts</UI>. You can invite them with{" "}
-            <UI>Invite them</UI>, or later with <UI>Invite someone</UI>: give the invitation the name on their key, and
-            the key switches to their Porch app when they join.
+            Under <UI>Their details</UI>, choose someone who has already joined using{" "}
+            <UI>Choose from Family on Porch</UI>. Otherwise, enter their name or tap{" "}
+            <UI>Choose from Contacts</UI>. If you invite them now with <UI>Invite them</UI> or later
+            with <UI>Invite someone</UI>, use the same name as their key. Porch will then switch the key
+            to their app when they join.
           </li>
           <li>
             Under <UI>Calls start as</UI>, choose video or audio. Add a photo under{" "}
             <UI>Photo &amp; button color</UI>.
           </li>
           <li>
-            To let Porch call their regular phone, <a href="#phone-fallback">add their phone number</a>. Tap <UI>Save</UI>.
+            To call their regular phone if they miss an app call,{" "}
+            <a href="#phone-fallback">add their phone number</a>. Then tap <UI>Save</UI>.
           </li>
         </ol>
         <p>
-          To move someone, tap them under <UI>People</UI>, then <UI>Keypad key</UI>, and pick another key or{" "}
-          <UI>Take off the keypad</UI>.
+          To move someone to a different button, open <UI>People</UI>, tap their name, then{" "}
+          <UI>Keypad key</UI>. Choose another key or <UI>Take off the keypad</UI>.
         </p>
         <p>
-          To put each person’s photo and name on their key, print labels with the{" "}
-          <Link href="/labels">phone button label maker</Link>. The setup guides walk through it.
+          Use the <Link href="/labels">phone button label maker</Link> to print photos and names for
+          the physical buttons.
         </p>
         <h3>What else a key can do</h3>
         <ul>
           <li>
-            <UI>Answer / decline / hang up</UI> answers a ringing call, stops a drop-in before it connects or ends
-            a call. To decline a ringing call, tap <UI>Decline</UI> on the screen.
+            <UI>Answer / decline / hang up</UI> lets the button answer a call, stop a drop-in before
+            it connects or hang up. To decline a ringing call, tap <UI>Decline</UI> on the screen.
           </li>
           <li>
             <UI>Turn video off / on</UI> controls the tablet’s camera during a video call.
@@ -153,8 +163,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          If someone misses a call in the Porch app, Porch can try their regular phone number. The second call is
-          voice only and shows your loved one’s Porch number.
+          If someone doesn’t answer in the Porch app, Porch can call their regular phone after a short
+          wait. That second call is voice-only and shows your loved one’s Porch number.
         </p>
         <h3>Add a phone number</h3>
         <ol>
@@ -165,16 +175,16 @@ const parts: GuidePart[] = [
             Tap <UI>Phone</UI>, turn on <UI>Call their phone</UI> and enter their <UI>Primary number</UI>.
           </li>
           <li>
-            Use <UI>Add another number</UI> for any other numbers they call from. You can save up to five numbers per
-            person. Porch places calls to the primary number.
+            Use <UI>Add another number</UI> to save any other numbers they might call from. You can
+            save up to five numbers per person, but Porch calls the primary number.
           </li>
           <li>
             Tap <UI>Save</UI>.
           </li>
         </ol>
         <p>
-          If the person only has a phone number on their key, Porch calls that number right away. If nobody answers
-          a regular phone call, the phone’s voicemail can take a message.
+          If someone has only a regular phone number on their key, Porch calls it right away.
+          If they don’t answer, their phone’s voicemail may take a message.
         </p>
         <Setting
           rows={[
@@ -196,12 +206,12 @@ const parts: GuidePart[] = [
             In Porch on your phone, tap <UI>Audio call</UI> or <UI>Video call</UI>.
           </li>
           <li>
-            If you’re approved to drop in and the clock is showing on the tablet, the call connects by itself. See{" "}
-            <a href="#drop-in">Drop-in</a>.
+            If you’re allowed to <a href="#drop-in">drop in</a> and the clock is showing on the tablet,
+            your call connects automatically.
           </li>
           <li>
-            Otherwise the tablet rings. To answer a video call, your loved one can tap <UI>Answer video call</UI> or
-            lift the receiver and press 0. To decline, tap <UI>Decline</UI>.
+            Otherwise, the tablet rings. Your loved one can tap <UI>Answer video call</UI>, or lift
+            the receiver and press 0. To decline, tap <UI>Decline</UI>.
           </li>
           <li>
             If nobody answers, Porch offers to <UI>Leave a message</UI>.
@@ -227,13 +237,15 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          A drop-in connects without anyone answering. Porch chimes, says who’s calling and waits five seconds before
-          connecting.
+          A <strong>drop-in</strong> call connects without your loved one having to answer. Porch
+          plays a chime, announces who’s calling and waits five seconds before connecting. Your loved one
+          can stop it during that time.
         </p>
         <ul>
           <li>
-            In Porch on your phone, tap <UI>Drop in with video</UI> or <UI>Drop in with audio</UI>. An approved
-            person’s <UI>Video call</UI> and <UI>Audio call</UI> drop in too.
+            On your phone, tap <UI>Drop in with video</UI> or <UI>Drop in with audio</UI>.
+            If you have drop-in permission, even your regular <UI>Video call</UI> and{" "}
+            <UI>Audio call</UI> connect this way.
           </li>
           <li>
             Your loved one can stop it by tapping <UI>Don’t connect</UI> or pressing 0.
@@ -243,26 +255,28 @@ const parts: GuidePart[] = [
         <h3>Choose who may drop in</h3>
         <ul>
           <li>
-            To pause drop-ins for everyone, turn off <Path steps={["Drop-in", "Allow drop-ins"]} />. Porch remembers who
-            you approved.
+            To pause all drop-in calls, turn off <Path steps={["Drop-in", "Allow drop-ins"]} />.
+            Porch keeps each person’s permissions for when you turn it back on.
           </li>
           <li>
             To change access for one person, tap their name under <UI>Drop-in</UI> or <UI>People</UI>. Turn <UI>Audio drop-in</UI> or{" "}
             <UI>Video drop-in</UI> on or off.
           </li>
           <li>
-            For new people, use the <UI>Approve drop-in</UI> switches on the invitation.
+            For someone new, choose their drop-in permissions when you invite them, using the{" "}
+            <UI>Approve drop-in</UI> switches.
           </li>
         </ul>
         <h3>Drop in from a regular phone</h3>
         <p>
-          For someone who uses a regular phone, open <Path steps={["Drop-in", "Add a phone number"]} /> and turn on{" "}
-          <UI>Approve audio drop-in</UI>. The call drops in if the phone company confirms the caller’s number. Otherwise
+          To allow someone to drop in from a regular phone, open{" "}
+          <Path steps={["Drop-in", "Add a phone number"]} /> and turn on <UI>Approve audio drop-in</UI>.
+          The call connects automatically only if the phone company verifies their caller ID. Otherwise,
           the tablet rings.
         </p>
         <Setting
           rows={[
-            ["Default", "On. Everyone you invite may drop in with audio and video, and so may your own phone from setup."],
+            ["Default", "On. Everyone you invite can drop in with audio or video, including your own phone from setup."],
             ["Change it", <><Path key="p" steps={["Drop-in"]} />, on the tablet or a caregiver’s phone.</>],
           ]}
         />
