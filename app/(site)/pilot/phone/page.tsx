@@ -163,6 +163,16 @@ const parts: GuidePart[] = [
             a: <p>Invitations work once and expire after 24 hours. Ask whoever invited you for a new one.</p>,
           },
           {
+            q: "My loved one’s key for me still calls my regular phone.",
+            a: (
+              <p>
+                A key switches to Porch on its own when it has the same name as your invitation. If yours didn’t, ask
+                whoever set up your loved one’s Porch to switch it: in caregiver mode, they open <UI>People</UI>, tap
+                your key, then <UI>Choose from Family on Porch</UI> and choose you.
+              </p>
+            ),
+          },
+          {
             q: "Google Play says Porch isn’t available.",
             a: (
               <p>

@@ -102,7 +102,8 @@ const parts: GuidePart[] = [
           <li>
             Under <UI>Their details</UI>, tap <UI>Choose from Family on Porch</UI> for someone who already uses Porch.
             For anyone else, type their name or tap <UI>Choose from Contacts</UI>. You can invite them with{" "}
-            <UI>Invite them</UI>.
+            <UI>Invite them</UI>, or later with <UI>Invite someone</UI>: give the invitation the name on their key, and
+            the key switches to their Porch app when they join.
           </li>
           <li>
             Under <UI>Calls start as</UI>, choose video or audio. Add a photo under{" "}
