@@ -9,7 +9,7 @@ const connectPhoneVideo =
 
 export const metadata = guideMetadata(
   "Set up Porch on an iPad | HelloPorch",
-  "Set up your loved one’s iPad, connect the corded phone and add family members to Porch.",
+  "Install Porch on an iPad, connect a big-button phone and invite family members.",
 );
 
 const kit: KitPart[] = [
@@ -28,8 +28,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          During the pilot, Porch is a test app that comes through Apple’s TestFlight app. Open these on your loved
-          one’s iPad, in this order.
+          Porch is still being tested, so you’ll install it through Apple’s free TestFlight app. On your loved
+          one’s iPad, use these links in order.
         </p>
         <Links
           lettered
@@ -41,7 +41,7 @@ const parts: GuidePart[] = [
               device: "your loved one’s iPad",
               how: (
                 <>
-                  Install this first. Tap <UI>Get</UI> to install Apple’s free TestFlight app. You don’t need to open it.
+                  First, tap <UI>Get</UI> to install TestFlight. You don’t need to open it.
                 </>
               ),
             },
@@ -60,23 +60,22 @@ const parts: GuidePart[] = [
               name: "Your private setup link",
               sent: "I’ll email or text it to you.",
               device: "your loved one’s iPad only",
-              how: "It works on one iPad and expires after 14 days.",
+              how: "Use this on your loved one’s iPad. It works once and expires after 14 days.",
             },
           ]}
         />
         <p>
-          You’ll also add Porch to your own phone partway through. The <Link href="/pilot/phone">phone guide</Link>{" "}
-          covers phones, for you and the rest of the family.
+          You’ll add Porch to your own phone later in setup. The <Link href="/pilot/phone">phone guide</Link>{" "}
+          has instructions for iPhones and Android phones.
         </p>
         <p>
-          The <strong>Porch phone adapter</strong> connects the Cell2Jack to the iPad. I’ll mail it to you. Or, if you
-          are in the Bay Area, I can bring it to you in-person. You can set up the iPad now and connect the phone when
-          the adapter arrives.
+          I’ll mail you the <strong>Porch phone adapter</strong>, or bring it by if you’re in the Bay Area.
+          You can set up Porch before it arrives and connect the corded phone later.
         </p>
         <Tip>
           <p>
-            Allow about 30 minutes. Have the iPad, corded phone, Cell2Jack, Porch phone adapter and your own phone
-            nearby.
+            Allow about 30 minutes for setup. You’ll need the iPad, corded phone, Cell2Jack, Porch phone
+            adapter and your own phone when you connect everything.
           </p>
           <p>
             If you get stuck at any point, <Contact />.
@@ -99,26 +98,25 @@ const parts: GuidePart[] = [
             Porch needs iPadOS 15 or later.
           </li>
           <li>
-            <strong>Check the date and time are set automatically,</strong> under <UI>Settings</UI>, <UI>General</UI>,{" "}
-            <UI>Date &amp; Time</UI>.
+            <strong>Check the date and time.</strong> Under <UI>Settings</UI>, <UI>General</UI>,{" "}
+            <UI>Date &amp; Time</UI>, make sure <UI>Set Automatically</UI> is on.
           </li>
           <li>
             <strong>Sign in to the App Store</strong> with an Apple ID, so the iPad can install TestFlight.
           </li>
           <li>
-            <strong>Make sure you can open your setup link on it,</strong> from your email or texts on the iPad, or by
-            AirDrop from your iPhone.
+            <strong>Have your setup link ready on the iPad.</strong> Open it from email or messages, or
+            send it from your iPhone using AirDrop.
           </li>
         </ol>
         <Tip label="An older iPad?">
           <p>
-            An iPad with a Lightning charging port needs a Lightning hub with a port for the charger instead of a
-            USB-C hub, such as{" "}
+            If your iPad has a Lightning charging port rather than USB-C, you’ll need a Lightning adapter
+            with a charging port, such as{" "}
             <a href={shopping.lightningHub.href} target="_blank" rel="noopener noreferrer">
               this one on Amazon
             </a>{" "}
-            ({shopping.lightningHub.price.toLowerCase()}). If you’re unsure which port your iPad has, ask me
-            before you buy a hub.
+            ({shopping.lightningHub.price.toLowerCase()}). Not sure which one to get? Ask me before buying.
           </p>
         </Tip>
       </>
@@ -132,24 +130,24 @@ const parts: GuidePart[] = [
         <StepVideo
           name="ios-setup"
           label="Video: installing Porch and setting up your loved one’s Porch on the iPad"
-          caption="Installing Porch, opening your setup link and setting up your loved one’s Porch."
+          caption="Watch how to install and set up Porch on the iPad."
         />
         <ol>
           <li>
-            On the iPad, install Apple’s free <a href={testFlightApp}>TestFlight app</a>. Then open{" "}
-            <a href={testFlight}>Porch’s TestFlight link</a> and tap{" "}
-            <UI>Accept</UI>, then <UI>Install</UI>. Porch appears on the Home Screen.
+            If you haven’t already, install <a href={testFlightApp}>TestFlight</a> on the iPad. Then open{" "}
+            <a href={testFlight}>the Porch test link</a> and tap <UI>Accept</UI>, then <UI>Install</UI>.
+            Porch will appear on the Home Screen.
           </li>
           <li>
             Tap your private setup link on the iPad your loved one will use. Porch opens and asks{" "}
             <UI>Who is this Porch for?</UI>
           </li>
           <li>
-            Enter the name family members use, such as Grandpa Joe, and tap <UI>Continue</UI>.
+            Enter a name your family will recognize, such as Grandpa Joe, and tap <UI>Continue</UI>.
           </li>
-          <li>Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.</li>
+          <li>Choose a six-digit caregiver PIN and enter it twice. You’ll use it to change Porch’s settings, so keep it somewhere safe.</li>
           <li>
-            Tap <UI>Get number</UI> to get a phone number for your loved one’s Porch. When it appears, tap{" "}
+            Tap <UI>Get number</UI>. Porch will assign a phone number people can call. When it appears, tap{" "}
             <UI>Continue</UI>.
           </li>
           <li>
@@ -168,9 +166,9 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          When Porch shows <UI>Connect the phone</UI>, follow the steps below. Its <UI>Step-by-step instructions</UI>{" "}
-          link opens this page. You’ll use the corded phone’s keys to make and answer calls. You’ll see and hear the
-          caller on the iPad and speak into the iPad’s microphone.
+          When Porch shows <UI>Connect the phone</UI>, follow the steps below. Your loved one will press
+          the corded phone’s buttons to call and answer. Your loved one will see and hear callers on the iPad and speak into the iPad’s microphone,
+          not the phone receiver.
         </p>
         <h3>Plug in the phone</h3>
         <FilmedVideo
@@ -183,8 +181,8 @@ const parts: GuidePart[] = [
         />
         <ol>
           <li>
-            <strong>Plug the iPad’s charger into the hub first,</strong> and the hub into the iPad. The charger powers
-            the adapter and the Cell2Jack as well as the iPad.
+            <strong>Plug the iPad’s charger into the hub first,</strong> then connect the hub to the iPad.
+            This powers the iPad, adapter and Cell2Jack.
           </li>
           <li>Plug the phone’s cord into the Cell2Jack, and the Cell2Jack’s USB cable into the adapter.</li>
           <li>
@@ -194,9 +192,9 @@ const parts: GuidePart[] = [
         </ol>
         <Tip label="If Porch says the iPad has an M chip">
           <p>
-            The adapter works on every iPad. An iPad Pro from 2021 or later or an iPad Air from 2022 or later, with
-            iPadOS 16 or later, can also do without it. Porch says so at the bottom of <UI>Connect the phone</UI>. To
-            leave the adapter out:
+            Some newer iPads can connect without the adapter: an iPad Pro (2021 or later) or iPad Air
+            (2022 or later) running iPadOS 16 or later. Only follow these steps if Porch offers the option
+            at the bottom of <UI>Connect the phone</UI>:
           </p>
           <ol>
             <li>Plug the Cell2Jack’s USB cable straight into the hub.</li>
@@ -209,11 +207,11 @@ const parts: GuidePart[] = [
             </li>
           </ol>
         </Tip>
-        <h3>Then test the phone</h3>
+        <h3>Test the phone</h3>
         <ol>
           <li>
-            When Porch asks, lift the receiver and press a key, such as 3. Listen for{" "}
-            <Says>Porch heard 3. Now put the receiver back.</Says> This is a test.
+            When Porch asks, lift the receiver and press a button, such as 3. The iPad should say{" "}
+            <Says>Porch heard 3. Now put the receiver back.</Says>
           </li>
           <li>
             Hang up. Porch says <Says>Porch heard you hang up. The phone is ready.</Says> Tap <UI>Continue</UI>.
@@ -276,8 +274,8 @@ const parts: GuidePart[] = [
             then tap <UI>Join family</UI> in Porch.
           </li>
           <li>
-            <strong>On your phone:</strong> allow what Porch asks for, so calls can ring. See{" "}
-            <Link href="/pilot/phone#ring">Let calls ring your phone</Link>.
+            <strong>On your phone:</strong> allow notifications and the other permissions Porch needs for calls.
+            See <Link href="/pilot/phone#ring">Let calls ring your phone</Link>.
           </li>
           <li>
             <strong>On the iPad:</strong> it says your phone joined. Tap <UI>Continue</UI>.
@@ -292,9 +290,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Invite family and friends from Porch on your phone, now or any time later. Each person gets their own
-          invitation. Send it with the <Link href="/pilot/phone">phone guide</Link>, which shows them how to get Porch
-          and join.
+          You can invite family and friends from Porch on your phone, now or later. Send each person
+          their own invitation along with the <Link href="/pilot/phone">phone guide</Link> so they know how to join.
         </p>
         <StepVideo
           name="android-invite"
@@ -310,18 +307,22 @@ const parts: GuidePart[] = [
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
           </li>
           <li>
-            Enter their name. If they’re already on the keypad, use the name on their key, so their key switches to
-            their Porch app when they join. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls
-            should ring first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
+            Enter their name. If they already have a keypad button, use the same name so it can connect
+            to their Porch app when they join.
           </li>
           <li>
-            Tap <UI>Create invitation</UI> and send it by text or email. Then tap <UI>Done</UI>.
+            Choose whether they can use <UI>Audio drop-in</UI> or <UI>Video drop-in</UI>. Drop-in lets
+            them connect without your loved one answering; turn these off if calls should ring instead.
+            Turn on <UI>Caregiver mode</UI> only if they should be able to change settings.
+          </li>
+          <li>
+            Tap <UI>Create invitation</UI>, send it by text or email, then tap <UI>Done</UI>.
           </li>
         </ol>
         <p>
-          Each invitation works once and expires after 24 hours. If one runs out, make a new one the same way.
-          Relatives with an Android phone need me to add their Google account to the Google Play test first, so send me
-          their email before you invite them.
+          Before inviting someone with an Android phone, send me the email address they use for Google Play
+          so I can add them to the test. Invitations work once and expire after 24 hours. You can make a new
+          invitation if one expires.
         </p>
         <Tip label="Adding people later">
           <p>
@@ -344,14 +345,14 @@ const parts: GuidePart[] = [
           caption="Putting a family member who has joined on key 1."
         />
         <p>
-          Any key, including * and #, can <UI>Call a person</UI>, <UI>Answer / decline / hang up</UI>,{" "}
-          <UI>Turn video off / on</UI> or <UI>Play / stop messages</UI>. To start, 0 answers and hangs up, 9 turns video
-          off and on, and the other keys have no action. You can change any of them.
+          You can assign any key, including * and #, to call someone, answer or hang up, turn video
+          on or off, or play messages. By default, 0 answers and hangs up, 9 turns video on or off, and the
+          other keys are unassigned. You can change them all.
         </p>
         <ol>
           <li>
-            When setup ends, tap <UI>Put people on the keypad</UI>. Later, tap the gear on the clock, enter your PIN
-            and tap <UI>Open caregiver mode</UI>.
+            At the end of setup, tap <UI>Put people on the keypad</UI>. To return later, tap the gear
+            on the clock, enter your PIN and choose <UI>Open caregiver mode</UI>.
           </li>
           <li>
             Open <UI>People</UI> and tap the key you want to set up, such as 1. To have it call someone, choose{" "}
@@ -365,8 +366,9 @@ const parts: GuidePart[] = [
             Under <UI>Calls start as</UI>, choose <UI>Video</UI> or <UI>Voice</UI>.
           </li>
           <li>
-            To try their regular phone when they miss a Porch call, turn on <UI>Call their phone</UI> and enter their{" "}
-            <UI>Primary number</UI>. Porch tries it after 20 seconds.
+            If they don’t answer in Porch, you can have Porch call their regular phone. Turn on{" "}
+            <UI>Call their phone</UI> and enter their <UI>Primary number</UI>. By default, Porch tries it
+            after 20 seconds.
           </li>
           <li>
             Tap <UI>Save</UI>. Repeat for each key.
@@ -374,16 +376,14 @@ const parts: GuidePart[] = [
         </ol>
         <h3>When someone joins Porch later</h3>
         <p>
-          A key can start with someone’s regular phone number and switch to their Porch app once they join. It switches
-          on its own when their invitation has the same name as their key, such as Sarah on key 1 and an invitation for
-          Sarah. Capital letters and extra spaces don’t matter, and it works however you invite them: from your phone,
-          from <UI>People</UI>, or by tapping her key and then <UI>Invite Sarah</UI>. If you send her a second invitation,
-          her key takes whichever one she uses. Her phone number stays as the one Porch tries when she misses a call.
+          You can put someone on a button before they install Porch. Start with their name and regular phone
+          number. When they join using an invitation with the same name, Porch automatically switches their key
+          to call the app. Their phone number stays as a backup if they miss a call.
         </p>
         <p>
-          If their key doesn’t switch, switch it yourself. That happens when their invitation has another name, when two
-          keys or two people who joined share their name, or when the iPad was off for more than a day after they
-          joined. In <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose them.
+          If the key doesn’t switch (for example, because two people share a name or the iPad was offline
+          for more than a day), open <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI>
+          and select them.
         </p>
         <StepVideo
           name="ios-switch"
@@ -399,9 +399,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Porch starts in English. You only need this step if your loved one is more comfortable in another
-          language. Once you switch, the iPad shows and speaks that language. Caregiver mode and family phones stay
-          in English.
+          Porch starts in English. If your loved one prefers another language, you can change what
+          they see and hear on the iPad. Caregiver mode and family phones will still use English.
         </p>
         <p>You can choose:</p>
         <Choices
@@ -417,8 +416,8 @@ const parts: GuidePart[] = [
         />
         <StepVideo
           name="ios-language"
-          label="Video: changing the bedside language and voice"
-          caption="Switching the bedside to Spanish and choosing a voice."
+          label="Video: changing the iPad language and voice"
+          caption="Changing the iPad’s language to Spanish and choosing a voice."
         />
         <ol>
           <li>
@@ -428,8 +427,8 @@ const parts: GuidePart[] = [
             Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose your loved one’s language.
           </li>
           <li>
-            To pick a voice, use the menu under <UI>Announcement voice</UI>. <UI>Preview announcement</UI> lets you
-            hear it.
+            Under <UI>Announcement voice</UI>, choose a voice. Tap <UI>Preview announcement</UI>
+            to hear how it sounds.
           </li>
           <li>
             Tap <UI>Save</UI>, then <UI>Back to clock</UI>.
@@ -469,7 +468,7 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          For more on any feature or setting, see the <Link href="/pilot/features">features guide</Link>.
+          For more about Porch’s features and settings, see the <Link href="/pilot/features">features guide</Link>.
         </p>
         <Questions
           items={[
@@ -535,9 +534,8 @@ const parts: GuidePart[] = [
               q: "How do I get help?",
               a: (
                 <p>
-                  The <Link href="/pilot/features">features guide</Link> may have your answer. If not, tell me what
-                  happened and which device you were using. You can <Contact />. If there’s an error on the screen, a
-                  photo helps.
+                  Tell me what happened and which device you were using. If there’s an error, a photo
+                  of the screen helps. You can <Contact />.
                 </p>
               ),
             },
@@ -559,7 +557,8 @@ export default function IOSGuide() {
       }
       lede={
         <p>
-          Set up the iPad your loved one will use, connect their big-button phone and add Porch to your own phone.
+          This guide walks you through installing Porch on your loved one’s iPad, connecting the
+          big-button phone and adding family members.
         </p>
       }
       aside={
@@ -571,10 +570,10 @@ export default function IOSGuide() {
       }
       kit={{
         intro:
-          "I’ll send you the Porch phone adapter. Have the other parts ready before you connect the phone. Prices are approximate.",
+          "I’ll send you the Porch phone adapter. Have the other parts ready before connecting the phone. Prices are approximate.",
         parts: kit,
         ready: [
-          "Wi-Fi where your loved one lives, and its password.",
+          "The Wi-Fi password where your loved one lives.",
           "Your private setup link, from me.",
           "Your own iPhone or Android phone.",
           <>

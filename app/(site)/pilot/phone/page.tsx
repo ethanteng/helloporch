@@ -4,7 +4,7 @@ import { playTesting, qrFor, testFlight, testFlightApp } from "../links";
 
 export const metadata = guideMetadata(
   "Set up Porch on your phone | HelloPorch",
-  "Get Porch on your iPhone or Android phone, join your family’s Porch and let calls ring.",
+  "Install Porch on your iPhone or Android phone, accept your invitation and get ready for calls.",
 );
 
 // The family phone guide: what everyone does on their own phone, iPhone or Android. The bedside guides cover the
@@ -16,8 +16,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Someone in your family has set up Porch for your loved one and invited you. During the pilot, Porch is a
-          test app. Follow the steps for your phone, then open your invitation.
+          Someone in your family has invited you to use Porch. It’s still a test app, so installing it
+          takes an extra step. Follow the instructions for your phone below, then open your invitation.
         </p>
         <h3>On an iPhone</h3>
         <Links
@@ -29,7 +29,7 @@ const parts: GuidePart[] = [
               device: "your iPhone",
               how: (
                 <>
-                  Install this first. Tap <UI>Get</UI> to install Apple’s free TestFlight app. You don’t need to open it.
+                  First, tap <UI>Get</UI> to install Apple’s free TestFlight app. You don’t need to open it.
                 </>
               ),
             },
@@ -40,7 +40,7 @@ const parts: GuidePart[] = [
               device: "your iPhone",
               how: (
                 <>
-                  Once TestFlight is installed, open this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
+                  Next, open this link and tap <UI>Accept</UI>, then <UI>Install</UI>.
                 </>
               ),
             },
@@ -53,8 +53,8 @@ const parts: GuidePart[] = [
               name: "Email me your Google account",
               how: (
                 <>
-                  Do this first. Email me at <Email /> the address of the Google account you use in Google Play.
-                  It’s usually a Gmail address, but any Google account works. The next link works once I’ve added it.
+                  First, email me at <Email /> with the Google account email address you use in Google Play.
+                  It doesn’t have to be a Gmail address. I’ll add it to the test so you can install Porch.
                 </>
               ),
             },
@@ -65,7 +65,8 @@ const parts: GuidePart[] = [
               device: "your Android phone",
               how: (
                 <>
-                  Once I’ve added your Google account, open this link, accept the invitation and tap <UI>Install</UI>.
+                  After I’ve added your account, open this link, accept the test invitation and tap{" "}
+                  <UI>Install</UI>.
                 </>
               ),
             },
@@ -76,9 +77,9 @@ const parts: GuidePart[] = [
           items={[
             {
               name: "Your invitation",
-              sent: "From whoever invited you, or the code on your loved one’s iPad or tablet.",
+              sent: "A link from the person who invited you, or a QR code on your loved one’s tablet.",
               device: "your own phone",
-              how: "It works once and expires after 24 hours.",
+              how: "Open it on your phone after installing Porch. Text or email invitations work once and expire after 24 hours.",
             },
           ]}
         />
@@ -96,14 +97,15 @@ const parts: GuidePart[] = [
     body: (
       <ol>
         <li>
-          Open your invitation on your phone. Tap the link in your text or email, or point your phone’s Camera at the
-          code on your loved one’s iPad or tablet and tap the link that appears.
+          On your phone, open the invitation link you received by text or email. If the person setting up
+          Porch is showing you a QR code on their tablet, scan it with your phone’s Camera instead.
         </li>
         <li>
-          Porch opens. Tap <UI>Join family</UI>.
+          When Porch opens, tap <UI>Join family</UI>.
         </li>
         <li>
-          If the link opens a web page instead, tap <UI>Open invitation in Porch</UI>.
+          If the link opens a web page instead of the app, tap <UI>Open invitation in Porch</UI>,
+          then tap <UI>Join family</UI>.
         </li>
       </ol>
     ),
@@ -115,14 +117,15 @@ const parts: GuidePart[] = [
       <>
         <h3>On an iPhone</h3>
         <p>
-          When Porch asks, allow notifications and the microphone. A Focus, Do Not Disturb or the Ring/Silent switch
-          can silence Porch calls.
+          When Porch asks, allow notifications and microphone access. Otherwise, you may miss calls or
+          people won’t hear you. Also check that Focus, Do Not Disturb and the Ring/Silent switch aren’t
+          silencing calls.
         </p>
         <h3>On an Android phone</h3>
         <p>
-          Look at the top of Porch. Under <UI>Ring when Porch is closed</UI>, tap <UI>Allow</UI> and allow what it
-          asks. Under <UI>Show calls on the lock screen</UI>, tap <UI>Open settings</UI> and allow full-screen
-          notifications.
+          At the top of Porch, find <UI>Ring when Porch is closed</UI>. Tap <UI>Allow</UI> and
+          approve the requested permissions. Then, under <UI>Show calls on the lock screen</UI>, tap{" "}
+          <UI>Open settings</UI> and allow full-screen notifications.
         </p>
       </>
     ),
@@ -152,9 +155,10 @@ const parts: GuidePart[] = [
             q: "My phone won’t join from the invitation.",
             a: (
               <p>
-                If the link opens a web page, tap <UI>Open invitation in Porch</UI>. Or tap <UI>Copy invitation</UI>,
-                open Porch, tap <UI>I’m joining my family</UI>, paste it into <UI>Porch invitation</UI> on an iPhone or{" "}
-                <UI>Invitation link</UI> on Android, and tap <UI>Join family</UI>.
+                If the link opens a web page, tap <UI>Open invitation in Porch</UI>. If that doesn’t work,
+                tap <UI>Copy invitation</UI>. Open Porch and choose <UI>I’m joining my family</UI>.
+                Paste the link into <UI>Porch invitation</UI> on iPhone or <UI>Invitation link</UI> on Android,
+                then tap <UI>Join family</UI>.
               </p>
             ),
           },
@@ -166,9 +170,9 @@ const parts: GuidePart[] = [
             q: "My loved one’s key for me still calls my regular phone.",
             a: (
               <p>
-                A key switches to Porch on its own when it has the same name as your invitation. If yours didn’t, ask
-                whoever set up your loved one’s Porch to switch it: in caregiver mode, they open <UI>People</UI>, tap
-                your key, then <UI>Choose from Family on Porch</UI> and choose you.
+                The keypad button should switch to your Porch app if your invitation used the same name.
+                If it still calls your regular phone, ask the person who set it up to open caregiver mode,
+                go to <UI>People</UI>, tap your button, then <UI>Choose from Family on Porch</UI> and select you.
               </p>
             ),
           },
@@ -194,8 +198,8 @@ const parts: GuidePart[] = [
             q: "My phone says Porch isn’t ready.",
             a: (
               <p>
-                Your loved one’s iPad or tablet is off, unplugged or offline, or Porch isn’t open on it. Ask whoever
-                looks after it to check.
+                Ask whoever set up your loved one’s tablet to make sure it’s charged, connected to Wi-Fi
+                and showing the Porch clock.
               </p>
             ),
           },
@@ -203,8 +207,8 @@ const parts: GuidePart[] = [
             q: "How do I get help?",
             a: (
               <p>
-                Tell me what happened and which phone you were using. You can <Contact />. If there’s an error on the
-                screen, a photo helps.
+                Tell me what happened and whether you use an iPhone or Android. If there’s an error, a
+                screenshot helps. You can <Contact />.
               </p>
             ),
           },
@@ -225,14 +229,14 @@ export default function PhoneGuide() {
       }
       lede={
         <p>
-          For family and friends invited to a loved one’s Porch, on an iPhone or an Android phone: get Porch, join
-          and make sure calls ring.
+          Install Porch on your iPhone or Android phone, join your loved one’s family group and
+          make sure you can receive calls.
         </p>
       }
       aside={
         <>
-          Setting up your loved one’s Porch? Start with the <Link href="/pilot/ios">iPad guide</Link> or the{" "}
-          <Link href="/pilot/android">Android tablet guide</Link>.
+          Setting up the tablet your loved one will use? Follow the <Link href="/pilot/ios">iPad guide</Link> or{" "}
+          <Link href="/pilot/android">Android tablet guide</Link> instead.
         </>
       }
       parts={parts}

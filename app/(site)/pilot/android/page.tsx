@@ -5,7 +5,7 @@ import { shopping } from "../shopping";
 
 export const metadata = guideMetadata(
   "Set up Porch on an Android tablet | HelloPorch",
-  "Set up your loved one’s Android tablet, connect the corded phone and add family members to Porch.",
+  "Install Porch on an Android tablet, connect a big-button phone and invite family members.",
 );
 
 const kit: KitPart[] = [
@@ -22,7 +22,10 @@ const parts: GuidePart[] = [
     title: "Before you start",
     body: (
       <>
-        <p>During the pilot, Porch is a test app on Google Play. Do these in this order.</p>
+        <p>
+          Porch is still being tested, so you’ll install it through Google Play’s testing program.
+          Start with these steps in order.
+        </p>
         <Links
           lettered
           items={[
@@ -30,9 +33,8 @@ const parts: GuidePart[] = [
               name: "Email me the tablet’s Google account",
               how: (
                 <>
-                  Do this first. Email me at <Email /> the address of the Google account signed in to Google Play on
-                  the tablet. It’s usually a Gmail address, but any Google account works. The next link works once
-                  I’ve added it.
+                  First, email me at <Email /> with the Google account address used in Google Play on your
+                  loved one’s tablet. It doesn’t have to be a Gmail address. I’ll add it to the test so you can install Porch.
                 </>
               ),
             },
@@ -43,7 +45,8 @@ const parts: GuidePart[] = [
               device: "your loved one’s tablet",
               how: (
                 <>
-                  Once I’ve added your Google account, open this link, accept the invitation and tap <UI>Install</UI>.
+                  After I’ve added the account, open this link on the tablet, accept the test invitation and tap{" "}
+                  <UI>Install</UI>.
                 </>
               ),
             },
@@ -51,16 +54,17 @@ const parts: GuidePart[] = [
               name: "Your private setup link",
               sent: "I’ll email or text it to you.",
               device: "your loved one’s tablet only",
-              how: "It works on one tablet and expires after 14 days.",
+              how: "Use this on your loved one’s tablet. It works once and expires after 14 days.",
             },
           ]}
         />
         <p>
-          You’ll also add Porch to your own phone partway through. The <Link href="/pilot/phone">phone guide</Link>{" "}
-          covers phones, for you and the rest of the family.
+          You’ll add Porch to your own phone later in setup. The <Link href="/pilot/phone">phone guide</Link>{" "}
+          has instructions for iPhones and Android phones.
         </p>
         <Tip>
-          <p>Allow about 30 minutes. Have the tablet, corded phone and your own phone nearby.</p>
+          <p>Set aside about 30 minutes once you have everything. Keep the tablet, corded phone,
+            Cell2Jack and your own phone nearby.</p>
           <p>
             If you get stuck at any point, <Contact />.
           </p>
@@ -77,14 +81,14 @@ const parts: GuidePart[] = [
           <strong>Charge it and connect it to Wi-Fi.</strong> If you’re setting up at your loved one’s home, use their Wi-Fi.
         </li>
         <li>
-          <strong>Check the Android version.</strong> Open <UI>Settings</UI>, then <UI>About tablet</UI>. Porch needs
-          Android 15 or later. Install any system update the tablet offers.
+          <strong>Check the Android version.</strong> Open <UI>Settings</UI>, then <UI>About tablet</UI>.
+          Porch needs Android 15 or later. Install any available system updates.
         </li>
         <li>
           <strong>Sign in to Google Play</strong> with the Google account you sent me.
         </li>
         <li>
-          <strong>Make sure you can open your setup link on it,</strong> from your email or texts on the tablet.
+          <strong>Have your setup link ready on the tablet.</strong> Open it from your email or messages.
         </li>
       </ol>
     ),
@@ -97,25 +101,24 @@ const parts: GuidePart[] = [
         <StepVideo
           name="android-setup"
           label="Video: installing Porch and setting up your loved one’s Porch on the tablet"
-          caption="Installing Porch, opening your setup link and setting up your loved one’s Porch."
+          caption="Watch how to install and set up Porch on the tablet."
         />
         <ol>
           <li>
-            On the tablet, open{" "}
-            <a href={playTesting}>Porch’s Google Play test</a>.
-            Accept the invitation to test Porch, then tap <UI>Install</UI> in Google Play. Porch appears with the
-            tablet’s apps.
+            After I’ve added your Google account to the test, open{" "}
+            <a href={playTesting}>the Porch test link</a> on the tablet. Accept the invitation, then
+            tap <UI>Install</UI> in Google Play. Porch will appear with your other apps.
           </li>
           <li>
             Tap your private setup link on the tablet your loved one will use. Porch opens and asks{" "}
             <UI>Who is this Porch for?</UI>
           </li>
           <li>
-            Enter the name family members use, such as Grandpa Joe, and tap <UI>Continue</UI>.
+            Enter a name your family will recognize, such as Grandpa Joe, and tap <UI>Continue</UI>.
           </li>
-          <li>Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.</li>
+          <li>Choose a six-digit caregiver PIN and enter it twice. You’ll use it to change Porch’s settings, so keep it somewhere safe.</li>
           <li>
-            Tap <UI>Get number</UI> to get a phone number for your loved one’s Porch. When it appears, tap{" "}
+            Tap <UI>Get number</UI>. Porch will assign a phone number people can call. When it appears, tap{" "}
             <UI>Continue</UI>.
           </li>
           <li>
@@ -135,20 +138,21 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          When Porch shows <UI>Connect the phone</UI>, follow the steps below. Its <UI>Step-by-step instructions</UI>{" "}
-          link opens this page. You’ll use the corded phone’s keys to make and answer calls. You’ll see and hear the
-          caller on the tablet and speak into the tablet’s microphone.
+          When Porch shows <UI>Connect the phone</UI>, follow the steps below. Your loved one will press
+          the corded phone’s buttons to call and answer. Your loved one will see and hear callers on the tablet and speak into the tablet’s microphone,
+          not the phone receiver.
         </p>
         <Chain label="How it connects" items={["Corded phone", "Cell2Jack", "USB-C hub", "Tablet"]} />
         <ol>
-          <li>Plug the phone’s cord into the Cell2Jack, and the Cell2Jack’s USB cable into the hub.</li>
-          <li>Plug the hub into the tablet, and the tablet’s charger into the hub’s charging port.</li>
+          <li>Plug the phone’s cord into the Cell2Jack. Then plug the Cell2Jack’s USB cable into the hub.</li>
+          <li>Connect the hub to the tablet, then plug the tablet’s charger into the hub’s charging port.</li>
           <li>
-            When Android asks whether Porch can use the Cell2Jack, check the box to <strong>always open Porch</strong>{" "}
-            and tap <UI>OK</UI>. If you miss the prompt, tap <UI>Allow Porch to use the Cell2Jack</UI>.
+            When Android asks whether Porch can use the Cell2Jack, select the option to{" "}
+            <strong>always open Porch</strong> and tap <UI>OK</UI>. If you miss the prompt, tap{" "}
+            <UI>Allow Porch to use the Cell2Jack</UI> in Porch.
           </li>
           <li>
-            When Porch asks, lift the receiver and press a key, such as 5. Listen for{" "}
+            When Porch asks, lift the receiver and press a button, such as 5. The tablet should say{" "}
             <Says>Porch heard 5. Now put the receiver back.</Says>
           </li>
           <li>
@@ -157,7 +161,7 @@ const parts: GuidePart[] = [
         </ol>
         <Tip label="If the phone keys don’t respond">
           <ul>
-            <li>Unplug the Cell2Jack and plug it back in. When Android asks, choose to always open Porch.</li>
+            <li>Unplug the Cell2Jack, then plug it back in. If Android asks, choose to always open Porch.</li>
             <li>Check that the switch on the phone is set to <UI>T</UI> or <UI>Tone</UI>.</li>
             <li>The keys only work while the receiver is lifted.</li>
             <li>
@@ -195,8 +199,8 @@ const parts: GuidePart[] = [
             then tap <UI>Join family</UI> in Porch.
           </li>
           <li>
-            <strong>On your phone:</strong> allow what Porch asks for, so calls can ring. See{" "}
-            <Link href="/pilot/phone#ring">Let calls ring your phone</Link>.
+            <strong>On your phone:</strong> allow notifications and the other permissions Porch needs for calls.
+            See <Link href="/pilot/phone#ring">Let calls ring your phone</Link>.
           </li>
           <li>
             <strong>On the tablet:</strong> it says your phone joined. Tap <UI>Continue</UI>, then <UI>Back to the clock</UI>.
@@ -211,9 +215,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Invite family and friends from Porch on your phone, now or any time later. Each person gets their own
-          invitation. Send it with the <Link href="/pilot/phone">phone guide</Link>, which shows them how to get Porch
-          and join.
+          You can invite family and friends from Porch on your phone, now or later. Send each person
+          their own invitation along with the <Link href="/pilot/phone">phone guide</Link> so they know how to join.
         </p>
         <StepVideo
           name="android-invite"
@@ -229,18 +232,22 @@ const parts: GuidePart[] = [
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.
           </li>
           <li>
-            Enter their name. If they’re already on the keypad, use the name on their key, so their key switches to
-            their Porch app when they join. Turn off <UI>Audio drop-in</UI> or <UI>Video drop-in</UI> if their calls
-            should ring first. Turn on <UI>Caregiver mode</UI> for people who should change settings.
+            Enter their name. If they already have a keypad button, use the same name so it can connect
+            to their Porch app when they join.
           </li>
           <li>
-            Tap <UI>Create invitation</UI> and send it by text or email. Then tap <UI>Done</UI>.
+            Choose whether they can use <UI>Audio drop-in</UI> or <UI>Video drop-in</UI>. Drop-in lets
+            them connect without your loved one answering; turn these off if calls should ring instead.
+            Turn on <UI>Caregiver mode</UI> only if they should be able to change settings.
+          </li>
+          <li>
+            Tap <UI>Create invitation</UI>, send it by text or email, then tap <UI>Done</UI>.
           </li>
         </ol>
         <p>
-          Each invitation works once and expires after 24 hours. If one runs out, make a new one the same way.
-          Relatives with an Android phone need me to add their Google account to the Google Play test first, so send me
-          their email before you invite them.
+          Before inviting someone with an Android phone, send me the email address they use for Google Play
+          so I can add them to the test. Invitations work once and expire after 24 hours. You can make a new
+          invitation if one expires.
         </p>
         <Tip label="Adding people later">
           <p>
@@ -263,9 +270,9 @@ const parts: GuidePart[] = [
           caption="Putting a family member who has joined on key 1."
         />
         <p>
-          Any key, including * and #, can <UI>Call a person</UI>, <UI>Answer / decline / hang up</UI>,{" "}
-          <UI>Turn video off / on</UI> or <UI>Play / stop messages</UI>. To start, 0 answers and hangs up, 9 turns video
-          off and on, and the other keys have no action. You can change any of them.
+          You can assign any key, including * and #, to call someone, answer or hang up, turn video
+          on or off, or play messages. By default, 0 answers and hangs up, 9 turns video on or off, and the
+          other keys are unassigned. You can change them all.
         </p>
         <ol>
           <li>
@@ -283,8 +290,9 @@ const parts: GuidePart[] = [
             Under <UI>Calls start as</UI>, choose <UI>Video</UI> or <UI>Voice</UI>.
           </li>
           <li>
-            To try their regular phone when they miss a Porch call, turn on <UI>Call their phone</UI> and enter their{" "}
-            <UI>Primary number</UI>. Porch tries it after 20 seconds.
+            If they don’t answer in Porch, you can have Porch call their regular phone. Turn on{" "}
+            <UI>Call their phone</UI> and enter their <UI>Primary number</UI>. By default, Porch tries it
+            after 20 seconds.
           </li>
           <li>
             Tap <UI>Save</UI>. Repeat for each key.
@@ -292,16 +300,14 @@ const parts: GuidePart[] = [
         </ol>
         <h3>When someone joins Porch later</h3>
         <p>
-          A key can start with someone’s regular phone number and switch to their Porch app once they join. It switches
-          on its own when their invitation has the same name as their key, such as Sarah on key 1 and an invitation for
-          Sarah. Capital letters and extra spaces don’t matter, and it works however you invite them: from your phone,
-          from <UI>People</UI>, or by tapping her key and then <UI>Invite Sarah</UI>. If you send her a second invitation,
-          her key takes whichever one she uses. Her phone number stays as the one Porch tries when she misses a call.
+          You can put someone on a button before they install Porch. Start with their name and regular phone
+          number. When they join using an invitation with the same name, Porch automatically switches their key
+          to call the app. Their phone number stays as a backup if they miss a call.
         </p>
         <p>
-          If their key doesn’t switch, switch it yourself. That happens when their invitation has another name, when two
-          keys or two people who joined share their name, or when the tablet was off for more than a day after they
-          joined. In <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI> and choose them.
+          If the key doesn’t switch (for example, because two people share a name or the tablet was offline
+          for more than a day), open <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI>
+          and select them.
         </p>
         <StepVideo
           name="android-switch"
@@ -317,9 +323,8 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          Porch starts in English. You only need this step if your loved one is more comfortable in another
-          language. Once you switch, the tablet shows and speaks that language. Caregiver mode and family phones stay
-          in English.
+          Porch starts in English. If your loved one prefers another language, you can change what
+          they see and hear on the tablet. Caregiver mode and family phones will still use English.
         </p>
         <p>You can choose:</p>
         <Choices
@@ -335,8 +340,8 @@ const parts: GuidePart[] = [
         />
         <StepVideo
           name="android-language"
-          label="Video: changing the bedside language and voice"
-          caption="Switching the bedside to Spanish and choosing a voice."
+          label="Video: changing the tablet language and voice"
+          caption="Changing the tablet’s language to Spanish and choosing a voice."
         />
         <ol>
           <li>
@@ -346,8 +351,8 @@ const parts: GuidePart[] = [
             Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose your loved one’s language.
           </li>
           <li>
-            To pick a voice, tap the menu under <UI>Announcement voice</UI>. <UI>Preview announcement</UI> lets you
-            hear it.
+            Under <UI>Announcement voice</UI>, choose a voice. Tap <UI>Preview announcement</UI>
+            to hear how it sounds.
           </li>
           <li>
             Tap <UI>Save</UI>, then <UI>Back to clock</UI>.
@@ -390,7 +395,7 @@ const parts: GuidePart[] = [
     body: (
       <>
         <p>
-          For more on any feature or setting, see the <Link href="/pilot/features">features guide</Link>.
+          For more about Porch’s features and settings, see the <Link href="/pilot/features">features guide</Link>.
         </p>
         <Questions
           items={[
@@ -464,9 +469,8 @@ const parts: GuidePart[] = [
               q: "How do I get help?",
               a: (
                 <p>
-                  The <Link href="/pilot/features">features guide</Link> may have your answer. If not, tell me what
-                  happened and which device you were using. You can <Contact />. If there’s an error on the screen, a
-                  photo helps.
+                  Tell me what happened and which device you were using. If there’s an error, a photo
+                  of the screen helps. You can <Contact />.
                 </p>
               ),
             },
@@ -488,7 +492,8 @@ export default function AndroidGuide() {
       }
       lede={
         <p>
-          Set up the tablet your loved one will use, connect their big-button phone and add Porch to your own phone.
+          This guide walks you through installing Porch on your loved one’s tablet, connecting the
+          big-button phone and adding family members.
         </p>
       }
       aside={
@@ -501,7 +506,7 @@ export default function AndroidGuide() {
         intro: "The Cell2Jack connects the corded phone to the tablet through the USB-C hub. Prices are approximate.",
         parts: kit,
         ready: [
-          "Wi-Fi where your loved one lives, and its password.",
+          "The Wi-Fi password where your loved one lives.",
           "Your private setup link, from me.",
           "Your own iPhone or Android phone.",
           <>
