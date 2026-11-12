@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { Chain, Choices, Contact, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
+import { Chain, Choices, Contact, FilmedVideo, Guide, guideMetadata, Links, Questions, Says, Screenshot, StepVideo, Tip, UI, type GuidePart, type KitPart } from "../_guide/parts";
 import { qrFor, testFlight, testFlightApp } from "../links";
 import { shopping } from "../shopping";
+
+/** Filmed at home: plugging in the corded phone, Cell2Jack, Porch phone adapter and hub. */
+const connectPhoneVideo =
+  "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/How%20to%20connect%20phone%20to%20iPad%20compressed.mp4";
 
 export const metadata = guideMetadata(
   "Set up Porch on an iPad | HelloPorch",
@@ -28,6 +32,7 @@ const parts: GuidePart[] = [
           one’s iPad, in this order.
         </p>
         <Links
+          lettered
           items={[
             {
               name: "TestFlight on the App Store",
@@ -175,9 +180,13 @@ const parts: GuidePart[] = [
         </p>
         <p>How you plug the phone in depends on whether the iPad needs the adapter.</p>
         <h3>Most iPads, with the adapter</h3>
-        <Chain
-          label="How it connects with the adapter"
-          items={["Corded phone", "Cell2Jack", "Porch phone adapter", "USB-C hub", "iPad"]}
+        <FilmedVideo
+          src={connectPhoneVideo}
+          poster="ios-connect-phone"
+          width={1920}
+          height={1080}
+          label="Video: connecting the corded phone to the iPad with the Cell2Jack, the Porch phone adapter and the hub"
+          caption="Connecting the corded phone to the iPad with the Porch phone adapter."
         />
         <ol>
           <li>

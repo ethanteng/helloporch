@@ -235,20 +235,45 @@ export function StepVideo({ name, label, caption }: { name: string; label: strin
 }
 
 /**
+ * A filmed video, with a voice, kept in Vercel Blob at `src` because it is too big for the repository. Its poster is
+ * public/pilot/videos/<poster>.jpg. It loads only when played.
+ */
+export function FilmedVideo({ src, poster, width, height, label, caption }: {
+  src: string; poster: string; width: number; height: number; label: string; caption?: ReactNode;
+}) {
+  return (
+    <figure className={styles.video}>
+      <video controls playsInline preload="none" width={width} height={height} poster={`/pilot/videos/${poster}.jpg`}
+        aria-label={label} style={{ aspectRatio: `${width} / ${height}` }}>
+        <source src={src} type="video/mp4" />
+        <a href={src}>Watch the video</a>
+      </video>
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
+  );
+}
+
+/**
  * A link a family opens during setup: what it is, which device to open it on, and what to do first. `sent` stands in
  * for a link I send each family, such as "I’ll email or text it to you." A card without a link or a device is a step
  * to do before the links, such as emailing me.
  */
 export type GuideLink = { name: string; href?: string; qr?: string; sent?: ReactNode; device?: ReactNode; how: ReactNode };
 
-/** The links a family uses, one card each, with the link written out and, where there is one, a QR code to scan. */
-export function Links({ items }: { items: GuideLink[] }) {
+/**
+ * The links a family uses, one card each, with the link written out and, where there is one, a QR code to scan.
+ * `lettered` names the cards (A), (B), (C) in order, for links opened one after another.
+ */
+export function Links({ items, lettered = false }: { items: GuideLink[]; lettered?: boolean }) {
   return (
     <ul className={styles.links}>
-      {items.map((link) => (
+      {items.map((link, i) => (
         <li key={link.name} className={styles.link}>
           <div className={styles.linkText}>
-            <h3>{link.name}</h3>
+            <h3 className={lettered ? styles.linkLettered : undefined}>
+              {lettered && <LinkLetter letter={String.fromCharCode(65 + i)} />}
+              <span>{link.name}</span>
+            </h3>
             {link.href ? (
               <a className={styles.linkUrl} href={link.href}>
                 {link.href.replace(/^https:\/\//, "")}
@@ -274,6 +299,16 @@ export function Links({ items }: { items: GuideLink[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A link card's letter, in a round label like the step numbers. Screen readers hear "(A)". */
+function LinkLetter({ letter }: { letter: string }) {
+  return (
+    <>
+      <span className={styles.linkLetter} aria-hidden="true">{letter}</span>
+      <span className={styles.srOnly}>({letter}) </span>
+    </>
   );
 }
 
