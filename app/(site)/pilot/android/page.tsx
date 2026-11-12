@@ -33,8 +33,8 @@ const parts: GuidePart[] = [
               name: "Email me the tablet’s Google account",
               how: (
                 <>
-                  First, send me the Google account email address used in Google Play on your loved one’s tablet,
-                  at <Email />. It doesn’t have to be a Gmail address. I’ll add it to the test so you can install Porch.
+                  First, email me at <Email /> with the Google account address used in Google Play on your
+                  loved one’s tablet. It doesn’t have to be a Gmail address. I’ll add it to the test so you can install Porch.
                 </>
               ),
             },
@@ -139,7 +139,7 @@ const parts: GuidePart[] = [
       <>
         <p>
           When Porch shows <UI>Connect the phone</UI>, follow the steps below. Your loved one will press
-          the corded phone’s buttons to call and answer. The video, sound and microphone all come from the tablet,
+          the corded phone’s buttons to call and answer. Your loved one will see and hear callers on the tablet and speak into the tablet’s microphone,
           not the phone receiver.
         </p>
         <Chain label="How it connects" items={["Corded phone", "Cell2Jack", "USB-C hub", "Tablet"]} />
