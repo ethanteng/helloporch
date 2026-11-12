@@ -334,9 +334,8 @@ Follow [BedsideSetup.swift](../ios/Porch/BedsideSetup.swift), one screen at a ti
      4. "Put the receiver back" confirms hang-up.
 
      Tips appear after 30 s: replug it, use tone dialing, and lift the receiver first.
-   - **USB keypad.** `InputManager` notices any keyboard, and the screen shows the key Porch heard. Tips appear after 30 s, including Num Lock.
    - **Just the touchscreen**, which goes straight on.
-   - **Do this later** and **Back** turn off a keypad this screen turned on. The same screens open again from **This tablet** in caregiver mode.
+   - **Do this later** and **Back** turn off a keypad this screen turned on. The same screen opens again from **This tablet** in caregiver mode. (A USB keypad was a choice here too, for testing; it was removed on 2026-11-11. A keypad still works as keys.)
 8. **Add your phone.**
    - Asks for the caregiver's name, then calls `createInvite` with caregiver access. Drop-in is approved for whatever the tablet can already use.
    - Shows a QR code of the `/join` link (ZXing, error correction M, on a white frame). It's replaced when it expires, and the screen shows "Your phone joined" when the invitation is used.
@@ -531,7 +530,7 @@ Page contents:
   - Test ringing, and test announcement.
 - **Privacy.** **Show family when someone is at the tablet** (`setShareAttendance`), and on the tablet, **Check with the camera**.
 - **Caregivers & PIN.** Change the PIN.
-- **This tablet.** **Use the Cell2Jack phone keypad** and **Hang up when the receiver is put back**, plus Connect the phone or USB keypad again, and Use this tablet as a family device. Also **Make Porch the home screen** or **Stop using Porch as the home screen**, and **Tablet settings**, which opens Android's Settings: with Porch as the home screen and the system bars hidden, a caregiver otherwise has to know to swipe down twice from the top.
+- **This tablet.** Under **Connect the physical phone**: Connect the phone again, **Use Cell2Jack phone keypad** and **Hang up when the receiver is put back**, and Use this tablet as a family device. Also **Make Porch the home screen** or **Stop using Porch as the home screen**, and **Tablet settings**, which opens Android's Settings: with Porch as the home screen and the system bars hidden, a caregiver otherwise has to know to swipe down twice from the top.
 - **About.** Porch's version and the open-source licenses, gathered from the dependencies at build time by AboutLibraries (iOS lists its own in Settings, from Settings.bundle). A tap shows a license in a dialog, never a browser, which on a family phone would end caregiver mode. A family phone also has About Porch under its families, since not everyone with Porch is a caregiver.
 - **Typing with a keypad attached.** Android hides the on-screen keyboard when a hardware keyboard is attached unless the user changes that setting, which is the same problem iPadOS has.
   - Port the Porch keyboard: number pad, phone pad with `+`, and text with a symbols layer, plus Paste, Next and Done. Built in `PorchKeyboard.kt`, with the layouts and editing in `:core` (`PorchKeyboardKeys.kt`).

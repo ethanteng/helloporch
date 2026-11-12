@@ -617,9 +617,6 @@ const parts: GuidePart[] = [
             To check the phone again, open <Path steps={["This iPad", "Connect the phone"]} />. On Android it’s{" "}
             <UI>This tablet</UI>, which also has <UI>Retry phone connection</UI>.
           </li>
-          <li>
-            To use a USB number keypad instead, tap <UI>Connect the USB keypad</UI> in the same menu.
-          </li>
         </ul>
         <Setting
           rows={[

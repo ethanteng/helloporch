@@ -16,6 +16,12 @@ enum PorchDevice {
     }
     /// Only an iPad becomes the bedside: it stays with them, and only an iPad can use the Cell2Jack. An iPhone is family.
     static var canBeBedside: Bool { UIDevice.current.userInterfaceIdiom != .phone }
+    /// The model identifier, such as "iPad13,16". A simulator gives the one it simulates.
+    static let model: String = {
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return simulated }
+        var system = utsname(); uname(&system)
+        return withUnsafeBytes(of: &system.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }()
     static var defaultOrigin: URL { URL(string: Bundle.main.object(forInfoDictionaryKey: "PorchServerURL") as? String ?? "https://porch-calling-prototype.vercel.app")! }
     /// A device that has never been set up either way, and hasn't been told which it is: Porch asks first. Anything
     /// that says otherwise, such as a pairing or a keypad, counts. Before the first unlock the keychain can't be read, so

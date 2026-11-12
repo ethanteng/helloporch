@@ -112,9 +112,6 @@ fun CaregiverScreenContent(app: PorchApplication, admin: CaregiverAdmin, links: 
             }
         }
         CaregiverScreen.CONNECT_PHONE -> CordedPhoneSetup(app.cell2jack, onDone = onDone, onBack = onDone)
-        CaregiverScreen.CONNECT_KEYPAD -> FormScreen("Connect the USB keypad", navigation = { TextButton(onClick = onDone) { Text("Back") } }) {
-            SetupUSBKeypadScreen(lovedOne, onContinue = onDone)
-        }
     }
 }
 
@@ -516,7 +513,7 @@ private fun HouseholdNameScreen(admin: CaregiverAdmin, links: FamilyLinks, onDon
 
 // MARK: This tablet
 
-/** The tablet itself: the corded phone or a USB keypad as its keypad, Porch as its home screen, Android's settings, and
+/** The tablet itself: the corded phone as its keypad, Porch as its home screen, Android's settings, and
  * what the tablet is used as. */
 @Composable
 private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Unit, onClose: () -> Unit) {
@@ -524,7 +521,7 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
     val keypad = app.cell2jack
     val enabled by keypad.enabled.collectAsStateWithLifecycle()
     var receiverHangUp by remember { mutableStateOf(keypad.receiverHangUp) }
-    CaregiverGroup("Cell2Jack phone keypad", "Plug the Cell2Jack into this tablet's USB port.") {
+    CaregiverGroup("Connect the physical phone", "Plug the Cell2Jack into this tablet's USB port.") {
         ActionRow("Connect the phone") { onScreen(CaregiverScreen.CONNECT_PHONE) }
         HorizontalDivider()
         ToggleRow("Use Cell2Jack phone keypad", enabled, onChange = keypad::setEnabled)
@@ -534,9 +531,6 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
         ActionRow("Retry phone connection") { keypad.retry() }
         HorizontalDivider()
         ActionRow("Open app settings") { open(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))) }
-    }
-    CaregiverGroup("USB keypad", "A number keypad plugged into this tablet works as Porch's keypad.") {
-        ActionRow("Connect the USB keypad") { onScreen(CaregiverScreen.CONNECT_KEYPAD) }
     }
     var isHome by remember { mutableStateOf(BedsideHomeScreen.isHome(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { isHome = BedsideHomeScreen.isHome(context) }

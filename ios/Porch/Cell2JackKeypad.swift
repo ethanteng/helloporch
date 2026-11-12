@@ -99,11 +99,15 @@ final class Cell2JackKeypad {
         self.defaults = defaults; self.isBedside = isBedside; self.makeConnection = makeConnection
         self.uptime = uptime; self.enqueueRetry = enqueueRetry
     }
+    /// A build with the driver, on an iPad that may have an M chip. An iPad known to have none can take the phone only
+    /// through the adapter, so Porch never tries the driver there.
     static var supportsDriverPlatform: Bool {
         #if PORCH_NO_CELL2JACK
         return false
         #else
-        if #available(iOS 16.0, *) { return UIDevice.current.userInterfaceIdiom == .pad }
+        if #available(iOS 16.0, *) {
+            return UIDevice.current.userInterfaceIdiom == .pad && !IPadChip.lacksMChip(model: PorchDevice.model)
+        }
         return false
         #endif
     }
@@ -292,7 +296,7 @@ private final class Cell2JackUnavailableConnection: Cell2JackKeypadConnection {
     let supportsRecovery = false
     private let update: (Cell2JackKeypadUpdate) -> Void
     init(_ update: @escaping (Cell2JackKeypadUpdate) -> Void) { self.update = update }
-    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack needs an iPad with an M chip. A regular USB keypad and the touchscreen still work.")) } }
+    func start() { DispatchQueue.main.async { self.update(.finished("Cell2Jack needs an iPad with an M chip. The Porch phone adapter and the touchscreen still work.")) } }
     func stop() {}
 }
 

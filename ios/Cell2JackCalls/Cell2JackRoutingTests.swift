@@ -591,25 +591,24 @@ final class Cell2JackRoutingTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: Cell2JackKeypad.enabledKey))
         XCTAssertEqual(keypad.status, "Phone keypad off")
     }
-    @MainActor func testCaregiverCell2JackSwitchStartsOffAndLeavesSilenceAlone() throws {
-        guard Cell2JackKeypad.supportsDriverPlatform else { return }
+    /// This iPad has no switch for the Cell2Jack keypad: Connect the phone turns it on. One already on, such as Mom's,
+    /// stays on, and turning it on and off leaves silence alone.
+    @MainActor func testThisIPadLeavesTheCell2JackKeypadToConnectThePhone() throws {
         let name = "cell2jack-switch-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { false }) { Connection($0) }
-        let screen = DeviceSettingsViewController(phoneKeypad: keypad)
+        XCTAssertFalse(keypad.enabled)
+        keypad.setEnabled(true)
+        let screen = DeviceSettingsViewController(phoneKeypad: keypad, driver: true)
         screen.loadViewIfNeeded()
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
-        let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "device.cell2jack" })
-        XCTAssertFalse(toggle.isOn)
-        toggle.isOn = true; toggle.sendActions(for: .valueChanged)
-        XCTAssertTrue(keypad.enabled)
+        XCTAssertEqual(switches(screen.view).map(\.accessibilityIdentifier), ["device.cell2jackReceiverHangUp"])
+        XCTAssertTrue(keypad.enabled, "Opening This iPad leaves it on")
+        keypad.setEnabled(false)
         XCTAssertNil(defaults.object(forKey: "porch.disconnectAfterSilence"), "Silence stays at its default")
-        toggle.isOn = false; toggle.sendActions(for: .valueChanged)
-        XCTAssertFalse(keypad.enabled)
     }
     @MainActor func testReceiverHangUpSwitchStartsOnAndTurningItOffKeepsTheCall() throws {
-        guard Cell2JackKeypad.supportsDriverPlatform else { return }
         let name = "cell2jack-receiver-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
@@ -617,7 +616,7 @@ final class Cell2JackRoutingTests: XCTestCase {
         let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }) { update in
             let result = Connection(update); connection = result; return result
         }
-        let screen = DeviceSettingsViewController(phoneKeypad: keypad)
+        let screen = DeviceSettingsViewController(phoneKeypad: keypad, driver: true)
         screen.loadViewIfNeeded()
         func switches(_ view: UIView) -> [UISwitch] { (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap(switches) }
         let toggle = try XCTUnwrap(switches(screen.view).first { $0.accessibilityIdentifier == "device.cell2jackReceiverHangUp" })

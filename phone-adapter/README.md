@@ -47,7 +47,7 @@ The red LED is off with no Cell2Jack, blinks while connecting, and stays on once
 
 ## In Porch
 
-In setup, **How will Mom call? → Corded phone** opens **Connect the phone**, which checks a key and the receiver going back. **This iPad → Desk phone** opens it again and has **Hang up when the receiver is put back**, which is on by default. Both are in every build. Leave **Use Cell2Jack phone keypad** off in builds that have it, since that switch is for the driver.
+In setup, **How will Mom call? → Corded phone** opens **Connect the phone**, which checks a key and the receiver going back. **This iPad → Connect the physical phone** opens it again and has **Hang up when the receiver is put back**, which is on by default. Both are in every build.
 
 The digits work like any number pad's. Hanging up needs the Porch build of 2026-11-04 or later, which reads F24 ([CallTrigger.receiverHangUpKey](../ios/PorchCore/Sources/PorchCore/CallTrigger.swift), routed in `PorchWindow` and [Cell2JackKeypad.receiveAdapterHangUp](../ios/Porch/Cell2JackKeypad.swift)). From the adapter's first hang-up on, Porch keeps its usual trace in `Documents/cell2jack-call-actions.json`, with `rawLine` set to `phone adapter`, even though the driver is off.
 
