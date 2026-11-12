@@ -87,6 +87,9 @@ final class Cell2JackKeypad {
     private(set) var trying = false
     /// The Cell2Jack is answering: the phone is plugged in and the driver is on.
     private(set) var isReady = false
+    /// A connection to the driver is open and hasn't answered yet, as the first one is for a few seconds after the
+    /// Cell2Jack is found. Between tries, after one found no Cell2Jack, there's none.
+    var connecting: Bool { worker != nil && !isReady }
     var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
 
     init(defaults: UserDefaults = .standard,

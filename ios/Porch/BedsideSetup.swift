@@ -492,6 +492,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private var keys = CallTrigger()
     /// This screen turned the keypad on. Do this later undoes that; one that was already on stays on.
     private var enabledHere = false
+    /// The phone was checked through the adapter. A driver still connecting then may yet answer, so the keypad is left
+    /// alone until it does or gives up.
+    private var checkedThroughAdapter = false
     /// Leaving, so a stop callback doesn't put the waiting text back up.
     private var leaving = false
     private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
@@ -603,6 +606,8 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         if leaving { return }
         // Turned on for them: from now on the phone is Mom's keypad, here and on the clock.
         if keypad.isReady, !keypad.enabled { keypad.setEnabled(true); enabledHere = true }
+        // The driver gave up after the adapter checked the phone: now it's clear nothing is on the driver.
+        if checkedThroughAdapter { checkedWithoutDriver() }
         connectionChanged()
     }
     /// The driver retries every few seconds while nothing answers on it, so only a change of state renders: rendering
@@ -669,7 +674,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         } else {
             heardFrom = nil
             progress = .done("Porch heard \(symbol). The phone is ready.")
-            if !fromDriver { checkedWithoutDriver() }
+            if !fromDriver { checkedThroughAdapter = true; checkedWithoutDriver() }
         }
         render()
     }
@@ -682,7 +687,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     func receiveCell2JackHangUp() -> String {
         guard case .heard = progress else { return "setup: hang-up before a key" }
         progress = .done("Porch heard you hang up. The phone is ready.")
-        if heardFrom == .keyboard { checkedWithoutDriver() }
+        if heardFrom == .keyboard { checkedThroughAdapter = true; checkedWithoutDriver() }
         render()
         return "setup: heard hang-up"
     }
@@ -690,8 +695,10 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// A phone keypad left on, such as from a Cell2Jack that used to be plugged straight in, would keep Porch looking
     /// for one every 15 seconds and fill the call log with the tries, so it goes off. A keyboard case on an iPad whose
     /// Cell2Jack is on the driver leaves it on, and a Cell2Jack that answers while this screen is open turns it back on.
+    /// So does a connection still making its first try, as for a few seconds after the screen opens: the keypad goes
+    /// off only once that try finds nothing, here or from `keypadChanged`.
     private func checkedWithoutDriver() {
-        guard keypad.enabled, !keypad.isReady else { return }
+        guard keypad.enabled, !keypad.isReady, !keypad.connecting else { return }
         keypad.record(["kind": "phoneKeypadOff", "reason": "phone checked through the adapter"])
         keypad.setEnabled(false); enabledHere = false
     }

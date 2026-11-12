@@ -520,7 +520,9 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
     val keypad = app.cell2jack
     var receiverHangUp by remember { mutableStateOf(keypad.receiverHangUp) }
     // As on iOS, Connect the phone is the only way the phone keypad turns on, and opening it connects again at once,
-    // so there's no switch or retry here. Unplugging the Cell2Jack stops it.
+    // so there's no switch or retry here. Once on it stays on: unplugging the Cell2Jack doesn't turn it off, and Porch
+    // keeps trying to connect, backing off to every 15 seconds, until it's plugged back in. That's on purpose, since
+    // the guide says to unplug it for ten seconds. Android has no adapter check to turn it off, as iOS has.
     CaregiverGroup("Connect the physical phone", "Plug the Cell2Jack into this tablet's USB port.") {
         ActionRow("Connect the phone") { onScreen(CaregiverScreen.CONNECT_PHONE) }
         HorizontalDivider()

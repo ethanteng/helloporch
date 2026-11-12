@@ -2280,6 +2280,26 @@ final class BedsideSetupTests: XCTestCase {
         }
     }
 
+    @MainActor func testAnAdapterCheckWaitsForTheDriversFirstTryBeforeTurningTheKeypadOff() throws {
+        // The keypad was already on, and the driver is still making its first try when the adapter's check finishes,
+        // as for a few seconds after the screen opens: a Cell2Jack plugged straight in may yet answer.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(phoneStatus(step.screen)?.hasSuffix("The phone is ready.") == true, "\(hangUp)")
+            XCTAssertTrue(step.keypad.connecting, "\(hangUp)")
+            XCTAssertTrue(step.keypad.enabled, "The driver hasn't finished its first try (\(hangUp))")
+            // That try finds nothing while the screen is still open: now the keypad goes off.
+            step.connections()[0].update(.finished("No running Cell2Jack driver service"))
+            XCTAssertFalse(step.keypad.enabled, "The driver found nothing, so the adapter is the phone's way in (\(hangUp))")
+        }
+    }
+
     @MainActor func testAKeyboardKeyWhileTheDriverAnswersLeavesThePhoneKeypadOn() throws {
         // A keyboard case on an iPad whose Cell2Jack is plugged straight in.
         let step = try phoneStep { true }
