@@ -492,8 +492,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private var keys = CallTrigger()
     /// This screen turned the keypad on. Do this later undoes that; one that was already on stays on.
     private var enabledHere = false
-    /// The phone was checked through the adapter. A driver still connecting then may yet answer, so the keypad is left
-    /// alone until it does or gives up.
+    /// The phone was checked through the adapter, and the driver's first try was still open. That try may yet answer,
+    /// so the keypad is left alone until it does or that try ends. Cleared once the driver is ready or the try ends:
+    /// a later disconnect, such as the ten-second unplug, must not turn a working keypad off.
     private var checkedThroughAdapter = false
     /// Leaving, so a stop callback doesn't put the waiting text back up.
     private var leaving = false
@@ -606,7 +607,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         if leaving { return }
         // Turned on for them: from now on the phone is Mom's keypad, here and on the clock.
         if keypad.isReady, !keypad.enabled { keypad.setEnabled(true); enabledHere = true }
-        // The driver gave up after the adapter checked the phone: now it's clear nothing is on the driver.
+        // The first try ended after the adapter checked the phone. A driver that already answered is left alone.
         if checkedThroughAdapter { checkedWithoutDriver() }
         connectionChanged()
     }
@@ -695,10 +696,14 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// A phone keypad left on, such as from a Cell2Jack that used to be plugged straight in, would keep Porch looking
     /// for one every 15 seconds and fill the call log with the tries, so it goes off. A keyboard case on an iPad whose
     /// Cell2Jack is on the driver leaves it on, and a Cell2Jack that answers while this screen is open turns it back on.
-    /// So does a connection still making its first try, as for a few seconds after the screen opens: the keypad goes
-    /// off only once that try finds nothing, here or from `keypadChanged`.
+    /// A connection still making its first try, as for a few seconds after the screen opens, is the same: the keypad
+    /// goes off only if that try finds nothing. Once the driver has answered, a later disconnect is not another check.
     private func checkedWithoutDriver() {
-        guard keypad.enabled, !keypad.isReady, !keypad.connecting else { return }
+        // Ready, or nothing was on: the decision is made. A later drop must not be treated as the adapter replacing it.
+        guard keypad.enabled, !keypad.isReady else { checkedThroughAdapter = false; return }
+        // Still the first try. `keypadChanged` calls this again when that try finishes.
+        if keypad.connecting { return }
+        checkedThroughAdapter = false
         keypad.record(["kind": "phoneKeypadOff", "reason": "phone checked through the adapter"])
         keypad.setEnabled(false); enabledHere = false
     }

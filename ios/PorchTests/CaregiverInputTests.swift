@@ -2300,6 +2300,25 @@ final class BedsideSetupTests: XCTestCase {
         }
     }
 
+    @MainActor func testAnAdapterCheckThatSeesTheDriverAnswerLeavesTheKeypadOn() throws {
+        // The first try was still open when the keyboard key arrived, then the Cell2Jack answered. Unplugging it
+        // afterwards, as the note says to do for ten seconds, has to leave the keypad on.
+        for hangUp in [true, false] {
+            var keyboard = false
+            let step = try phoneStep { keyboard }
+            step.keypad.setEnabled(true); step.keypad.setReceiverHangUp(hangUp)
+            keyboard = true
+            NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+            step.screen.receiveKey(4)
+            if hangUp { _ = step.screen.receiveCell2JackHangUp() }
+            XCTAssertTrue(step.keypad.connecting, "\(hangUp)")
+            step.connections()[0].update(.ready)
+            XCTAssertTrue(step.keypad.enabled, "The Cell2Jack answered (\(hangUp))")
+            step.connections()[0].update(.finished("Phone keypad stopped"))
+            XCTAssertTrue(step.keypad.enabled, "That answer already decided it, so a later drop leaves the keypad on (\(hangUp))")
+        }
+    }
+
     @MainActor func testAKeyboardKeyWhileTheDriverAnswersLeavesThePhoneKeypadOn() throws {
         // A keyboard case on an iPad whose Cell2Jack is plugged straight in.
         let step = try phoneStep { true }
@@ -2310,6 +2329,9 @@ final class BedsideSetupTests: XCTestCase {
         _ = step.screen.receiveCell2JackHangUp()
         XCTAssertEqual(phoneStatus(step.screen), "Porch heard you hang up. The phone is ready.")
         XCTAssertTrue(step.keypad.enabled, "The Cell2Jack on the driver still needs it")
+        // The note says to unplug the Cell2Jack for ten seconds. That ends the connection the key already found answering.
+        step.connections()[0].update(.finished("Phone keypad stopped"))
+        XCTAssertTrue(step.keypad.enabled, "The driver had already answered, so unplugging it does not turn the keypad off")
     }
 
     @MainActor func testSetupAsksHowTheyCallWithTheTouchscreenToFallBackOn() throws {
