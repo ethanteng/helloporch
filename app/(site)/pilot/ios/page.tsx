@@ -74,8 +74,8 @@ const parts: GuidePart[] = [
         </p>
         <Tip>
           <p>
-            Set aside about 30 minutes once you have everything. Keep the iPad, corded phone, Cell2Jack,
-            Porch phone adapter and your own phone nearby.
+            Allow about 30 minutes for setup. You’ll need the iPad, corded phone, Cell2Jack, Porch phone
+            adapter and your own phone when you connect everything.
           </p>
           <p>
             If you get stuck at any point, <Contact />.
@@ -167,7 +167,7 @@ const parts: GuidePart[] = [
       <>
         <p>
           When Porch shows <UI>Connect the phone</UI>, follow the steps below. Your loved one will press
-          the corded phone’s buttons to call and answer. The video, sound and microphone all come from the iPad,
+          the corded phone’s buttons to call and answer. Your loved one will see and hear callers on the iPad and speak into the iPad’s microphone,
           not the phone receiver.
         </p>
         <h3>Plug in the phone</h3>
