@@ -43,6 +43,9 @@ const parts: GuidePart[] = [
           in this guide. On your phone, these settings appear locked under <UI>On the bedside iPad</UI> or{" "}
           <UI>On the bedside tablet</UI>.
         </p>
+        <p>
+          In the instructions below, an Android tablet may show “tablet” where an iPad shows “iPad.”
+        </p>
         <p>In buttons such as <UI>Send to [Name]</UI>, Porch shows your loved one’s name instead of [Name].</p>
         <Tip label="Return to the clock after changing settings">
           <p>
