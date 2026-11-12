@@ -394,8 +394,7 @@ const parts: GuidePart[] = [
               a: (
                 <p>
                   Lift the receiver before pressing a key. Check that the switch on the phone is set to <UI>T</UI> or{" "}
-                  <UI>Tone</UI>. Then open caregiver mode, <UI>This tablet</UI>, and run <UI>Connect the phone</UI> again, or tap{" "}
-                  <UI>Retry phone connection</UI>.
+                  <UI>Tone</UI>. Then open caregiver mode, <UI>This tablet</UI>, and run <UI>Connect the phone</UI> again.
                 </p>
               ),
             },

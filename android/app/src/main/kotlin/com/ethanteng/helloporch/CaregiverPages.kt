@@ -55,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ethanteng.helloporch.core.BedsideAttendance
 import com.ethanteng.helloporch.core.BedsideLanguage
 import com.ethanteng.helloporch.core.BedsidePreferences
@@ -519,16 +518,13 @@ private fun HouseholdNameScreen(admin: CaregiverAdmin, links: FamilyLinks, onDon
 private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     val keypad = app.cell2jack
-    val enabled by keypad.enabled.collectAsStateWithLifecycle()
     var receiverHangUp by remember { mutableStateOf(keypad.receiverHangUp) }
+    // As on iOS, Connect the phone is the only way the phone keypad turns on, and opening it connects again at once,
+    // so there's no switch or retry here. Unplugging the Cell2Jack stops it.
     CaregiverGroup("Connect the physical phone", "Plug the Cell2Jack into this tablet's USB port.") {
         ActionRow("Connect the phone") { onScreen(CaregiverScreen.CONNECT_PHONE) }
         HorizontalDivider()
-        ToggleRow("Use Cell2Jack phone keypad", enabled, onChange = keypad::setEnabled)
-        HorizontalDivider()
         ToggleRow("Hang up when the receiver is put back", receiverHangUp, onChange = { keypad.setReceiverHangUp(it); receiverHangUp = it })
-        HorizontalDivider()
-        ActionRow("Retry phone connection") { keypad.retry() }
         HorizontalDivider()
         ActionRow("Open app settings") { open(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))) }
     }

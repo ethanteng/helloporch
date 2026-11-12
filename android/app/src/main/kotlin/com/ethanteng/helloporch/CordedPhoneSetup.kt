@@ -62,8 +62,10 @@ fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> 
     val access by keypad.access.collectAsStateWithLifecycle()
 
     // Porch tries the Cell2Jack while this screen is open, with the phone keypad on or off. A trial that's still
-    // running when it goes would keep the desk phone live with the keypad off.
+    // running when it goes would keep the desk phone live with the keypad off. A connection waiting to try again
+    // tries now, as This tablet's Retry phone connection used to: opening this screen is how to retry.
     DisposableEffect(keypad) {
+        keypad.retry()
         keypad.beginTrial()
         onDispose { if (keypad.trying) keypad.endTrial() }
     }
