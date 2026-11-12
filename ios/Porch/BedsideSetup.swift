@@ -428,6 +428,7 @@ final class SetupCallingViewController: BedsideSetupStep {
             guard let self else { return }
             self.navigationController?.setViewControllers([self.setup.screen(from: .yourPhone)], animated: true)
         }
+        touchscreen.contentHorizontalAlignment = .center
         touchscreen.accessibilityIdentifier = "setup.touchscreen"
         form.addArrangedSubview(section("How will \(lovedOne) call?", detail: "\(lovedOne) presses a key to call someone. The touchscreen works too, whichever you choose.",
                                         views: options + [touchscreen]))
@@ -494,6 +495,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// Leaving, so a stop callback doesn't put the waiting text back up.
     private var leaving = false
     private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
+    /// The step the check is on, as a picture over the status: plug in, press a key, put the receiver back, done.
+    private let badge = UIView()
+    private let statusIcon = UIImageView()
     private let proceed = PorchStyle.button("Continue", symbol: "arrow.right")
     private var later: UIButton?
     init(_ setup: BedsideSetup, keypad: Cell2JackKeypad = .shared, tryDriver: Bool = SetupPhoneViewController.offered,
@@ -511,29 +515,70 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         proceed.addAction(UIAction { [weak self] _ in self?.finish() }, for: .touchUpInside)
         status.textAlignment = .center; status.accessibilityIdentifier = "setup.phoneStatus"
         // The steps, the parts and the tips are on the website, which can change without an update.
-        let guide = textLink("Instructions at helloporch.store/pilot/ios") { [weak self] in if let self { showIPadGuide(on: self) } }
+        let guide = textLink("Step-by-step instructions") { [weak self] in if let self { showIPadGuide(on: self) } }
+        guide.configuration?.image = UIImage(systemName: "arrow.up.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold))
+        guide.configuration?.imagePlacement = .trailing; guide.configuration?.imagePadding = 6
+        guide.contentHorizontalAlignment = .center
+        guide.accessibilityHint = "Opens the iPad setup guide on helloporch.store."
         guide.accessibilityIdentifier = "setup.phoneGuide"
         let later = textLink("Do this later") { [weak self] in self?.finish() }
+        later.contentHorizontalAlignment = .center
         later.accessibilityIdentifier = "setup.phoneLater"; self.later = later
-        var views: [UIView] = [guide, status, proceed, later]
-        if tryDriver && mChip {
-            // A footnote: the Cell2Jack can plug straight in, with the USB driver turned on in Settings. The guide's
-            // steps for that start from Open Settings here.
-            let note = PorchStyle.label("This iPad has an M chip, so it doesn't need the Porch phone adapter.", size: 15)
-            note.accessibilityIdentifier = "setup.phoneMChip"
-            let settings = textLink("Open Settings", size: 15) {
-                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-            }
-            settings.accessibilityIdentifier = "setup.phoneSettings"
-            views += [note, settings]
+        var views: [UIView] = [guide, progressPanel(), proceed, later]
+        if tryDriver && mChip { views.append(mChipNote()) }
+        let card = section("Connect the phone", detail: "\(lovedOne) can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter.",
+                           views: views)
+        if let stack = card.subviews.first as? UIStackView, let detail = stack.arrangedSubviews.dropFirst().first {
+            // The link reads as part of the explanation above it, and the panel stands apart from both.
+            stack.setCustomSpacing(4, after: detail); stack.setCustomSpacing(24, after: guide)
         }
-        form.addArrangedSubview(section("Connect the phone", detail: "\(lovedOne) can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter.",
-                                        views: views))
+        form.addArrangedSubview(card)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidDisconnect, object: nil)
         if tryDriver { NotificationCenter.default.addObserver(self, selector: #selector(keypadChanged), name: .cell2JackKeypadChanged, object: nil) }
         progress = connected ? .connected : .waiting
         render(announce: false)
+    }
+    /// The status, under a round badge whose icon shows the step it's on. It's the part of the screen that changes, so
+    /// it sits apart on the page colour.
+    private func progressPanel() -> UIView {
+        statusIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
+        statusIcon.isAccessibilityElement = false
+        badge.layer.cornerRadius = 36
+        let row = UIView()
+        for view in [badge, statusIcon] { view.translatesAutoresizingMaskIntoConstraints = false }
+        row.addSubview(badge); badge.addSubview(statusIcon)
+        NSLayoutConstraint.activate([
+            badge.widthAnchor.constraint(equalToConstant: 72), badge.heightAnchor.constraint(equalToConstant: 72),
+            badge.centerXAnchor.constraint(equalTo: row.centerXAnchor),
+            badge.topAnchor.constraint(equalTo: row.topAnchor), badge.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            statusIcon.centerXAnchor.constraint(equalTo: badge.centerXAnchor), statusIcon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
+        ])
+        let panel = UIStackView(arrangedSubviews: [row, status])
+        panel.axis = .vertical; panel.spacing = 16
+        panel.isLayoutMarginsRelativeArrangement = true
+        panel.directionalLayoutMargins = .init(top: 28, leading: 24, bottom: 28, trailing: 24)
+        panel.backgroundColor = PorchStyle.page; panel.layer.cornerRadius = 16
+        return panel
+    }
+    /// A footnote under a rule, for an iPad known to have an M chip: the Cell2Jack can plug straight in, with the USB
+    /// driver turned on in Settings. The guide's steps for that start from Open Settings here.
+    private func mChipNote() -> UIView {
+        let rule = UIView()
+        rule.backgroundColor = PorchStyle.border
+        rule.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
+        let note = PorchStyle.label("This iPad has an M chip, so it doesn't need the Porch phone adapter.", size: 15)
+        note.textAlignment = .center
+        note.accessibilityIdentifier = "setup.phoneMChip"
+        let settings = textLink("Open Settings", size: 15) {
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        }
+        settings.contentHorizontalAlignment = .center
+        settings.accessibilityIdentifier = "setup.phoneSettings"
+        let stack = UIStackView(arrangedSubviews: [rule, note, settings])
+        stack.axis = .vertical; stack.spacing = 2
+        stack.setCustomSpacing(18, after: rule)
+        return stack
     }
     /// The Cell2Jack is answering on the driver, as opposed to a keyboard the iPad can see.
     private var driverReady: Bool { tryDriver && keypad.isReady }
@@ -661,6 +706,17 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         case .heard(let symbol): status.text = "Porch heard \(symbol). Now put the receiver back."
         case .done(let text): status.text = text
         }
+        let symbol: String
+        switch progress {
+        case .waiting: symbol = "phone.connection"
+        case .connected: symbol = "circle.grid.3x3.fill"
+        case .heard: symbol = "phone.down.fill"
+        case .done: symbol = "checkmark"
+        }
+        statusIcon.image = UIImage(systemName: symbol)
+        // Done fills the badge in. Waiting is grey until the phone is there.
+        badge.backgroundColor = checked ? PorchStyle.accent : PorchStyle.surface
+        statusIcon.tintColor = checked ? .white : progress == .waiting ? PorchStyle.secondary : PorchStyle.accent
         proceed.isHidden = !checked; later?.isHidden = checked
         if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
     }

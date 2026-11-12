@@ -2247,8 +2247,8 @@ final class BedsideSetupTests: XCTestCase {
             let case_ = "driver \(tryDriver), M chip \(mChip)"
             XCTAssertTrue(texts.contains("Mom can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter."), case_)
             let guide = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.phoneGuide" }, case_)
-            XCTAssertEqual(guide.configuration?.title, "Instructions at helloporch.store/pilot/ios")
-            XCTAssertEqual(iPadGuideURL.absoluteString, "https://helloporch.store/pilot/ios")
+            XCTAssertEqual(guide.configuration?.title, "Step-by-step instructions", "A link, not the address")
+            XCTAssertEqual(iPadGuideURL.absoluteString, "https://helloporch.store/pilot/ios#phone")
             XCTAssertFalse(texts.contains { $0.hasPrefix("1. ") || $0.hasPrefix("• ") || $0 == "Not working?" || $0.contains("You'll need") },
                            "The steps, parts and tips are on the guide: \(texts)")
             let note = texts.contains("This iPad has an M chip, so it doesn't need the Porch phone adapter.")

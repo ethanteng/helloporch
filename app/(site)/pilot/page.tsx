@@ -19,17 +19,17 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/pilot.jpg", alt: "HelloPorch: Join the Porch pilot. Beside the Porch prototype, a tablet and a big-button phone." },
 });
 
-// What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call. On an iPad without
-// an M chip it also goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop
-// off, so it is free and has no link. An iPad with an M chip takes the Cell2Jack straight in, through Porch's USB
-// driver. The tablet has no price: most families use one they have. The links are the ones I use, on Amazon, and the
-// prices are roughly what they cost there. The pages name the iPads with an M chip instead of the chip, which families
-// don't know: iPad Pro from 2021 and iPad Air from 2022. The standard iPad and the iPad mini have none.
+// What a family needs. The big-button corded phone, through a Cell2Jack, is the only way to call. On an iPad it also
+// goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop off, so it is free and
+// has no link. Every iPad family gets one, whatever the iPad, so the pages don't ask families which iPad they have; an
+// iPad with an M chip could take the Cell2Jack straight in, and Porch and the iPad guide mention that. The tablet has
+// no price: most families use one they have. The links are the ones I use, on Amazon, and the prices are roughly what
+// they cost there.
 const KIT: { name: string; rule: string; price?: string; optional?: boolean; photo: string; href?: string }[] = [
   { name: "A tablet", rule: "iPad or Android", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Any brand", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Must be a Cell2Jack", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
-  { name: "A Porch phone adapter", rule: "Most iPads need this. I will mail it to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
+  { name: "A Porch phone adapter", rule: "For iPads. I will mail it to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", rule: "Any brand", ...shopping.hub, photo: "/pilot/hub.jpg" },
   { name: "A sturdy stand", rule: "Any brand", ...shopping.stand, optional: true, photo: "/pilot/stand.jpg" },
 ];
@@ -62,7 +62,7 @@ const STEPS: { title: string; text: string[] }[] = [
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Do I need to buy a tablet from HelloPorch?",
-    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack and a USB-C hub. Most iPads also need one more small adapter, which I’ll provide.",
+    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack and a USB-C hub. With an iPad, you’ll also use one more small adapter, which I’ll provide.",
   },
   {
     q: "Can I use a tablet I already own?",
@@ -70,7 +70,7 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Do I need a special phone?",
-    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it. With most iPads, it also goes through a Porch phone adapter, which I’ll provide.",
+    a: "No. A corded phone with big buttons works best, especially one with room for photos on the keys. You’ll need a Cell2Jack adapter to connect it. With an iPad, it also goes through a Porch phone adapter, which I’ll provide.",
   },
   {
     q: "How do I put photos on the phone buttons?",
@@ -78,11 +78,7 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "What is the Porch phone adapter?",
-    a: "A small board that lets an iPad read the buttons on the phone through the Cell2Jack. I’ll provide it, already set up and tested. I’ll mail it to you, or drop it off if you live nearby. Android tablets don’t need it, and neither does an iPad Pro from 2021 or later or an iPad Air from 2022 or later.",
-  },
-  {
-    q: "Does my iPad need the adapter?",
-    a: "Yes, unless it’s an iPad Pro from 2021 or later or an iPad Air from 2022 or later. Those can read the Cell2Jack directly. The standard iPad and the iPad mini always need the adapter. To see which iPad you have, open Settings, then General and About. Send me what it says under Model Name and I’ll tell you.",
+    a: "A small board that lets an iPad read the buttons on the phone through the Cell2Jack. I’ll provide it, already set up and tested. I’ll mail it to you, or drop it off if you live nearby. Every iPad family gets one. Android tablets don’t need it.",
   },
   {
     q: "How do family members call?",
@@ -143,9 +139,8 @@ export default function PilotPage() {
                 Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
               </p>
               <p className={styles.glanceText}>
-                Most iPads also need a Porch phone adapter for the phone. I’ll provide this, already set up and tested,
-                and mail it to you, or drop it off if you live nearby. An iPad Pro from 2021 or later or an iPad Air
-                from 2022 or later doesn’t need it.
+                With an iPad, the phone also goes through a Porch phone adapter. I’ll provide this, already set up and
+                tested, and mail it to you, or drop it off if you live nearby.
               </p>
               <p className={styles.glanceText}>
                 You may already have some of what you need. Here’s the hardware for the current pilot.
