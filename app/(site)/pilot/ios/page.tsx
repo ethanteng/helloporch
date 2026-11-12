@@ -377,7 +377,7 @@ const parts: GuidePart[] = [
           A key can start with someone’s regular phone number and switch to their Porch app once they join. It switches
           on its own when their invitation has the same name as their key, such as Sarah on key 1 and an invitation for
           Sarah. Capital letters and extra spaces don’t matter, and it works however you invite them: from your phone,
-          from <UI>People</UI>, or with <UI>Invite</UI> on their key’s page. Their phone number stays as the one Porch
+          from <UI>People</UI>, or with <UI>Invite them</UI> on their key’s page. Their phone number stays as the one Porch
           tries when they miss a call.
         </p>
         <p>
