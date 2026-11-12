@@ -60,7 +60,11 @@ communication is an iPadOS facility.
   has no switch in This iPad since 2026-11-11: Connect the phone is the only way
   to turn it on, and once on it stays on. Unplugging the Cell2Jack, or turning the
   USB driver off in Settings → Porch (**Open app settings** in that group), stops
-  it. No launch argument automatically enables the normal app.
+  it working, but Porch keeps looking for the Cell2Jack, backing off to every 15
+  seconds. Checking the phone through the Porch phone adapter on Connect the
+  phone, while nothing answers on the driver, turns the setting off, so an iPad
+  that moves from a Cell2Jack plugged straight in to the adapter stops looking.
+  No launch argument automatically enables the normal app.
 - Return to the bedside clock and wait for **Phone keypad ready** beneath **Call someone**. This confirmation
   disappears after three seconds; keypad input stays active. Input is
   ignored on caregiver/PIN screens and other unsupported screens.

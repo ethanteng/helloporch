@@ -26,8 +26,8 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
         receiverSwitch.addTarget(self, action: #selector(changeReceiverHangUp), for: .valueChanged)
         // The same steps as setup, with a test of a key and hanging up. With the driver it listens for the adapter and
         // the driver both, connects to the driver right away, and turns the phone keypad on once a Cell2Jack there
-        // answers. That's the only way it turns on, so there's no switch for it here: unplugging the Cell2Jack, or
-        // turning the USB driver off in Settings → Porch, stops it. Opening it is also how to retry the connection.
+        // answers. That's the only way it turns on, so there's no switch for it here. Checking the phone through the
+        // adapter there, with nothing on the driver, turns it back off. Opening it is also how to retry the connection.
         let phone = actionRow("Connect the phone", symbol: "phone.connection") { [weak self] in self?.connectPhone() }
         phone.accessibilityIdentifier = "device.connectPhone"
         var rows = [phone, toggleRow("Hang up when the receiver is put back", receiverSwitch)]

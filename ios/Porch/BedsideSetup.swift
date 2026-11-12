@@ -459,7 +459,8 @@ final class SetupCallingViewController: BedsideSetupStep {
 /// on any iPad not known to lack one (`IPadChip`). There the screen listens for both and goes on with whichever answers;
 /// a Cell2Jack on the driver turns the phone keypad on. Then the caregiver presses a key and hangs up, and neither acts.
 /// Do this later, or going back to choose another way, leaves the phone keypad off; This iPad in caregiver mode opens
-/// this screen again.
+/// this screen again. The phone checked through the adapter, with no Cell2Jack on the driver, turns the phone keypad
+/// off: an iPad that moves from a Cell2Jack plugged straight in to the adapter stops looking for it.
 final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving {
     /// Builds without the Cell2Jack driver, iPhones, and iPads without an M chip listen only for the adapter.
     static var offered: Bool { Cell2JackKeypad.supportsDriverPlatform }
@@ -634,6 +635,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         } else {
             heardFrom = nil
             progress = .done("Porch heard \(symbol). The phone is ready.")
+            if !fromDriver { checkedWithoutDriver() }
         }
         render()
     }
@@ -646,8 +648,18 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     func receiveCell2JackHangUp() -> String {
         guard case .heard = progress else { return "setup: hang-up before a key" }
         progress = .done("Porch heard you hang up. The phone is ready.")
+        if heardFrom == .keyboard { checkedWithoutDriver() }
         render()
         return "setup: heard hang-up"
+    }
+    /// The phone was checked through the adapter while no Cell2Jack answers on the driver, so the driver isn't needed.
+    /// A phone keypad left on, such as from a Cell2Jack that used to be plugged straight in, would keep Porch looking
+    /// for one every 15 seconds and fill the call log with the tries, so it goes off. A keyboard case on an iPad whose
+    /// Cell2Jack is on the driver leaves it on, and a Cell2Jack that answers while this screen is open turns it back on.
+    private func checkedWithoutDriver() {
+        guard keypad.enabled, !keypad.isReady else { return }
+        keypad.record(["kind": "phoneKeypadOff", "reason": "phone checked through the adapter"])
+        keypad.setEnabled(false); enabledHere = false
     }
     private func render(announce: Bool = true) {
         switch progress {

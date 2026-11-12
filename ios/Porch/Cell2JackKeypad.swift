@@ -368,7 +368,7 @@ private final class Cell2JackKeypadTransport: Cell2JackKeypadConnection {
                 primaryDigits += digits.filter { $0.kind == .digit }.count
                 if !digits.isEmpty { emit(.digits(digits, ProcessInfo.processInfo.systemUptime)) }
             } else if !ready, ProcessInfo.processInfo.systemUptime - attemptTime >= 2 {
-                guard attempts < 3 else { throw failure("No device logs after three attempts. Check the driver and reconnect, then tap Retry.") }
+                guard attempts < 3 else { throw failure("No device logs after three attempts. Check the USB driver in Settings → Porch, then unplug the Cell2Jack for ten seconds and plug it back in.") }
                 _ = try unpack(session.endLogs()); try begin()
             }
             let now = ProcessInfo.processInfo.systemUptime
