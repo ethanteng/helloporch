@@ -13,10 +13,11 @@ final class KeysFollowInvitationsTests: XCTestCase {
         return try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: object))
     }
     private func invitation(_ id: String, _ name: String) -> [String: Any] { ["id": id, "name": name, "expiresAt": now + 3600] }
-    private func member(_ id: String, invitation: String, invited: String, name: String? = nil, joinedAt: TimeInterval?) -> [String: Any] {
+    private func member(_ id: String, invitation: String, invited: String, name: String? = nil, joinedAt: TimeInterval?, photoID: String? = nil) -> [String: Any] {
         var person: [String: Any] = ["id": id, "name": name ?? invited, "invitedName": invited, "invitationID": invitation, "role": "family",
             "permissions": ["audio": true, "video": true], "online": true]
         if let joinedAt { person["joinedAt"] = joinedAt }
+        if let photoID { person["photoID"] = photoID }
         return person
     }
     private func phoneKey(_ name: String, room: String = "lisa", number: String = "+14155550123") throws -> CallContact {
@@ -107,6 +108,31 @@ final class KeysFollowInvitationsTests: XCTestCase {
         try slots.setContact(phoneKey("Lisa"), for: 2)
         try slots.reconcile(with: snapshot(invitations: [invitation(lisaInvite, "Lisa")], role: "family"))
         XCTAssertNil(slots.contact(for: 2)?.invitationID)
+    }
+
+    /// Hand-linking a key drops the previous person's photo. Following an invitation has to do the same, or the key
+    /// shows someone who left while it waits for the new person.
+    func testAKeyThatFollowsSomeoneNewDropsThePreviousPersonsPhoto() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("keys-follow-photo.\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ContactPhotoStore(directoryURL: directory)
+        let photo = Data("dad's photo".utf8), keypad = Data("keypad photo".utf8)
+        try store.familyMembers.add(photo)
+        let gone = "44444444-4444-4444-8444-444444444444"
+        let expired = "33333333-3333-4333-8333-333333333333"
+        let dadInvite = "66666666-6666-4666-8666-666666666666"
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "", nativeCall: NativeCall(room: "dad", mode: .voice), familyMemberID: gone, invitationID: expired, memberName: "Dad", photoData: keypad), for: 3)
+        try slots.reconcile(with: snapshot(people: [member(gone, invitation: expired, invited: "Dad", joinedAt: now - 60, photoID: ContactPhotoStore.id(for: photo))]), memberPhotos: store.familyMembers)
+        XCTAssertEqual(slots.contact(for: 3)?.memberPhotoID, ContactPhotoStore.id(for: photo))
+        XCTAssertEqual(slots.contact(for: 3)?.customPhotoData, keypad)
+
+        try slots.reconcile(with: snapshot(invitations: [invitation(dadInvite, "Dad")]), memberPhotos: store.familyMembers)
+        let followed = try XCTUnwrap(slots.contact(for: 3))
+        XCTAssertEqual(followed.invitationID, dadInvite)
+        XCTAssertNil(followed.familyMemberID)
+        XCTAssertNil(followed.memberPhotoID, "The previous person's photo must not stay on a key that picked up someone else")
+        XCTAssertEqual(followed.customPhotoData, keypad, "The caregiver's own photo of the key stays")
     }
 
     func testNamesMatchWithoutCaseAccentsOrExtraSpaces() {

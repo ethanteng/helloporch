@@ -42,6 +42,9 @@ class CallContact private constructor(
     // reading the image file on the main thread.
     internal fun preservingPhoto(original: CallContact) = copy(photo = original.photo, memberPhoto = original.memberPhoto)
 
+    /** The caregiver's keypad photo only. A key that takes up a different invitation must not keep the previous person's photo. */
+    internal fun preservingCaregiverPhoto(original: CallContact) = copy(photo = original.photo)
+
     /** The same contact showing its family member's current name and photo, which must be in `photos`. */
     internal fun showingMember(name: String?, photoID: String?, photos: ContactPhotoStore) =
         copy(memberName = name, memberPhoto = photoID?.let { storedPhoto(it, photos) })

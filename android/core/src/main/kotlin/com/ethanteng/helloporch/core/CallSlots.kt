@@ -130,7 +130,7 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
             val (id, invited) = invitations.filter { matchingName(it.second) == name }.singleOrNull() ?: continue
             val contact = contact(digit) ?: continue
             setContact(CallContact(name = "", nativeCall = contact.nativeCall, phoneNumber = contact.phoneNumber, otherPhoneNumbers = contact.otherPhoneNumbers,
-                invitationID = id, memberName = invited, buttonColorHex = contact.buttonColorHex).preservingPhoto(contact), digit)
+                invitationID = id, memberName = invited, buttonColorHex = contact.buttonColorHex).preservingCaregiverPhoto(contact), digit)
         }
     }
 

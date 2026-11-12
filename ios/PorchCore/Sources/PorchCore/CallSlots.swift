@@ -144,7 +144,7 @@ public struct CallSlots: Equatable {
             let matches = invitations.filter { Self.matchingName($0.name) == key.name }
             guard matches.count == 1, let invitation = matches.first, let contact = contact(for: key.digit), let native = contact.nativeCall else { continue }
             try setContact(CallContact(name: "", nativeCall: native, phoneNumber: contact.phoneNumber, otherPhoneNumbers: contact.otherPhoneNumbers,
-                invitationID: invitation.id, memberName: invitation.name, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact), for: key.digit)
+                invitationID: invitation.id, memberName: invitation.name, buttonColorHex: contact.buttonColorHex).preservingCaregiverPhoto(from: contact), for: key.digit)
         }
     }
     /// A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same.
