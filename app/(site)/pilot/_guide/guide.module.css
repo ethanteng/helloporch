@@ -436,6 +436,25 @@ a.kitTag:focus-visible {
   color: var(--ink);
 }
 
+/* Cards opened in order, (A), (B), (C): the letter in a small round label, like the step numbers. */
+.part .linkText h3.linkLettered {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.linkLetter {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--tomato-deep);
+  color: #fff;
+  font: 600 15px / 1 var(--sans);
+}
+
 .linkUrl {
   font: 600 16px / 1.45 var(--sans);
   color: var(--tomato-deep);

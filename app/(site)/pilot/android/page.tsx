@@ -24,6 +24,7 @@ const parts: GuidePart[] = [
       <>
         <p>During the pilot, Porch is a test app on Google Play. Do these in this order.</p>
         <Links
+          lettered
           items={[
             {
               name: "Email me the tablet’s Google account",
