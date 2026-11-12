@@ -110,7 +110,7 @@ fun CaregiverScreenContent(app: PorchApplication, admin: CaregiverAdmin, links: 
                 SetupNumberScreen(number, lovedOne, onContinue = onDone)
             }
         }
-        CaregiverScreen.CONNECT_PHONE -> CordedPhoneSetup(app.cell2jack, onDone = onDone, onBack = onDone)
+        CaregiverScreen.CONNECT_PHONE -> CordedPhoneSetup(app.cell2jack, onDone = onDone, onBack = onDone, title = "Connect the phone")
     }
 }
 

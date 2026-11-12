@@ -64,7 +64,7 @@ fun SetupPermissionsScreen(app: PorchApplication, lovedOne: String, onContinue: 
 @Composable
 fun SetupCallingScreen(lovedOne: String, offersCordedPhone: Boolean, onCordedPhone: () -> Unit, onTouchscreen: () -> Unit) {
     FormSection("How will $lovedOne call?", "$lovedOne presses a key to call someone. The touchscreen works too, whichever you choose.") {
-        if (offersCordedPhone) CallingOption("Corded phone", "A desk phone plugged into a Cell2Jack.", onCordedPhone)
+        if (offersCordedPhone) CallingOption("Corded phone", "A desk phone, plugged in with a Cell2Jack.", onCordedPhone)
         FormLink("Just the touchscreen", onClick = onTouchscreen)
     }
 }
