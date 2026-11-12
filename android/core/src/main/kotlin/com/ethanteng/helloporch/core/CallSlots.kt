@@ -1,6 +1,8 @@
 package com.ethanteng.helloporch.core
 
+import java.text.Normalizer
 import java.time.Instant
+import java.util.Locale
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
@@ -61,12 +63,14 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         slots[index] = Slot(KeypadAction.PERSON, validated)
     }
 
-    /** Pair by the server-issued invitation identity, never a person's name.
+    /** Pair by the server-issued invitation identity, never a name the person chose.
      * Removal of a member also removes their stale calling target.
      * Also keeps each contact showing its family member's current name and photo, once the
-     * photo is in `memberPhotos`. A removed member's last name and photo stay until the caregiver edits the key. */
+     * photo is in `memberPhotos`. A removed member's last name and photo stay until the caregiver edits the key.
+     * First, a key still waiting for someone takes up the invitation sent for them (see [followInvitations]). */
     fun reconcile(state: FamilySnapshot, memberPhotos: ContactPhotoStore) {
         if (state.me.role != PorchExperience.BEDSIDE) return
+        followInvitations(state)
         for (digit in digits) {
             val contact = contact(digit) ?: continue
             val member = member(contact, state)
@@ -85,6 +89,48 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
                     otherPhoneNumbers = contact.otherPhoneNumbers, familyMemberID = member?.id, invitationID = contact.invitationID, memberName = name,
                     buttonColorHex = contact.buttonColorHex).preservingPhoto(contact).showingMember(name, photoID, memberPhotos), digit)
             }
+        }
+    }
+
+    /** A key waiting for someone takes up the invitation sent for them, wherever it was sent from: People, a caregiver's
+     * phone, or again after the key's own invitation ran out. Once they join, the key calls their Porch app, so no
+     * caregiver has to link them by hand.
+     *
+     * A key is waiting when no family member on Porch is on it and its own invitation, if it has one, isn't open. It takes
+     * up an invitation that's open, or was accepted in the last day by someone not on a key, when the invitation's name is
+     * the key's name, ignoring case, accents and spacing. Only the name a caregiver gave the invitation counts, never one
+     * the person chose, and only when that name belongs to exactly one key and one invitation. The key then goes by their
+     * Porch name and photo, as one linked by hand does, and follows the invitation's identity from then on. */
+    internal fun followInvitations(state: FamilySnapshot) {
+        val keyed = contacts.filterNotNull()
+        val open = state.invitations.orEmpty()
+        fun onKey(invitation: String, member: String? = null) = keyed.any { it.invitationID == invitation || (member != null && it.familyMemberID == member) }
+        val invitations = open.mapNotNull { invitation ->
+            val name = invitation.name?.trim()
+            if (name.isNullOrEmpty() || onKey(invitation.id)) null else invitation.id to name
+        }.toMutableList()
+        for (person in state.people) {
+            if (person.role != PorchExperience.FAMILY) continue
+            val id = person.invitationID ?: continue
+            val joined = person.joinedAt ?: continue
+            val name = person.invitedName?.trim()
+            if (state.serverTime - joined >= joinedRecentlySeconds || name.isNullOrEmpty() || onKey(id, person.id)) continue
+            invitations += id to name
+        }
+        if (invitations.isEmpty()) return
+        // Two keys with one name, such as two Lisas, leave an invitation for "Lisa" to the caregiver, even if one is linked.
+        val names = keyed.map { matchingName(it.name) }
+        val waiting = digits.mapNotNull { digit ->
+            val contact = contact(digit) ?: return@mapNotNull null
+            if (member(contact, state) != null || open.any { it.id == contact.invitationID }) return@mapNotNull null
+            matchingName(contact.name).takeIf { it.isNotEmpty() }?.let { digit to it }
+        }
+        for ((digit, name) in waiting) {
+            if (names.count { it == name } != 1) continue
+            val (id, invited) = invitations.filter { matchingName(it.second) == name }.singleOrNull() ?: continue
+            val contact = contact(digit) ?: continue
+            setContact(CallContact(name = "", nativeCall = contact.nativeCall, phoneNumber = contact.phoneNumber, otherPhoneNumbers = contact.otherPhoneNumbers,
+                invitationID = id, memberName = invited, buttonColorHex = contact.buttonColorHex).preservingPhoto(contact), digit)
         }
     }
 
@@ -134,6 +180,15 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         const val pound = 11
         val digits = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 0, star, pound)
         val count = digits.size
+
+        /** How long after someone accepts an invitation a key can still take it up: a day, as long as an invitation lasts.
+         * It covers a bedside that was offline the whole time the invitation was open. */
+        const val joinedRecentlySeconds = 86_400L
+
+        /** A name as keys and invitations are matched: "lisa  ", "Lisa" and "Lísa" are the same. */
+        fun matchingName(name: String): String =
+            Normalizer.normalize(name, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase(Locale.ROOT)
+                .split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
 
         /** The key as the keypad labels it. */
         fun symbol(digit: Int): String = when (digit) {

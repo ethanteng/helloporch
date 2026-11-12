@@ -18,6 +18,8 @@ final class ContractFixtureTests: XCTestCase {
         XCTAssertEqual(bedside.me.role, .bedside)
         XCTAssertEqual(bedside.people.map(\.name), ["Ethan", "Lee"])
         XCTAssertEqual(bedside.invitations?.map(\.name), ["Sam"])
+        // Keys follow invitations accepted in the last day, so the bedside learns when each person joined.
+        XCTAssertEqual(bedside.people.map(\.joinedAt), [bedside.serverTime, bedside.serverTime])
         let family = try decode(FamilySnapshot.self, try fixture("family-poll")["state"])
         XCTAssertEqual(family.me.caregiver, true); XCTAssertNil(family.call)
         let ringing = try decode(FamilySnapshot.self, try fixture("family-incoming-call")["state"])

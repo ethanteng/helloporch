@@ -413,11 +413,17 @@ test('contact invitations expose pending status and a durable accepted identity 
  assert.match(invite.invitationID,/^[a-f0-9-]{36}$/);
  assert.deepEqual(invite.state.invitations,[{id:invite.invitationID,name:'Same name',expiresAt:invite.expiresAt}]);
  assert.ok(!JSON.stringify(invite.state).includes(invite.code));
+ const joined=f.advance(60);
  const family=await f.json('claimInvite',{code:invite.code});
  assert.deepEqual(family.state.invitations,[]); assert.equal(family.state.me.invitationID,undefined);
+ assert.equal(family.state.me.joinedAt,undefined,'only the bedside learns when people joined');
  const next=await f.json('createInvite',{name:'Same name',permissions:{audio:false,video:false}},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
+ f.advance(600);
  const poll=await f.json('poll',{available:true},bedside.credential);
  assert.equal(poll.state.people[0].invitationID,invite.invitationID);
+ // A key waiting for someone can take up an invitation they accepted recently, so the bedside learns when.
+ assert.equal(poll.state.people[0].joinedAt,joined);
+ assert.equal(poll.state.people[0].invitedName,'Same name');
  assert.notEqual(poll.state.invitations[0].id,invite.invitationID);
  await f.json('cancelInvites',{},bedside.credential,env.PORCH_CONTACT_SETUP_CODE);
  const after=await f.json('poll',{available:true},bedside.credential);

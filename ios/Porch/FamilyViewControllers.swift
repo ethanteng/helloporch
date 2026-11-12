@@ -728,6 +728,8 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     private var invitationExpiry: TimeInterval = 0
     private let inviteHint = PorchStyle.label("", size: 17)
     @objc private func finishedInvite() { navigationController?.popViewController(animated: true) }
+    /// How an invitation from People reaches someone's key: by its name (`CallSlots.followInvitations`).
+    static let keypadHint = "Already on the keypad? Use the name on their key, and it calls their Porch app once they join."
     /// What sharing an invitation sends: a note, then the link.
     static func shareItems(_ link: URL) -> [Any] {
         // A web link opens Porch, or shows how to get it first.
@@ -750,7 +752,9 @@ final class FamilyInviteViewController: CaregiverFormViewController {
             toggle.onTintColor = PorchStyle.accent
             let row = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: PorchStyle.ink), toggle]); row.alignment = .center; row.spacing = 16; return row
         }
-        form.addArrangedSubview(section("Who is this invitation for?", views: [field(personName, title: "Their name", placeholder: "For example, Ethan")]))
+        // An invitation from a key is already that key's. One from People finds its key by name once they join.
+        let keypadHint = onCreated == nil ? Self.keypadHint : nil
+        form.addArrangedSubview(section("Who is this invitation for?", detail: keypadHint, views: [field(personName, title: "Their name", placeholder: "For example, Ethan")]))
         form.addArrangedSubview(section("Approve drop-in", detail: "Lets them connect without anyone answering.", views: [row("Audio drop-in", audio), row("Video drop-in", video)]))
         form.addArrangedSubview(section("Caregiver mode", detail: "Can change settings from their phone with the PIN.", views: [row("Caregiver mode", caregiver)]))
         form.addArrangedSubview(inviteHint)

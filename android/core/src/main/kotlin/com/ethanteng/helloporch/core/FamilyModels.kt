@@ -38,6 +38,8 @@ data class FamilyPerson(
     val canReceiveCalls: Boolean? = null,
     val online: Boolean,
     val invitationID: String? = null,
+    /** Bedside only: when they accepted `invitationID`, in server time. Members who joined before servers kept it don't have it. */
+    val joinedAt: Long? = null,
     /** Family devices only: approved to open caregiver mode with the PIN. */
     val caregiver: Boolean? = null,
 )

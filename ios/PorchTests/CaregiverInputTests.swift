@@ -1194,6 +1194,8 @@ final class CaregiverInputTests: XCTestCase {
         let navigation = UINavigationController(rootViewController: family); family.loadViewIfNeeded()
         buttons(in: family.view).first { $0.configuration?.title == "Invite someone" }!.sendActions(for: .touchUpInside)
         let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
+        XCTAssertTrue(descendants(invite.view).contains { ($0 as? UILabel)?.text == FamilyInviteViewController.keypadHint },
+            "An invitation from People finds its key by name, so it says to use the name on their key")
         invite.onAdminChanged?(try decode(["householdName": "Pat", "dropInEnabled": false, "people": [], "invitations": [["id": "a", "name": "Ana", "expiresAt": 1_800_000_900]]]))
         XCTAssertTrue(buttons(in: family.view).contains { $0.accessibilityLabel == "Cancel invitation for Ana" }, "Caregiver mode on a phone keeps its own state, so it must take the one createInvite returns")
     }
@@ -1346,6 +1348,8 @@ final class CaregiverInputTests: XCTestCase {
         let name = try XCTUnwrap(descendants(editor.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "Name" })
         try XCTUnwrap(buttons(in: editor.view).first { $0.configuration?.title == "Invite them" }).sendActions(for: .touchUpInside)
         let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
+        XCTAssertFalse(descendants(invite.view).contains { ($0 as? UILabel)?.text == FamilyInviteViewController.keypadHint },
+            "An invitation from a key is already that key's")
         invite.onCreated?(UUID().uuidString, "")
         func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
         XCTAssertTrue(visible(name), "an invitation without a name leaves the name to fill in")

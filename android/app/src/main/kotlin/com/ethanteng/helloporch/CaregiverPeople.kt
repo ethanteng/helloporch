@@ -108,7 +108,7 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
         PeopleRoute.Kind.KEY -> KeyEditor(app, admin, links, open.slot ?: 1, contact = null, initialAction = open.action, onDone = close)
-        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, returnsToPerson = false, onCreated = { _, _ -> }, onDone = close)
+        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, returnsToPerson = false, onCreated = { _, _ -> }, onDone = close, fromKey = false)
     }
 }
 
@@ -630,7 +630,7 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
  */
 @Composable
 fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, returnsToPerson: Boolean, onCreated: (id: String, name: String) -> Unit,
-    onDone: () -> Unit) {
+    onDone: () -> Unit, fromKey: Boolean = true) {
     BackHandler(onBack = onDone)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -668,7 +668,9 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
         }
     }
     FormScreen("Invite someone", navigation = { TextButton(onClick = onDone) { Text(if (made) "Done" else "Cancel") } }) {
-        FormSection("Who is this invitation for?") {
+        // An invitation from a key is already that key's. One from People finds its key by name once they join
+        // (`CallSlots.followInvitations`).
+        FormSection("Who is this invitation for?", if (fromKey) null else "Already on the keypad? Use the name on their key, and it calls their Porch app once they join.") {
             FormField(name, { name = it }, "Their name", "For example, Ethan", enabled = !made,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
         }
