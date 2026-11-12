@@ -669,38 +669,44 @@ const parts: GuidePart[] = [
             on your phone.
           </li>
           <li>
-            Type their name. Choose whether they may drop in with audio and video, and whether they get caregiver mode.
+            Enter their name. Choose whether they can drop in with audio or video. Drop-in calls
+            connect without your loved one answering, so turn these permissions off if calls should ring first.
+            Give them <UI>Caregiver mode</UI> access only if they should be able to change settings.
           </li>
           <li>
-            Tap <UI>Create invitation</UI> and share it. It works once, within 24 hours.
+            Tap <UI>Create invitation</UI> and send it by text or email. Each link works once
+            and expires after 24 hours.
           </li>
         </ol>
         <p>
-          To cancel an unused invitation, find it under <UI>Invited</UI> and tap <UI>Cancel</UI>.
+          To cancel an invitation before it’s used, find it under <UI>Invited</UI> and tap{" "}
+          <UI>Cancel</UI>.
         </p>
         <h3>Change what someone can do</h3>
-        <p>Tap their name under <UI>People</UI> or <UI>Family</UI>.</p>
+        <p>Open <UI>People</UI> on the tablet or <UI>Family</UI> on your phone, then tap their name.</p>
         <ul>
           <li>
-            Change the name and photo your loved one sees. Tap <UI>Use their own photo</UI> to go back to the
-            photo they chose.
+            Change the name or photo your loved one sees. Tap <UI>Use their own photo</UI>
+            to restore the photo they chose.
           </li>
           <li>
             Turn <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> on or off.
           </li>
           <li>
-            Turn on <UI>Caregiver mode</UI> to let them change settings from their phone with the PIN.
+            Turn on <UI>Caregiver mode</UI> if they need to change settings from their phone.
+            They’ll also need the caregiver PIN.
           </li>
           <li>
-            Tap <UI>Remove [Name]</UI> to remove them. They’ll need a new invitation to rejoin.
+            Tap <UI>Remove [Name]</UI> to remove them from the family. They’ll need
+            another invitation to join again.
           </li>
         </ul>
         <p>
-          To rename your loved one’s Porch, tap its name at the top of caregiver mode.
+          To change the name shown for your loved one’s Porch, tap it at the top of caregiver mode.
         </p>
         <Setting
           rows={[
-            ["Default", "People you invite can drop in with audio and video. Caregiver access is off for new invitations and on for the phone you added during setup."],
+            ["Default", "Newly invited people can drop in with audio and video. Caregiver access is off for them, but on for the phone you added during setup."],
             ["Change it", "On the tablet or a caregiver’s phone."],
           ]}
         />
@@ -714,15 +720,15 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            To change it, open <Path steps={["Caregivers & PIN", "Change caregiver PIN"]} /> on the tablet. Enter the
-            current PIN, then the new one twice, and tap <UI>Save new PIN</UI>.
+            To change the PIN, open <Path steps={["Caregivers & PIN", "Change caregiver PIN"]} />
+            on the tablet. Enter your current PIN and the new one twice, then tap <UI>Save new PIN</UI>.
           </li>
           <li>
-            Turn caregiver access on or off for each person in the same place, or on their page.
+            You can also give or remove someone’s caregiver access here, or from their profile.
           </li>
-          <li>After five wrong PIN entries, wait 15 minutes before trying again.</li>
+          <li>After five incorrect PIN attempts, you’ll need to wait 15 minutes to try again.</li>
           <li>
-            If you forget the PIN, <Contact /> for help resetting it.
+            Forgot the PIN? <Contact /> and I can help reset it.
           </li>
         </ul>
       </>
@@ -735,22 +741,24 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            <strong>Change your name or photo.</strong> On an iPhone, tap your photo or the person icon in the top right.
-            On Android, tap <UI>Your name and photo</UI>.
+            <strong>Change your name or photo.</strong> On iPhone, tap your photo or the person
+            icon at the top right. On Android, tap <UI>Your name and photo</UI>.
           </li>
           <li>
             To start video calls with your camera off, turn off <UI>Start video calls with my camera on</UI>.
           </li>
           <li>
-            Tap <UI>Join another family</UI> to add another loved one. One phone can join up to four Porches.
+            Tap <UI>Join another family</UI> to connect with another loved one. You can join
+            up to four family groups on one phone.
           </li>
           <li>
-            On Android, tap <UI>Leave this family</UI> to leave. On an iPhone, you can leave from the app if you’ve
-            joined two or more families. If you’ve joined one, ask a caregiver to remove you.
+            To leave a family on Android, tap <UI>Leave this family</UI>. On iPhone,
+            you can leave from the app if you’ve joined at least two families. Otherwise,
+            ask a caregiver to remove you.
           </li>
           <li>
-            Allow notifications so Porch can ring when the app is closed. Allow microphone access so the other
-            person can hear you. On Android, tap <UI>Ring when Porch is closed</UI> if it appears.
+            Allow notifications so calls can ring when Porch is closed, and microphone access
+            so people can hear you. On Android, tap <UI>Ring when Porch is closed</UI> if shown.
           </li>
         </ul>
         <Setting rows={[["Default", "Your camera is on when a video call starts."]]} />
@@ -763,14 +771,15 @@ const parts: GuidePart[] = [
     body: (
       <ul>
         <li>
-          <strong>Move Porch to a new tablet.</strong> To get a link for the new tablet, <Contact />. Your loved
-          one keeps their Porch number and family members. Set up the keys again on the new tablet.
+          <strong>Move Porch to a new tablet.</strong> <Contact /> for a new setup link.
+          Your loved one will keep their Porch number and family members, but you’ll need to
+          set up the keypad buttons again.
         </li>
         <li>
-          <strong>Use the tablet to call your loved one.</strong> On iPad, open{" "}
-          <Path steps={["This iPad", "Use this iPad as a family device"]} />. On Android, choose{" "}
-          <Path steps={["This tablet", "Use this tablet as a family device"]} />. On iPad you can switch back from
-          Porch settings with <UI>Use this iPad as the bedside Porch</UI>.
+          <strong>Use the tablet as a family device instead.</strong> On iPad, open{" "}
+          <Path steps={["This iPad", "Use this iPad as a family device"]} />. On Android, open{" "}
+          <Path steps={["This tablet", "Use this tablet as a family device"]} />. To switch an iPad
+          back to your loved one’s Porch, use <UI>Use this iPad as the bedside Porch</UI> in its settings.
         </li>
       </ul>
     ),
@@ -780,11 +789,11 @@ const parts: GuidePart[] = [
     title: "Help during the pilot",
     body: (
       <>
-        <p>If you need help with any of these, <Contact />.</p>
+        <p>During the pilot, <Contact /> if you need help with:</p>
         <ul>
-          <li>Resetting a forgotten caregiver PIN.</li>
-          <li>Deleting a Porch, its number and everything in it.</li>
-          <li>Setting up the keypad again on a replacement tablet.</li>
+          <li>A forgotten caregiver PIN.</li>
+          <li>Deleting a Porch and its data, including the phone number.</li>
+          <li>Setting up a replacement tablet or its keypad.</li>
         </ul>
       </>
     ),
@@ -802,14 +811,15 @@ export default function FeaturesGuide() {
       }
       lede={
         <p>
-How to make calls, send messages and change settings on your loved one’s tablet or your phone.
+Find the feature you need, from making calls and sending messages to changing settings on
+          your loved one’s tablet or your own phone. You don’t need to follow these sections in order.
         </p>
       }
       aside={
         <>
-          For first-time setup, use the <Link href="/pilot/ios">iPad guide</Link> or the{" "}
-          <Link href="/pilot/android">Android tablet guide</Link>, and the <Link href="/pilot/phone">phone guide</Link>{" "}
-          for family phones.
+          New to Porch? Start with the <Link href="/pilot/ios">iPad setup guide</Link> or{" "}
+          <Link href="/pilot/android">Android tablet setup guide</Link>. Family members can use the{" "}
+          <Link href="/pilot/phone">phone guide</Link>.
         </>
       }
       parts={parts}
