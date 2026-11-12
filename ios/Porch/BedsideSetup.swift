@@ -562,12 +562,13 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         return panel
     }
     /// A footnote under a rule, for an iPad known to have an M chip: the Cell2Jack can plug straight in, with the USB
-    /// driver turned on in Settings. The guide's steps for that start from Open Settings here.
+    /// driver turned on in Settings. Porch can't tell that the driver is off, since a Cell2Jack plugged in then looks
+    /// like no Cell2Jack at all, so the note says when Open Settings is needed, and the replug that loads the driver.
     private func mChipNote() -> UIView {
         let rule = UIView()
         rule.backgroundColor = PorchStyle.border
         rule.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
-        let note = PorchStyle.label("This iPad has an M chip, so it doesn't need the Porch phone adapter.", size: 15)
+        let note = PorchStyle.label("This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.", size: 15)
         note.textAlignment = .center
         note.accessibilityIdentifier = "setup.phoneMChip"
         let settings = textLink("Open Settings", size: 15) {

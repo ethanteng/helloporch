@@ -2169,7 +2169,7 @@ final class BedsideSetupTests: XCTestCase {
         let step = try phoneStep { keyboard }
         XCTAssertNotNil(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneSettings" },
                         "A Cell2Jack plugged straight in needs the USB driver on in Settings")
-        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text == "This iPad has an M chip, so it doesn't need the Porch phone adapter." })
+        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text == "This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in." })
         XCTAssertEqual(step.connections().count, 1, "The screen tries the driver for a Cell2Jack plugged straight in")
         // The adapter comes in while the driver finds nothing, as on an iPad without an M chip.
         keyboard = true
@@ -2251,7 +2251,7 @@ final class BedsideSetupTests: XCTestCase {
             XCTAssertEqual(iPadGuideURL.absoluteString, "https://helloporch.store/pilot/ios#phone")
             XCTAssertFalse(texts.contains { $0.hasPrefix("1. ") || $0.hasPrefix("• ") || $0 == "Not working?" || $0.contains("You'll need") },
                            "The steps, parts and tips are on the guide: \(texts)")
-            let note = texts.contains("This iPad has an M chip, so it doesn't need the Porch phone adapter.")
+            let note = texts.contains("This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.")
             let settings = buttons(in: screen.view).contains { $0.accessibilityIdentifier == "setup.phoneSettings" }
             XCTAssertEqual(note, tryDriver && mChip, case_); XCTAssertEqual(settings, tryDriver && mChip, case_)
         }
