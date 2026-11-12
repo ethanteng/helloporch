@@ -11,6 +11,11 @@ let privacyPolicyURL = URL(string: "https://helloporch.store/privacy")!
 func showPrivacyPolicy(on controller: UIViewController) {
     controller.present(SFSafariViewController(url: privacyPolicyURL), animated: true)
 }
+/// The iPad setup guide, which has the steps for plugging in the desk phone, the parts and the tips.
+let iPadGuideURL = URL(string: "https://helloporch.store/pilot/ios")!
+func showIPadGuide(on controller: UIViewController) {
+    controller.present(SFSafariViewController(url: iPadGuideURL), animated: true)
+}
 func showPorchError(_ error: Error, on controller: UIViewController) {
     let alert = UIAlertController(title: "Couldn't complete that", message: error.localizedDescription, preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "OK", style: .default))

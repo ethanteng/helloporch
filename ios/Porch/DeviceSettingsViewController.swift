@@ -7,18 +7,21 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
     private let phoneKeypad: Cell2JackKeypad
     /// A Cell2Jack plugged straight in can work: a build with the driver, on an iPad that may have an M chip.
     private let driver: Bool
+    /// The iPad is known to have an M chip, so Connect the phone says it doesn't need the adapter.
+    private let mChip: Bool
 
-    init(phoneKeypad: Cell2JackKeypad = .shared, driver: Bool = Cell2JackKeypad.supportsDriverPlatform) {
-        self.phoneKeypad = phoneKeypad; self.driver = driver
+    init(phoneKeypad: Cell2JackKeypad = .shared, driver: Bool = Cell2JackKeypad.supportsDriverPlatform,
+         mChip: Bool = IPadChip.hasMChip(model: PorchDevice.model)) {
+        self.phoneKeypad = phoneKeypad; self.driver = driver; self.mChip = mChip
         super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(phoneKeypad:driver:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(phoneKeypad:driver:mChip:)") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         title = CaregiverPage.device.title(onBedside: true)
         hideKeyboardControl()
-        // The desk phone through the Porch phone adapter needs no driver: every build, any iPad. With the driver, an
+        // Every family has the Porch phone adapter, which needs no driver: every build, any iPad. With the driver, an
         // iPad that may have an M chip also takes a Cell2Jack plugged straight in. Hanging up with the receiver applies
         // to both.
         receiverSwitch.isOn = phoneKeypad.receiverHangUp
@@ -37,13 +40,13 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
             })
         }
-        form.addArrangedSubview(group("Connect the physical phone", detail: SetupPhoneViewController.parts(tryDriver: driver), rows: rows))
+        form.addArrangedSubview(group("Connect the physical phone", detail: SetupPhoneViewController.parts, rows: rows))
         let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
         form.addArrangedSubview(group(rows: [actionRow("Use this \(device) as a family device", symbol: "iphone") { [weak self] in self?.confirmFamilyDevice(device) }]))
         form.addArrangedSubview(textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } })
     }
     private func connectPhone() {
-        let screen = SetupPhoneViewController(BedsideSetup(), keypad: phoneKeypad, tryDriver: driver)
+        let screen = SetupPhoneViewController(BedsideSetup(), keypad: phoneKeypad, tryDriver: driver, mChip: mChip)
         let navigation = PorchStyle.navigation(screen)
         screen.onContinue = { [weak navigation] in navigation?.dismiss(animated: true) }
         present(navigation, animated: true)

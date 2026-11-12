@@ -11,6 +11,7 @@ final class IPadChipTests: XCTestCase {
                       "iPad8,12",                // iPad Pro 12.9-inch (4th generation), A12Z
                       "iPad12,1", "iPad11,3", "iPad7,5", "iPad6,11"] {
             XCTAssertTrue(IPadChip.lacksMChip(model: model), model)
+            XCTAssertFalse(IPadChip.hasMChip(model: model), model)
         }
     }
 
@@ -24,13 +25,16 @@ final class IPadChipTests: XCTestCase {
                       "iPad16,8", "iPad16,9", "iPad16,10", "iPad16,11", // iPad Air, M4
                       "iPad17,1", "iPad17,4"] {              // iPad Pro, M5
             XCTAssertFalse(IPadChip.lacksMChip(model: model), model)
+            XCTAssertTrue(IPadChip.hasMChip(model: model), model)
         }
     }
 
     func testAModelItDoesntKnowIsNotCountedOut() {
         // Newer than the list, or not an iPad's identifier at all, such as an iOS app on a Mac.
-        for model in ["iPad19,1", "iPad18,2", "arm64", "", "iPad", "iPad13", "iPad13,x", "iPhone17,1"] {
+        for model in ["iPad19,1", "iPad18,2", "iPad17,5", "arm64", "", "iPad", "iPad13", "iPad13,x", "iPhone17,1"] {
             XCTAssertFalse(IPadChip.lacksMChip(model: model), model)
+            // Nor is it said to have an M chip: it could be a standard iPad, which needs the adapter.
+            XCTAssertFalse(IPadChip.hasMChip(model: model), model)
         }
     }
 }
