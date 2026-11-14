@@ -88,7 +88,7 @@ fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: Fa
         CaregiverPage.CALLS -> { CallsPages(app, admin, links, onBack); return }
         CaregiverPage.DROP_IN -> { DropInPages(app, admin, links, onBack); return }
         CaregiverPage.MESSAGES -> { MessagesPages(app, admin, links, onBack); return }
-        // Its list of licenses scrolls by itself.
+        // Contact, Licenses and each license open in its place.
         CaregiverPage.ABOUT -> { AboutScreen(navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }); return }
         else -> {}
     }

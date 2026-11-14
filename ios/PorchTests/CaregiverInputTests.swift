@@ -91,7 +91,7 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(Array(CaregiverPage.pages(onBedside: true).map { $0.title(onBedside: true) }.prefix(7)), ["People", "Calls", "Drop-in", "Messages", "Display & voice", "Privacy", "Caregivers & PIN"])
         let expected: [(CaregiverPage, AnyClass)] = [(.people, PeopleSettingsViewController.self), (.calls, CallSettingsViewController.self), (.dropIn, DropInSettingsViewController.self),
             (.messages, MessageSettingsViewController.self), (.display, BedsideDisplaySettingsViewController.self), (.privacy, PrivacySettingsViewController.self),
-            (.caregivers, CaregiverAccessViewController.self), (.device, DeviceSettingsViewController.self)]
+            (.caregivers, CaregiverAccessViewController.self), (.device, DeviceSettingsViewController.self), (.about, AboutViewController.self)]
         for (page, screen) in expected {
             navigation.popToRootViewController(animated: false)
             try XCTUnwrap(rows(in: home.view).first { $0.accessibilityIdentifier == "caregiver.page.\(page.rawValue)" }).sendActions(for: .touchUpInside)
@@ -1012,7 +1012,8 @@ final class CaregiverInputTests: XCTestCase {
     }
 
     @MainActor func testCaregiverModeOnAPhoneOffersOnlyFamilySettings() {
-        XCTAssertEqual(CaregiverPage.pages(onBedside: false).map { $0.title(onBedside: false) }, ["Family", "Calls", "Drop-in", "Messages", "Privacy", "Caregivers"])
+        XCTAssertEqual(CaregiverPage.pages(onBedside: false).map { $0.title(onBedside: false) }, ["Family", "Calls", "Drop-in", "Messages", "Privacy", "Caregivers", "About"])
+        XCTAssertEqual(CaregiverPage.pages(onBedside: true).last, .about, "About is the last page on the bedside too")
     }
 
     @MainActor func testThisIPadAndPrivacyPagesLinkThePrivacyPolicy() throws {
@@ -1026,6 +1027,85 @@ final class CaregiverInputTests: XCTestCase {
         let home = FamilyAdminViewController(slots: CallSlots())
         let privacy = PrivacySettingsViewController(admin: home); privacy.loadViewIfNeeded()
         XCTAssertTrue(buttons(in: privacy.view).contains { $0.configuration?.title == "Privacy policy" })
+    }
+
+    @MainActor func testAboutShowsTheVersionFirstThenOpensContactAndEachLicense() throws {
+        let about = AboutViewController()
+        let navigation = UINavigationController(rootViewController: about); about.loadViewIfNeeded()
+        XCTAssertEqual(about.title, "About")
+        let info = Bundle.main.infoDictionary
+        let version = try XCTUnwrap(info?["CFBundleShortVersionString"] as? String), build = try XCTUnwrap(info?["CFBundleVersion"] as? String)
+        let shown = texts(about.view)
+        for text in ["Porch", "Version \(version) (\(build))", "Built with ❤️ in Oakland, CA", "Licenses"] { XCTAssertTrue(shown.contains(text), text) }
+        XCTAssertLessThan(try XCTUnwrap(shown.firstIndex(of: "Version \(version) (\(build))")), try XCTUnwrap(shown.firstIndex(of: "Licenses")))
+        let contact = try XCTUnwrap(buttons(in: about.view).first { $0.accessibilityIdentifier == "about.contact" })
+        XCTAssertEqual(contact.configuration?.attributedTitle.map { String($0.characters) }, "Questions or feedback? Contact me.")
+        contact.sendActions(for: .touchUpInside)
+        XCTAssertTrue(navigation.topViewController is ContactViewController)
+        navigation.popToRootViewController(animated: false)
+        try XCTUnwrap(rows(in: about.view).first { $0.accessibilityIdentifier == "about.licenses" }).sendActions(for: .touchUpInside)
+        let licenses = try XCTUnwrap(navigation.topViewController as? LicensesViewController); licenses.loadViewIfNeeded()
+        XCTAssertEqual(licenses.title, "Licenses")
+        // The list Settings → Porch → Acknowledgements shows, without its introduction.
+        let all = Acknowledgement.bundled
+        XCTAssertGreaterThan(all.count, 10)
+        XCTAssertTrue(all.contains { $0.title.hasPrefix("LiveKit Swift SDK") })
+        XCTAssertFalse(all.contains { $0.text.hasPrefix("Porch includes") })
+        let listed = rows(in: licenses.view).filter { $0.accessibilityIdentifier == "licenses.row" }
+        XCTAssertEqual(listed.map(\.accessibilityLabel), all.map(\.title))
+        try XCTUnwrap(listed.first).sendActions(for: .touchUpInside)
+        let license = try XCTUnwrap(navigation.topViewController as? LicenseViewController); license.loadViewIfNeeded()
+        XCTAssertEqual(license.title, all[0].title)
+        XCTAssertEqual(labels(in: license.view).first { $0.accessibilityIdentifier == "license.text" }?.text, all[0].reflowed)
+    }
+
+    func testLicenseTextRewrapsToTheScreenButKeepsShortLinesAndParagraphs() {
+        let mit = Acknowledgement(title: "PhoneNumberKit 5.0.9", text: """
+        The MIT License (MIT)
+
+        Copyright (c) 2018 Roy Marmelstein
+        Copyright (c) 2026 Bruno Guidolim and contributors
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software.\r
+           \r
+              "License" shall mean the terms and conditions for use, reproduction,
+              and distribution.
+        """)
+        XCTAssertEqual(mit.reflowed, """
+        The MIT License (MIT)
+
+        Copyright (c) 2018 Roy Marmelstein
+        Copyright (c) 2026 Bruno Guidolim and contributors
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software.
+
+        "License" shall mean the terms and conditions for use, reproduction, and distribution.
+        """)
+    }
+
+    @MainActor func testContactIsReachableFromAFamilyDeviceAndOnlyShownOnTheBedside() throws {
+        func actions(_ screen: ContactViewController) -> [String: String] {
+            screen.loadViewIfNeeded()
+            return Dictionary(uniqueKeysWithValues: buttons(in: screen.view).compactMap { button in
+                guard let id = button.accessibilityIdentifier, id.hasPrefix("contact."), let title = button.configuration?.title else { return nil }
+                return (id, title)
+            })
+        }
+        let phone = ContactViewController(onBedside: false, onPhone: true)
+        XCTAssertEqual(actions(phone), ["contact.email": "ethan@helloporch.store", "contact.phone": "(415) 867-6937"])
+        XCTAssertEqual(phone.title, "Contact")
+        XCTAssertEqual(actions(ContactViewController(onBedside: false, onPhone: false)), ["contact.email": "ethan@helloporch.store"], "An iPad can't call")
+        let bedside = ContactViewController(onBedside: true, onPhone: false)
+        XCTAssertEqual(actions(bedside), [:], "The bedside iPad doesn't leave Porch for Mail")
+        XCTAssertEqual(descendants(bedside.view).filter { $0.accessibilityIdentifier?.hasPrefix("contact.") == true }.map(\.accessibilityLabel),
+                       ["Email, ethan@helloporch.store", "Phone, (415) 867-6937"])
+    }
+
+    func testVersionShowsTheBuildInBrackets() {
+        XCTAssertEqual(PorchVersion.text(["CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "78"]), "0.1.0 (78)")
+        XCTAssertEqual(PorchVersion.text(["CFBundleShortVersionString": "0.1.0"]), "0.1.0")
     }
 
     @MainActor func testSetupsFirstScreenLinksPrivacyPolicy() {
@@ -1079,7 +1159,7 @@ final class CaregiverInputTests: XCTestCase {
         let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
         XCTAssertEqual(rows(in: admin.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("caregiver.page.") },
-                       ["caregiver.page.people", "caregiver.page.calls", "caregiver.page.dropIn", "caregiver.page.messages", "caregiver.page.privacy", "caregiver.page.caregivers"])
+                       ["caregiver.page.people", "caregiver.page.calls", "caregiver.page.dropIn", "caregiver.page.messages", "caregiver.page.privacy", "caregiver.page.caregivers", "caregiver.page.about"])
         for bedsideOnly in ["Keypad", "Display & voice", "Caregiver PIN"] {
             XCTAssertTrue(descendants(admin.view).contains { $0.accessibilityLabel == "\(bedsideOnly), set on the bedside iPad" }, bedsideOnly)
         }
@@ -1660,10 +1740,17 @@ final class CaregiverInputTests: XCTestCase {
     }
 
     @MainActor func testFamilySettingsKeepRarelyUsedChoicesAsLinks() {
-        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
+        let settings = FamilyProfileViewController()
+        let navigation = UINavigationController(rootViewController: settings); settings.loadViewIfNeeded()
         XCTAssertEqual(settings.title, "Settings")
         let titles = buttons(in: settings.view).compactMap { $0.configuration?.title }
-        XCTAssertTrue(titles.contains("Privacy policy"))
+        // The page's own buttons, without the keyboard choice under it.
+        XCTAssertEqual(Array(buttons(in: settings.form).compactMap { $0.configuration?.title }.suffix(2)), ["Privacy policy", "About Porch"], "Last, as on Android")
+        let links = buttons(in: settings.view).filter { ["family.privacy", "family.about"].contains($0.accessibilityIdentifier) }
+        XCTAssertEqual(links.map(\.contentHorizontalAlignment), [.leading, .leading], "Left-aligned, as on Android")
+        links.last?.sendActions(for: .touchUpInside)
+        XCTAssertTrue(navigation.topViewController is AboutViewController)
+        navigation.popToRootViewController(animated: false)
         // Only an iPad can become the bedside.
         XCTAssertEqual(titles.contains("Use this iPad as the bedside Porch"), UIDevice.current.userInterfaceIdiom == .pad)
         XCTAssertFalse(titles.contains("Use this iPhone as the bedside Porch"))

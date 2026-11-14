@@ -199,8 +199,8 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         }
     })
     onCancel?.let { FormLink("Cancel", onClick = it) }
-    // The licenses, before a phone has joined any family.
-    if (!adding) FormLink("About Porch", onClick = onAbout)
+    // Before a phone has joined any family.
+    if (!adding) PorchLinks(onAbout)
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 
@@ -419,8 +419,7 @@ private fun Families(app: PorchApplication, links: FamilyLinks, families: List<F
     }
     leaveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     if (families.size < FamilyNames.limit) FormLink("Join another family", onClick = onJoinAnother)
-    // The open-source licenses, for anyone, not only a family's caregivers.
-    FormLink("About Porch", onClick = onAbout)
+    PorchLinks(onAbout)
     families.firstOrNull { it.deviceID == leaving }?.let { family ->
         val name = app.device.familyName(family) ?: links.state(family)?.householdName ?: "this family"
         // As on iOS (FamilyProfiles.swift): the phone leaves on the server, then forgets the family.

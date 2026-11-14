@@ -46,7 +46,7 @@ android {
         targetSdk = 36
         // Each upload to Google Play needs a higher versionCode: -Pporch.versionCode (README).
         versionCode = (findProperty("porch.versionCode") as String?)?.toInt() ?: 1
-        versionName = (findProperty("porch.versionName") as String?) ?: "0.1"
+        versionName = (findProperty("porch.versionName") as String?) ?: "0.1.0"
         // The calling server, as on iOS (PorchServerURL). Invitations for any other server carry it in their link.
         buildConfigField("String", "PORCH_SERVER_URL", "\"https://porch-calling-prototype.vercel.app\"")
         for (name in listOf("FIREBASE_APP_ID", "FIREBASE_API_KEY", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID")) {
