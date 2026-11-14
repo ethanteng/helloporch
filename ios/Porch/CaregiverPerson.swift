@@ -311,8 +311,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         }
         phone.accessibilityIdentifier = "person.phone"
         rows.append(phone)
-        let fallback = linked && contact.phoneNumber != nil ? "If Porch isn't answered in \(CallPreferences.fallbackSeconds()) seconds, Porch calls their phone. Voice only." : nil
-        return group("Reach \(subject.firstName)", detail: fallback, rows: rows)
+        return group("Reach \(subject.firstName)", rows: rows)
     }
     /// Invites someone who's on the keypad by phone, and links their key to the invitation.
     private func invite() {
