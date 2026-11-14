@@ -172,7 +172,7 @@ const parts: GuidePart[] = [
               <p>
                 The keypad button should switch to your Porch app if your invitation used the same name.
                 If it still calls your regular phone, ask the person who set it up to open caregiver mode,
-                go to <UI>People</UI>, tap your button, then <UI>Choose from Family on Porch</UI> and select you.
+                go to <UI>People</UI>, tap your button, then <UI>Porch app</UI>. Tap <UI>Choose from Family on Porch</UI> and select you.
               </p>
             ),
           },
