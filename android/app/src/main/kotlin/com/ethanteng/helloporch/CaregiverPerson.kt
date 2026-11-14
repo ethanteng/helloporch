@@ -279,14 +279,20 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             }
         }
     }
-    /** Cancels their waiting invitation. Their key stays, by phone, with the same name, numbers, color and photo. */
+    /** Cancels their waiting invitation. Their key stays, reached by phone, with the same name, numbers, color and photo. */
     fun cancelInvite() {
         val id = latest().contact?.invitationID ?: return
         admin.launch {
             if (!send("cancelInvite", mapOf("inviteID" to JsonPrimitive(id)))) return@launch
+            // Cancelling updates the family first, and a key follows an invitation on its own. That keypad is saved
+            // before this returns, and is newer than the one this screen was drawn from.
+            reloadSlots()
             val now = latest()
             val at = now.slot ?: return@launch
             val keyed = now.contact ?: return@launch
+            // A key with no number has no other way to reach them, so it keeps the invitation, which can be sent again.
+            // A key that already followed a different invitation is left as it is.
+            if (keyed.invitationID != id || keyed.phoneNumber == null) return@launch
             saveSlots { it.setContact(CallContact(name = keyed.name, nativeCall = keyed.nativeCall, phoneNumber = keyed.phoneNumber,
                 otherPhoneNumbers = keyed.otherPhoneNumbers, buttonColorHex = keyed.buttonColorHex, photoData = keyed.customPhotoData), at) }
         }
