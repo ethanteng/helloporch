@@ -7,7 +7,9 @@ from the real apps against `scripts/local-family-server.mjs` with a made-up hous
    `xcrun simctl io <udid> screenshot`. Android: the debug build on the `porch-tablet` and `porch-phone` emulators,
    with `adb exec-out screencap -p`. Name them as `boards.py` expects, under `<shots>/ios` and `<shots>/android`.
    The emulator has no USB host, so its setup hides Corded phone; for the setup video, temporarily make
-   `usbHost` true in `BedsideSetupScreens.kt` and don't commit that.
+   `usbHost` true in `BedsideSetupScreens.kt` and don't commit that. On the iPad simulator, choose Settings →
+   Multitasking & Gestures → Full Screen Apps first, or every screenshot shows the app's window controls. Its
+   hardware keyboard stands in for the phone adapter: typing 3 on Connect the phone shows "Porch heard 3".
 2. `python3 -I boards.py <shots> <out>` writes one storyboard per video: each beat is a screenshot, its caption and
    where to show the tap, in the screenshot's own points or pixels.
 3. `swiftc -O render.swift -o render && ./render <out>/<name>.json [sheet.jpg]` writes `<name>.mp4` and its poster
