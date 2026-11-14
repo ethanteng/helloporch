@@ -90,8 +90,8 @@ jobs:
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people-chinese.png --preview-six --preview-people --preview-chinese --family-silent
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock-chinese.png --preview-chinese --family-silent
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-chinese.png --preview-dynamic --preview-chinese --preview-hour 10 --family-silent
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-phone-setup --preview-touch-keyboard
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-phone-setup --preview-system-keyboard --preview-hardware-keyboard
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-touch-keyboard
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-system-keyboard --preview-hardware-keyboard
       - name: Save the iPad screenshots
         uses: actions/upload-artifact@v4
         with:

@@ -43,7 +43,7 @@ class AddSomeoneDraftTest {
         assertNull(draft.phoneValue("US"))
         val one = draft.reaching("(415) 867-6937", "US")
         assertEquals("(415) 867-6937", one.phoneValue("US"))
-        assertEquals("(415) 867-6937 +1", one.adding("+44 20 7031 3000", "US").phoneValue("US"))
+        assertEquals("(415) 867-6937 +1", one.copy(numbers = PhoneNumberList.adding(one.numbers, "+44 20 7031 3000", "US")).phoneValue("US"))
     }
 
     @Test fun stepTwoReplacesTheNumberPorchCallsAndKeepsTheOthers() {
@@ -58,16 +58,44 @@ class AddSomeoneDraftTest {
     }
 
     @Test fun addingNumbersRefusesBadRepeatedAndTooMany() {
-        var draft = AddSomeoneDraft(key = 5, name = "Linda", numbers = listOf("+14158676937"))
-        assertEquals("Check this number. For other countries, start with +.", assertFailsWith<ValidationException> { draft.adding("911", "US") }.message)
-        assertEquals("That number is already saved for them.", assertFailsWith<ValidationException> { draft.adding("415-867-6937", "US") }.message)
-        for (number in listOf("+14155552671", "+14155552672", "+14155552673", "+14155552674")) draft = draft.adding(number, "US")
-        assertEquals(CallContact.maximumPhoneNumbers, draft.numbers.size)
-        assertEquals("Save up to 5 phone numbers for one person.", assertFailsWith<ValidationException> { draft.adding("+14155552675", "US") }.message)
-        val moved = draft.makingPrimary("+14155552673")
-        assertEquals("+14155552673", moved.numbers.first())
-        assertEquals(draft.numbers.toSet(), moved.numbers.toSet())
-        assertFalse("+14155552673" in moved.removing("+14155552673").numbers)
+        var numbers = listOf("+14158676937")
+        assertEquals("Check this number. For other countries, start with +.",
+            assertFailsWith<ValidationException> { PhoneNumberList.adding(numbers, "911", "US") }.message)
+        assertEquals("That number is already saved for them.", assertFailsWith<ValidationException> { PhoneNumberList.adding(numbers, "415-867-6937", "US") }.message)
+        for (number in listOf("+14155552671", "+14155552672", "+14155552673", "+14155552674")) numbers = PhoneNumberList.adding(numbers, number, "US")
+        assertEquals("+14155552674", numbers.last(), "A typed number goes after the others")
+        assertEquals(CallContact.maximumPhoneNumbers, numbers.size)
+        assertEquals("Save up to 5 phone numbers for one person.",
+            assertFailsWith<ValidationException> { PhoneNumberList.adding(numbers, "+14155552675", "US") }.message)
+        val moved = PhoneNumberList.makingPrimary(numbers, "+14155552673")
+        assertEquals("+14155552673", moved.first())
+        assertEquals(numbers.toSet(), moved.toSet())
+        assertEquals(numbers, PhoneNumberList.makingPrimary(numbers, "+14155550000"), "A number that isn't theirs changes nothing")
+    }
+
+    @Test fun aPickedNumberBecomesTheOnePorchCalls() {
+        val numbers = listOf("+14158676937", "+14155552671")
+        assertEquals(listOf("+442070313000", "+14158676937", "+14155552671"), PhoneNumberList.picking(numbers, "+44 20 7031 3000", "US"))
+        // One already saved moves to the front instead of repeating, even when the list is full.
+        assertEquals(listOf("+14155552671", "+14158676937"), PhoneNumberList.picking(numbers, "(415) 555-2671", "US"))
+        val full = numbers + listOf("+14155552672", "+14155552673", "+14155552674")
+        assertEquals("+14155552674", PhoneNumberList.picking(full, "415 555 2674", "US").first())
+        assertEquals("Save up to 5 phone numbers for one person.",
+            assertFailsWith<ValidationException> { PhoneNumberList.picking(full, "+14155552675", "US") }.message)
+        assertEquals("Check this number. For other countries, start with +.",
+            assertFailsWith<ValidationException> { PhoneNumberList.picking(numbers, "555", "US") }.message)
+        assertEquals(listOf("+14158676937"), PhoneNumberList.picking(emptyList(), "4158676937", "US"))
+    }
+
+    @Test fun onlySomeoneOnPorchCanBeLeftWithoutANumber() {
+        val call = NativeCall("contact-1a2b3c4d", NativeCall.Mode.VOICE)
+        val byPhone = CallContact("Linda Park", call, phoneNumber = "+14158676937")
+        assertEquals("Add a number so Porch can reach Linda.", PhoneNumberList.missing(emptyList(), byPhone))
+        assertNull(PhoneNumberList.missing(listOf("+14155552671"), byPhone))
+        val invited = CallContact("", call, phoneNumber = "+14158676937", invitationID = newInvitation, memberName = "Linda Park")
+        assertNull(PhoneNumberList.missing(emptyList(), invited))
+        val onPorch = CallContact("", call, familyMemberID = memberID, memberName = "Tom Reyes")
+        assertNull(PhoneNumberList.missing(emptyList(), onPorch))
     }
 
     @Test fun choosingAFamilyMemberUsesTheirPorchNameAndApp() {

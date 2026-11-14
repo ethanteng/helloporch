@@ -67,7 +67,7 @@ A caregiver can let specific phone numbers drop in with audio, the same way an a
 Approve a number in either place:
 
 - **Drop-in → Add a phone number**, or a keypad person's page → **Calls from their number drop in** (name, number, or **Choose from Contacts**). Approved numbers are listed there with **Remove**. Caregivers on approved family phones can also manage this list from caregiver mode.
-- When editing a keypad person on the bedside iPad, turn on **Call their phone**, enter their primary number, then turn on **Drop-in by phone → Audio drop-in when they call**. **Save** approves that number under the person's name. Drop-in covers only the primary number; their other numbers ring for a normal answer. Changing their number moves the approval to the new number in a single update. Removing their number, turning the switch off, removing the person, or giving their key a different action withdraws it. The keypad list shows **Phone drop-in on**.
+- On a keypad person's page on the bedside iPad, add their number under **Phone**, then turn on **Drop-in → By phone**. That approves the number marked **Porch calls** under the person's name. Drop-in covers only that number; their other numbers ring for a normal answer. Making another number the one Porch calls moves the approval to it in a single update. Removing all their numbers, turning the switch off, removing the person, or giving their key a different action withdraws it. The keypad list shows **Phone drop-in on**.
 
 Approving on the bedside iPad asks for microphone access. Approvals are stored per household, at most 20 numbers. Each phone drop-in needs all of these; otherwise the call rings for a normal answer:
 
@@ -84,7 +84,7 @@ Removing a number, or turning off **Allow approved drop-ins**, ends that phone d
 
 A caregiver can turn on **Calls → Block unknown callers**, on the bedside iPad or from caregiver mode on a family phone. Bedsides set up from the app start with it on. While it's on, a regular phone call rings the bedside only if its caller ID is:
 
-- one of a keypad person's numbers, with **Call their phone** on: their primary number or any of their **Other numbers** (such as home and mobile),
+- one of a keypad person's numbers under **Phone**: the one Porch calls or any of the others (such as home and mobile),
 - approved for [audio drop-in by phone](#audio-drop-in-by-phone), or
 - on the caregiver's **Allowed** list.
 

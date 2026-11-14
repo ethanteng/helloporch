@@ -1,14 +1,18 @@
 package com.ethanteng.helloporch
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.ContactsContract
 import android.icu.text.DateFormat as IcuDateFormat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,7 +86,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -110,7 +116,7 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
         PeopleRoute.Kind.ADD -> AddSomeone(app, admin, links, open.slot, open.start, onDone = close)
-        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, returnsToPerson = false, onCreated = { _, _ -> }, onDone = close, fromKey = false)
+        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, onCreated = { _, _ -> }, onDone = close, fromKey = false)
     }
 }
 
@@ -295,11 +301,11 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     val key = subject.slot
     when (screen) {
         PersonScreen.PHONE -> if (key != null && contact != null) {
-            KeyEditor(app, admin, links, key, contact, KeypadAction.PERSON, onDone = { screen = null })
+            PersonPhoneScreen(app, admin, links, key, contact, onDone = { screen = null })
             return
         }
         PersonScreen.INVITE -> if (key != null && contact != null) {
-            InviteScreen(app, admin, prefilledName = contact.name, returnsToPerson = false, onDone = { screen = null }, onCreated = { id, invitedName ->
+            InviteScreen(app, admin, prefilledName = contact.name, onDone = { screen = null }, onCreated = { id, invitedName ->
                 // The name moves to the invitation, and the key follows the name they choose once they join.
                 val current = latest()
                 val at = current.slot
@@ -633,7 +639,7 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
  * still answers on the bedside, so the phone doesn't ask for its own microphone.
  */
 @Composable
-fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, returnsToPerson: Boolean, onCreated: (id: String, name: String) -> Unit,
+fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, onCreated: (id: String, name: String) -> Unit,
     onDone: () -> Unit, fromKey: Boolean = true) {
     BackHandler(onBack = onDone)
     val context = LocalContext.current
@@ -689,8 +695,7 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
         val shown = link?.takeIf { expiresAt > System.currentTimeMillis() / 1000 }
         if (shown != null) {
             InvitationCode(shown, "QR code for ${name.trim().ifEmpty { "their" }} invitation")
-            Text(if (returnsToPerson) "Invitation ready. Show them this code or share it, tap Done, then tap Save."
-                else "Invitation ready. Show them this code or share it, then tap Done.",
+            Text("Invitation ready. Show them this code or share it, then tap Done.",
                 Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
         }
         FormButton(when { shown != null -> "Share invitation"; busy -> "Creating…"; else -> "Create invitation" }, enabled = !busy && (shown != null || !made), onClick = {
@@ -780,6 +785,26 @@ internal fun newRoom(): String = "contact-" + UUID.randomUUID().toString().take(
 
 /** The tablet's country, for numbers typed without a country code. */
 internal fun homeRegion(): String = Locale.getDefault().country.ifEmpty { "US" }
+
+/** Android's contact picker, showing only contacts' phone numbers. Porch may read the one number tapped. */
+internal class PickPhoneNumber : ActivityResultContract<Unit, Uri?>() {
+    override fun createIntent(context: Context, input: Unit) = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent?.data?.takeIf { resultCode == Activity.RESULT_OK }
+}
+
+/** The picked contact's name and the number tapped. */
+internal suspend fun pickedNumber(context: Context, uri: Uri): Pair<String?, String>? = withContext(Dispatchers.IO) {
+    try {
+        val columns = arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER)
+        context.contentResolver.query(uri, columns, null, null, null)?.use { row ->
+            if (!row.moveToFirst()) return@use null
+            val number = row.getString(1)?.takeIf { it.isNotBlank() } ?: return@use null
+            row.getString(0) to number
+        }
+    } catch (_: SecurityException) {
+        null
+    }
+}
 
 /** A number as people read it: national at home, international otherwise. */
 internal fun displayNumber(e164: String): String = PhoneNumberNormalization.display(e164, homeRegion())

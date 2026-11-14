@@ -58,23 +58,11 @@ data class AddSomeoneDraft(
         PhoneNumberNormalization.display(first, region) + if (numbers.size > 1) " +${numbers.size - 1}" else ""
     }
 
-    /** Step 2's typed number becomes the one Porch calls, and the rest stay. Throws with [badNumber]. */
+    /** Step 2's typed number becomes the one Porch calls, and the rest stay. Throws with [PhoneNumberList.badNumber]. */
     fun reaching(typed: String, region: String): AddSomeoneDraft {
-        val number = normalized(typed, region)
+        val number = PhoneNumberList.normalized(typed, region)
         return copy(numbers = listOf(number) + numbers.drop(1).filter { it != number }, viaPhone = true)
     }
-
-    /** One more number, from the Phone screen. Throws with why it can't be added. */
-    fun adding(typed: String, region: String): AddSomeoneDraft {
-        val number = normalized(typed, region)
-        if (number in numbers) throw ValidationException(repeatedNumber)
-        if (numbers.size >= CallContact.maximumPhoneNumbers) throw ValidationException(ContactError.tooManyPhoneNumbers)
-        return copy(numbers = numbers + number)
-    }
-
-    fun makingPrimary(number: String): AddSomeoneDraft = if (number !in numbers) this else copy(numbers = listOf(number) + (numbers - number))
-
-    fun removing(number: String): AddSomeoneDraft = copy(numbers = numbers - number)
 
     /**
      * Their key. A family member goes by their Porch name and photo, and someone invited by the name their invitation
@@ -96,11 +84,47 @@ data class AddSomeoneDraft(
         /** The first key with nothing on it, in keypad order. Null when the keypad is full. */
         fun firstFreeKey(slots: CallSlots): Int? = keypadOrder.firstOrNull { slots.action(it) == KeypadAction.UNASSIGNED }
 
-        const val badNumber = "Check this number. For other countries, start with +."
-        const val repeatedNumber = "That number is already saved for them."
         const val unreachable = "Choose Phone or Porch app."
-
-        private fun normalized(typed: String, region: String): String =
-            try { PhoneNumberNormalization.e164(typed.trim(), region) } catch (_: ValidationException) { throw ValidationException(badNumber) }
     }
+}
+
+/**
+ * Someone's phone numbers as the Phone screen changes them, the one Porch calls first. Add someone changes its draft's
+ * numbers this way, and a person's page the numbers on their key. Each change that can't be made throws with why, for the
+ * screen to show under its field.
+ */
+object PhoneNumberList {
+    const val badNumber = "Check this number. For other countries, start with +."
+    const val repeatedNumber = "That number is already saved for them."
+
+    /** One more number, typed, after the others. */
+    fun adding(numbers: List<String>, typed: String, region: String): List<String> {
+        val number = normalized(typed, region)
+        if (number in numbers) throw ValidationException(repeatedNumber)
+        if (numbers.size >= CallContact.maximumPhoneNumbers) throw ValidationException(ContactError.tooManyPhoneNumbers)
+        return numbers + number
+    }
+
+    /** A number picked from Contacts becomes the one Porch calls. One already saved moves there rather than repeating. */
+    fun picking(numbers: List<String>, picked: String, region: String): List<String> {
+        val number = normalized(picked, region)
+        if (number in numbers) return makingPrimary(numbers, number)
+        if (numbers.size >= CallContact.maximumPhoneNumbers) throw ValidationException(ContactError.tooManyPhoneNumbers)
+        return listOf(number) + numbers
+    }
+
+    fun makingPrimary(numbers: List<String>, number: String): List<String> = if (number !in numbers) numbers else listOf(number) + (numbers - number)
+
+    /**
+     * Why `contact`'s key can't have `numbers`, or null when it can. Someone on the keypad only by phone needs a number
+     * left, or Porch couldn't reach them. Someone on Porch, or invited to it, can do without.
+     */
+    fun missing(numbers: List<String>, contact: CallContact): String? {
+        if (numbers.isNotEmpty() || contact.familyMemberID != null || contact.invitationID != null) return null
+        val first = contact.name.split(" ").firstOrNull { it.isNotEmpty() } ?: contact.name
+        return "Add a number so Porch can reach $first."
+    }
+
+    internal fun normalized(typed: String, region: String): String =
+        try { PhoneNumberNormalization.e164(typed.trim(), region) } catch (_: ValidationException) { throw ValidationException(badNumber) }
 }

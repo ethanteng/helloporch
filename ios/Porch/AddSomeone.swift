@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 import ContactsUI
 import PorchCore
 
@@ -602,13 +603,33 @@ final class AddInviteViewController: AddSomeoneScreen {
 
 // MARK: Phone numbers
 
-final class AddPhoneNumbersViewController: AddSomeoneScreen {
+/// Someone's phone numbers: which one Porch calls, and the rest that can call in. In Add someone it changes the draft.
+/// Opened from the Phone row on someone's page, it edits a copy of their key's numbers, and Done saves them there.
+final class AddPhoneNumbersViewController: AddSomeoneScreen, CNContactPickerDelegate {
     override var showsFlowTitle: Bool { false }
+    /// The key and person whose numbers Done saves, when this was opened from their page.
+    private let saving: (key: Int, contact: CallContact)?
     /// Redrawn whenever a number is added, removed or made the one Porch calls.
     private let host = UIStackView()
     private let numberField = UITextField()
     private let addButton = PorchStyle.button("Add", filled: false)
+    private let done = PorchStyle.button("Done")
     private lazy var error = errorLabel()
+    private var saveTask: Task<Void, Never>?
+
+    init(admin: FamilyAdminViewController, draft: AddSomeoneDraft, saving: (key: Int, contact: CallContact)?) {
+        self.saving = saving
+        super.init(admin: admin, draft: draft)
+    }
+    override convenience init(admin: FamilyAdminViewController, draft: AddSomeoneDraft) { self.init(admin: admin, draft: draft, saving: nil) }
+    /// The numbers of someone already on a key, from their page.
+    convenience init(admin: FamilyAdminViewController, key: Int, contact: CallContact) {
+        let draft = AddSomeoneDraft(key: key, fromKeyTile: false)
+        draft.name = contact.name; draft.numbers = contact.phoneNumbers
+        self.init(admin: admin, draft: draft, saving: (key, contact))
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(admin:draft:)") }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Phone"
@@ -622,14 +643,14 @@ final class AddPhoneNumbersViewController: AddSomeoneScreen {
         form.addArrangedSubview(host)
         form.addArrangedSubview(error)
         form.addArrangedSubview(PorchStyle.label("All of these can call \(lovedOne).", size: 16))
-        let done = PorchStyle.button("Done")
         done.accessibilityIdentifier = "add.doneNumbers"
-        done.addAction(UIAction { [weak self] _ in
-            guard let self, self.takeTyped() else { return }
-            self.navigationController?.popViewController(animated: true)
-        }, for: .touchUpInside)
+        done.addAction(UIAction { [weak self] _ in self?.finishNumbers() }, for: .touchUpInside)
         form.addArrangedSubview(done)
         renderList()
+    }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent { saveTask?.cancel() }
     }
     private func renderList() {
         host.arrangedSubviews.forEach { host.removeArrangedSubview($0); $0.removeFromSuperview() }
@@ -661,6 +682,9 @@ final class AddPhoneNumbersViewController: AddSomeoneScreen {
         // The placeholder says what the field is for, so it needs no label above it.
         (entry as? UIStackView)?.arrangedSubviews.first?.isHidden = true
         rows.append(listRow(entry, trailing: FamilyAdminViewController.singleLine(addButton)))
+        let contacts = actionRow("Choose from Contacts", symbol: "person.crop.circle") { [weak self] in self?.pickContact() }
+        contacts.accessibilityIdentifier = "add.numberFromContacts"
+        rows.append(contacts)
         host.addArrangedSubview(group(rows: rows))
     }
     private func makeFirst(_ number: String) {
@@ -669,6 +693,10 @@ final class AddPhoneNumbersViewController: AddSomeoneScreen {
         renderList()
     }
     private func remove(_ number: String) { draft.numbers.removeAll { $0 == number }; renderList() }
+    private func show(_ message: String?) {
+        error.text = message; error.isHidden = message == nil
+        if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+    }
     /// Adds what's typed, if anything. False, with the reason shown, when it can't be added.
     private func takeTyped() -> Bool {
         let typed = (numberField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -679,9 +707,92 @@ final class AddPhoneNumbersViewController: AddSomeoneScreen {
             else if draft.numbers.count >= CallContact.maximumPhoneNumbers { message = CallContact.ValidationError.tooManyPhoneNumbers.localizedDescription }
             else { message = nil; draft.numbers.append(number); numberField.text = nil; renderList() }
         } else { message = AddSomeoneDraft.badNumber }
-        error.text = message; error.isHidden = message == nil
-        if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+        show(message)
         return message == nil
+    }
+
+    // MARK: Contacts
+
+    private func pickContact() {
+        view.endEditing(true)
+        let picker = CNContactPickerViewController()
+        picker.overrideUserInterfaceStyle = .light
+        picker.delegate = self
+        picker.displayedPropertyKeys = [CNContactPhoneNumbersKey]
+        picker.predicateForEnablingContact = NSPredicate(format: "phoneNumbers.@count > 0")
+        picker.predicateForSelectionOfContact = NSPredicate(value: false)
+        picker.predicateForSelectionOfProperty = NSPredicate(format: "key == 'phoneNumbers'")
+        present(picker, animated: true)
+    }
+    /// The number tapped becomes the one Porch calls.
+    func contactPicker(_ picker: CNContactPickerViewController, didSelect property: CNContactProperty) {
+        guard let phone = property.value as? CNPhoneNumber else { return }
+        guard let number = try? PhoneNumberNormalization.e164(phone.stringValue) else { show(AddSomeoneDraft.badNumber); return }
+        if draft.numbers.contains(number) || draft.numbers.count < CallContact.maximumPhoneNumbers {
+            makeFirst(number); show(nil)
+        } else { show(CallContact.ValidationError.tooManyPhoneNumbers.localizedDescription) }
+    }
+
+    // MARK: Done
+
+    private func finishNumbers() {
+        guard saveTask == nil, takeTyped() else { return }
+        view.endEditing(true)
+        guard let saving, let admin else { navigationController?.popViewController(animated: true); return }
+        let numbers = draft.numbers
+        guard numbers != saving.contact.phoneNumbers else { navigationController?.popViewController(animated: true); return }
+        // Someone who isn't on Porch is reached only by phone.
+        guard !numbers.isEmpty || saving.contact.familyMemberID != nil || saving.contact.invitationID != nil else {
+            show("Add a number so Porch can reach \(draft.firstName)."); return
+        }
+        done.isEnabled = false; done.configuration?.title = "Saving…"
+        view.isUserInteractionEnabled = false
+        saveTask = Task { [weak self] in
+            defer {
+                self?.saveTask = nil
+                self?.view.isUserInteractionEnabled = true
+                self?.done.isEnabled = true; self?.done.configuration?.title = "Done"
+            }
+            do {
+                try await Self.save(numbers, to: saving.key, replacing: saving.contact, admin: admin)
+                guard let self, !Task.isCancelled else { return }
+                self.navigationController?.popViewController(animated: true)
+            } catch {
+                if !Task.isCancelled { admin.showError(error) }
+            }
+        }
+    }
+    /// Approves the number Porch calls, moves its phone drop-in with it, and saves the key with everything else kept.
+    @MainActor static func save(_ numbers: [String], to key: Int, replacing original: CallContact, admin: FamilyAdminViewController) async throws {
+        if let number = numbers.first {
+            let server = try NativeCallSettings.loadForPhone()
+            _ = try await NativeCallSettings.authorizePhone(number, server: server, refresh: true)
+            try Task.checkCancellation()
+        }
+        try await movePhoneDropIn(from: original.phoneNumber, to: numbers.first, name: original.name)
+        try Task.checkCancellation()
+        let contact = try CallContact(name: original.customName,
+            nativeCall: original.nativeCall ?? NativeCall(room: "contact-\(UUID().uuidString.prefix(8).lowercased())", mode: .video),
+            phoneNumber: numbers.first, otherPhoneNumbers: Array(numbers.dropFirst()), familyMemberID: original.familyMemberID,
+            invitationID: original.invitationID, memberName: original.memberName, buttonColorHex: original.buttonColorHex,
+            photoData: original.customPhotoData)
+        try admin.saveSlots { try $0.setContact(contact, for: key) }
+    }
+    /// A phone drop-in approval follows the number Porch calls: a new one moves it, and none withdraws it.
+    @MainActor private static func movePhoneDropIn(from previous: String?, to number: String?, name: String) async throws {
+        guard let previous, previous != number, FamilyCoordinator.shared.state?.phoneDropIns?.contains(where: { $0.number == previous }) == true else { return }
+        guard let credential = PorchDevice.credential(for: .bedside) else { throw FamilyServiceError(message: "Finish bedside setup before changing phone drop-in.", status: 409) }
+        let values: [String: Any]
+        if let number {
+            // A drop-in answers on this iPad, so only it can grant its own microphone.
+            guard await AVCaptureDevice.requestAccess(for: .audio) else {
+                throw FamilyServiceError(message: "Allow microphone access in iPad Settings before approving drop-in.", status: 403)
+            }
+            // One request swaps the number, so a failure never leaves both approved.
+            values = ["number": number, "name": name, "enabled": true, "replacing": previous]
+        } else { values = ["number": previous, "enabled": false] }
+        let response = try await FamilyService(credential).send("setPhoneDropIn", values, pin: NativeCallSettings.caregiverCode)
+        FamilyCoordinator.shared.update(response)
     }
 }
 

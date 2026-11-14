@@ -180,14 +180,15 @@ const parts: GuidePart[] = [
             On the tablet, open <Path steps={["People"]} /> and tap the person.
           </li>
           <li>
-            Tap <UI>Phone</UI>, turn on <UI>Call their phone</UI> and enter their <UI>Primary number</UI>.
+            Tap <UI>Phone</UI>. Type their number in <UI>Add a number</UI> and tap <UI>Add</UI>, or tap{" "}
+            <UI>Choose from Contacts</UI>.
           </li>
           <li>
-            Use <UI>Add another number</UI> to save any other numbers they might call from. You can
-            save up to five numbers per person, but Porch calls the primary number.
+            Porch calls the number marked <UI>Porch calls</UI>. Tap another number to change it. You can
+            save up to five numbers per person, and all of them can call your loved one.
           </li>
           <li>
-            Tap <UI>Save</UI>.
+            Tap <UI>Done</UI>.
           </li>
         </ol>
         <p>
@@ -198,7 +199,7 @@ const parts: GuidePart[] = [
           rows={[
             ["Default", "Porch tries their phone after 20 seconds, for anyone whose key has a phone number."],
             ["Change the wait", <><Path key="p" steps={["Calls", "Try their phone after"]} />, from 5 seconds to 2 minutes. Tablet only.</>],
-            ["Turn it off", <>For one person, turn off <UI>Call their phone</UI> on their page.</>],
+            ["Turn it off", <>For someone on the Porch app, remove their numbers under <UI>Phone</UI> on their page.</>],
           ]}
         />
       </>

@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,11 +70,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ethanteng.helloporch.core.AddSomeoneDraft
+import com.ethanteng.helloporch.core.CallContact
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyInvitation
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyPerson
 import com.ethanteng.helloporch.core.KeypadAction
+import com.ethanteng.helloporch.core.PhoneNumberList
 import com.ethanteng.helloporch.core.PhoneNumberNormalization
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.ValidationException
@@ -115,7 +118,7 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
     val scope = rememberCoroutineScope()
     val mediaAccess = rememberMediaAccess(admin.onBedside)
     val region = remember { homeRegion() }
-    val lovedOne = admin.state(links)?.householdName?.takeIf { it.isNotBlank() } ?: "your loved one"
+    val lovedOne = lovedOne(admin, links)
     val title = draft.key?.takeIf { draft.fromKeyTile }?.let { "Key ${CallSlots.symbol(it)}" } ?: "Add someone"
     val update: ((AddSomeoneDraft) -> AddSomeoneDraft) -> Unit = { change -> draft = change(draft) }
     fun open(screen: AddScreen) { screens = screens + screen }
@@ -130,7 +133,8 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
     }
     BackHandler(onBack = ::back)
 
-    /** Approves their number, invites them, then puts them on their key, as the old key editor and invite screen did. */
+    /** Approves their number, invites them, then puts them on their key, as the person page's Phone screen and the invite
+     * screen do. */
     fun save() {
         if (saving) return
         val saved = draft
@@ -182,7 +186,9 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
         AddScreen.CHECK -> CheckStep(app, admin, links, draft, photo, title, lovedOne, region, saving, update, onBack = ::back, onOpen = ::open,
             onSave = ::save)
         AddScreen.INVITE -> InviteStep(draft, title, onDone)
-        AddScreen.PHONE -> PhoneScreen(draft, lovedOne, region, update, onBack = ::back)
+        // A number added or picked means Porch can call their phone.
+        AddScreen.PHONE -> PhoneNumbersScreen(admin, draft.numbers, { numbers -> update { it.copy(numbers = numbers, viaPhone = numbers.isNotEmpty()) } },
+            lovedOne, region, saving = false, problem = null, onBack = ::back, onDone = { back() })
         AddScreen.APP -> AppScreen(draft, lovedOne, update, onBack = ::back)
         AddScreen.KEY -> KeyScreen(admin, draft, update, onBack = ::back)
         AddScreen.KEY_ACTION -> {
@@ -268,7 +274,7 @@ private fun ReachStep(admin: CaregiverAdmin, draft: AddSomeoneDraft, title: Stri
                 PorchTextField(typed, { typed = it; bad = false }, "$first's phone number",
                     Modifier.fillMaxWidth().semantics { contentDescription = "$first's phone number" }, placeholder = { Text("Phone number") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), isError = bad)
-                if (bad) Text(AddSomeoneDraft.badNumber, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                if (bad) Text(PhoneNumberList.badNumber, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
         }
         OptionCard("Porch app", "Video calls, photos and messages", R.drawable.ic_videocam, draft.viaApp, onChange = { on -> update { it.copy(viaApp = on) } })
@@ -441,57 +447,140 @@ private fun InviteStep(draft: AddSomeoneDraft, title: String, onDone: () -> Unit
 
 // MARK: Phone, Porch app and Key
 
-/** Their numbers: the one Porch calls first, which any can become, and adding and removing them. */
+/**
+ * The Phone screen: someone's numbers, the one Porch calls first, which any of them can become, and adding, picking and
+ * removing them. Add someone changes its draft's numbers here, and a person's page the numbers on their key
+ * (PersonPhoneScreen). `problem` shows under the card. Done adds a number still typed, then hands over the numbers.
+ */
 @Composable
-private fun PhoneScreen(draft: AddSomeoneDraft, lovedOne: String, region: String, update: ((AddSomeoneDraft) -> AddSomeoneDraft) -> Unit,
-    onBack: () -> Unit) {
+private fun PhoneNumbersScreen(admin: CaregiverAdmin, numbers: List<String>, onChange: (List<String>) -> Unit, lovedOne: String, region: String,
+    saving: Boolean, problem: String?, onBack: () -> Unit, onDone: (List<String>) -> Unit) {
     var typed by rememberSaveable { mutableStateOf("") }
-    var problem by rememberSaveable { mutableStateOf<String?>(null) }
-    /** Adds what's typed, if anything. False, with why under the field, when it can't be added. */
-    fun add(): Boolean {
-        if (typed.isBlank()) return true
+    /** Why what's typed or picked can't be added, under the field. */
+    var refused by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val current by rememberUpdatedState(numbers)
+    val pickContact = rememberLauncherForActivityResult(PickPhoneNumber()) { uri ->
+        if (uri != null) scope.launch {
+            val picked = pickedNumber(context, uri) ?: run { refused = "That contact's number couldn't be read. Type it instead."; return@launch }
+            try {
+                onChange(PhoneNumberList.picking(current, picked.second, region))
+                refused = null
+            } catch (e: ValidationException) {
+                refused = e.message
+            }
+        }
+    }
+    /** The numbers with what's typed added. Null, with why under the field, when it can't be added. */
+    fun withTyped(): List<String>? {
+        if (typed.isBlank()) return numbers
         return try {
-            update { it.adding(typed, region) }
-            typed = ""
-            problem = null
-            true
+            PhoneNumberList.adding(numbers, typed, region).also { onChange(it); typed = ""; refused = null }
         } catch (e: ValidationException) {
-            problem = e.message
-            false
+            refused = e.message
+            null
         }
     }
     val colors = MaterialTheme.colorScheme
-    FormScreen("Phone", navigation = { BackButton(onBack) }) {
+    FormScreen("Phone", navigation = { BackButton(onBack, enabled = !saving) }) {
         CaregiverGroup {
-            draft.numbers.forEachIndexed { index, number ->
+            numbers.forEachIndexed { index, number ->
                 if (index > 0) HorizontalDivider()
                 val shown = displayNumber(number)
                 val calls = index == 0
                 CaregiverRow {
-                    Row(Modifier.weight(1f).heightIn(min = 48.dp).selectable(calls, role = Role.RadioButton) { update { it.makingPrimary(number) } },
+                    Row(Modifier.weight(1f).heightIn(min = 48.dp)
+                        .selectable(calls, enabled = !saving, role = Role.RadioButton) { onChange(PhoneNumberList.makingPrimary(numbers, number)) },
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        RadioButton(calls, onClick = null)
+                        RadioButton(calls, onClick = null, enabled = !saving)
                         Text(shown, style = MaterialTheme.typography.titleMedium)
                         if (calls) Text("Porch calls", Modifier.clip(RoundedCornerShape(50)).background(colors.secondaryContainer)
                             .padding(horizontal = 10.dp, vertical = 2.dp), color = colors.onSecondaryContainer, style = MaterialTheme.typography.labelMedium)
                     }
-                    IconButton(onClick = { update { it.removing(number) } }) {
+                    IconButton(onClick = { onChange(numbers - number) }, enabled = !saving) {
                         Icon(painterResource(R.drawable.ic_close), contentDescription = "Remove $shown", tint = colors.onSurfaceVariant)
                     }
                 }
             }
-            if (draft.numbers.isNotEmpty()) HorizontalDivider()
+            if (numbers.isNotEmpty()) HorizontalDivider()
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PorchTextField(typed, { typed = it; problem = null }, "Add a number", Modifier.weight(1f), placeholder = { Text("Add a number") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), isError = problem != null)
-                OutlinedButton(onClick = { add() }) { Text("Add") }
+                PorchTextField(typed, { typed = it; refused = null }, "Add a number", Modifier.weight(1f), enabled = !saving,
+                    placeholder = { Text("Add a number") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), isError = refused != null)
+                OutlinedButton(onClick = { withTyped() }, enabled = !saving) { Text("Add") }
             }
-            problem?.let { Text(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), color = colors.error, style = MaterialTheme.typography.bodyMedium) }
+            refused?.let { Text(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), color = colors.error, style = MaterialTheme.typography.bodyMedium) }
+            HorizontalDivider()
+            // Android's picker hands Porch the one number tapped, without the contact's others.
+            CaregiverRow(onClick = if (saving) null else ({
+                try { pickContact.launch(Unit) } catch (_: ActivityNotFoundException) { admin.error = "This tablet has no contacts app. Type the number instead." }
+            })) {
+                Icon(painterResource(R.drawable.ic_account), contentDescription = null, Modifier.size(24.dp), tint = colors.primary)
+                Text("Choose from Contacts", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = colors.primary)
+            }
         }
+        problem?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodyMedium) }
         Text("All of these can call $lovedOne.", style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-        // A number still typed is added first.
-        FormButton("Done", onClick = { if (add()) onBack() })
+        FormButton(if (saving) "Saving…" else "Done", enabled = !saving, onClick = { withTyped()?.let(onDone) })
     }
+}
+
+/**
+ * The numbers of someone already on a key, from their page's Phone row: the Phone screen on a copy, which Back leaves
+ * as it was. Done approves the number Porch calls with the server, so one it can't call is refused while the caregiver
+ * is here, moves a phone drop-in approval to it, then saves the key with only its numbers changed.
+ */
+@Composable
+internal fun PersonPhoneScreen(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, key: Int, contact: CallContact, onDone: () -> Unit) {
+    var numbers by rememberSaveable { mutableStateOf(contact.phoneNumbers) }
+    var problem by rememberSaveable { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val mediaAccess = rememberMediaAccess(admin.onBedside)
+    val region = remember { homeRegion() }
+    BackHandler { if (!saving) onDone() }
+
+    /** Moves a phone drop-in approval to the new number Porch calls, or withdraws it when there's none. False, with the
+     * reason shown, when it can't. */
+    suspend fun followDropIn(previous: String?, number: String?): Boolean {
+        if (previous == null || previous == number) return true
+        if (app.coordinator.links.value.state?.phoneDropIns.orEmpty().none { it.number == previous }) return true
+        val values = if (number != null) {
+            // A drop-in answers on this tablet, so it needs its own microphone.
+            if (!mediaAccess.granted(false)) {
+                admin.error = "Allow the microphone in the tablet's settings before approving drop-in."
+                return false
+            }
+            mapOf("number" to JsonPrimitive(number), "name" to JsonPrimitive(contact.name), "enabled" to JsonPrimitive(true),
+                "replacing" to JsonPrimitive(previous))
+        } else mapOf("number" to JsonPrimitive(previous), "enabled" to JsonPrimitive(false))
+        return admin.send("setPhoneDropIn", values)
+    }
+    fun save(changed: List<String>) {
+        if (saving) return
+        val saved = contact
+        if (changed == saved.phoneNumbers) { onDone(); return }
+        PhoneNumberList.missing(changed, saved)?.let { problem = it; return }
+        saving = true
+        scope.launch {
+            try {
+                changed.firstOrNull()?.let { PhoneApprovals.authorize(app, it, refresh = true) }
+                if (!followDropIn(saved.phoneNumber, changed.firstOrNull())) return@launch
+                val updated = CallContact(name = saved.customName, nativeCall = saved.nativeCall, phoneNumber = changed.firstOrNull(),
+                    otherPhoneNumbers = changed.drop(1), familyMemberID = saved.familyMemberID, invitationID = saved.invitationID,
+                    memberName = saved.memberName, buttonColorHex = saved.buttonColorHex, photoData = saved.customPhotoData)
+                if (admin.saveSlots { it.setContact(updated, key) }) onDone()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                admin.error = e.message ?: "Couldn't save this number. Check your internet and try again."
+            } finally {
+                saving = false
+            }
+        }
+    }
+    PhoneNumbersScreen(admin, numbers, { numbers = it; problem = null }, lovedOne(admin, links), region, saving, problem,
+        onBack = { if (!saving) onDone() }, onDone = ::save)
 }
 
 /** How their calls start and, for someone invited, the drop-in their invitation approves. */
@@ -596,6 +685,9 @@ private fun KeyActionScreen(admin: CaregiverAdmin, key: Int, control: Boolean, o
 }
 
 // MARK: Shared pieces
+
+/** Who the bedside is for, as the screens here name them: the household's name, or "your loved one". */
+private fun lovedOne(admin: CaregiverAdmin, links: FamilyLinks): String = admin.state(links)?.householdName?.takeIf { it.isNotBlank() } ?: "your loved one"
 
 /** Where a screen is in the three steps: a bar for each, filled up to this one. */
 @Composable

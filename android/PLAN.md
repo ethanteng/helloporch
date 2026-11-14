@@ -514,7 +514,7 @@ Page contents:
   - Caregiver switch.
   - Remove, as Take off keypad or Remove from Porch.
 - **Key editor.** Five actions per key. Saving a number calls `contacts/authorize`. Cache the approval until 5 minutes before its 30-day expiry. Show refusals as they come, such as "Porch can't call phone numbers in X yet."
-- **Contact import.** Android's picker returns the one phone number you tap, with no permission, and that's what the key editor uses for now. iOS also imports the contact's other numbers, which on Android needs `READ_CONTACTS`. See [open questions](#open-questions).
+- **Contact import.** Android's picker returns the one phone number you tap, with no permission, and that's what Add someone and the Phone screen use for now. iOS also imports the contact's other numbers, which on Android needs `READ_CONTACTS`. See [open questions](#open-questions).
 - **Calls.**
   - Ring before voicemail: 15–120 s in steps of 5, default 45 (`setRingSeconds`).
   - Block unknown callers.

@@ -252,11 +252,7 @@ final class CallViewController: UIViewController {
         let args = ProcessInfo.processInfo.arguments
         guard !previewShown, presentedViewController == nil else { return }
         previewShown = true
-        if args.contains("--preview-phone-setup") || args.contains("--preview-recipient-appearance") {
-            let person = args.contains("--preview-recipient-appearance") ? slots.contact(for: 1) : try? CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .video), phoneNumber: "+14155550123")
-            present(PorchStyle.navigation(SetupViewController(slot: 1, contact: person)), animated: false)
-
-        } else if args.contains("--preview-outgoing-call"), let person = slots.contact(for: 1), let call = person.nativeCall {
+        if args.contains("--preview-outgoing-call"), let person = slots.contact(for: 1), let call = person.nativeCall {
             let server = try! NativeCallServer(url: "https://example.invalid", accessCode: "static-preview-only")
             present(NativeCallViewController(contact: person, call: call, server: server), animated: false)
         } else if args.contains("--preview-incoming-call"), let person = slots.contact(for: 1), let caller = person.familyMemberID {

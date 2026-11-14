@@ -976,47 +976,36 @@ final class CaregiverInputTests: XCTestCase {
     }
 
 
-    @MainActor func testContactEditorWithOtherNumbersKeepsFullWidthAndControlsAtTheirSize() throws {
+    @MainActor func testPhoneNumbersKeepFullWidthAndControlsAtTheirSize() throws {
         let person = try CallContact(name: "David", nativeCall: NativeCall(room: "family-david", mode: .voice), phoneNumber: "+14155550123", otherPhoneNumbers: ["+14155550199"])
+        var slots = CallSlots(); try slots.setContact(person, for: 1)
+        let home = FamilyAdminViewController(slots: slots)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         func all(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(all) }
         for size in [CGSize(width: 834, height: 1210), CGSize(width: 1210, height: 834), CGSize(width: 402, height: 874)] {
-            let editor = SetupViewController(slot: 1, contact: person)
+            let numbers = AddPhoneNumbersViewController(admin: home, key: 1, contact: person)
             let window = UIWindow(windowScene: scene)
             window.frame = CGRect(origin: .zero, size: size)
-            window.rootViewController = PorchStyle.navigation(editor)
+            window.rootViewController = PorchStyle.navigation(numbers)
             window.makeKeyAndVisible()
             defer { window.isHidden = true }
             window.layoutIfNeeded()
-            XCTAssertEqual(editor.title, "Phone", "A person already on the key has only their numbers edited here")
-            XCTAssertEqual(editor.form.bounds.width, min(760, size.width - 48), "The other numbers must not squeeze the form at \(size)")
-            let controls = all(editor.form).filter { $0 is UISwitch || ["Make primary", "Remove"].contains(($0 as? UIButton)?.configuration?.title) }
+            XCTAssertEqual(numbers.title, "Phone")
+            XCTAssertEqual(numbers.form.bounds.width, min(760, size.width - 48), "The numbers must not squeeze the form at \(size)")
+            let controls = all(numbers.form).filter { ($0 as? UIButton)?.accessibilityLabel?.hasPrefix("Remove ") == true || $0.accessibilityIdentifier == "add.addNumber" }
             XCTAssertEqual(controls.count, 3)
-            // Converting between views leaves rounding noise (143.66666666666663 against 143.66666666666666);
-            // a squeezed control is short by whole points.
+            // Converting between views leaves rounding noise; a squeezed control is short by whole points.
             let tolerance: CGFloat = 0.5
             for control in controls {
-                let frame = control.convert(control.bounds, to: editor.form)
+                let frame = control.convert(control.bounds, to: numbers.form)
                 XCTAssertGreaterThanOrEqual(frame.width, control.intrinsicContentSize.width - tolerance, "\(control.accessibilityLabel ?? "") is squeezed at \(size)")
                 XCTAssertGreaterThanOrEqual(frame.minX, -tolerance)
-                XCTAssertLessThanOrEqual(frame.maxX, editor.form.bounds.width + tolerance, "\(control.accessibilityLabel ?? "") leaves its card at \(size)")
+                XCTAssertLessThanOrEqual(frame.maxX, numbers.form.bounds.width + tolerance, "\(control.accessibilityLabel ?? "") leaves its card at \(size)")
             }
         }
     }
 
-    @MainActor func testContactEditorOnlyOffersPorchDetailsAndPhoneFallback() {
-        let editor = SetupViewController(slot: 1, contact: nil)
-        editor.loadViewIfNeeded()
-        func labels(_ view: UIView) -> [String] {
-            (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels)
-        }
-        let text = labels(editor.view)
-        XCTAssertTrue(text.contains("Their details"))
-        XCTAssertTrue(text.contains("Calls start as"))
-        XCTAssertTrue(text.contains("Primary number"))
-        XCTAssertTrue(text.contains("Other numbers"))
-        for obsolete in ["Call using", "Porch room", "Porch call", "FaceTime", "Shortcut"] { XCTAssertFalse(text.contains(obsolete)) }
-        XCTAssertEqual(editor.title, "Key 1")
+    @MainActor func testCaregiverModeOnAPhoneOffersOnlyFamilySettings() {
         XCTAssertEqual(CaregiverPage.pages(onBedside: false).map { $0.title(onBedside: false) }, ["Family", "Calls", "Drop-in", "Messages", "Privacy", "Caregivers"])
     }
 
@@ -1058,11 +1047,14 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(confirm?.isSecureTextEntry == true)
     }
 
-    @MainActor func testEveryKeypadActionHasAnEditorChoice() {
-        let editor = SetupViewController(slot: 8, contact: nil, action: .messages); editor.loadViewIfNeeded()
-        let choices = buttons(in: editor.view).filter { $0.accessibilityIdentifier?.hasPrefix("keypad.action.") == true }
+    @MainActor func testEveryKeyActionHasAChoice() throws {
+        var slots = CallSlots(); try slots.setAction(.messages, for: 8)
+        let home = FamilyAdminViewController(slots: slots)
+        let screen = KeyActionViewController(admin: home, key: 8, offersSomeone: false); screen.loadViewIfNeeded()
+        let choices = rows(in: screen.view).filter { $0.accessibilityIdentifier?.hasPrefix("keypad.action.") == true }
         func chosen() -> [String?] { choices.filter { $0.accessibilityTraits.contains(.selected) }.map(\.accessibilityIdentifier) }
-        XCTAssertEqual(choices.map { $0.configuration?.title }, KeypadAction.allCases.map(\.title), "Each action is a row with its whole name")
+        XCTAssertEqual(choices.compactMap(\.accessibilityLabel), ["Answer / hang up", "Video on / off", "Play messages", "Nothing"])
+        XCTAssertEqual(Set(choices.compactMap(\.accessibilityIdentifier)), Set(KeypadAction.allCases.filter { $0 != .person }.map { "keypad.action.\($0.rawValue)" }), "Every key action but a person is offered")
         XCTAssertEqual(chosen(), ["keypad.action.messages"])
         choices.first { $0.accessibilityIdentifier == "keypad.action.callControl" }?.sendActions(for: .touchUpInside)
         XCTAssertEqual(chosen(), ["keypad.action.callControl"])
@@ -1409,11 +1401,12 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertNotNil(home.navigationItem.rightBarButtonItem?.image)
         let pairing = FamilyPairingViewController(); pairing.loadViewIfNeeded()
         XCTAssertTrue(labels(pairing.view).contains("Your Porch invite"))
-        let editor = SetupViewController(slot: 1, contact: nil); editor.loadViewIfNeeded()
+        let draft = AddSomeoneDraft(key: 1, fromKeyTile: true); draft.name = "David"; draft.viaApp = true
+        let app = AddPorchAppViewController(admin: FamilyAdminViewController(slots: CallSlots()), draft: draft); app.loadViewIfNeeded()
         func segments(_ view: UIView) -> [UISegmentedControl] { (view as? UISegmentedControl).map { [$0] } ?? view.subviews.flatMap(segments) }
-        let mode = segments(editor.view).first { $0.accessibilityLabel == "Calls start as" }
+        let mode = segments(app.view).first { $0.accessibilityLabel == "Calls start with" }
         XCTAssertEqual(mode?.titleForSegment(at: 0), "Voice")
-        XCTAssertFalse(buttons(in: editor.view).contains { $0.configuration?.title == "Link their Porch app" })
+        XCTAssertEqual(mode?.selectedSegmentIndex, 1, "Calls in the app start with video")
     }
 
     @MainActor func testSomeoneOnlyOnTheKeypadKeepsTheNameSavedWithTheirKey() throws {
@@ -1437,14 +1430,39 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(buttons(in: person.view).contains { $0.configuration?.title == "Invite David" })
         XCTAssertFalse(descendants(person.view).contains { $0.accessibilityIdentifier == "person.caregiver" }, "Caregiver mode is for family members on Porch")
         XCTAssertEqual(buttons(in: person.view).filter { $0.configuration?.title == "Remove David" }.count, 1)
-        // Their phone numbers open in the key editor, without the rest of it.
+        // Their phone numbers open in the same Phone screen Add someone uses.
         let navigation = UINavigationController(rootViewController: person)
         try XCTUnwrap(rows(in: person.view).first { $0.accessibilityIdentifier == "person.phone" }).sendActions(for: .touchUpInside)
-        let numbers = try XCTUnwrap(navigation.topViewController as? SetupViewController)
+        let numbers = try XCTUnwrap(navigation.topViewController as? AddPhoneNumbersViewController)
         numbers.loadViewIfNeeded()
         XCTAssertEqual(numbers.title, "Phone")
+        XCTAssertEqual(numbers.draft.numbers, ["+14155550123"])
         func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
-        XCTAssertTrue(visible(try XCTUnwrap(buttons(in: numbers.view).first { $0.configuration?.title == "Choose from Contacts" })))
+        XCTAssertTrue(visible(try XCTUnwrap(buttons(in: numbers.view).first { $0.accessibilityIdentifier == "add.numberFromContacts" })))
+        // Someone on the keypad only by phone can't be left without a number.
+        buttons(in: numbers.view).first { $0.accessibilityLabel == "Remove (415) 555-0123" }!.sendActions(for: .touchUpInside)
+        saved = nil
+        buttons(in: numbers.view).first { $0.accessibilityIdentifier == "add.doneNumbers" }!.sendActions(for: .touchUpInside)
+        XCTAssertTrue(texts(numbers.view).contains("Add a number so Porch can reach David."))
+        XCTAssertNil(saved, "nothing is saved")
+        XCTAssertTrue(navigation.topViewController === numbers)
+    }
+
+    /// Someone on Porch can have their numbers removed from their page; the rest of their key stays as it was.
+    @MainActor func testSavingNumbersFromSomeonesPageKeepsTheRestOfTheirKey() async throws {
+        let member = UUID().uuidString
+        let contact = try CallContact(name: "", nativeCall: NativeCall(room: "contact-abc", mode: .voice), phoneNumber: "+14155550123",
+                                      otherPhoneNumbers: ["+14155550199"], familyMemberID: member, memberName: "Tom", buttonColorHex: "1565C0")
+        var slots = CallSlots(); try slots.setContact(contact, for: 4)
+        let home = FamilyAdminViewController(slots: slots)
+        try await AddPhoneNumbersViewController.save([], to: 4, replacing: contact, admin: home)
+        let saved = try XCTUnwrap(home.slots?.contact(for: 4))
+        XCTAssertEqual(saved.phoneNumbers, [])
+        XCTAssertEqual(saved.familyMemberID, member)
+        XCTAssertEqual(saved.name, "Tom")
+        XCTAssertEqual(saved.nativeCall?.room, "contact-abc")
+        XCTAssertEqual(saved.nativeCall?.mode, .voice)
+        XCTAssertEqual(saved.buttonColorHex, "1565C0")
     }
 
     /// Moving someone to another key keeps their page open, now showing that key.
@@ -1483,30 +1501,6 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(key.nativeCall?.room, "test")
         XCTAssertEqual(key.nativeCall?.mode, .video)
         XCTAssertEqual(key.buttonColorHex, "FFCC00")
-    }
-
-    /// Someone invited from an empty key without a name gets one there, so the key can still be saved.
-    @MainActor func testKeyInvitedWithoutANameAsksForOne() async throws {
-        let editor = SetupViewController(slot: 3, contact: nil)
-        let navigation = UINavigationController(rootViewController: editor); editor.loadViewIfNeeded()
-        let name = try XCTUnwrap(descendants(editor.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "Name" })
-        try XCTUnwrap(buttons(in: editor.view).first { $0.configuration?.title == "Invite them" }).sendActions(for: .touchUpInside)
-        let invite = try XCTUnwrap(navigation.topViewController as? FamilyInviteViewController)
-        XCTAssertFalse(descendants(invite.view).contains { ($0 as? UILabel)?.text == FamilyInviteViewController.keypadHint },
-            "An invitation from a key is already that key's")
-        invite.onCreated?(UUID().uuidString, "")
-        func visible(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
-        XCTAssertTrue(visible(name), "an invitation without a name leaves the name to fill in")
-        name.text = "David"
-        let saved = expectation(description: "saved")
-        editor.onSaveSlot = { action, contact in
-            XCTAssertEqual(action, .person); XCTAssertEqual(contact?.name, "David"); XCTAssertNotNil(contact?.invitationID)
-            XCTAssertEqual(contact?.customName, "", "the name gives way once they join and choose their own")
-            XCTAssertEqual(contact?.memberName, "David")
-            saved.fulfill()
-        }
-        _ = editor.perform(try XCTUnwrap(editor.navigationItem.rightBarButtonItem?.action))
-        await fulfillment(of: [saved], timeout: 5)
     }
 
     /// On a caregiver's phone, a family member's photo shows on their page once it has downloaded.
