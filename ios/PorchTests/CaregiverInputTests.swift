@@ -1570,6 +1570,28 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(descendants(person.view).first { $0.accessibilityIdentifier == "person.preview" }?.accessibilityLabel, "David, press 3")
     }
 
+    /// Someone removed while one of their screens is open, such as by another caregiver, takes their page with them, so
+    /// Back doesn't land on an empty page.
+    @MainActor func testRemovingSomeoneWhileTheirKeyScreenIsOpenClosesTheirPage() throws {
+        var slots = CallSlots()
+        try slots.setContact(CallContact(name: "David", nativeCall: NativeCall(room: "test", mode: .voice), phoneNumber: "+14155550123"), for: 2)
+        let home = FamilyAdminViewController(slots: slots)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        window.rootViewController = navigation; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        // Pushing and popping animate in a window, so each step waits for the last to finish.
+        func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.8)) }
+        let person = PersonViewController(admin: home, slot: 2)
+        navigation.pushViewController(person, animated: false); settle()
+        try XCTUnwrap(rows(in: person.view).first { $0.accessibilityIdentifier == "person.key" }).sendActions(for: .touchUpInside); settle()
+        XCTAssertTrue(navigation.topViewController is AddKeyViewController)
+        try home.saveSlots { try $0.setContact(nil, for: 2) }; settle()
+        XCTAssertEqual(navigation.viewControllers.count, 1)
+        XCTAssertFalse(navigation.viewControllers.contains(person))
+    }
+
     /// An invitation's expiry reads after "Expires", so a relative day isn't capitalized.
     @MainActor func testInviteExpiryReadsAfterExpires() {
         let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date().addingTimeInterval(86_400))!

@@ -64,8 +64,9 @@ final class PersonViewController: CaregiverFormViewController {
         let subject = resolve(admin)
         memberID = subject.member?.id; slot = subject.slot
         guard subject.exists else {
-            // Removed here or by another caregiver.
-            if navigationController?.topViewController === self { navigationController?.popViewController(animated: true) }
+            // Removed here or by another caregiver. Any screen opened from this page, such as Key or Phone, closes too,
+            // so Back never lands on an empty page.
+            returnHere()
             return
         }
         title = subject.name
