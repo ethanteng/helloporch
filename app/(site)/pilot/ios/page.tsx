@@ -430,7 +430,7 @@ const parts: GuidePart[] = [
             Open <UI>Display &amp; voice</UI>. Under <UI>Bedside language</UI>, choose your loved one’s language.
           </li>
           <li>
-            Under <UI>Announcement voice</UI>, choose a voice. Tap <UI>Preview announcement</UI>
+            Under <UI>Announcement voice</UI>, choose a voice. Tap <UI>Preview announcement</UI>{" "}
             to hear how it sounds.
           </li>
           <li>
@@ -539,7 +539,8 @@ const parts: GuidePart[] = [
               a: (
                 <p>
                   Tell me what happened and which device you were using. If there’s an error, a photo
-                  of the screen helps. You can <Contact />.
+                  of the screen helps. <UI>About</UI>, the last page in caregiver mode, shows which version of Porch
+                  it has. You can <Contact />.
                 </p>
               ),
             },
