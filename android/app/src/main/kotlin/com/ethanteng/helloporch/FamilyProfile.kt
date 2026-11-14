@@ -34,7 +34,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.PorchExperience
@@ -51,7 +50,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * This phone's name and photo in one family, as iOS's FamilyProfileViewController shows them: what the bedside shows
  * for it, unless a caregiver chose otherwise, which it says. A photo comes from the camera or the library, made a JPEG
  * under 1 MB with its longest side at most 768 pixels, then uploaded (`profilePhotoUpload`) and saved (`setProfile`).
- * Also whether video calls start with the camera on, which is this phone's.
+ * Opened from the family's page on You, which also has whether video calls start with the camera on.
  */
 @Composable
 fun FamilyProfileScreen(app: PorchApplication, family: FamilyCredential, links: FamilyLinks, onBack: () -> Unit) {
@@ -64,7 +63,6 @@ fun FamilyProfileScreen(app: PorchApplication, family: FamilyCredential, links: 
     var error by remember { mutableStateOf<String?>(null) }
     var editedName by rememberSaveable { mutableStateOf<String?>(null) }
     var choosing by remember { mutableStateOf(false) }
-    var camera by remember { mutableStateOf(CallPreferences.startVideoWithCamera(app.settings)) }
     val lovedOne = state?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }?.name ?: state?.householdName ?: "your loved one"
     // A new phone, or a photo saved elsewhere: it downloads, and tries again on later check-ins if that fails.
     val photoID = me?.profile?.photoID
@@ -173,12 +171,6 @@ fun FamilyProfileScreen(app: PorchApplication, family: FamilyCredential, links: 
         FormButton(if (saving) "Saving…" else "Save name", onClick = { save(mapOf("name" to JsonPrimitive(name.trim()))) },
             enabled = !saving && name.trim() != me.profile?.name.orEmpty())
         note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        CaregiverGroup {
-            ToggleRow("Start video calls with my camera on", camera, onChange = {
-                CallPreferences.saveStartVideoWithCamera(it, app.settings)
-                camera = it
-            }, detail = "On this phone, in every family.")
-        }
     }
     PorchErrorDialog(error) { error = null }
 }

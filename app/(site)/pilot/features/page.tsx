@@ -24,9 +24,8 @@ const parts: GuidePart[] = [
             your PIN and tap <UI>Open caregiver mode</UI>. Tap <UI>Back to clock</UI> when you’re done.
           </li>
           <li>
-            <strong>On your phone:</strong> On iPhone, tap your photo or the person icon at the top right,
-            then <UI>Caregiver mode</UI>. On Android, tap <UI>Caregiver mode</UI> below your loved one’s
-            name. Enter your PIN. Tap <UI>Done</UI> to close it. It also locks automatically after 10 minutes
+            <strong>On your phone:</strong> Tap <UI>You</UI>, then the family, then <UI>Caregiver mode</UI>.
+            Enter your PIN. Tap <UI>Done</UI> to close it. It also locks automatically after 10 minutes
             of inactivity.
           </li>
         </ul>
@@ -87,7 +86,7 @@ const parts: GuidePart[] = [
             ["Keypad", "0 answers and hangs up, 9 turns video off and on, and the other keys are empty", <><Path steps={["People"]} />, tablet only</>],
             ["New keypad calls", "Start as video", <>Their page’s <UI>Porch app</UI>, then <UI>Calls start with</UI>, tablet only</>],
             ["Putting the receiver back hangs up", "On", <><Path steps={["This iPad", "Hang up when the receiver is put back"]} />, tablet only</>],
-            ["Your camera at the start of video calls", "On", <>Your own Porch settings: <UI>Start video calls with my camera on</UI></>],
+            ["Your camera at the start of video calls", "On", <>On your phone, <UI>You</UI>, then <UI>Start video calls with my camera on</UI></>],
           ]}
         />
       </>
@@ -220,7 +219,7 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            In Porch on your phone, tap <UI>Audio call</UI> or <UI>Video call</UI>.
+            In Porch on your phone, tap <UI>Call</UI> or <UI>Video</UI>.
           </li>
           <li>
             If you’re allowed to <a href="#drop-in">drop in</a> and the clock is showing on the tablet,
@@ -242,7 +241,7 @@ const parts: GuidePart[] = [
           rows={[
             ["Default", "A call rings the tablet for 45 seconds. Your camera is on when a video call starts."],
             ["Change the ring time", <><Path key="p" steps={["Calls", "Ring before voicemail"]} />, from 15 seconds to 2 minutes. Tablet only. It also applies to calls from regular phones.</>],
-            ["Start with your camera off", <>In your own Porch settings, turn off <UI>Start video calls with my camera on</UI>.</>],
+            ["Start with your camera off", <>On your phone, tap <UI>You</UI> and turn off <UI>Start video calls with my camera on</UI>.</>],
           ]}
         />
       </>
@@ -260,9 +259,10 @@ const parts: GuidePart[] = [
         </p>
         <ul>
           <li>
-            On your phone, tap <UI>Drop in with video</UI> or <UI>Drop in with audio</UI>.
-            If you have drop-in permission, even your regular <UI>Video call</UI> and{" "}
-            <UI>Audio call</UI> connect this way.
+            On your phone, tap <UI>Drop in</UI>. If both audio and video are approved, choose{" "}
+            <UI>Drop in with audio</UI> or <UI>Drop in with video</UI>.
+            If you have drop-in permission, <UI>Call</UI> and <UI>Video</UI> connect this way too while the
+            clock is showing.
           </li>
           <li>
             Your loved one can stop it by tapping <UI>Don’t connect</UI> or pressing 0.
@@ -308,7 +308,8 @@ const parts: GuidePart[] = [
         <h3>Send a message</h3>
         <ol>
           <li>
-            In Porch on your phone, tap <UI>Send a message</UI>.
+            In Porch on your phone, tap <UI>Messages</UI>, then your loved one, then{" "}
+            <UI>Record a message for [Name]</UI>.
           </li>
           <li>
             Choose <UI>Record a video</UI> or <UI>Record audio</UI>. A message can be up to two minutes long.
@@ -318,7 +319,7 @@ const parts: GuidePart[] = [
           </li>
         </ol>
         <p>
-          Under <UI>Messages with [Name]</UI>, you can see whether a message has been played.
+          In the same conversation, you can see whether a message has been played.
           You can also <UI>Unsend</UI> one that hasn’t been played yet.
         </p>
         <h3>Play messages</h3>
@@ -336,7 +337,7 @@ const parts: GuidePart[] = [
           rows={[
             ["Default", "On."],
             ["Change it", <><Path key="p" steps={["Messages", "Allow family messages"]} />, on the tablet or a caregiver’s phone.</>],
-            ["When it’s off", <>Family phones hide <UI>Send a message</UI>, unanswered calls don’t offer one, and people calling the Porch number can’t leave voicemail.</>],
+            ["When it’s off", <>Family phones hide <UI>Record a message</UI>, unanswered calls don’t offer one, and people calling the Porch number can’t leave voicemail.</>],
           ]}
         />
       </>
@@ -382,7 +383,7 @@ const parts: GuidePart[] = [
             <strong>When your loved one calls someone:</strong> If nobody answers in Porch, the tablet
             asks them to speak after the beep. They press 0 when finished, then tap{" "}
             <UI>Send message</UI> or <UI>Don’t send</UI>. The message appears under{" "}
-            <UI>Messages with [Name]</UI> on the family member’s phone. If Porch called
+            <UI>Messages</UI> on the family member’s phone. If Porch called
             a regular phone instead, that phone’s voicemail may answer.
           </li>
           <li>
@@ -411,8 +412,8 @@ const parts: GuidePart[] = [
             recognize calls from your loved one.
           </li>
           <li>
-            On a family phone, under <UI>[Name]’s Porch number</UI>, tap <UI>Add to Contacts</UI> or{" "}
-            <UI>Share this number</UI>, which sends it by text with a contact card.
+            On a family phone, tap <UI>You</UI>, the family, then <UI>Porch number</UI>. Tap{" "}
+            <UI>Add to Contacts</UI> or <UI>Share this number</UI>, which sends it by text with a contact card.
           </li>
           <li>
             People can call this number from a regular phone. The tablet rings, and if nobody
@@ -777,20 +778,19 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            <strong>Change your name or photo.</strong> On iPhone, tap your photo or the person
-            icon at the top right. On Android, tap <UI>Your name and photo</UI>.
+            <strong>Change your name or photo.</strong> Tap <UI>You</UI>, the family, then{" "}
+            <UI>Your name and photo</UI>. Each family can have its own.
           </li>
           <li>
-            To start video calls with your camera off, turn off <UI>Start video calls with my camera on</UI>.
+            To start video calls with your camera off, tap <UI>You</UI> and turn off{" "}
+            <UI>Start video calls with my camera on</UI>.
           </li>
           <li>
-            Tap <UI>Join another family</UI> to connect with another loved one. You can join
+            Tap <UI>You</UI>, then <UI>Join another family</UI>, to connect with another loved one. You can join
             up to four family groups on one phone.
           </li>
           <li>
-            To leave a family on Android, tap <UI>Leave this family</UI>. On iPhone,
-            you can leave from the app if you’ve joined at least two families. Otherwise,
-            ask a caregiver to remove you.
+            To leave a family, tap <UI>You</UI>, the family, then <UI>Leave [family]</UI>.
           </li>
           <li>
             Allow notifications so calls can ring when Porch is closed, and microphone access

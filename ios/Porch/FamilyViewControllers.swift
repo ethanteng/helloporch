@@ -21,282 +21,193 @@ func showPorchError(_ error: Error, on controller: UIViewController) {
     alert.addAction(UIAlertAction(title: "OK", style: .default))
     controller.present(alert, animated: true)
 }
-final class FamilyHomeViewController: CaregiverFormViewController, CNContactViewControllerDelegate, MFMessageComposeViewControllerDelegate {
+/// Family mode's Call tab: a card for each family's bedside, with its calls. Messages and settings have tabs of their
+/// own, so a phone in two families, such as both sets of parents, shows two short cards rather than every button and
+/// setting of both.
+final class FamilyHomeViewController: CaregiverFormViewController {
     private let status = PorchStyle.label("", size: 17)
-    /// Under each bedside's name: someone is at the iPad, or how long ago someone was. It changes by the minute,
-    /// so it's updated in place rather than rebuilding the screen. One for each family, by this phone's ID there.
-    private var attendance: [String: UILabel] = [:]
-    private let people = UIStackView()
+    private let cards = UIStackView()
+    /// Under each name: on a call, not ready, or whether someone is at the bedside. That changes by the minute, so it's
+    /// updated in place rather than rebuilding the cards. One for each family, by this phone's ID there.
+    private var statusLines: [String: UILabel] = [:]
     private var starting = false
-    /// One family as this screen shows it. A phone in more than one, such as both sets of parents, shows each under its
-    /// name; with only one, the screen looks as it always has.
-    private struct Family: Equatable {
+    /// One family's card as it's drawn. Its status line is left out: that's updated in place.
+    private struct Card: Equatable {
         let id: String
-        let name: String?
-        let household: String?
-        let people: [FamilyPerson]
-        let permissions: DropInPermissions?
-        let dropIn: Bool?
-        let busy: Bool?
-        let error: String?
+        let name: String
+        /// The family's name, with more than one family, when it says something the bedside's name doesn't.
+        let family: String?
         let removed: Bool
-        let messages: Bool
-        let held: Int
-        let heldTexts: Int
-        let unheard: Int
-        /// The bedside's own phone number, which anyone can call it on.
-        let number: String?
+        /// It has checked in and has a bedside to call.
+        let connected: Bool
+        let callable: Bool
+        /// Drop-ins this phone may start: drop-in is on and approved for it.
+        let dropIns: [NativeCall.Mode]
     }
     private struct Presentation: Equatable {
-        let families: [Family]
+        let cards: [Card]
         let starting: Bool
-        /// The photo Porch shows for this phone, once it's on this device.
-        let photo: String?
+        let ringing: Bool
+        let largeText: Bool
     }
     private var displayed: Presentation?
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Porch"
-        people.axis = .vertical; people.spacing = 20
+        // Not `title`, which would rename the Call tab too.
+        super.viewDidLoad(); navigationItem.title = "Porch"
+        cards.axis = .vertical; cards.spacing = 16
         status.textAlignment = .center
-        form.addArrangedSubview(status); form.addArrangedSubview(people)
-        navigationItem.rightBarButtonItem = settingsButton(photo: nil)
+        form.spacing = 16
+        form.addArrangedSubview(status); form.addArrangedSubview(cards)
         hideKeyboardControl()
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(refreshPushStatus), name: .porchSystemCallChanged, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(openReceivedMessages(_:)), name: .porchOpenReceivedMessages, object: nil)
         refresh()
     }
-    /// A message notification says which family it's from: each family knows this phone by its own ID.
-    @objc private func openReceivedMessages(_ notification: Notification) {
-        if let family = PorchDevice.family(memberID: notification.userInfo?["recipientID"] as? String) { FamilyCoordinator.shared.select(family) }
-        openMessages()
-    }
-    @objc private func openMessages() {
-        guard PorchDevice.credential(for: .family) != nil, let navigationController else { return }
-        if navigationController.presentedViewController != nil { navigationController.dismiss(animated: false) }
-        navigationController.popToRootViewController(animated: false)
-        navigationController.pushViewController(MessageThreadViewController(), animated: true)
-    }
-    /// The screens past this one show the family chosen last.
-    private func choose(_ family: FamilyCredential, then show: () -> Void) {
-        FamilyCoordinator.shared.select(family); show()
+    deinit { NotificationCenter.default.removeObserver(self) }
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory { refresh() }
     }
     @objc private func refreshPushStatus() { displayed = nil; refresh() }
-    #if DEBUG
-    private var previewShown = false
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        guard !previewShown else { return }
-        previewShown = true
-        if ProcessInfo.processInfo.arguments.contains("--preview-messages") { openMessages() }
-        if ProcessInfo.processInfo.arguments.contains("--preview-profile") { showSettings() }
+    /// Joining from the Call tab, before this phone is in any family.
+    private func showPairing() {
+        if let tabs = tabBarController as? FamilyTabBarController { tabs.showPairing() }
+        else { navigationController?.pushViewController(FamilyPairingViewController(), animated: true) }
     }
-    #endif
-    deinit { NotificationCenter.default.removeObserver(self) }
-    /// This phone's photo, as the bedside shows it. It opens this phone's settings.
-    private func settingsButton(photo: String?) -> UIBarButtonItem {
-        let image = RecipientAppearance.cardPhoto(FamilyPhotos.shared.data(for: photo), width: 32) ?? UIImage(systemName: "person.crop.circle")
-        let item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(showSettings))
-        item.accessibilityLabel = "Settings"
-        item.accessibilityIdentifier = "family.profile"
-        return item
-    }
-    @objc private func showSettings() { navigationController?.pushViewController(FamilyProfileViewController(), animated: true) }
-    func openCaregiverMode() {
-        guard FamilyCoordinator.shared.state?.me.caregiver == true else {
-            let alert = UIAlertController(title: "Caregiver mode isn't on for you", message: "Ask the caregiver to turn it on for you.", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true); return
-        }
-        navigationController?.pushViewController(RemoteCaregiverPINViewController(), animated: true)
-    }
-    func showPairing(invitation: URL? = nil) {
-        let pairing = FamilyPairingViewController(); pairing.invitation = invitation
-        navigationController?.pushViewController(pairing, animated: true)
-    }
-    private func attendanceLabel(for family: FamilyCredential) -> UILabel {
-        if let label = attendance[family.deviceID] { return label }
-        let label = PorchStyle.label("", size: 17, weight: .semibold)
-        label.textAlignment = .center
-        attendance[family.deviceID] = label
+    private func statusLine(for credential: FamilyCredential) -> UILabel {
+        if let label = statusLines[credential.deviceID] { return label }
+        let label = PorchStyle.label("", size: 16)
+        label.accessibilityIdentifier = "family.status"
+        statusLines[credential.deviceID] = label
         return label
+    }
+    /// What a card says under the name: why its bedside can't be reached, or how it is, and whether that's someone
+    /// at the bedside right now.
+    static func status(of link: FamilyCoordinator.Link?) -> (text: String, present: Bool) {
+        if link?.accessRemoved == true { return ("This phone was removed from this family.", false) }
+        if let error = link?.error { return (error, false) }
+        guard let state = link?.state else { return ("Connecting…", false) }
+        guard let bedside = state.people.first(where: { $0.role == .bedside }), bedside.online else { return ("Porch isn't ready", false) }
+        if state.busy { return ("On a call", false) }
+        // Without a fresh check-in the last one's time stands still, so an error above shows instead.
+        if let attended = BedsideAttendance.text(attendedAt: state.bedsideAttendedAt, now: state.serverTime, device: BedsideAttendance.device(in: state)) {
+            return (attended, BedsideAttendance.isPresent(attendedAt: state.bedsideAttendedAt, now: state.serverTime))
+        }
+        return ("Porch is open", false)
     }
     @objc private func refresh() {
         guard isViewLoaded else { return }
         let coordinator = FamilyCoordinator.shared
         let credentials = PorchDevice.families
         let several = credentials.count > 1
-        let families = credentials.map { credential -> Family in
+        let next = Presentation(cards: credentials.map { credential in
             let link = coordinator.link(for: credential), state = link?.state
-            return Family(id: credential.deviceID, name: several ? PorchDevice.familyName(credential) ?? "Family" : nil, household: state?.householdID, people: state?.people ?? [],
-                          permissions: state?.me.permissions, dropIn: state?.dropInEnabled, busy: state?.busy, error: link?.error, removed: link?.accessRemoved == true,
-                          messages: state?.messagesEnabled != false, held: state?.heldMessages ?? 0, heldTexts: state?.heldTexts ?? 0, unheard: state?.newMessages ?? 0, number: state?.porchNumber)
-        }
-        let next = Presentation(families: families, starting: starting, photo: coordinator.state?.me.photoID.flatMap { FamilyPhotos.shared.store.contains($0) ? $0 : nil })
+            let bedside = state?.people.first { $0.role == .bedside }
+            let name = bedside?.name ?? state?.householdName ?? PorchDevice.familyName(credential) ?? "Family"
+            let family = several ? PorchDevice.familyName(credential).flatMap { $0 == name ? nil : $0 } : nil
+            let dropIns = state.map { state in
+                [(NativeCall.Mode.voice, state.me.permissions.audio), (.video, state.me.permissions.video)].filter { state.dropInEnabled && $0.1 }.map(\.0)
+            } ?? []
+            return Card(id: credential.deviceID, name: name, family: family, removed: link?.accessRemoved == true, connected: state != nil && bedside != nil,
+                        callable: link?.error == nil && bedside?.online == true && state?.busy == false, dropIns: dropIns)
+        }, starting: starting, ringing: SystemIncomingCalls.shared.hasCall, largeText: traitCollection.preferredContentSizeCategory.isAccessibilityCategory)
         for credential in credentials {
-            let link = coordinator.link(for: credential), label = attendanceLabel(for: credential)
-            // Without a fresh check-in the last one's time stands still, so it would look current forever.
-            let attended = link?.error != nil ? nil : link?.state.flatMap { BedsideAttendance.text(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime, device: BedsideAttendance.device(in: $0)) }
-            label.text = attended; label.isHidden = attended == nil
-            label.textColor = link?.state.map { BedsideAttendance.isPresent(attendedAt: $0.bedsideAttendedAt, now: $0.serverTime) } == true ? PorchStyle.accent : PorchStyle.secondary
+            let (text, present) = Self.status(of: coordinator.link(for: credential)), label = statusLine(for: credential)
+            label.text = text
+            label.textColor = present ? PorchStyle.accent : PorchStyle.secondary
+            label.font = PorchStyle.font(16, weight: present ? .semibold : .regular)
         }
+        // Ringing while locked is what's expected, so only its absence is mentioned.
+        let push = SystemIncomingCalls.shared.pushReady ? nil : "Keep Porch open so you don't miss calls."
+        let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
+        let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .denied ? "Allow microphone access in \(device) Settings → Porch to answer calls." : nil
+        status.text = credentials.isEmpty ? "Ask the caregiver to invite you." : microphone ?? push
+        status.isHidden = status.text == nil
         guard next != displayed else { return }
         displayed = next
-        navigationItem.rightBarButtonItem = settingsButton(photo: next.photo)
-        people.arrangedSubviews.forEach { people.removeArrangedSubview($0); $0.removeFromSuperview() }
-        attendance = attendance.filter { id, _ in credentials.contains { $0.deviceID == id } }
+        cards.arrangedSubviews.forEach { cards.removeArrangedSubview($0); $0.removeFromSuperview() }
+        statusLines = statusLines.filter { id, _ in credentials.contains { $0.deviceID == id } }
         guard !credentials.isEmpty else {
-            status.text = "Ask the caregiver to invite you."; status.isHidden = false
             let join = PorchStyle.button("Join a family", symbol: "person.badge.plus")
             join.addAction(UIAction { [weak self] _ in self?.showPairing() }, for: .touchUpInside)
-            people.addArrangedSubview(join); return
+            cards.addArrangedSubview(join); return
         }
-        people.spacing = several ? 40 : 20
-        // Ringing while locked is what's expected, so only its absence is mentioned. With one family its problems show
-        // here too; with several, each shows its own.
-        let push = SystemIncomingCalls.shared.pushReady ? nil : "Keep Porch open so you don't miss calls."
-        let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .denied ? "Allow microphone access in iPhone Settings → Porch to answer calls." : nil
-        status.text = microphone ?? (several ? push : families[0].error ?? push)
-        status.isHidden = status.text == nil
-        for (credential, family) in zip(credentials, families) {
-            let block = UIStackView(); block.axis = .vertical; block.spacing = 20
-            people.addArrangedSubview(block)
-            if let name = family.name {
-                let heading = PorchStyle.label(name, size: 26, color: PorchStyle.ink, weight: .bold)
-                heading.accessibilityTraits = .header
-                block.addArrangedSubview(heading)
-                if let error = family.error { block.addArrangedSubview(PorchStyle.label(error, size: 17)) }
-            }
-            // A family that removed this phone can't reach it again, so what it last showed, such as its messages, is
-            // left out. Taking it off leaves the others as they are.
-            if family.removed {
-                let remove = PorchStyle.button(several ? "Remove \(family.name ?? "this family") from this phone" : "Remove this family from this phone", symbol: "minus.circle", filled: false)
-                remove.configuration?.baseForegroundColor = .systemRed
-                remove.addAction(UIAction { [weak self] _ in self?.confirmRemoval(of: credential, named: family.name) }, for: .touchUpInside)
-                block.addArrangedSubview(remove)
-                continue
-            }
-            guard let state = coordinator.link(for: credential)?.state else {
-                if family.error == nil {
-                    if several { block.addArrangedSubview(PorchStyle.label("Connecting…", size: 17)) }
-                    else { status.text = "Connecting to your family…"; status.isHidden = false }
-                }
-                continue
-            }
-            // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
-            if family.held + family.heldTexts > 0 {
-                let review = PorchStyle.button(Self.reviewTitle(voicemails: family.held, texts: family.heldTexts), symbol: "exclamationmark.bubble.fill")
-                review.accessibilityIdentifier = "family.heldVoicemail"
-                review.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openCaregiverMode() } }, for: .touchUpInside)
-                block.addArrangedSubview(review)
-            }
-            // Left by the bedside when its call to this phone wasn't answered.
-            let bedside = state.people.first { $0.role == .bedside }
-            let from = bedside?.name ?? state.householdName
-            // Both ways in one thread, like a text conversation. It sits with the bedside's other actions, under
-            // Send a message, and stays even while sending is off so earlier messages can still be played.
-            let thread = PorchStyle.button("Messages with \(from)", symbol: "bubble.left.and.bubble.right", filled: false)
-            thread.accessibilityIdentifier = "family.messages"
-            thread.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openMessages() } }, for: .touchUpInside)
-            if family.unheard > 0 {
-                let play = PorchStyle.button(family.unheard == 1 ? "New message from \(from)" : "\(family.unheard) new messages from \(from)", symbol: "envelope.badge.fill")
-                play.accessibilityIdentifier = "family.newMessages"
-                play.addAction(UIAction { [weak self] _ in self?.choose(credential) { self?.openMessages() } }, for: .touchUpInside)
-                block.addArrangedSubview(play)
-            }
-            for person in state.people {
-                let availability = PorchStyle.label(person.online ? (state.busy ? "On a call" : "Porch is open") : "Porch isn't ready", size: 17)
-                availability.textAlignment = .center
-                var views: [UIView] = [availability] + (person.role == .bedside ? [attendanceLabel(for: credential)] : [])
-                // Drop-in buttons this phone can't use, while drop-ins are paused or not approved for it, aren't shown.
-                let dropIns: [(NativeCall.Mode, Bool)] = [(.voice, state.me.permissions.audio), (.video, state.me.permissions.video)]
-                let calls: [(String, String, NativeCall.Mode, Bool)] = [("Audio call", "phone.fill", .voice, false), ("Video call", "video.fill", .video, false)]
-                    + dropIns.filter { state.dropInEnabled && $0.1 }.map { mode, _ -> (String, String, NativeCall.Mode, Bool) in
-                        mode == .voice ? ("Drop in with audio", "waveform", .voice, true) : ("Drop in with video", "video.badge.waveform", .video, true)
-                    }
-                for (title, symbol, mode, drop) in calls {
-                    let button = PorchStyle.button(title, symbol: symbol, filled: !drop)
-                    // While another family's call rings or is on, CallKit has it: a call from here would be cut off.
-                    button.isEnabled = family.error == nil && person.online && !state.busy && !starting && !SystemIncomingCalls.shared.hasCall
-                    button.addAction(UIAction { [weak self] _ in self?.call(person, mode: mode, dropIn: drop, in: credential) }, for: .touchUpInside)
-                    views.append(button)
-                }
-                // Messages wait on the bedside device, so they don't need it to be open right now.
-                if family.messages {
-                    let message = PorchStyle.button("Send a message", symbol: "envelope.fill", filled: false)
-                    message.addAction(UIAction { [weak self] _ in
-                        self?.choose(credential) { self?.navigationController?.pushViewController(MessageComposerViewController(recipient: person.name), animated: true) }
-                    }, for: .touchUpInside)
-                    views.append(message)
-                }
-                if person.id == bedside?.id { views.append(thread) }
-                block.addArrangedSubview(section(person.name, views: views))
-            }
-            // Without a bedside to show, the thread still has to be reachable.
-            if bedside == nil { block.addArrangedSubview(thread) }
-            // Anyone can call the bedside on its own number, from any phone.
-            if let number = family.number {
-                let shown = PorchStyle.label(PorchNumber.display(number), size: 28, color: PorchStyle.ink, weight: .bold)
-                shown.textAlignment = .center; shown.accessibilityIdentifier = "family.porchNumber"
-                let add = PorchStyle.button("Add to Contacts", symbol: "person.crop.circle.badge.plus", filled: false)
-                add.accessibilityIdentifier = "family.addPorchNumber"
-                add.addAction(UIAction { [weak self] _ in self?.addToContacts(number, name: from) }, for: .touchUpInside)
-                let share = PorchStyle.button("Share this number", symbol: "message", filled: false)
-                share.accessibilityIdentifier = "family.sharePorchNumber"
-                share.addAction(UIAction { [weak self, weak share] _ in self?.shareNumber(number, name: from, from: share) }, for: .touchUpInside)
-                block.addArrangedSubview(section("\(from)'s Porch number", views: [shown, add, share]))
-            }
-        }
+        for (credential, card) in zip(credentials, next.cards) { cards.addArrangedSubview(view(for: card, credential: credential, in: next)) }
     }
-    /// A text with the bedside's Porch number, to whoever they choose, with a contact card so they can save it in one
-    /// tap. A device that can't text, such as an iPad without Messages, gets the share sheet instead.
-    private func shareNumber(_ number: String, name: String, from source: UIView?) {
-        let note = "Here's \(name)'s Porch number: \(PorchNumber.display(number)). Call it from any phone to talk with \(name)."
-        // Without the card the text still carries the number, so a card that can't be made is left out.
-        let card = try? CNContactVCardSerialization.data(with: [Self.porchContact(number, name: name)])
-        let filename = "\(name)'s Porch.vcf"
-        guard MFMessageComposeViewController.canSendText() else {
-            var items: [Any] = [note]
-            if let card {
-                let file = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-                if (try? card.write(to: file, options: .atomic)) != nil { items.append(file) }
+    private func view(for card: Card, credential: FamilyCredential, in presentation: Presentation) -> UIView {
+        let name = PorchStyle.label(card.name, size: 21, color: PorchStyle.ink, weight: .semibold)
+        name.accessibilityTraits = .header
+        let text = UIStackView(arrangedSubviews: [name] + (card.family.map { [PorchStyle.label($0, size: 15)] } ?? []) + [statusLine(for: credential)])
+        text.axis = .vertical; text.spacing = 2
+        let header = UIStackView(arrangedSubviews: [FamilyAdminViewController.avatar(card.name, size: 56), text])
+        header.spacing = 14; header.alignment = .center
+        var views: [UIView] = [header]
+        if card.removed {
+            // A family that removed this phone can't reach it again. Taking it off leaves the others as they are.
+            let remove = PorchStyle.button("Remove from this phone", symbol: "minus.circle", filled: false)
+            remove.configuration?.baseForegroundColor = .systemRed
+            remove.addAction(UIAction { [weak self] _ in self?.confirmRemoval(of: credential, named: card.family ?? PorchDevice.familyName(credential)) }, for: .touchUpInside)
+            views.append(remove)
+        } else if card.connected, let bedside = FamilyCoordinator.shared.state(for: credential)?.people.first(where: { $0.role == .bedside }) {
+            views.append(callButtons(card, bedside: bedside, credential: credential, in: presentation))
+        }
+        let stack = UIStackView(arrangedSubviews: views)
+        stack.axis = .vertical; stack.spacing = 16
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.directionalLayoutMargins = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+        stack.backgroundColor = PorchStyle.surface
+        stack.layer.cornerRadius = 20
+        stack.accessibilityIdentifier = "family.card"
+        return stack
+    }
+    /// Call, Video and, when it's approved for this phone, Drop in. Approved for both, Drop in asks which.
+    private func callButtons(_ card: Card, bedside: FamilyPerson, credential: FamilyCredential, in presentation: Presentation) -> UIView {
+        // While another family's call rings or is on, CallKit has it: a call from here would be cut off.
+        let enabled = card.callable && !presentation.starting && !presentation.ringing
+        func button(_ title: String, symbol: String, filled: Bool, label: String, identifier: String) -> UIButton {
+            let button = PorchStyle.button(title, symbol: symbol, filled: filled)
+            button.configuration?.imagePadding = 6
+            button.configuration?.contentInsets = .init(top: 12, leading: 8, bottom: 12, trailing: 8)
+            button.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+            button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(17, weight: .semibold); return attributes
             }
-            let share = UIActivityViewController(activityItems: items, applicationActivities: nil)
-            share.popoverPresentationController?.sourceView = source
-            share.popoverPresentationController?.sourceRect = source?.bounds ?? .zero
-            present(share, animated: true); return
+            if !filled { button.configuration?.background.strokeColor = PorchStyle.border; button.configuration?.background.strokeWidth = 1.5 }
+            button.accessibilityLabel = label
+            button.accessibilityIdentifier = identifier
+            button.isEnabled = enabled
+            return button
         }
-        let compose = MFMessageComposeViewController()
-        compose.body = note
-        if let card, MFMessageComposeViewController.canSendAttachments(), MFMessageComposeViewController.isSupportedAttachmentUTI(UTType.vCard.identifier) {
-            compose.addAttachmentData(card, typeIdentifier: UTType.vCard.identifier, filename: filename)
+        let call = button("Call", symbol: "phone.fill", filled: true, label: "Call \(card.name)", identifier: "family.call")
+        call.addAction(UIAction { [weak self] _ in self?.call(bedside, mode: .voice, dropIn: false, in: credential) }, for: .touchUpInside)
+        let video = button("Video", symbol: "video.fill", filled: true, label: "Video call \(card.name)", identifier: "family.videoCall")
+        video.addAction(UIAction { [weak self] _ in self?.call(bedside, mode: .video, dropIn: false, in: credential) }, for: .touchUpInside)
+        var buttons = [call, video]
+        if let only = card.dropIns.first {
+            let drop = button("Drop in", symbol: "waveform", filled: false, label: card.dropIns.count > 1 ? "Drop in on \(card.name)"
+                : only == .video ? "Drop in on \(card.name) with video" : "Drop in on \(card.name) with audio", identifier: "family.dropIn")
+            if card.dropIns.count > 1 {
+                drop.menu = UIMenu(children: [
+                    UIAction(title: "Drop in with audio", image: UIImage(systemName: "waveform")) { [weak self] _ in self?.call(bedside, mode: .voice, dropIn: true, in: credential) },
+                    UIAction(title: "Drop in with video", image: UIImage(systemName: "video.badge.waveform")) { [weak self] _ in self?.call(bedside, mode: .video, dropIn: true, in: credential) },
+                ])
+                drop.showsMenuAsPrimaryAction = true
+            } else {
+                drop.addAction(UIAction { [weak self] _ in self?.call(bedside, mode: only, dropIn: true, in: credential) }, for: .touchUpInside)
+            }
+            buttons.append(drop)
         }
-        compose.messageComposeDelegate = self
-        present(compose, animated: true)
+        let row = UIStackView(arrangedSubviews: buttons)
+        row.spacing = 8; row.distribution = .fillEqually
+        // Very large text doesn't fit three across.
+        if presentation.largeText { row.axis = .vertical }
+        return row
     }
-    func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-        controller.dismiss(animated: true)
-    }
-    /// The bedside's Porch number as a contact, named so it's easy to find.
     /// What's waiting for this caregiver's OK: phone voicemail, texts, or both.
     static func reviewTitle(voicemails: Int, texts: Int) -> String {
         if texts == 0 { return voicemails == 1 ? "1 phone voicemail needs your review" : "\(voicemails) phone voicemails need your review" }
         if voicemails == 0 { return texts == 1 ? "1 text needs your review" : "\(texts) texts need your review" }
         return "\(voicemails + texts) messages need your review"
-    }
-    private static func porchContact(_ number: String, name: String) -> CNMutableContact {
-        let contact = CNMutableContact()
-        contact.givenName = "\(name)'s Porch"
-        contact.phoneNumbers = [CNLabeledValue(label: CNLabelPhoneNumberMain, value: CNPhoneNumber(stringValue: number))]
-        return contact
-    }
-    /// A new contact for the bedside's Porch number, which they can change before saving. Porch never reads Contacts.
-    private func addToContacts(_ number: String, name: String) {
-        let editor = CNContactViewController(forNewContact: Self.porchContact(number, name: name))
-        editor.delegate = self
-        present(UINavigationController(rootViewController: editor), animated: true)
-    }
-    func contactViewController(_ viewController: CNContactViewController, didCompleteWith contact: CNContact?) {
-        viewController.dismiss(animated: true)
     }
     private func confirmRemoval(of family: FamilyCredential, named name: String?) {
         let alert = UIAlertController(title: "Remove \(name ?? "this family") from this phone?", message: "They've already removed this phone. To join again, you'll need a new invitation.", preferredStyle: .alert)
@@ -313,7 +224,8 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
         let alert = UIAlertController(title: title, message: "Leave a message?", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Not now", style: .cancel))
         alert.addAction(UIAlertAction(title: "Leave a message", style: .default) { [weak self] _ in
-            self?.choose(family) { self?.navigationController?.pushViewController(MessageComposerViewController(recipient: name, kind: "voicemail", startAudioImmediately: true), animated: true) }
+            FamilyCoordinator.shared.select(family)
+            self?.navigationController?.pushViewController(MessageComposerViewController(recipient: name, kind: "voicemail", startAudioImmediately: true, family: family), animated: true)
         })
         present(alert, animated: true)
     }
@@ -682,9 +594,16 @@ final class PhoneDropInViewController: CaregiverFormViewController, CNContactPic
 
 /// Opens caregiver mode on an approved family phone with the household's caregiver PIN.
 final class RemoteCaregiverPINViewController: CaregiverFormViewController {
+    /// The family whose PIN this screen checks. Opening another family's page while it sits on its tab must not switch that.
+    private let family: FamilyCredential?
     private let pin = UITextField()
     private let submit = PorchStyle.button("Open caregiver mode", symbol: "lock.fill")
     private var task: Task<Void, Never>?
+    init(family: FamilyCredential? = nil) {
+        self.family = family ?? PorchDevice.credential(for: .family)
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(family:)") }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Caregiver mode"
         pin.isSecureTextEntry = true; pin.keyboardType = .numberPad
@@ -694,7 +613,7 @@ final class RemoteCaregiverPINViewController: CaregiverFormViewController {
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
     @objc private func unlock() {
-        guard task == nil, let credential = PorchDevice.credential(for: .family) else { return }
+        guard task == nil, let credential = family ?? PorchDevice.credential(for: .family) else { return }
         let value = pin.text ?? ""
         guard value.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else {
             showPorchError(FamilyServiceError(message: "Enter six digits.", status: 400), on: self); return

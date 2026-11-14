@@ -132,30 +132,25 @@ final class PhotoChooser: NSObject, PHPickerViewControllerDelegate, UIImagePicke
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true) }
 }
 
-/// A family phone's settings, opened from its photo: the name and photo the bedside shows for this phone, its calls,
-/// and, less often, caregiver mode and joining another family or device. The bedside shows the name and photo when this
-/// phone calls, drops in or sends a message, unless a caregiver chose others. A phone in several families, such as both
-/// sets of parents, chooses which one the page is for: each has its own name, photo and caregiver mode.
+/// What the bedside shows for this phone in one family, opened from that family's page: its name and photo, shown when
+/// this phone calls, drops in or sends a message, unless a caregiver chose others. Each family has its own, so the page
+/// is for the family chosen last, which the family's page chooses.
 final class FamilyProfileViewController: CaregiverFormViewController {
+    /// The family this page was opened for. You can switch families while this stays open on its own tab, and a name typed here must stay with this one.
+    private let family: FamilyCredential?
     private let content = UIStackView()
     /// Kept across redraws, which happen whenever anything in the family changes.
     private let nameField = UITextField()
     private var editedName: String?
-    /// What this phone calls the family the page is for, when it's in more than one.
-    private let familyField = UITextField()
-    private var editedFamily: String?
     private var renderAfterEditing = false
     private var saving = false
     /// What the page shows from the family. Porch checks in every few seconds, and redrawing for a check-in that
     /// changed none of it would close an open photo menu and send VoiceOver back to the top.
     private struct Shown: Equatable {
-        let paired: Bool
         /// This phone's own details the page shows. Being online or able to ring isn't one of them.
-        let name: String?, invitedName: String?, profile: FamilyProfile?, override: FamilyProfile?, caregiver: Bool?
+        let name: String?, invitedName: String?, profile: FamilyProfile?, override: FamilyProfile?
         let lovedOne: String
         let photo: Bool
-        /// With more than one family: each one's name, which one the page is for, and what this phone calls it.
-        let families: [String], family: String?, nickname: String?
     }
     private var shown: Shown?
     /// The family the form on screen was built for. A name typed for one family must not be saved onto another.
@@ -165,22 +160,26 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
         self.saveProfile(["photo": data])
     }
-    private var me: FamilyPerson? { FamilyCoordinator.shared.state?.me }
-    private var lovedOne: String {
-        let state = FamilyCoordinator.shared.state
-        return state?.people.first { $0.role == .bedside }?.name ?? state?.householdName ?? "your loved one"
+    init(family: FamilyCredential? = nil) {
+        self.family = family ?? PorchDevice.credential(for: .family)
+        super.init(nibName: nil, bundle: nil)
     }
-    private var device: String { UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
+    required init?(coder: NSCoder) { fatalError("Use init(family:)") }
+    /// Nil only when the page was opened with no family yet, in which case it follows the one chosen last.
+    private var credential: FamilyCredential? { family ?? PorchDevice.currentFamily }
+    private var snapshot: FamilySnapshot? { credential.flatMap { FamilyCoordinator.shared.state(for: $0) } }
+    private var me: FamilyPerson? { snapshot?.me }
+    private var lovedOne: String {
+        snapshot?.people.first { $0.role == .bedside }?.name ?? snapshot?.householdName ?? "your loved one"
+    }
 
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Settings"
+        super.viewDidLoad(); title = "Your name and photo"
         content.axis = .vertical; content.spacing = 24
         form.addArrangedSubview(content)
         nameField.textContentType = .name
         nameField.accessibilityIdentifier = "profile.name"
         nameField.addAction(UIAction { [weak self] _ in self?.editedName = self?.nameField.text }, for: .editingChanged)
-        familyField.accessibilityIdentifier = "family.nickname"
-        familyField.addAction(UIAction { [weak self] _ in self?.editedFamily = self?.familyField.text }, for: .editingChanged)
         NotificationCenter.default.addObserver(self, selector: #selector(render), name: .porchFamilyChanged, object: nil)
         render()
     }
@@ -192,54 +191,23 @@ final class FamilyProfileViewController: CaregiverFormViewController {
     @objc private func render() {
         guard isViewLoaded else { return }
         // Waits while a name is typed, so the keyboard doesn't close.
-        guard !nameField.isFirstResponder, !familyField.isFirstResponder else { renderAfterEditing = true; return }
-        let families = PorchDevice.families, current = PorchDevice.currentFamily
-        let several = families.count > 1
-        let paired = current != nil
-        // Switching family drops a half-typed name. The field still showed the previous family until this redraw.
-        if current?.deviceID != formCredential?.deviceID { editedName = nil; editedFamily = nil }
+        guard !nameField.isFirstResponder else { renderAfterEditing = true; return }
+        let current = credential
+        // An unpinned page follows a family chosen meanwhile, and drops a half-typed name. This page is for one family.
+        if family == nil, current?.deviceID != formCredential?.deviceID { editedName = nil }
         let photoID = me?.profile?.photoID
         let photo = photoID.map { FamilyPhotos.shared.store.contains($0) } == true
         // A new phone, or a photo saved elsewhere: download it, and try again on later check-ins if that fails.
-        if !photo, let photoID, let credential = PorchDevice.credential(for: .family) {
-            FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: credential)
+        if !photo, let photoID, let current {
+            FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: current)
         }
-        let next = Shown(paired: paired, name: me?.name, invitedName: me?.invitedName, profile: me?.profile, override: me?.override, caregiver: me?.caregiver,
-                         lovedOne: lovedOne, photo: photo, families: several ? families.map { PorchDevice.familyName($0) ?? "" } : [],
-                         family: several ? current?.deviceID : nil, nickname: several ? current.flatMap { PorchDevice.nickname($0) } : nil)
+        let next = Shown(name: me?.name, invitedName: me?.invitedName, profile: me?.profile, override: me?.override, lovedOne: lovedOne, photo: photo)
         guard next != shown else { return }
         shown = next
         formCredential = current
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
-        // Names are the only things to type, so the keyboard choice shows only with them.
-        setKeyboardControlVisible(paired && (me != nil || several))
-        if several, let current { choose(among: families, current: current) }
-        if paired, let me { profile(me) } else if paired { content.addArrangedSubview(PorchStyle.label("Connecting to your family…")) }
-        if several, let current { nickname(current) }
-        if paired {
-            let camera = UISwitch(); camera.isOn = CallPreferences.startVideoWithCamera()
-            camera.accessibilityIdentifier = "family.startVideoWithCamera"
-            camera.addAction(UIAction { [weak camera] _ in if let camera { CallPreferences.saveStartVideoWithCamera(camera.isOn) } }, for: .valueChanged)
-            content.addArrangedSubview(group(rows: [toggleRow("Start video calls with my camera on", camera)]))
-        }
-        if me?.caregiver == true {
-            let caregiver = linkRow("Caregiver mode", symbol: "lock.fill") { [weak self] in
-                self?.navigationController?.pushViewController(RemoteCaregiverPINViewController(), animated: true)
-            }
-            caregiver.accessibilityIdentifier = "family.caregiverMode"
-            content.addArrangedSubview(group(rows: [caregiver]))
-        }
-        // Rarely needed, so they're links rather than settings.
-        var links: [UIView] = []
-        if several, let current { links.append(textLink("Leave \(PorchDevice.familyName(current) ?? "this family")") { [weak self] in self?.confirmLeave(current) }) }
-        if paired, families.count < FamilyNames.limit {
-            links.append(textLink("Join another family") { [weak self] in self?.navigationController?.pushViewController(FamilyPairingViewController(), animated: true) })
-        }
-        if PorchDevice.canBeBedside { links.append(textLink("Use this \(device) as the bedside Porch") { [weak self] in self?.confirmBedside() }) }
-        let linkStack = UIStackView(arrangedSubviews: links)
-        linkStack.axis = .vertical; linkStack.alignment = .leading
-        content.addArrangedSubview(linkStack)
-        content.addArrangedSubview(porchLinks())
+        setKeyboardControlVisible(me != nil)
+        if let me { profile(me) } else { content.addArrangedSubview(PorchStyle.label("Connecting to your family…")) }
     }
     private func profile(_ me: FamilyPerson) {
         let photo = FamilyPhotos.shared.data(for: me.profile?.photoID)
@@ -296,55 +264,5 @@ final class FamilyProfileViewController: CaregiverFormViewController {
                 self.render()
             } catch { showPorchError(error, on: self) }
         }
-    }
-    /// Which family the page is for. Choosing one also opens its messages and caregiver mode from the home screen.
-    private func choose(among families: [FamilyCredential], current: FamilyCredential) {
-        let rows = families.map { family -> UIView in
-            let chosen = family.deviceID == current.deviceID
-            let row = actionRow(PorchDevice.familyName(family) ?? "Family", symbol: chosen ? "checkmark.circle.fill" : "circle") { [weak self] in
-                FamilyCoordinator.shared.select(family)
-                // After the row action, so redrawing doesn't remove this button while it is handling the tap.
-                DispatchQueue.main.async { self?.view.endEditing(true) }
-            }
-            row.accessibilityTraits = chosen ? [.button, .selected] : .button
-            return row
-        }
-        content.addArrangedSubview(group("Family", rows: rows))
-    }
-    /// What this phone calls a family, to tell it from the others. Two sets of parents are often both "Mom" and "Dad".
-    private func nickname(_ family: FamilyCredential) {
-        familyField.text = editedFamily ?? PorchDevice.nickname(family)
-        let save = PorchStyle.button("Save", symbol: "checkmark")
-        save.accessibilityLabel = "Save family name"
-        save.addAction(UIAction { [weak self] _ in
-            guard let self else { return }
-            self.view.endEditing(true)
-            PorchDevice.setNickname(self.familyField.text, for: family)
-            self.editedFamily = nil
-            // The home screen and incoming calls use it too.
-            NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
-        }, for: .touchUpInside)
-        let household = FamilyCoordinator.shared.state(for: family)?.householdName ?? "Family"
-        let name = field(familyField, title: "What you call this family", placeholder: household)
-        familyField.autocapitalizationType = .words
-        content.addArrangedSubview(group(detail: "Only on this \(device).", rows: [listRow(name, trailing: FamilyAdminViewController.singleLine(save), alignedToBottom: true)]))
-    }
-    private func confirmLeave(_ family: FamilyCredential) {
-        let name = PorchDevice.familyName(family) ?? "this family"
-        let alert = UIAlertController(title: "Leave \(name)?", message: "This \(device) stops getting their calls and messages. To join again, you'll need a new invitation.", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Leave", style: .destructive) { [weak self] _ in
-            Task { [weak self] in
-                do { try await FamilyCoordinator.shared.leave(family); self?.navigationController?.popToRootViewController(animated: true) }
-                catch { if let self { showPorchError(error, on: self) } }
-            }
-        })
-        present(alert, animated: true)
-    }
-    private func confirmBedside() {
-        let alert = UIAlertController(title: "Use this \(device) as the bedside Porch?", message: "Only do this on the device next to your loved one. You can switch back later.", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Use as bedside", style: .default) { _ in PorchDevice.experience = .bedside })
-        present(alert, animated: true)
     }
 }
