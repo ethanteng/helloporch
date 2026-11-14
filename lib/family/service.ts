@@ -535,6 +535,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           const features = input.features.filter(f => f === translationFeature);
           if (features.length) me.features = features; else delete me.features;
         }
+        // They also say the language it's set to (chosen behind its caregiver PIN), so translation and phone voicemail
+        // follow it even when no one has saved Display & voice since the server started keeping a copy.
+        if (me.role === "bedside" && isBedsideLanguage(input.language)) house.bedsideLanguage = input.language;
         // Same ordering as availability. A poll that left earlier can arrive after a newer one, and its
         // attendedSeconds were counted when it was sent.
         if (takesAvailability(me, input.launch, input.sequence)) {

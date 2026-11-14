@@ -52,17 +52,27 @@ ${fence(heard, "speech")}
 
 /** One quick retry; a sentence that can't be translated in time is left untranslated rather than said late. */
 export function claudeTranslator(client = new Anthropic({ timeout: 8_000, maxRetries: 1 })) {
+  const request = (heard: string, from: Side, target: Language, recent: Line[], fast: boolean) => client.beta.messages.create({
+    model: translationModel,
+    max_tokens: 4000,
+    // Fast mode answers about half a second sooner (1.4 s instead of 1.9 s on scripts/translate-check.ts), at twice
+    // the price: about a cent a sentence. Smaller models were no faster and missed mixed-in English.
+    ...(fast ? { speed: "fast" as const } : {}),
+    // A declined request is retried on the model Anthropic recommends for it.
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "low", format: { type: "json_schema", schema } },
+    system: instructions,
+    messages: [{ role: "user", content: translationRequest(heard, from, target, recent) }],
+  });
   return async (heard: string, from: Side, target: Language, recent: Line[]): Promise<Rendering> => {
-    const response = await client.beta.messages.create({
-      model: translationModel,
-      max_tokens: 4000,
-      // A declined request is retried on the model Anthropic recommends for it.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "low", format: { type: "json_schema", schema } },
-      system: instructions,
-      messages: [{ role: "user", content: translationRequest(heard, from, target, recent) }],
-    });
+    let response;
+    try { response = await request(heard, from, target, recent, true); }
+    catch (error) {
+      // Fast mode has its own rate limit. When it's busy, normal speed is still better than nothing.
+      if (!(error instanceof Anthropic.RateLimitError)) throw error;
+      response = await request(heard, from, target, recent, false);
+    }
     // What people say on a call is personal, so neither it nor the response is logged.
     if (response.stop_reason !== "end_turn") throw new Error(`Translation stopped (${response.stop_reason}).`);
     const block = response.content.find(b => b.type === "text");

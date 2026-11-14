@@ -361,7 +361,8 @@ struct FamilyCallSession {
                     do {
                         var values: [String: Any] = ["available": self.canReceive()]
                         // The bedside's regular check-ins say what this app can show, such as a call's translation.
-                        if credential.role == .bedside { values["features"] = ["translation"] }
+                        // It also says its language, which translation and phone voicemail follow.
+                        if credential.role == .bedside { values["features"] = ["translation"]; values["language"] = BedsidePreferences.load().language.rawValue }
                         // How long ago someone was at the bedside iPad, so family can tell whether to call now. Never before
                         // this launch's first poll says that's on. While a caregiver has it off, nothing is kept to report later.
                         if credential.role == .bedside, link.state?.shareAttendance == false { AttendanceTracker.shared.forget() }

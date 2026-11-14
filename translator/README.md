@@ -12,8 +12,10 @@ For each sentence someone finishes:
    mixed English and Mandarin (`scripts/stt-bench.ts`); AssemblyAI is its fallback.
 2. **Translating.** Claude (`src/translate.ts`) decides whether the listener needs it said again: a sentence entirely in
    their language passes through, and one with any other language in it is said again, all of it, in theirs.
-3. **Speaking.** ElevenLabs reads it in the household's natural voice for that language, on a track only that side
-   hears: `porch-translation-bedside` or `porch-translation-family`. The apps lower the other voices while it speaks.
+3. **Speaking.** ElevenLabs reads it in the household's natural voice for that language, on that side's own track:
+   `porch-translation-bedside` or `porch-translation-family`. Each app unsubscribes from the other side's track
+   itself; LiveKit's server-side unsubscribe doesn't stop a participant that joined with auto-subscribe. A phone guest
+   hears both. The apps lower the other voices while the translator speaks.
 
 It also sends the words to the apps on the `porch-translation` data topic (`src/interpreter.ts`, `Message`): family see
 what was heard and what was said; the bedside shows what is said to it.
@@ -31,6 +33,24 @@ npm run typecheck
 It needs `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (LiveKit Cloud sets these for a deployed agent),
 `ANTHROPIC_API_KEY` and `ELEVENLABS_API_KEY`. Locally, `npm run dev` registers a worker named `porch-translator`
 with the project in `LIVEKIT_URL`. It only joins rooms it's dispatched to.
+
+## Testing a call
+
+`scripts/call-test.ts` joins "mom" and "ethan" to a test room, dispatches the translator, plays recorded sentences
+from each in turn and reports what was heard and said, how long after each sentence the words and voice arrived, and
+saves what each side heard as WAV files. Run it against a local LiveKit server (`livekit-server --dev`) with the worker
+pointed there, and speech recognition still going through LiveKit Cloud:
+
+```bash
+LIVEKIT_URL=ws://localhost:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret \
+  LIVEKIT_INFERENCE_API_KEY=… LIVEKIT_INFERENCE_API_SECRET=… ANTHROPIC_API_KEY=… ELEVENLABS_API_KEY=… npm run dev
+LIVEKIT_URL=ws://localhost:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret node scripts/call-test.ts <clips folder>
+```
+
+On 2026-11-14, with mixed English and Mandarin sentences, the listener saw the words 2.0 to 3.1 seconds after a
+sentence ended and heard them 2.6 to 3.8 seconds after: about 1.2 s to recognize, 0.8 to 1.7 s to translate (Claude
+Opus 5.5 in fast mode) and 0.5 s for the voice to start. `scripts/translate-check.ts` runs the translation step alone,
+and `scripts/stt-bench.ts` compares speech recognition models.
 
 ## Deploying
 

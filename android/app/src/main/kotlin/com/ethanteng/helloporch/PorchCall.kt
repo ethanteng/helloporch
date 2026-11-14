@@ -27,6 +27,7 @@ import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
+import io.livekit.android.room.track.RemoteTrackPublication
 import io.livekit.android.room.track.VideoTrack
 import io.livekit.android.util.flow
 import kotlinx.coroutines.CancellationException
@@ -459,6 +460,16 @@ class PorchCall(
             is RoomEvent.Disconnected -> if (!ending && !switchingToPhone && mediaReady) finish(returning("The call disconnected."))
             // Even a word between the timer's ticks starts the silence over.
             is RoomEvent.ActiveSpeakersChanged -> checkInactivity(speaking = event.speakers.isNotEmpty())
+            // The call translator speaks to each side on its own track (translator/ in the repository). This app
+            // doesn't show translation yet, but it shouldn't hear the other side's either.
+            is RoomEvent.TrackSubscribed -> {
+                val mine = if (role == PorchExperience.BEDSIDE) "porch-translation-bedside" else "porch-translation-family"
+                val name = event.publication.name
+                if (event.participant.kind == Participant.Kind.AGENT && name.startsWith("porch-translation") && name != mine) {
+                    (event.publication as? RemoteTrackPublication)?.setSubscribed(false)
+                }
+                refresh()
+            }
             else -> refresh()
         }
     }

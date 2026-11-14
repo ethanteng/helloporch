@@ -35,7 +35,8 @@ async function join(identity: string, name: string): Promise<Caller> {
   const mine = trackNames[identity === "mom" ? "bedside" : "family"];
   room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, publication) => {
     if (track.kind !== TrackKind.KIND_AUDIO || !publication.name?.startsWith("porch-translation")) return;
-    if (publication.name !== mine) { console.log(`${at()} ✗ ${identity} is subscribed to ${publication.name}, which isn't for them`); return; }
+    // As the apps do (ios/Porch/CallTranslation.swift): leave the other side's translation.
+    if (publication.name !== mine) { publication.setSubscribed(false); return; }
     void (async () => {
       const reader = new AudioStream(track, 24_000, 1).getReader();
       for (;;) {
@@ -46,6 +47,9 @@ async function join(identity: string, name: string): Promise<Caller> {
       }
     })();
   });
+  room.on(RoomEvent.TrackUnsubscribed, (_track, publication) => {
+    if (publication.name?.startsWith("porch-translation")) console.log(`${at()} ${publication.name === mine ? "✗" : "✓"} ${identity} no longer receives ${publication.name}`);
+  });
   room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
     if (topic !== topics.lines) return;
     const message = JSON.parse(new TextDecoder().decode(payload)) as Message;
@@ -53,6 +57,8 @@ async function join(identity: string, name: string): Promise<Caller> {
       const tag = identity === "mom" ? "mom sees" : "ethan sees";
       console.log(`${at()} ${tag}: [${message.name}] heard «${message.heard}»${message.said ? ` → said «${message.said}»` : " (already in their language)"}`);
       lineAt ??= Date.now();
+    } else if (message.type === "speaking") {
+      console.log(`${at()}   ${identity}: translator ${message.on ? "started" : "stopped"} speaking (voices ${message.on ? "lowered" : "back"})`);
     } else if (message.type === "state") console.log(`${at()} ${identity}: translation ${message.on ? "on" : "off"} (${message.language}) from ${participant?.identity}`);
   });
   return caller;
@@ -66,8 +72,12 @@ async function play(caller: Caller, clip: string) {
     const frame = samples.slice(i, i + 160);
     await caller.source.captureFrame(new AudioFrame(frame, 16_000, 1, frame.length));
   }
+  // Wait until the sentence has actually been sent, not just queued: the end of speech is now.
+  await caller.source.waitForPlayout();
+  const ended = Date.now();
   // Silence afterwards, so recognition hears the sentence end.
   for (let i = 0; i < 100; i++) await caller.source.captureFrame(new AudioFrame(new Int16Array(160), 16_000, 1, 160));
+  return ended;
 }
 
 function wav(samples: Int16Array[], path: string) {
@@ -94,8 +104,7 @@ for (const clip of script) {
   const speaker = clip.id.startsWith("m") ? mom : ethan, listener = speaker === mom ? ethan : mom;
   console.log(`\n${at()} ${speaker === mom ? "mom" : "ethan"} says: ${clip.text}`);
   lineAt = undefined; listener.firstVoiceAfter = 0;
-  await play(speaker, clip.id);
-  const ended = Date.now() - 1_000; // the silence after the sentence
+  const ended = await play(speaker, clip.id);
   await new Promise(r => setTimeout(r, 9_000));
   const words = lineAt ? `${((lineAt - ended) / 1000).toFixed(1)}s` : "none";
   const voice = listener.firstVoiceAfter ? `${((listener.firstVoiceAfter - ended) / 1000).toFixed(1)}s` : "none";

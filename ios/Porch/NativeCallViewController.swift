@@ -511,6 +511,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 FamilyCoordinator.shared.state(for: session.credential)?.call.flatMap { $0.id == session.call.id ? $0 : nil }
             }
         }
+        #if DEBUG
+        if translation == nil { translation = CallTranslation.preview(peerName: contact.name) }
+        #endif
         CallScreenLayout.install(in: view, video: stage, preview: call.mode == .video && !isPhoneCall ? localVideo : nil,
                                  placeholder: placeholder, title: title, status: statusLabel,
                                  hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto,

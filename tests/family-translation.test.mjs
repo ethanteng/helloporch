@@ -62,6 +62,19 @@ test('the family member on the call is offered translation once the bedside app 
   assert.deepEqual(f.calls,[]);
 });
 
+test("the bedside's check-ins keep its language current, so translation starts in it without anyone saving settings", async () => {
+  const f=fixture(),{bedside,ethan,callID}=await f.connected();
+  await f.json('poll',{available:true,features:['translation'],language:'ko'},bedside.credential);
+  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.bedsideLanguage,'ko');
+  await f.json('poll',{available:true,features:['translation'],language:'klingon'},bedside.credential);
+  await f.json('setCallTranslation',{callID,on:true},ethan.credential);
+  assert.equal(f.calls[0].metadata.bedsideLanguage,'ko');
+  assert.equal(f.calls[0].metadata.bedsideVoice,'uyVNoMrnUku1dZyVEXwD');
+  // A family phone can't set it.
+  await f.json('poll',{available:true,language:'es'},ethan.credential);
+  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.bedsideLanguage,'ko');
+});
+
 test('translation is offered only once the server knows the translator', async () => {
   const f=fixture(),{ethan,callID}=await f.connected();
   delete process.env.LIVEKIT_TRANSLATOR_AGENT;

@@ -74,8 +74,10 @@ export class Interpreter {
     const listener: Side = side === "bedside" ? "family" : "bedside";
     const target = listener === "bedside" ? this.bedsideLanguage : this.familyLanguage;
     let rendering: Rendering;
+    const asked = this.deps.now();
     try {
       rendering = await this.deps.translate(text, side, target, this.recent.slice(-recentLines));
+      this.deps.log?.(`translated in ${this.deps.now() - asked} ms`);
     } catch (error) {
       this.deps.log?.("translation failed", error);
       rendering = { say: false, text: "" };

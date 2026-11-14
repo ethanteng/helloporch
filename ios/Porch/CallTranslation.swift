@@ -99,13 +99,40 @@ import PorchCore
         toggle.isOn = isOn
         toggle.isEnabled = !sending
         languageButton.isEnabled = !sending
-        languageButton.configuration?.title = language?.choiceLabel ?? "\(peerName)'s language"
+        languageButton.configuration?.title = language?.displayName ?? "\(peerName)'s language"
         languageButton.menu = UIMenu(title: "\(peerName) hears", children: BedsideLanguage.allCases.map { option in
             UIAction(title: option.choiceLabel, state: option == language ? .on : .off) { [weak self] _ in self?.choose(option) }
         })
         notice.isHidden = notice.text?.isEmpty != false
         showTranscript()
     }
+
+    #if DEBUG
+    /// `--preview-translation bedside|family` with `--preview-outgoing-call`: the panel as it looks partway through a call.
+    static func preview(peerName: String) -> CallTranslation? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "--preview-translation"), args.count > i + 1 else { return nil }
+        let bedside = args[i + 1] == "bedside"
+        let json = #"{"id":"preview","from":"preview-family","to":"preview-bedside","mode":"video","kind":"call","state":"accepted","createdAt":1,"expiresAt":9007199254740991,"callerName":"Preview","translationAvailable":true,"translation":{"on":true,"language":"zh-Hant","by":"preview-family","at":1}}"#
+        let record = try! JSONDecoder().decode(FamilyCallRecord.self, from: Data(json.utf8))
+        let translation = CallTranslation(bedside: bedside, credential: FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "preview-family.preview",
+            role: bedside ? .bedside : .family), callID: "preview", peerName: peerName, room: { nil }, call: { record })
+        translation.translatorOn = true
+        if bedside {
+            translation.caption.text = "醫生說你的血壓有一點高，所以要換藥。你要每天早上吃一顆，跟早餐一起吃。"
+        } else {
+            translation.lines = [
+                CallTranslationLine(id: "1", speaker: "preview-family", name: "Ethan", side: "family", heard: "The doctor said your blood pressure is a little high, 所以要換藥。",
+                                    said: "醫生說你的血壓有一點高，所以要換藥。", language: "zh-Hant", at: 1),
+                CallTranslationLine(id: "2", speaker: "preview-bedside", name: peerName, side: "bedside", heard: "那個藥我吃了以後會不會想睡覺？",
+                                    said: "Will that medicine make me sleepy after I take it?", language: "en", at: 2),
+                CallTranslationLine(id: "3", speaker: "preview-family", name: "Ethan", side: "family", heard: "你今天吃飯了沒有？", said: nil, language: "zh-Hant", at: 3),
+            ]
+        }
+        translation.refresh()
+        return translation
+    }
+    #endif
 
     // MARK: Room events
 

@@ -2,7 +2,6 @@ import { fileURLToPath } from "node:url";
 import { AutoSubscribe, cli, defineAgent, inference, ServerOptions, stt, type JobContext } from "@livekit/agents";
 import { AudioFrame, AudioSource, AudioStream, LocalAudioTrack, ParticipantKind, RoomEvent, TrackKind, TrackPublishOptions, TrackSource,
   type RemoteParticipant, type RemoteTrack, type Room } from "@livekit/rtc-node";
-import { RoomServiceClient } from "livekit-server-sdk";
 import { Interpreter, type Message, type Side } from "./interpreter.ts";
 import { isLanguage, languages, type Language } from "./languages.ts";
 import { claudeTranslator } from "./translate.ts";
@@ -10,8 +9,10 @@ import { elevenLabsVoice, voiceSampleRate } from "./voice.ts";
 
 // Porch's call translator. The calling server dispatches it into a family call's room when someone turns
 // translation on (lib/family/translation.ts) and removes it when they turn it off. It listens to everyone, says
-// what one side said in the other side's language on a track only that side hears, and sends the words to the
-// apps on the `porch-translation` topic.
+// what one side said in the other side's language on that side's own track, and sends the words to the apps on the
+// `porch-translation` topic. Each app unsubscribes from the other side's track itself: LiveKit's server-side
+// unsubscribe doesn't stop a participant that joined with auto-subscribe (tried in scripts/call-test.ts). A phone
+// guest hears both tracks.
 export const agentName = "porch-translator";
 export const topics = { lines: "porch-translation", control: "porch-translation-control" } as const;
 export const trackNames: Record<Side, string> = { bedside: "porch-translation-bedside", family: "porch-translation-family" };
@@ -51,12 +52,10 @@ export default defineAgent({
 
     // One track per side, so each side hears only the translation meant for it.
     const sources = {} as Record<Side, AudioSource>;
-    const trackSids = {} as Record<Side, string>;
     for (const side of ["bedside", "family"] as const) {
       sources[side] = new AudioSource(voiceSampleRate, 1);
       const track = LocalAudioTrack.createAudioTrack(trackNames[side], sources[side]);
-      const publication = await room.localParticipant!.publishTrack(track, new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE }));
-      trackSids[side] = publication.sid!;
+      await room.localParticipant!.publishTrack(track, new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE }));
     }
     await room.localParticipant!.setAttributes({ "porch.translator": "1" });
 
@@ -71,7 +70,10 @@ export default defineAgent({
       const source = sources[to];
       const frame = voiceSampleRate / 100; // 10 ms
       let pending = new Int16Array(0);
+      const asked = Date.now();
+      let first = true;
       for await (const chunk of elevenLabsVoice(text, voices[to], language, elevenLabsKey)) {
+        if (first) { log(`voice started in ${Date.now() - asked} ms`); first = false; }
         const samples = new Int16Array(pending.length + chunk.length);
         samples.set(pending); samples.set(chunk, pending.length);
         let i = 0;
@@ -82,16 +84,6 @@ export default defineAgent({
       await source.waitForPlayout();
     };
     const interpreter = new Interpreter(config, { translate: claudeTranslator(), speak, send, now: Date.now, log });
-
-    // Each person stops receiving the other side's translation track. The apps also skip it themselves, but a
-    // phone guest or an older app subscribes to everything.
-    const rooms = new RoomServiceClient(httpURL(process.env.LIVEKIT_URL), process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET);
-    const keepApart = (p: RemoteParticipant) => {
-      if (!isPerson(p)) return;
-      const other = trackSids[p.identity === config.bedside ? "family" : "bedside"];
-      const update = () => rooms.updateSubscriptions(room.name!, p.identity, [other], false).catch(error => log("couldn't separate tracks", error));
-      update(); setTimeout(update, 2_000);
-    };
 
     // Speech recognition for each person on the call, restarted when the bedside's language changes.
     const listeners = new Map<string, () => void>();
@@ -110,7 +102,9 @@ export default defineAgent({
       (async () => {
         for await (const event of recognition) {
           const text = event.type === stt.SpeechEventType.FINAL_TRANSCRIPT ? event.alternatives?.[0]?.text : undefined;
-          if (text?.trim()) void interpreter.heard(participant.identity, participant.name || participant.identity, text);
+          if (!text?.trim()) continue;
+          if (event.speechEndTime) log(`recognized ${Date.now() - event.speechEndTime} ms after speech ended`);
+          void interpreter.heard(participant.identity, participant.name || participant.identity, text);
         }
       })().catch(error => log("recognition stopped", error));
       listeners.set(participant.identity, () => {
@@ -131,7 +125,6 @@ export default defineAgent({
       if (track.kind === TrackKind.KIND_AUDIO && isPerson(participant)) listen(participant, track);
     });
     room.on(RoomEvent.TrackUnsubscribed, (_track, _publication, participant) => listeners.get(participant.identity)?.());
-    room.on(RoomEvent.ParticipantConnected, keepApart);
     room.on(RoomEvent.ParticipantDisconnected, participant => {
       listeners.get(participant.identity)?.();
       if (!stillNeeded(room, config.bedside)) ctx.shutdown("the call no longer has both sides");
@@ -153,7 +146,6 @@ export default defineAgent({
       for (const stop of [...listeners.values()]) stop();
     });
 
-    for (const p of room.remoteParticipants.values()) keepApart(p);
     listenAgain();
     send({ type: "state", on: true, language: interpreter.bedsideLanguage }, "everyone");
     if (!stillNeeded(room, config.bedside)) ctx.shutdown("the call no longer has both sides");
@@ -165,8 +157,6 @@ function stillNeeded(room: Room, bedside: string) {
   const people = [...room.remoteParticipants.values()].filter(isPerson);
   return people.some(p => p.identity === bedside) && people.some(p => p.identity !== bedside);
 }
-
-function httpURL(url = "") { return url.replace(/^ws(s?):\/\//, "http$1://"); }
 
 function log(message: string, detail?: unknown) {
   // Never the words: only what went wrong.
