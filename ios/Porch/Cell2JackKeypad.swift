@@ -41,6 +41,9 @@ enum Cell2JackDigitRouter {
 
 extension Notification.Name { static let cell2JackKeypadChanged = Notification.Name("porch.cell2jack.changed") }
 
+/// The desk phone on This iPad (`Cell2JackKeypad.deskPhone`).
+enum DeskPhone: Equatable { case notSetUp, connected, notConnected }
+
 enum Cell2JackKeypadUpdate {
     case ready, digits([Cell2JackDigitEvent], TimeInterval), finished(String)
     case health(bytes: Int, packets: Int, primaryDigits: Int)
@@ -60,6 +63,8 @@ final class Cell2JackKeypad {
     // On unless a caregiver turns it off, for someone who sets the receiver down
     // right after pressing a key because the sound comes from the iPad.
     static let receiverHangUpKey = "porch.cell2jack.receiverHangUp"
+    /// The Porch phone adapter has been heard on this iPad (`noteAdapterHeard`).
+    static let adapterHeardKey = "porch.phoneAdapter.heard"
     weak var root: UIViewController?
     weak var windowScene: UIWindowScene?
     private(set) var status = "Phone keypad off"
@@ -94,6 +99,10 @@ final class Cell2JackKeypad {
     /// in. One Porch stopped, such as when it left the screen, didn't find anything out, so it doesn't count.
     private(set) var lastTryFoundNothing = false
     var receiverHangUp: Bool { defaults.object(forKey: Self.receiverHangUpKey) as? Bool ?? true }
+    /// The adapter is a keyboard to the iPad, and iPadOS shows every keyboard attached as one, by no name of its own, so
+    /// Porch can't tell it from a keyboard case. Once its hang-up key has arrived, or the phone was checked with a
+    /// keyboard, a keyboard on this iPad is taken to be the adapter (`deskPhone`).
+    var adapterHeard: Bool { defaults.bool(forKey: Self.adapterHeardKey) }
 
     init(defaults: UserDefaults = .standard,
          isBedside: @escaping () -> Bool = { PorchDevice.experience == .bedside },
@@ -129,6 +138,17 @@ final class Cell2JackKeypad {
         refresh()
     }
     func setReceiverHangUp(_ value: Bool) { defaults.set(value, forKey: Self.receiverHangUpKey) }
+    func noteAdapterHeard() {
+        guard !adapterHeard else { return }
+        defaults.set(true, forKey: Self.adapterHeardKey)
+        NotificationCenter.default.post(name: .cell2JackKeypadChanged, object: nil)
+    }
+    /// The desk phone, as This iPad shows it. The driver knows: the Cell2Jack answers. A keyboard counts as the adapter
+    /// only once the adapter has been heard here (`adapterHeard`). Not set up on this iPad shows Connect the phone alone.
+    func deskPhone(driver: Bool, keyboardConnected: Bool) -> DeskPhone {
+        if (driver && isReady) || (keyboardConnected && adapterHeard) { return .connected }
+        return (driver && enabled) || adapterHeard ? .notConnected : .notSetUp
+    }
     /// Connects even while the phone keypad is off, until `endTrial`. Turning it on is up to whoever started the trial.
     func beginTrial() { trying = true; refresh() }
     func endTrial() { trying = false; refresh() }
@@ -276,6 +296,7 @@ final class Cell2JackKeypad {
     func receiveAdapterHangUp() {
         guard let root, sceneActive, isBedside(), windowScene?.activationState == .foregroundActive else { return }
         adapterSeen = true
+        noteAdapterHeard()
         // The adapter is not the driver session, so a retry stays live across a brief
         // resign-active. It still has to stop if this iPad is no longer the bedside.
         deliverHangUp("phone adapter", root: root) { [weak self] in
