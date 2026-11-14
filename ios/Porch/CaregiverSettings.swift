@@ -571,11 +571,9 @@ final class PeopleSettingsViewController: CaregiverPageViewController {
         let tile = KeypadTile(key: key, title: title, detail: detail, badge: badge, empty: action == .unassigned) { [weak self, weak admin] in
             guard let self, let admin else { return }
             if action == .person, contact != nil { self.push(PersonViewController(admin: admin, slot: digit)); return }
-            let editor = SetupViewController(slot: digit, contact: nil, action: action)
-            editor.onSaveSlot = { [weak admin] action, contact in
-                try admin?.saveSlots { try $0.setContact(contact, for: digit); try $0.setAction(action, for: digit) }
-            }
-            self.push(editor)
+            // An empty key asks who goes on it. A key with a control on it can change what it does, or take someone.
+            if action == .unassigned { self.push(AddWhoViewController(admin: admin, draft: AddSomeoneDraft(key: digit, fromKeyTile: true))); return }
+            self.push(KeyActionViewController(admin: admin, key: digit, offersSomeone: true))
         }
         tile.accessibilityIdentifier = "keypad.key.\(key)"
         tile.accessibilityLabel = "Key \(key), \(contact?.name ?? action.title)"
@@ -620,10 +618,20 @@ final class PeopleSettingsViewController: CaregiverPageViewController {
             let invited = UIStackView(arrangedSubviews: [clock, text]); invited.alignment = .center; invited.spacing = 12
             return listRow(invited, trailing: FamilyAdminViewController.singleLine(cancel))
         }
-        rows.append(actionRow("Invite someone", symbol: "person.badge.plus") { [weak self, weak admin] in
-            guard let self, let admin else { return }
-            self.push(admin.inviteScreen())
-        })
+        // The bedside adds someone step by step, onto the first free key. A phone, which can't change the keypad, invites.
+        if admin.onBedside, admin.slots != nil {
+            let add = actionRow("Add someone", symbol: "person.badge.plus") { [weak self, weak admin] in
+                guard let self, let admin else { return }
+                self.push(AddWhoViewController(admin: admin, draft: AddSomeoneDraft(key: admin.slots.flatMap(AddSomeoneDraft.firstFreeKey), fromKeyTile: false)))
+            }
+            add.accessibilityIdentifier = "family.addSomeone"
+            rows.append(add)
+        } else {
+            rows.append(actionRow("Invite someone", symbol: "person.badge.plus") { [weak self, weak admin] in
+                guard let self, let admin else { return }
+                self.push(admin.inviteScreen())
+            })
+        }
         return group(admin.slots == nil ? nil : "Family on Porch", rows: rows)
     }
 }

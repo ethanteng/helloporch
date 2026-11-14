@@ -327,7 +327,7 @@ const parts: GuidePart[] = [
         <Tip label="Adding people later">
           <p>
             You can invite someone whenever they’re ready, from your phone as above, or on the iPad: open caregiver
-            mode, then <UI>People</UI>, and tap <UI>Invite someone</UI> under the keypad. People you invite with{" "}
+            mode, then <UI>People</UI>, and tap <UI>Add someone</UI> under the keypad. People you invite with{" "}
             <UI>Caregiver mode</UI> turned on can invite others too.
           </p>
         </Tip>
@@ -355,25 +355,28 @@ const parts: GuidePart[] = [
             on the clock, enter your PIN and choose <UI>Open caregiver mode</UI>.
           </li>
           <li>
-            Open <UI>People</UI> and tap the key you want to set up, such as 1. To have it call someone, choose{" "}
-            <UI>Call a person</UI>.
+            Open <UI>People</UI> and tap an empty key, such as 1.
           </li>
           <li>
-            If they’ve joined, tap <UI>Choose from Family on Porch</UI> and choose them. For anyone else, type their
-            name or tap <UI>Choose from Contacts</UI>. If you’ve invited them, use the name on their invitation.
+            If they’ve joined, tap their name under <UI>On Porch</UI>. For anyone else, type their name or tap{" "}
+            <UI>Choose from Contacts</UI>, then tap <UI>Next</UI>.
           </li>
           <li>
-            Under <UI>Calls start as</UI>, choose <UI>Video</UI> or <UI>Voice</UI>.
+            Choose <UI>Phone</UI>, <UI>Porch app</UI> or both, then tap <UI>Next</UI>. With both, Porch rings
+            their app first and their phone after 20 seconds.
           </li>
           <li>
-            If they don’t answer in Porch, you can have Porch call their regular phone. Turn on{" "}
-            <UI>Call their phone</UI> and enter their <UI>Primary number</UI>. By default, Porch tries it
-            after 20 seconds.
+            Check the key. You can add a photo or pick a color. Tap <UI>Add to key 1</UI>.
           </li>
           <li>
-            Tap <UI>Save</UI>. Repeat for each key.
+            If you chose <UI>Porch app</UI>, send them the invite from the next screen, then tap <UI>Done</UI>.
+            Repeat for each key.
           </li>
         </ol>
+        <p>
+          To have a key answer and hang up, turn video on or off, or play messages, tap{" "}
+          <UI>Use key 1 for something else</UI> on the first screen.
+        </p>
         <h3>When someone joins Porch later</h3>
         <p>
           You can put someone on a button before they install Porch. Start with their name and regular phone

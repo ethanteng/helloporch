@@ -341,7 +341,7 @@ private fun KeyRow(keys: List<String>, uppercase: Boolean, height: Int, press: (
 
 /**
  * A text field Porch keyboard can type in, as iOS's form fields are. `title` names it above Porch keyboard's keys.
- * Outside a form, it's an ordinary field.
+ * Outside a form, it's an ordinary field. `isError` outlines it in red, for what's typed that can't be used.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -357,6 +357,7 @@ fun PorchTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    isError: Boolean = false,
 ) {
     // The text with its cursor, so keys type where the cursor is. Text changed from outside, such as by a filter that
     // keeps a PIN to six digits, puts the cursor at the end.
@@ -400,7 +401,7 @@ fun PorchTextField(
                 if (keyboard == null) return@onFocusChanged
                 if (it.isFocused) keyboard.active = field else if (keyboard.active === field) keyboard.active = null
             },
-            enabled = enabled, singleLine = true, label = label, placeholder = placeholder, prefix = prefix,
+            enabled = enabled, singleLine = true, label = label, placeholder = placeholder, prefix = prefix, isError = isError,
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions, visualTransformation = visualTransformation)
     }
 }

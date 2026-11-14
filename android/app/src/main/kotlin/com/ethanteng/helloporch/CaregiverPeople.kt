@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.ethanteng.helloporch.core.AddSomeoneDraft
 import com.ethanteng.helloporch.core.CallContact
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
@@ -86,15 +87,16 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Where the People page is: its list, or a person, a key or an invitation opened from it. Kept across a rotation. */
-data class PeopleRoute(val kind: Kind, val memberID: String? = null, val slot: Int? = null, val action: KeypadAction = KeypadAction.PERSON) :
+/** Where the People page is: its list, or a person, Add someone or an invitation opened from it. Kept across a rotation. */
+data class PeopleRoute(val kind: Kind, val memberID: String? = null, val slot: Int? = null, val start: AddSomeoneStart = AddSomeoneStart.PEOPLE) :
     java.io.Serializable {
-    enum class Kind { PERSON, KEY, INVITE }
+    enum class Kind { PERSON, ADD, INVITE }
 }
 
 /**
  * The People page, as iOS's PeopleSettingsViewController shows it on the bedside: the keypad as it's laid out, and
- * everyone on Porch with the invitations still waiting. A person, a key or a new invitation opens in the page's place.
+ * everyone on Porch with the invitations still waiting. A person, Add someone or a new invitation opens in the page's
+ * place.
  */
 @Composable
 fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
@@ -107,7 +109,7 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
             PeopleList(app, admin, links, onOpen = { route = it })
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
-        PeopleRoute.Kind.KEY -> KeyEditor(app, admin, links, open.slot ?: 1, contact = null, initialAction = open.action, onDone = close)
+        PeopleRoute.Kind.ADD -> AddSomeone(app, admin, links, open.slot, open.start, onDone = close)
         PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, returnsToPerson = false, onCreated = { _, _ -> }, onDone = close, fromKey = false)
     }
 }
@@ -124,14 +126,16 @@ private fun PeopleList(app: PorchApplication, admin: CaregiverAdmin, links: Fami
     }
     // As the keypad is laid out: 1 2 3, 4 5 6, 7 8 9, * 0 #.
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        keypadOrder.chunked(3).forEach { row ->
+        AddSomeoneDraft.keypadOrder.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { digit ->
                     KeyTile(app, digit, slots, state, Modifier.weight(1f).fillMaxHeight()) {
-                        val action = slots.action(digit) ?: KeypadAction.UNASSIGNED
-                        // A person opens their page. Any other key opens what it does.
-                        if (action == KeypadAction.PERSON && slots.contact(digit) != null) onOpen(PeopleRoute(PeopleRoute.Kind.PERSON, slot = digit))
-                        else onOpen(PeopleRoute(PeopleRoute.Kind.KEY, slot = digit, action = action))
+                        // A person opens their page, and an empty key adds someone to it. Any other key opens what it does.
+                        onOpen(when (slots.action(digit) ?: KeypadAction.UNASSIGNED) {
+                            KeypadAction.PERSON -> PeopleRoute(PeopleRoute.Kind.PERSON, slot = digit)
+                            KeypadAction.UNASSIGNED -> PeopleRoute(PeopleRoute.Kind.ADD, slot = digit, start = AddSomeoneStart.KEY_TILE)
+                            else -> PeopleRoute(PeopleRoute.Kind.ADD, slot = digit, start = AddSomeoneStart.CONTROL)
+                        })
                     }
                 }
             }
@@ -139,8 +143,6 @@ private fun PeopleList(app: PorchApplication, admin: CaregiverAdmin, links: Fami
     }
     FamilyGroup(app, admin, state, slots, onOpen)
 }
-
-private val keypadOrder = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, CallSlots.star, 0, CallSlots.pound)
 
 /** One key: who it calls, or what it does. */
 @Composable
@@ -232,7 +234,9 @@ private fun FamilyGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
             }
         }
         if (people.isNotEmpty() || invitations.isNotEmpty()) HorizontalDivider()
-        ActionRow("Invite someone") { onOpen(PeopleRoute(PeopleRoute.Kind.INVITE)) }
+        // The bedside adds someone a step at a time, on the first empty key. A family phone, which has no keypad, invites.
+        if (admin.onBedside) ActionRow("Add someone") { onOpen(PeopleRoute(PeopleRoute.Kind.ADD, slot = AddSomeoneDraft.firstFreeKey(slots))) }
+        else ActionRow("Invite someone") { onOpen(PeopleRoute(PeopleRoute.Kind.INVITE)) }
     }
 }
 
