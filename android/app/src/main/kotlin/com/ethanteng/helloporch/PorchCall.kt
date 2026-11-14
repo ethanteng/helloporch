@@ -313,10 +313,13 @@ class PorchCall(
         if (!room.localParticipant.setMicrophoneEnabled(true)) throw CallException("Couldn't turn the microphone on. Please try again.")
     }
 
+    /** Everyone else on the call. The call translator (translator/ in the repository) isn't one of them. */
+    private val people get() = room.remoteParticipants.values.filter { it.kind != Participant.Kind.AGENT }
+
     private fun refresh() {
         if (ending || failed) return
         updateKeypadHint()
-        val peers = room.remoteParticipants.values.toList()
+        val peers = people
         for (peer in peers) {
             val identity = peer.identity?.value ?: continue
             peer.name?.takeIf { it.isNotEmpty() }?.let { peerNames[identity] = it }
@@ -425,7 +428,7 @@ class PorchCall(
      * and a phone on the call, such as a bank on hold, counts as speaking, as on iOS. */
     private fun checkInactivity(speaking: Boolean = false) {
         if (inactivity.timeout == null || ending || failed) return
-        val peers = room.remoteParticipants.values
+        val peers = people
         val leg = if (inboundPhone) peers.firstOrNull() else peers.firstOrNull { it.identity?.value == PHONE_IDENTITY }
         val sip = leg?.attributes?.get("sip.callStatus")
         // A call with a regular phone counts as connected once that phone has answered.
@@ -466,11 +469,11 @@ class PorchCall(
         if (switchingToPhone || onPhone) return
         // The bedside is never left on with only a phone a family caregiver added, such as a bank.
         val bedside = role == PorchExperience.BEDSIDE && !inboundPhone
-        if (hasConnectedPeer && room.remoteParticipants.values.none { !bedside || it.kind != Participant.Kind.SIP }) finish(returning("Call ended."))
+        if (hasConnectedPeer && people.none { !bedside || it.kind != Participant.Kind.SIP }) finish(returning("Call ended."))
         else {
             // The call goes on without them, such as whoever rang in David hanging up.
             val name = participant.name?.takeIf { it.isNotEmpty() } ?: participant.identity?.value?.let { peerNames[it] }
-            if (bedside && hasConnectedPeer && participant.kind != Participant.Kind.SIP) name?.let(::noteLeft)
+            if (bedside && hasConnectedPeer && participant.kind != Participant.Kind.SIP && participant.kind != Participant.Kind.AGENT) name?.let(::noteLeft)
             refresh()
         }
     }
@@ -493,7 +496,7 @@ class PorchCall(
         controlJob?.join()
         if (ending || hasConnectedPeer) return
         // Prefer a Porch answer that arrived just as the wait ran out.
-        if (room.remoteParticipants.isNotEmpty()) { refresh(); return }
+        if (people.isNotEmpty()) { refresh(); return }
         session?.let { porch ->
             switchingToPhone = true
             try {

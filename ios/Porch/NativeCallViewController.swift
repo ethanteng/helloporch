@@ -30,6 +30,15 @@ import PorchCore
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
     }
 
+    /// Several accessories stacked above the buttons; nil when there are none.
+    static func accessories(_ views: [UIView?]) -> UIView? {
+        let present = views.compactMap { $0 }
+        guard present.count > 1 else { return present.first }
+        let stack = UIStackView(arrangedSubviews: present)
+        stack.axis = .vertical; stack.spacing = 8
+        return stack
+    }
+
     /// `video` fills the screen: a `VideoView`, or a `CallVideoStage` when more than one person may join.
     /// `accessory` sits above the buttons, such as an added phone's status and controls.
     static func install(in view: UIView, video: UIView, preview: VideoView? = nil,
@@ -355,6 +364,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var familySession: FamilyCallSession?
     private var familyAccepted = false
     private var guests: CallGuestControls?
+    private var translation: CallTranslation?
     /// Someone who left while the call went on, such as Ethan leaving Mom and David talking.
     private var leftNotice: String?
     private var leftNoticeTask: Task<Void, Never>?
@@ -374,6 +384,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var skipUnansweredHandoff = false
     private var beginWithPhoneFallback = false
     private var keypad = CallTrigger()
+    /// Everyone else on the call. The translator, when it's on, isn't one of them.
+    private var people: [RemoteParticipant] { room.remoteParticipants.values.filter { $0.kind != .agent } }
     override var canBecomeFirstResponder: Bool { true }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated); keypad.resetKeys(); becomeFirstResponder()
@@ -491,9 +503,18 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 return .init(call: state?.call?.id == session.call.id ? state?.call : nil, canAddPhone: state?.canAddPhoneGuests == true, family: state?.family ?? [])
             }
         }
+        // On a Porch call between family and the bedside, the family member turns translation on when they need it,
+        // and the bedside shows what the translator says to it.
+        if let session = familySession, session.call.source != "phone", session.call.guest != true {
+            translation = CallTranslation(bedside: session.credential.role == .bedside, credential: session.credential, callID: session.call.id,
+                                          peerName: contact.name, room: { [weak self] in self?.room }) {
+                FamilyCoordinator.shared.state(for: session.credential)?.call.flatMap { $0.id == session.call.id ? $0 : nil }
+            }
+        }
         CallScreenLayout.install(in: view, video: stage, preview: call.mode == .video && !isPhoneCall ? localVideo : nil,
                                  placeholder: placeholder, title: title, status: statusLabel,
-                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
+                                 hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto,
+                                 accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
                                  buttons: [microphoneButton, cameraButton] + (guests.map { [$0.addButton] } ?? []) + [endButton])
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-outgoing-call") {
@@ -636,7 +657,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         defer { checkInactivity() }
         updateKeypadHint()
         guests?.refresh()
-        let peers = Array(room.remoteParticipants.values)
+        translation?.refresh()
+        let peers = people
         if familySession?.call.source == "phone" {
             let status = peers.first?.attributes["sip.callStatus"]
             if status == "hangup" { finishPhoneCall(); return }
@@ -707,6 +729,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             finish(message: BedsideText.language != .english ? "Call ended. Returning to Porch…" : state.call?.reason ?? "Call ended. Returning to Porch…"); return
         }
         guests?.refresh()
+        translation?.refresh()
         if session.credential.role == .bedside { refresh() }
         if call.state == "accepted", !familyAccepted {
             familyAccepted = true; waitTask?.cancel(); ringback.stop(); refresh()
@@ -754,7 +777,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     private func checkInactivity(speaking: Bool = false) {
-        let peers = Array(room.remoteParticipants.values)
+        let peers = people
         let inboundPhone = familySession?.call.source == "phone"
         let phoneStatus = (inboundPhone ? peers.first : peers.first { $0.identity?.stringValue == "phone" })?.attributes["sip.callStatus"]
         let connected = mediaReady && !isEnding && !hasFailed && !isSwitchingToPhone
@@ -863,7 +886,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor [weak self] in self?.refresh(source: room) }
+        Task { @MainActor [weak self] in
+            guard let self, room === self.room else { return }
+            self.translation?.peopleChanged(); self.refresh(source: room)
+        }
     }
 
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
@@ -883,17 +909,29 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             // The bedside is never left on with only a phone a family caregiver added, such as a bank.
             // The caregiver stays on with it when the bedside leaves.
             let bedside = self.familySession?.credential.role == .bedside && self.familySession?.call.source == "porch"
-            if self.hasConnectedPeer, !self.room.remoteParticipants.values.contains(where: { !bedside || $0.kind != .sip }) {
+            self.translation?.peopleChanged()
+            // The translator isn't someone to stay on the call with.
+            if self.hasConnectedPeer, !self.people.contains(where: { !bedside || $0.kind != .sip }) {
                 self.finish(message: "Call ended. Returning to the clock…")
             } else {
-                if bedside, self.hasConnectedPeer, kind != .sip, let name, !name.isEmpty { self.noteLeft(name) }
+                if bedside, self.hasConnectedPeer, kind != .sip, kind != .agent, let name, !name.isEmpty { self.noteLeft(name) }
                 self.refresh()
             }
         }
     }
 
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        Task { @MainActor [weak self] in self?.refresh(source: room) }
+        Task { @MainActor [weak self] in
+            guard let self, room === self.room else { return }
+            self.translation?.subscribed(publication, of: participant); self.refresh(source: room)
+        }
+    }
+
+    nonisolated func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
+        Task { @MainActor [weak self] in
+            guard let self, room === self.room else { return }
+            self.translation?.receive(data, topic: topic, from: participant)
+        }
     }
 
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
@@ -982,7 +1020,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         await controlTask?.value
         guard !Task.isCancelled, !isEnding, !hasConnectedPeer else { return }
         // Prefer a Porch answer delivered just as the fallback timer fires.
-        guard room.remoteParticipants.isEmpty else { refresh(); return }
+        guard people.isEmpty else { refresh(); return }
         if let session = familySession {
             isSwitchingToPhone = true
             do {

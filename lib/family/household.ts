@@ -1,3 +1,4 @@
+import type { CallTranslation } from "./translation.ts";
 import type { CallServer } from "../calls/server.ts";
 import type { FamilyStore } from "./store.ts";
 import type { VoIPRegistration } from "./push.ts";
@@ -16,7 +17,8 @@ export type PendingPhoto = { pathname: string; expiresAt: number };
  * `attendedAt`: the bedside only, when it last noticed someone at the iPad (see `noteAttendance`).
  * `platform`: "android" for an Android device. Devices set up before Android existed have none: iOS.
  * `joinedAt`: when a family member claimed their invitation. Members who joined before it was kept don't have it. */
-export type Member = { platform?: "android"; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; joinedAt?: number; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+/** `features`: what the bedside's app reported it can do, such as showing a call's translation (translation.ts). */
+export type Member = { platform?: "android"; features?: string[]; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; joinedAt?: number; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
@@ -29,7 +31,9 @@ export type Invite = { id: string; secretHash: string; name: string; permissions
  * approved phone number's, so a later rename or removal doesn't change the call in history.
  * `expiresAt`: when a call still ringing stops ringing. An answered call has no time limit: it's `noCallLimit`. */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
-  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string; peerName?: string };
+  guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string; peerName?: string;
+  /** Live translation on this call (translation.ts). Every call starts without it. */
+  translation?: CallTranslation };
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
  * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
 export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;

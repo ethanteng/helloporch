@@ -62,7 +62,7 @@ import PorchCore
     func refresh() {
         let current = snapshot(), call = current.call
         if guest == nil, let phone = call?.phoneGuest, phone.addedBy == myID, !finished.contains(phone.id) { track(phone) }
-        let peers = room()?.remoteParticipants.values.map { $0 } ?? []
+        let peers = room()?.remoteParticipants.values.filter { $0.kind != .agent } ?? []
         if let guest {
             let leg = peers.first { $0.identity?.stringValue == guest.identity }
             let callStatus = leg?.attributes["sip.callStatus"]
@@ -229,9 +229,9 @@ import PorchCore
 /// Who is on a call, as the call screens show them.
 @MainActor enum CallPeople {
     /// Everyone on Porch, `first` (the person the screen is about) leading, with their camera and photo. An added
-    /// phone has no video, so it gets no tile.
+    /// phone has no video, so it gets no tile, and neither does the translator.
     static func tiles(_ peers: [RemoteParticipant], first: String?) -> [CallVideoStage.Tile] {
-        peers.filter { $0.kind != .sip }
+        peers.filter { $0.kind != .sip && $0.kind != .agent }
             .sorted { $0.identity?.stringValue == first && $1.identity?.stringValue != first }
             .map { peer in
                 let track = peer.videoTracks.first { !$0.isMuted && $0.track is VideoTrack }?.track as? VideoTrack

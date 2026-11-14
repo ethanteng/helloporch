@@ -19,9 +19,11 @@ import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screen
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
 import type { Translate } from "./translate.ts";
+import { handleTranslationAction, translationActions, translationFeature, translationOffered, translationServices, type TranslationServices } from "./translation.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>; synthesize?: Synthesize; translate?: Translate;
-  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices };
+  phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
+  translationServices?: (configuration: CallServer) => TranslationServices };
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -75,7 +77,9 @@ function publicCall(call: Call, me: Member, house: Household) {
   const phoneGuest = publicPhoneGuest(call, me), porchGuest = publicPorchGuest(house, call);
   const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
   return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(porchGuest ? { porchGuest } : {}),
-    ...(bedside && left?.[bedside.id] !== undefined ? { bedsideLeft: true } : {}) };
+    ...(bedside && left?.[bedside.id] !== undefined ? { bedsideLeft: true } : {}),
+    // The family member on the call gets a Translate button once the bedside's app can show translation.
+    ...(translationOffered(house, call, me) ? { translationAvailable: true } : {}) };
 }
 // `name` and `photoID` are what Porch shows. Caregiver screens and the member themselves also get the
 // parts they edit: the invitation's name, the member's own choice and a caregiver's.
@@ -395,6 +399,16 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable) });
     }
+    if (translationActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      expire(house, now);
+      const result = await handleTranslationAction(String(action), { store, now, house, me: memberFor(house, auth), input,
+        services: (dependencies.translationServices ?? translationServices)(config()) });
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable) });
+    }
     // Hanging up leaves only you while the call can go on without you: two people still connected, counting a phone
     // guest only while whoever added it stays. So the bedside is never left alone with a phone, and a family guest
     // and the bedside keep talking when the person who rang them in leaves. Otherwise it ends the call for everyone.
@@ -515,6 +529,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now;
+        // The bedside's regular check-ins say what its app can do, so family phones offer only what it can show.
+        // Its other check-ins, and older apps, don't say, which changes nothing.
+        if (me.role === "bedside" && Array.isArray(input.features)) {
+          const features = input.features.filter(f => f === translationFeature);
+          if (features.length) me.features = features; else delete me.features;
+        }
         // Same ordering as availability. A poll that left earlier can arrive after a newer one, and its
         // attendedSeconds were counted when it was sent.
         if (takesAvailability(me, input.launch, input.sequence)) {
@@ -760,9 +780,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const configuration = config();
       const roomName = callRoom(call);
       const token = new AccessToken(configuration.apiKey, configuration.apiSecret, { identity: me.id, name: displayName(me), ttl: "1m" });
-      // Room for a family member rung in and a phone a caregiver adds (porch-guests.ts, phone-guests.ts). Only
-      // the server lets either in.
-      token.roomConfig = new RoomConfiguration({ maxParticipants: 4, emptyTimeout: 60, departureTimeout: 5 });
+      // Room for a family member rung in, a phone a caregiver adds (porch-guests.ts, phone-guests.ts) and the
+      // translator (translation.ts). Only the server lets any of them in.
+      token.roomConfig = new RoomConfiguration({ maxParticipants: 5, emptyTimeout: 60, departureTimeout: 5 });
       // Caregivers who can add a phone guest send its keypad tones, such as a bank's menu choices, as data.
       token.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true,
         canPublishData: !call.phone && canAddPhoneGuests(me) && [call.from, call.to].includes(me.id), canUpdateOwnMetadata: false,

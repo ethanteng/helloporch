@@ -13,3 +13,5 @@ node_modules/
 .next/
 .git/
 *.tsbuildinfo
+# The call translator runs on LiveKit Cloud, not Vercel (translator/README.md).
+/translator/
