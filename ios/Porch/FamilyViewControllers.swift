@@ -374,7 +374,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
     private func askForName(of family: FamilyCredential, sharing name: String, numbered: String) {
-        let alert = UIAlertController(title: "Another family here is called \(name)", message: "What do you call this one?", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Name this family", message: "You're in more than one family called \(name). What do you call this one?", preferredStyle: .alert)
         alert.addTextField { field in field.placeholder = "For example, Sarah's parents"; field.autocapitalizationType = .words }
         let done: () -> Void = { [weak self] in self?.navigationController?.popToRootViewController(animated: true) }
         alert.addAction(UIAlertAction(title: "Not now", style: .cancel) { _ in done() })
