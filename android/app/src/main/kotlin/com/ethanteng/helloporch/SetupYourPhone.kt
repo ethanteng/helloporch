@@ -92,7 +92,7 @@ class SetupYourPhone(
 
     fun createInvitation() {
         val chosen = name.trim()
-        if (chosen.isEmpty()) { onError("Enter your name, so ${lovedOne()}'s Porch can say who's calling."); return }
+        if (chosen.isEmpty()) { onError("Enter your name."); return }
         if (busy) return
         val credential = app.device.credential(PorchExperience.BEDSIDE) ?: return
         // Drop-in answers on this tablet, so it's approved only once the tablet can use what it needs.
@@ -184,11 +184,11 @@ class SetupYourPhone(
 }
 
 @Composable
-fun SetupYourPhoneScreen(yourPhone: SetupYourPhone, lovedOne: String, onContinue: () -> Unit) {
+fun SetupYourPhoneScreen(yourPhone: SetupYourPhone, onContinue: () -> Unit) {
     val context = LocalContext.current
     val showing = yourPhone.progress == SetupYourPhone.Progress.SHOWING
     LifecycleEventEffect(Lifecycle.Event.ON_START) { yourPhone.returnedToForeground() }
-    FormSection("Add your phone", "Call $lovedOne, send messages and change settings from your phone. Your name tells $lovedOne who's calling.") {
+    FormSection("Add your phone") {
         if (yourPhone.progress == SetupYourPhone.Progress.NAMING) {
             FormField(yourPhone.name, { yourPhone.name = it }, "Your name", "For example, Ethan",
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
@@ -200,7 +200,7 @@ fun SetupYourPhoneScreen(yourPhone: SetupYourPhone, lovedOne: String, onContinue
         val invitation = yourPhone.invitation
         if (showing && invitation != null) {
             InvitationCode(invitation.link)
-            Text("Open the Camera on your phone and point it at this code. If Porch isn't on your phone yet, the link shows how to get it.",
+            Text("Scan it with your phone's camera.",
                 Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
             FormLink("Send the invitation instead", onClick = { yourPhone.share(context) })
         }

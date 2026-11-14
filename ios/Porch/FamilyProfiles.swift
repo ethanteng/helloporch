@@ -311,7 +311,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
             row.accessibilityTraits = chosen ? [.button, .selected] : .button
             return row
         }
-        content.addArrangedSubview(group("Family", detail: "Your name, photo and caregiver mode can be different in each family.", rows: rows))
+        content.addArrangedSubview(group("Family", rows: rows))
     }
     /// What this phone calls a family, to tell it from the others. Two sets of parents are often both "Mom" and "Dad".
     private func nickname(_ family: FamilyCredential) {

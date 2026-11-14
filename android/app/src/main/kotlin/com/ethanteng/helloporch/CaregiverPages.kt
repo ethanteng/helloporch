@@ -182,7 +182,7 @@ private fun CallsPage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
     var fallback by remember { mutableIntStateOf(CallPreferences.fallbackSeconds(settings)) }
     var leaveMessage by remember { mutableStateOf(CallPreferences.leaveMessageWhenUnanswered(settings)) }
     val fallbackRange = CallPreferences.fallbackRange
-    CaregiverGroup("Calls from $name", "If Porch isn't answered, Porch calls the person's phone.") {
+    CaregiverGroup("Calls from $name") {
         fun changeFallback(seconds: Int) { CallPreferences.saveFallbackSeconds(seconds, settings); fallback = CallPreferences.fallbackSeconds(settings) }
         StepperRow("Try their phone after", duration(fallback),
             onMinus = (fallback - 5 >= fallbackRange.first).then { changeFallback(fallback - 5) },
@@ -437,7 +437,7 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
         if (admin.onBedside) {
             HorizontalDivider()
             // Only while family are shown it. The clock reads the switch again when caregiver mode closes.
-            ToggleRow("Check with the camera", camera, detail = "About every 30 seconds. Nothing is recorded.", enabled = share == true,
+            ToggleRow("Check with the camera", camera, detail = "Nothing is recorded.", enabled = share == true,
                 onChange = { on ->
                     camera = on
                     when {
@@ -459,7 +459,6 @@ private fun PrivacyPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
  * can't take its own access away: another caregiver can. */
 @Composable
 private fun CaregiversPage(admin: CaregiverAdmin, links: FamilyLinks, onScreen: (CaregiverScreen) -> Unit) {
-    Text("Caregivers can change settings from their phone with the PIN.", style = MaterialTheme.typography.bodyLarge)
     val people = admin.state(links)?.people.orEmpty()
     CaregiverGroup {
         if (people.isEmpty()) CaregiverRow { Text("No family members yet.") }
@@ -538,7 +537,7 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
         if (isHome) ActionRow("Choose another home screen") { open(context, Intent(Settings.ACTION_HOME_SETTINGS)) }
         else makeHome?.let { ask -> ActionRow("Make Porch the home screen") { askHome.launch(ask) } }
         if (isHome || makeHome != null) HorizontalDivider()
-        ActionRow("Tablet settings", "Android's own settings, such as Wi-Fi and the volume.") { open(context, Intent(Settings.ACTION_SETTINGS)) }
+        ActionRow("Tablet settings") { open(context, Intent(Settings.ACTION_SETTINGS)) }
     }
     // Ringing while Porch isn't in front needs notifications, which a tablet set up before Porch could ring that way
     // was never asked for.
@@ -548,7 +547,7 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
     PrivacyPolicyLink()
     if (confirming) AlertDialog(onDismissRequest = { confirming = false },
         title = { Text("Use this tablet as a family device?") },
-        text = { Text("For calling the bedside Porch from this tablet. You can switch back later.") },
+        text = { Text("You can switch back later.") },
         confirmButton = { TextButton(onClick = { confirming = false; onClose(); app.switchExperience(PorchExperience.FAMILY) }) { Text("Use as family device") } },
         dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }

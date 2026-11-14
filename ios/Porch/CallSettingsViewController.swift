@@ -28,7 +28,7 @@ final class CallSettingsViewController: CaregiverPageViewController {
             content.addArrangedSubview(group(rows: [historyRow(admin)]))
             return
         }
-        content.addArrangedSubview(group("Calls from \(name)", detail: "If Porch isn't answered, Porch calls the person's phone.", rows: [fallbackRow(), leaveMessageRow()]))
+        content.addArrangedSubview(group("Calls from \(name)", rows: [fallbackRow(), leaveMessageRow()]))
         var all = [silenceToggle()]
         if CallPreferences.disconnectAfterSilence(in: defaults) { all.append(silenceRow()) }
         content.addArrangedSubview(group("All calls", rows: all + [historyRow(admin), soundsRow()]))

@@ -280,14 +280,7 @@ fun MessageThreadScreen(app: PorchApplication, family: FamilyCredential, links: 
                         textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (state?.messagesEnabled != false) FormButton("Record a message for $name", onClick = { onRecord(name) })
-                    Text("Your messages wait on $name's Porch until they're played. When you miss a Porch call from $name, they can leave you a message here.",
-                        Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            if (state?.messagesEnabled != false) item { FormButton("Record a message for $name", onClick = { onRecord(name) }) }
         }
     }
     playing?.let { MessagePlayerDialog(it) { playing = null } }

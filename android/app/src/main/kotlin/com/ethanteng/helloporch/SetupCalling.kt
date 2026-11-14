@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,13 +42,10 @@ object SetupPermissions {
 
 /** One Continue asks for both. Turned off, before or just now, Porch goes on; Settings can still turn them on. */
 @Composable
-fun SetupPermissionsScreen(app: PorchApplication, lovedOne: String, onContinue: () -> Unit) {
+fun SetupPermissionsScreen(app: PorchApplication, onContinue: () -> Unit) {
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { onContinue() }
     val notifications = Build.VERSION.SDK_INT >= 33
-    FormSection(if (notifications) "Microphone, camera and notifications" else "Microphone and camera",
-        if (notifications) "Porch uses the microphone and camera for calls, so family can hear and see $lovedOne, and notifications to ring if " +
-            "Porch isn't in front. The tablet asks once for each."
-        else "Porch uses them for calls, so family can hear and see $lovedOne. The tablet asks once for each.") {
+    FormSection(if (notifications) "Microphone, camera and notifications" else "Microphone and camera", "Porch needs these for calls.") {
         FormButton("Continue", onClick = {
             val asking = SetupPermissions.all.filter { !SetupPermissions.granted(app, it) }
             SetupPermissions.noteAsked(app)
@@ -63,8 +59,8 @@ fun SetupPermissionsScreen(app: PorchApplication, lovedOne: String, onContinue: 
  * it. */
 @Composable
 fun SetupCallingScreen(lovedOne: String, offersCordedPhone: Boolean, onCordedPhone: () -> Unit, onTouchscreen: () -> Unit) {
-    FormSection("How will $lovedOne call?", "$lovedOne presses a key to call someone. The touchscreen works too, whichever you choose.") {
-        if (offersCordedPhone) CallingOption("Corded phone", "A desk phone, plugged in with a Cell2Jack.", onCordedPhone)
+    FormSection("How will $lovedOne call?") {
+        if (offersCordedPhone) CallingOption("Corded phone", "Plugged in with a Cell2Jack.", onCordedPhone)
         FormLink("Just the touchscreen", onClick = onTouchscreen)
     }
 }
@@ -79,9 +75,6 @@ private fun CallingOption(title: String, detail: String, onClick: () -> Unit) {
         }
     }
 }
-
-/** The name setup is using, such as Mom, for a screen that comes in through the corded-phone slot. */
-val LocalBedsideName = compositionLocalOf { "Your loved one" }
 
 /** Stands in for connecting the corded phone, which needs the Cell2Jack connection (built alongside this). */
 @Composable

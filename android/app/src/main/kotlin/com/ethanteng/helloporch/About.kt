@@ -20,7 +20,7 @@ fun AboutScreen(navigation: (@Composable () -> Unit)?) {
     val libraries by produceLibraries(R.raw.aboutlibraries)
     FormScreen("About", navigation = navigation, scrolls = false) {
         Text("Porch ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleLarge)
-        Text("Porch includes the open-source software below, each under the license shown. Tap one to read its license.",
+        Text("Tap one to read its license.",
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         // A tap shows the license here, in a dialog. Links to a library's source, website or license page would leave for a
         // browser, which on a family phone also ends caregiver mode.

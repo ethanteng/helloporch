@@ -71,7 +71,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.AddSomeoneDraft
 import com.ethanteng.helloporch.core.CallContact
-import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyAdminState
 import com.ethanteng.helloporch.core.FamilyInvitation
@@ -116,7 +115,7 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
         PeopleRoute.Kind.ADD -> AddSomeone(app, admin, links, open.slot, open.start, onDone = close)
-        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, onCreated = { _, _ -> }, onDone = close, fromKey = false)
+        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, links, prefilledName = null, onCreated = { _, _ -> }, onDone = close, fromKey = false)
     }
 }
 
@@ -305,7 +304,7 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
             return
         }
         PersonScreen.INVITE -> if (key != null && contact != null) {
-            InviteScreen(app, admin, prefilledName = contact.name, onDone = { screen = null }, onCreated = { id, invitedName ->
+            InviteScreen(app, admin, links, prefilledName = contact.name, onDone = { screen = null }, onCreated = { id, invitedName ->
                 // The name moves to the invitation, and the key follows the name they choose once they join.
                 val current = latest()
                 val at = current.slot
@@ -457,17 +456,17 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
         }
 
         // How the bedside reaches them.
-        if (key != null && contact != null) ReachGroup(app, admin, state, slots, subject, key, contact,
+        if (key != null && contact != null) ReachGroup(admin, state, slots, subject, key, contact,
             onInvite = { screen = PersonScreen.INVITE }, onPhone = { screen = PersonScreen.PHONE }, onLinked = { editedName = null })
 
-        DropInGroup(app, admin, state, subject, mediaAccess)
+        DropInGroup(app, admin, state, subject, lovedOne(admin, links), mediaAccess)
 
         member?.let { person ->
             // A caregiver's phone can't take its own access away: another caregiver can.
             val isMe = person.id == admin.myID
             CaregiverGroup {
                 ToggleRow("Caregiver mode", person.caregiver == true, enabled = !admin.busy && !isMe,
-                    detail = if (isMe) "Another caregiver can change this." else "Can change settings from their phone with the PIN.",
+                    detail = if (isMe) "Another caregiver can change this." else "Can change settings from their phone.",
                     onChange = { admin.perform("setCaregiver", mapOf("memberID" to JsonPrimitive(person.id), "enabled" to JsonPrimitive(it))) })
             }
         }
@@ -527,7 +526,7 @@ private fun invitePending(subject: Subject, state: FamilyAdminState?): Boolean =
 
 /** Whether the bedside reaches them on Porch, and the phone numbers it has for them. */
 @Composable
-private fun ReachGroup(app: PorchApplication, admin: CaregiverAdmin, state: FamilyAdminState?, slots: CallSlots, subject: Subject, key: Int, contact: CallContact,
+private fun ReachGroup(admin: CaregiverAdmin, state: FamilyAdminState?, slots: CallSlots, subject: Subject, key: Int, contact: CallContact,
     onInvite: () -> Unit, onPhone: () -> Unit, onLinked: () -> Unit) {
     val pending = invitePending(subject, state)
     val porch = when {
@@ -537,9 +536,7 @@ private fun ReachGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fami
         else -> "Not on Porch"
     }
     val linked = subject.member != null || contact.invitationID != null
-    val fallback = if (linked && contact.phoneNumber != null)
-        "If Porch isn't answered in ${CallPreferences.fallbackSeconds(app.settings)} seconds, Porch calls their phone. Voice only." else null
-    CaregiverGroup("Reach ${subject.firstName}", fallback) {
+    CaregiverGroup("Reach ${subject.firstName}") {
         CaregiverRow {
             Text("Porch app", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             Text(porch, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -589,14 +586,14 @@ private fun ReachGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fami
 
 /** Drop-in in their Porch app and by phone, approved apart, each on its own card. */
 @Composable
-private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: FamilyAdminState?, subject: Subject, mediaAccess: MediaAccess) {
+private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: FamilyAdminState?, subject: Subject, lovedOne: String, mediaAccess: MediaAccess) {
     val person = subject.member
     // Approvals live on the server, so a bedside that isn't paired yet can't offer them. A key's number is the bedside's.
     val number = subject.contact?.phoneNumber?.takeIf { admin.onBedside && app.device.credential(PorchExperience.BEDSIDE) != null }
     if (person == null && number == null) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Drop-in", style = MaterialTheme.typography.titleLarge)
-        Text(if (state?.dropInEnabled == false) "Drop-ins are paused for everyone." else "Drop-ins connect without anyone answering.",
+        Text(if (state?.dropInEnabled == false) "Drop-ins are paused for everyone." else "Connects without $lovedOne answering.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (person != null) {
             fun change(audio: Boolean, video: Boolean) {
@@ -639,7 +636,7 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
  * still answers on the bedside, so the phone doesn't ask for its own microphone.
  */
 @Composable
-fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, onCreated: (id: String, name: String) -> Unit,
+fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, prefilledName: String?, onCreated: (id: String, name: String) -> Unit,
     onDone: () -> Unit, fromKey: Boolean = true) {
     BackHandler(onBack = onDone)
     val context = LocalContext.current
@@ -680,16 +677,16 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
     FormScreen("Invite someone", navigation = { TextButton(onClick = onDone) { Text(if (made) "Done" else "Cancel") } }) {
         // An invitation from a key is already that key's. One from People finds its key by name once they join
         // (`CallSlots.followInvitations`).
-        FormSection("Who is this invitation for?", if (fromKey) null else "Already on the keypad? Use the name on their key, and it calls their Porch app once they join.") {
+        FormSection("Who is this invitation for?", if (fromKey) null else "If they're on the keypad, use the name on their key.") {
             FormField(name, { name = it }, "Their name", "For example, Ethan", enabled = !made,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
         }
-        CaregiverGroup("Approve drop-in", "Lets them connect without anyone answering.") {
+        CaregiverGroup("Approve drop-in", "Connects without ${lovedOne(admin, links)} answering.") {
             ToggleRow("Audio drop-in", audio, { audio = it }, enabled = !made)
             HorizontalDivider()
             ToggleRow("Video drop-in", video, { video = it }, enabled = !made)
         }
-        CaregiverGroup("Caregiver mode", "Can change settings from their phone with the PIN.") {
+        CaregiverGroup("Caregiver mode", "Can change settings from their phone.") {
             ToggleRow("Caregiver mode", caregiver, { caregiver = it }, enabled = !made)
         }
         val shown = link?.takeIf { expiresAt > System.currentTimeMillis() / 1000 }

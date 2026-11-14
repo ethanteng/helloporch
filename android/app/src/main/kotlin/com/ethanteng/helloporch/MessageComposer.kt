@@ -350,7 +350,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
         else -> FormScreen(if (kind == "voicemail") "Leave a message" else "Send a message",
             navigation = { TextButton(onClick = close) { Text("Back") } }) {
             when (composer.phase) {
-                MessageComposer.Phase.IDLE -> FormSection("Message for $recipient", "Up to two minutes. It waits on their Porch until they play it.") {
+                MessageComposer.Phase.IDLE -> FormSection("Message for $recipient", "Up to two minutes.") {
                     val video: @Composable () -> Unit = {
                         FormButton("Record a video", onClick = { withPermissions(video = true) { composer.openCamera() } }, enabled = videoSupported,
                             filled = kind != "voicemail")
@@ -362,7 +362,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
                     if (!videoSupported) Text("This phone has no front camera for a video message, so record audio instead.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                MessageComposer.Phase.RECORDING_AUDIO -> FormSection("Recording for $recipient…", "Speak after the beep. You have two minutes.") {
+                MessageComposer.Phase.RECORDING_AUDIO -> FormSection("Recording for $recipient…", "Speak after the beep.") {
                     Text(composer.timerText, Modifier.fillMaxWidth(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center)
                     FormButton("Stop recording", onClick = composer::stop)
@@ -387,7 +387,7 @@ fun MessageComposerScreen(app: PorchApplication, family: FamilyCredential, recip
     if (composer.sent) {
         val finish = { composer.acknowledgeSent(); onDone() }
         AlertDialog(onDismissRequest = finish, title = { Text("Message sent") },
-            text = { Text("It's waiting on $recipient's Porch. See when it's played in Messages with $recipient.") },
+            text = { Text("It's waiting on $recipient's Porch.") },
             confirmButton = { TextButton(onClick = finish) { Text("OK") } })
     }
     PorchErrorDialog(composer.error) { composer.error = null }

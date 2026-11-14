@@ -173,13 +173,13 @@ export function AddPhoneForm({ name, number, typing, press }: { name: string; nu
       <div className={styles.form}>
         <div className={styles.card}>
           <p className={styles.cardTitle}>Who should join the call?</p>
-          <p className={styles.cardDetail}>Porch calls this number and adds them to your call. If you hang up, their call ends too.</p>
-          <Field label="Who are you calling?" value={name} placeholder="For example, Bank" helper="The bedside shows this name." caret={typing === "name"} />
+          <p className={styles.cardDetail}>If you hang up, their call ends too.</p>
+          <Field label="Who are you calling?" value={name} placeholder="For example, Bank" caret={typing === "name"} />
           <Field
             label="Their phone number"
             value={number}
             placeholder="(800) 555-0123"
-            helper="US and Canadian numbers, including toll-free numbers."
+            helper="US and Canadian numbers only."
             caret={typing === "number"}
           />
           <span className={styles.formButton}>
@@ -228,7 +228,7 @@ function ringStyle(p: number): CSSProperties {
   };
 }
 
-function Field({ label, value, placeholder, helper, caret }: { label: string; value: string; placeholder: string; helper: string; caret: boolean }) {
+function Field({ label, value, placeholder, helper, caret }: { label: string; value: string; placeholder: string; helper?: string; caret: boolean }) {
   return (
     <div className={styles.field}>
       <p className={styles.fieldLabel}>{label}</p>
@@ -236,7 +236,7 @@ function Field({ label, value, placeholder, helper, caret }: { label: string; va
         {value || (caret ? "" : placeholder)}
         {caret && <span className={styles.caret} />}
       </p>
-      <p className={styles.helper}>{helper}</p>
+      {helper ? <p className={styles.helper}>{helper}</p> : null}
     </div>
   );
 }

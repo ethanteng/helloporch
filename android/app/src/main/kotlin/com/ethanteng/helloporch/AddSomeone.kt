@@ -687,7 +687,7 @@ private fun KeyActionScreen(admin: CaregiverAdmin, key: Int, control: Boolean, o
 // MARK: Shared pieces
 
 /** Who the bedside is for, as the screens here name them: the household's name, or "your loved one". */
-private fun lovedOne(admin: CaregiverAdmin, links: FamilyLinks): String = admin.state(links)?.householdName?.takeIf { it.isNotBlank() } ?: "your loved one"
+internal fun lovedOne(admin: CaregiverAdmin, links: FamilyLinks): String = admin.state(links)?.householdName?.takeIf { it.isNotBlank() } ?: "your loved one"
 
 /** Where a screen is in the three steps: a bar for each, filled up to this one. */
 @Composable

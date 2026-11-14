@@ -18,7 +18,7 @@ final class WelcomeViewController: CaregiverFormViewController {
         let join = PorchStyle.button("I'm joining my family", symbol: "person.2.fill", filled: false)
         join.accessibilityIdentifier = "welcome.join"
         join.addAction(UIAction { [weak self] _ in self?.choose(.family) }, for: .touchUpInside)
-        form.addArrangedSubview(section("Welcome to Porch", detail: "Set up Porch on the iPad that stays with your loved one, or join your family's Porch from your phone.", views: [setUp, join]))
+        form.addArrangedSubview(section("Welcome to Porch", views: [setUp, join]))
         let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
         privacy.accessibilityIdentifier = "caregiver.privacy"
         form.addArrangedSubview(privacy)
@@ -39,7 +39,7 @@ final class BedsideOnIPadViewController: CaregiverFormViewController {
         hideKeyboardControl()
         let join = PorchStyle.button("I'm joining my family", symbol: "person.2.fill", filled: false)
         join.addAction(UIAction { [weak self] _ in self?.choose(.family) }, for: .touchUpInside)
-        form.addArrangedSubview(section("Set up Porch on their iPad", detail: "Porch runs on the iPad that stays with your loved one. Open your setup link on that iPad: it opens Porch there, or shows how to get it. Once it's set up, you can add your phone from the iPad.", views: [join]))
+        form.addArrangedSubview(section("Set up Porch on their iPad", detail: "Open your setup link on the iPad that stays with your loved one.", views: [join]))
     }
 }
 
@@ -138,7 +138,7 @@ final class SetupLinkViewController: BedsideSetupStep {
         link.keyboardType = .URL; link.accessibilityIdentifier = "setup.link"
         let next = PorchStyle.button("Continue", symbol: "arrow.right")
         next.addAction(UIAction { [weak self] _ in self?.save() }, for: .touchUpInside)
-        form.addArrangedSubview(section("Your setup link", detail: "Paste the private link from your Porch invitation. If you don't have one, ask whoever invited you for your setup link.",
+        form.addArrangedSubview(section("Your setup link", detail: "Paste the link from your Porch invitation.",
                                         views: [field(link, title: "Setup link", placeholder: "Paste your setup link"), next]))
         addWayOut()
     }
@@ -161,7 +161,7 @@ final class SetupNameViewController: BedsideSetupStep {
         name.text = setup.name; name.accessibilityIdentifier = "setup.name"
         let next = PorchStyle.button("Continue", symbol: "arrow.right")
         next.addAction(UIAction { [weak self] _ in self?.save() }, for: .touchUpInside)
-        form.addArrangedSubview(section("Who is this Porch for?", detail: "Family see this name, and you can change it later.",
+        form.addArrangedSubview(section("Who is this Porch for?",
                                         views: [field(name, title: "Their name", placeholder: "For example, Mom"), next]))
         // `field` resets capitalization; a name is capitalized word by word.
         name.autocapitalizationType = .words
@@ -184,7 +184,7 @@ final class SetupPINViewController: BedsideSetupStep {
         for field in [pin, confirmation] { field.isSecureTextEntry = true; field.keyboardType = .numberPad }
         pin.accessibilityIdentifier = "caregiver.pin"; confirmation.accessibilityIdentifier = "caregiver.confirm"
         proceed.addAction(UIAction { [weak self] _ in self?.enroll() }, for: .touchUpInside)
-        form.addArrangedSubview(section("Choose a caregiver PIN", detail: "Six digits. Caregivers use it to change Porch's settings, here and on their phones.",
+        form.addArrangedSubview(section("Choose a caregiver PIN",
                                         views: [field(pin, title: "Caregiver PIN", placeholder: "Six digits"), field(confirmation, title: "Enter it again", placeholder: "The same six digits"), proceed]))
     }
     private func enroll() {
@@ -265,7 +265,8 @@ final class SetupNumberViewController: BedsideSetupStep {
     private let areaCode = UITextField()
     private let nearby = UIStackView()
     private let get = PorchStyle.button("Get number", symbol: "phone.fill")
-    private let message = PorchStyle.label("", size: 17)
+    /// What the number step says, if anything. It takes no room when it has nothing to say.
+    private let message = CollapsingLabel.make(size: 17)
     private let number = PorchStyle.label("", size: 34, color: PorchStyle.ink, weight: .bold)
     private let proceed = PorchStyle.button("Continue", symbol: "arrow.right")
     private var choosing: [UIView] = []
@@ -287,7 +288,7 @@ final class SetupNumberViewController: BedsideSetupStep {
         different.isHidden = true; self.different = different
         areaChoice = [areaField, nearby]
         choosing = [areaField, nearby, get, different]
-        form.addArrangedSubview(section("\(lovedOne)'s Porch number", detail: "People can call \(lovedOne)'s Porch from any phone.",
+        form.addArrangedSubview(section("\(lovedOne)'s Porch number",
                                         views: [number, message, areaField, nearby, get, different, proceed]))
         if let existing = FamilyCoordinator.shared.state?.porchNumber { show(existing) } else { loadOptions() }
     }
@@ -322,10 +323,10 @@ final class SetupNumberViewController: BedsideSetupStep {
             // With an area code near the iPad, getting the number is one tap.
             if let suggested = self.areaCode.text, PorchNumber.isAreaCode(suggested) {
                 self.showAreaChoice(false); self.different?.isHidden = false
-                self.message.text = "Porch will get a number in area code \(suggested), near this iPad."
+                self.message.text = "Porch will get a number in area code \(suggested)."
             } else {
                 self.showAreaChoice(true)
-                self.message.text = "Type the area code you'd like, such as 510."
+                self.message.text = nil
             }
         }
     }
@@ -335,7 +336,7 @@ final class SetupNumberViewController: BedsideSetupStep {
     }
     private func chooseAreaCode() {
         showAreaChoice(true); different?.isHidden = true
-        message.text = "Choose an area code near this iPad, or type another."
+        message.text = nil
         areaCode.becomeFirstResponder()
     }
     private func assign() {
@@ -346,7 +347,7 @@ final class SetupNumberViewController: BedsideSetupStep {
         guard task == nil, let credential = PorchDevice.credential(for: .bedside) else { return }
         let offeredAnother = different?.isHidden == false
         get.isEnabled = false; areaCode.isEnabled = false; different?.isHidden = true; view.endEditing(true)
-        message.text = "Getting a number in area code \(code). This can take a little while."
+        message.text = "Getting a number in area code \(code)…"
         task = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -359,7 +360,7 @@ final class SetupNumberViewController: BedsideSetupStep {
                 let response = try await FamilyService(credential).send("assignPhoneNumber", ["areaCode": code], pin: NativeCallSettings.caregiverCode, timeout: 45)
                 FamilyCoordinator.shared.update(response)
                 if let assigned = response.porchNumber { self.show(assigned) }
-                else { self.waiting("Porch is still getting \(self.lovedOne)'s number. It keeps trying, and caregiver mode shows the number once it's ready.") }
+                else { self.waiting("Still getting \(self.lovedOne)'s number. Caregiver mode shows it when it's ready.") }
             } catch {
                 if Task.isCancelled { return }
                 let failure = error as? FamilyServiceError
@@ -369,8 +370,8 @@ final class SetupNumberViewController: BedsideSetupStep {
                     self.message.text = error.localizedDescription
                     UIAccessibility.post(notification: .announcement, argument: error.localizedDescription)
                 }
-                else if failure?.code == "numberLimit" { self.waiting("\(error.localizedDescription) Porch keeps trying, and caregiver mode shows the number once it's ready.") }
-                else { self.waiting("\(error.localizedDescription) You can go on and get the number in caregiver mode later.") }
+                else if failure?.code == "numberLimit" { self.waiting("\(error.localizedDescription) Porch keeps trying.") }
+                else { self.waiting("\(error.localizedDescription) You can get it later in caregiver mode.") }
             }
         }
     }
@@ -381,7 +382,7 @@ final class SetupNumberViewController: BedsideSetupStep {
     private func show(_ assigned: String) {
         choosing.forEach { $0.isHidden = true }; setKeyboardControlVisible(false)
         number.text = PorchNumber.display(assigned); number.isHidden = false
-        message.text = "Anyone can call \(lovedOne)'s Porch on this number. When \(lovedOne) calls a regular phone, it shows this number too."
+        message.text = nil
         proceed.isHidden = false
         UIAccessibility.post(notification: .screenChanged, argument: number)
     }
@@ -396,7 +397,7 @@ final class SetupPermissionsViewController: BedsideSetupStep {
         let proceed = PorchStyle.button("Continue", symbol: "arrow.right")
         proceed.accessibilityIdentifier = "setup.allow"
         proceed.addAction(UIAction { [weak self] _ in self?.allow() }, for: .touchUpInside)
-        form.addArrangedSubview(section("Microphone and camera", detail: "Porch uses them for calls, so family can hear and see \(lovedOne). The iPad asks once for each.", views: [proceed]))
+        form.addArrangedSubview(section("Microphone and camera", detail: "Porch needs these for calls.", views: [proceed]))
     }
     private func allow() {
         guard task == nil else { return }
@@ -430,7 +431,7 @@ final class SetupCallingViewController: BedsideSetupStep {
         }
         touchscreen.contentHorizontalAlignment = .center
         touchscreen.accessibilityIdentifier = "setup.touchscreen"
-        form.addArrangedSubview(section("How will \(lovedOne) call?", detail: "\(lovedOne) presses a key to call someone. The touchscreen works too, whichever you choose.",
+        form.addArrangedSubview(section("How will \(lovedOne) call?",
                                         views: options + [touchscreen]))
     }
     /// A choice, which opens the screen for connecting it. That screen can come back here to choose another.
@@ -467,7 +468,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// Builds without the Cell2Jack driver, iPhones, and iPads without an M chip listen only for the adapter.
     static var offered: Bool { Cell2JackKeypad.supportsDriverPlatform }
     /// The desk phone, for setup's choice and This iPad. Every family has the adapter, whatever the iPad.
-    static let parts = "A desk phone, plugged in with the Porch phone adapter."
+    static let parts = "Plugged in with the Porch phone adapter."
     /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
     /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
     /// can't wait for `viewDidLoad`.
@@ -530,7 +531,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         later.accessibilityIdentifier = "setup.phoneLater"; self.later = later
         var views: [UIView] = [guide, progressPanel(), proceed, later]
         if tryDriver && mChip { views.append(mChipNote()) }
-        let card = section("Connect the phone", detail: "\(lovedOne) can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter.",
+        let card = section("Connect the phone", detail: "Plug the desk phone in with the Porch phone adapter.",
                            views: views)
         if let stack = card.subviews.first as? UIStackView, let detail = stack.arrangedSubviews.dropFirst().first {
             // The link reads as part of the explanation above it, and the panel stands apart from both.
@@ -572,7 +573,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         let rule = UIView()
         rule.backgroundColor = PorchStyle.border
         rule.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
-        let note = PorchStyle.label("This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.", size: 15)
+        let note = PorchStyle.label("This iPad doesn't need the adapter. Turn on the Cell2Jack's driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.", size: 15)
         note.textAlignment = .center
         note.accessibilityIdentifier = "setup.phoneMChip"
         let settings = textLink("Open Settings", size: 15) {
@@ -770,7 +771,7 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
     private let show = PorchStyle.button("Show QR code", symbol: "qrcode")
     private let code = UIImageView()
     private let codeFrame = UIView()
-    private let caption = PorchStyle.label("Open the Camera on your iPhone and point it at this code. If Porch isn't on your phone yet, the link shows how to get it.", size: 17)
+    private let caption = PorchStyle.label("Scan it with your phone's camera.", size: 17)
     private var send: UIButton?
     private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
     /// Going on without a phone is quieter than showing the code, until a phone has joined.
@@ -805,7 +806,7 @@ final class SetupYourPhoneViewController: BedsideSetupStep {
         // `field` resets these; a name is capitalized word by word, and Return shows the code.
         name.autocapitalizationType = .words; name.returnKeyType = .done
         for view in [codeFrame, caption, send, status] { view.isHidden = true }
-        form.addArrangedSubview(section("Add your phone", detail: "Call \(lovedOne), send messages and change settings from your iPhone. Your name tells \(lovedOne) who's calling.",
+        form.addArrangedSubview(section("Add your phone",
                                         views: [nameField, show, codeFrame, caption, send, status, skip, proceed]))
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(returnedToForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -903,7 +904,7 @@ final class SetupDoneViewController: BedsideSetupStep {
         let keypad = PorchStyle.button("Put people on the keypad", symbol: "square.grid.3x3.fill")
         keypad.addAction(UIAction { [weak self] _ in self?.finish(keypad: true) }, for: .touchUpInside)
         let clock = textLink("Back to the clock") { [weak self] in self?.finish(keypad: false) }
-        let calls = PorchStyle.label("Only people on the keypad and numbers you allow can call this number. Anyone else is turned away and listed under Blocked numbers, where you can allow them.", size: 17)
+        let calls = PorchStyle.label("Only people on the keypad and numbers you allow can call it.", size: 17)
         form.addArrangedSubview(section("\(lovedOne)'s Porch is ready", views: [numberViews, calls, keypad, clock]))
         NotificationCenter.default.addObserver(self, selector: #selector(renderNumber), name: .porchFamilyChanged, object: nil)
         renderNumber()
@@ -915,7 +916,7 @@ final class SetupDoneViewController: BedsideSetupStep {
         didRenderNumber = true; shownNumber = assigned
         numberViews.arrangedSubviews.forEach { numberViews.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard let assigned else {
-            numberViews.addArrangedSubview(PorchStyle.label("Porch is still getting \(lovedOne)'s phone number. Caregiver mode shows it once it's ready.", size: 17, color: PorchStyle.ink))
+            numberViews.addArrangedSubview(PorchStyle.label("Still getting \(lovedOne)'s number. Caregiver mode shows it when it's ready.", size: 17, color: PorchStyle.ink))
             return
         }
         let heading = PorchStyle.label("\(lovedOne)'s Porch number", size: 17)
@@ -927,4 +928,16 @@ final class SetupDoneViewController: BedsideSetupStep {
         let done = setup.onFinish
         dismiss(animated: true) { done(keypad) }
     }
+}
+
+/// A label that takes no room in a stack while it has no text.
+final class CollapsingLabel: UILabel {
+    static func make(size: CGFloat) -> CollapsingLabel {
+        let label = CollapsingLabel()
+        label.font = PorchStyle.font(size); label.textColor = PorchStyle.secondary
+        label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true
+        label.isHidden = true
+        return label
+    }
+    override var text: String? { didSet { isHidden = text?.isEmpty ?? true } }
 }

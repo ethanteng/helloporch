@@ -108,13 +108,12 @@ private fun PhoneGuestForm(guests: CallGuests) {
     // Closing or turning the phone doesn't cancel a dial that may already be ringing, so Cancel waits until it settles.
     Dialog(onDismissRequest = { if (!guests.dialing) guests.closePhoneForm() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         FormScreen("Add a phone", navigation = { TextButton(onClick = guests::closePhoneForm, enabled = !guests.dialing) { Text("Cancel") } }) {
-            FormSection("Who should join the call?", "Porch calls this number and adds them to your call. If you hang up, their call ends too.") {
+            FormSection("Who should join the call?", "If you hang up, their call ends too.") {
                 FormField(name, { name = it.take(40) }, "Who are you calling?", "For example, Bank", enabled = !guests.dialing,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
-                Text("The bedside shows this name.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FormField(number, { number = it }, "Their phone number", "(800) 555-0123", enabled = !guests.dialing,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
-                Text("US and Canadian numbers, including toll-free numbers.", style = MaterialTheme.typography.bodyMedium,
+                Text("US and Canadian numbers only.", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FormButton("Choose from Contacts", filled = false, enabled = !guests.dialing, onClick = ::chooseContact)
                 FormButton(if (guests.dialing) "Calling…" else "Call and add to this call", enabled = !guests.dialing, onClick = ::dial)

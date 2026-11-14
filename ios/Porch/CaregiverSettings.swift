@@ -859,7 +859,7 @@ final class PrivacySettingsViewController: CaregiverPageViewController {
                 NotificationCenter.default.post(name: .porchAttendanceCameraChanged, object: nil)
             }
         }, for: .valueChanged)
-        return toggleRow("Check with the camera", detail: "About every 30 seconds. Nothing is recorded.", on)
+        return toggleRow("Check with the camera", detail: "Nothing is recorded.", on)
     }
 }
 
@@ -867,7 +867,6 @@ final class PrivacySettingsViewController: CaregiverPageViewController {
 final class CaregiverAccessViewController: CaregiverPageViewController {
     override func viewDidLoad() { super.viewDidLoad(); title = admin?.onBedside == false ? "Caregivers" : "Caregivers & PIN" }
     override func build(_ admin: FamilyAdminViewController, _ state: FamilyAdminState?) {
-        content.addArrangedSubview(introduction("Caregivers can change settings from their phone with the PIN."))
         var rows: [UIView] = (state?.people ?? []).map { person in
             let isMe = person.id == admin.myID
             let caregiver = UISwitch(); caregiver.isOn = person.caregiver == true

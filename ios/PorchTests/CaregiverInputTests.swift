@@ -2311,7 +2311,7 @@ final class BedsideSetupTests: XCTestCase {
         let step = try phoneStep { keyboard }
         XCTAssertNotNil(buttons(in: step.screen.view).first { $0.accessibilityIdentifier == "setup.phoneSettings" },
                         "A Cell2Jack plugged straight in needs the USB driver on in Settings")
-        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text == "This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in." })
+        XCTAssertTrue(labels(in: step.screen.view).contains { $0.text == "This iPad doesn't need the adapter. Turn on the Cell2Jack's driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in." })
         XCTAssertEqual(step.connections().count, 1, "The screen tries the driver for a Cell2Jack plugged straight in")
         // The adapter comes in while the driver finds nothing, as on an iPad without an M chip.
         keyboard = true
@@ -2387,13 +2387,13 @@ final class BedsideSetupTests: XCTestCase {
             screen.loadViewIfNeeded()
             let texts = labels(in: screen.view).compactMap(\.text)
             let case_ = "driver \(tryDriver), M chip \(mChip)"
-            XCTAssertTrue(texts.contains("Mom can call by pressing a key on the desk phone. Plug it in with the Porch phone adapter."), case_)
+            XCTAssertTrue(texts.contains("Plug the desk phone in with the Porch phone adapter."), case_)
             let guide = try XCTUnwrap(buttons(in: screen.view).first { $0.accessibilityIdentifier == "setup.phoneGuide" }, case_)
             XCTAssertEqual(guide.configuration?.title, "Step-by-step instructions", "A link, not the address")
             XCTAssertEqual(iPadGuideURL.absoluteString, "https://helloporch.store/pilot/ios#phone")
             XCTAssertFalse(texts.contains { $0.hasPrefix("1. ") || $0.hasPrefix("• ") || $0 == "Not working?" || $0.contains("You'll need") },
                            "The steps, parts and tips are on the guide: \(texts)")
-            let note = texts.contains("This iPad has an M chip, so it doesn't need the Porch phone adapter. To plug the Cell2Jack straight in, turn on its USB driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.")
+            let note = texts.contains("This iPad doesn't need the adapter. Turn on the Cell2Jack's driver in Settings, then unplug the Cell2Jack for ten seconds and plug it back in.")
             let settings = buttons(in: screen.view).contains { $0.accessibilityIdentifier == "setup.phoneSettings" }
             XCTAssertEqual(note, tryDriver && mChip, case_); XCTAssertEqual(settings, tryDriver && mChip, case_)
         }
@@ -2506,7 +2506,7 @@ final class BedsideSetupTests: XCTestCase {
         XCTAssertTrue(labels(in: choice.view).contains { $0.text == "How will Mom call?" })
         // Every family has the adapter, which needs no driver, so every build offers the corded phone the same way.
         let corded = try XCTUnwrap(buttons(in: choice.view).first { $0.accessibilityIdentifier == "setup.cordedPhone" })
-        XCTAssertEqual(corded.configuration?.subtitle, "A desk phone, plugged in with the Porch phone adapter.")
+        XCTAssertEqual(corded.configuration?.subtitle, "Plugged in with the Porch phone adapter.")
         XCTAssertEqual(corded.configuration?.subtitle, SetupPhoneViewController.parts)
         XCTAssertEqual(corded.configuration?.subtitleLineBreakMode, .byWordWrapping, "A one-line subtitle could cut off the end")
         // A USB keypad was for testing: the corded phone is the only choice besides the touchscreen.
@@ -2699,7 +2699,7 @@ final class BedsideSetupTests: XCTestCase {
         let done = SetupDoneViewController(setup); done.loadViewIfNeeded()
         let text = labels(in: done.view).compactMap(\.text)
         XCTAssertTrue(text.contains("Mom's Porch is ready"))
-        XCTAssertTrue(text.contains { $0.hasPrefix("Only people on the keypad and numbers you allow can call this number.") })
+        XCTAssertTrue(text.contains("Only people on the keypad and numbers you allow can call it."))
         XCTAssertTrue(buttons(in: done.view).contains { $0.configuration?.title == "Put people on the keypad" })
         XCTAssertTrue(done.navigationItem.hidesBackButton)
     }

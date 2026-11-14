@@ -243,7 +243,7 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
                 let share = PorchStyle.button("Share this number", symbol: "message", filled: false)
                 share.accessibilityIdentifier = "family.sharePorchNumber"
                 share.addAction(UIAction { [weak self, weak share] _ in self?.shareNumber(number, name: from, from: share) }, for: .touchUpInside)
-                block.addArrangedSubview(section("\(from)'s Porch number", detail: "Be sure to add this to your Contacts and share it with friends & loved ones.", views: [shown, add, share]))
+                block.addArrangedSubview(section("\(from)'s Porch number", views: [shown, add, share]))
             }
         }
     }
@@ -310,7 +310,7 @@ final class FamilyHomeViewController: CaregiverFormViewController, CNContactView
         guard view.window != nil, presentedViewController == nil, FamilyCoordinator.shared.state(for: family)?.messagesEnabled != false else {
             showPorchError(FamilyServiceError(message: title, status: 409), on: self); return
         }
-        let alert = UIAlertController(title: title, message: "Leave a message? It waits on their Porch until they play it.", preferredStyle: .alert)
+        let alert = UIAlertController(title: title, message: "Leave a message?", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Not now", style: .cancel))
         alert.addAction(UIAlertAction(title: "Leave a message", style: .default) { [weak self] _ in
             self?.choose(family) { self?.navigationController?.pushViewController(MessageComposerViewController(recipient: name, kind: "voicemail", startAudioImmediately: true), animated: true) }
@@ -356,9 +356,9 @@ final class FamilyPairingViewController: CaregiverFormViewController {
         super.viewDidLoad(); title = adding ? "Join another family" : "Join your family"
         link.text = invitation?.absoluteString; link.keyboardType = .URL
         var views: [UIView] = [field(link, title: "Porch invitation", placeholder: "Paste the complete invitation link")]
-        if adding { views.append(field(nickname, title: "What do you call this family?", placeholder: "For example, Sarah's parents", helper: "Only on this phone, to tell your families apart.")) }
+        if adding { views.append(field(nickname, title: "What do you call this family?", placeholder: "For example, Sarah's parents", helper: "Only on this phone.")) }
         views.append(join)
-        form.addArrangedSubview(section("Your Porch invite", detail: "Paste the link the caregiver sent you. It works once, for 24 hours.", views: views))
+        form.addArrangedSubview(section("Your Porch invite", detail: "Paste the link a caregiver sent you.", views: views))
         // `field` resets capitalization; a family's name is capitalized word by word.
         nickname.autocapitalizationType = .words
         // A family that removed this phone doesn't call it any more.
@@ -374,7 +374,7 @@ final class FamilyPairingViewController: CaregiverFormViewController {
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
     private func askForName(of family: FamilyCredential, sharing name: String, numbered: String) {
-        let alert = UIAlertController(title: "Another family here is called \(name)", message: "What do you call the one you just joined? Until you name it, it's \(numbered). Only on this phone.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Another family here is called \(name)", message: "What do you call this one?", preferredStyle: .alert)
         alert.addTextField { field in field.placeholder = "For example, Sarah's parents"; field.autocapitalizationType = .words }
         let done: () -> Void = { [weak self] in self?.navigationController?.popToRootViewController(animated: true) }
         alert.addAction(UIAlertAction(title: "Not now", style: .cancel) { _ in done() })
@@ -731,9 +731,11 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     private var invitationLink: URL?
     private var invitationExpiry: TimeInterval = 0
     private let inviteHint = PorchStyle.label("", size: 17)
+    /// The bedside's name, such as Mom, for what drop-in means.
+    private var lovedOne: String { (remote.map { FamilyCoordinator.shared.state(for: $0) } ?? FamilyCoordinator.shared.state)?.householdName ?? "your loved one" }
     @objc private func finishedInvite() { navigationController?.popViewController(animated: true) }
     /// How an invitation from People reaches someone's key: by its name (`CallSlots.followInvitations`).
-    static let keypadHint = "Already on the keypad? Use the name on their key, and it calls their Porch app once they join."
+    static let keypadHint = "If they're on the keypad, use the name on their key."
     /// What sharing an invitation sends: a note, then the link.
     static func shareItems(_ link: URL) -> [Any] {
         // A web link opens Porch, or shows how to get it first.
@@ -759,8 +761,8 @@ final class FamilyInviteViewController: CaregiverFormViewController {
         // An invitation from a key is already that key's. One from People finds its key by name once they join.
         let keypadHint = onCreated == nil ? Self.keypadHint : nil
         form.addArrangedSubview(section("Who is this invitation for?", detail: keypadHint, views: [field(personName, title: "Their name", placeholder: "For example, Ethan")]))
-        form.addArrangedSubview(section("Approve drop-in", detail: "Lets them connect without anyone answering.", views: [row("Audio drop-in", audio), row("Video drop-in", video)]))
-        form.addArrangedSubview(section("Caregiver mode", detail: "Can change settings from their phone with the PIN.", views: [row("Caregiver mode", caregiver)]))
+        form.addArrangedSubview(section("Approve drop-in", detail: "Connects without \(lovedOne) answering.", views: [row("Audio drop-in", audio), row("Video drop-in", video)]))
+        form.addArrangedSubview(section("Caregiver mode", detail: "Can change settings from their phone.", views: [row("Caregiver mode", caregiver)]))
         form.addArrangedSubview(inviteHint)
         form.addArrangedSubview(create); create.addTarget(self, action: #selector(createInvite), for: .touchUpInside)
     }

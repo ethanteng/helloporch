@@ -53,9 +53,7 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
     }
     private func confirmFamilyDevice(_ device: String) {
         // Family settings only offer bedside mode on an iPad, so an iPhone that leaves it cannot switch back.
-        let message = PorchDevice.canBeBedside
-            ? "For calling the bedside Porch from this \(device). You can switch back later."
-            : "For calling the bedside Porch from this \(device)."
+        let message = PorchDevice.canBeBedside ? "You can switch back later." : nil
         let alert = UIAlertController(title: "Use this \(device) as a family device?", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Use as family device", style: .default) { _ in PorchDevice.experience = .family })
