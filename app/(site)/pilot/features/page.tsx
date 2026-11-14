@@ -219,7 +219,7 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            In Porch on your phone, tap <UI>Audio call</UI> or <UI>Video call</UI>.
+            In Porch on your phone, tap <UI>Call</UI> or <UI>Video</UI>.
           </li>
           <li>
             If you’re allowed to <a href="#drop-in">drop in</a> and the clock is showing on the tablet,
@@ -259,9 +259,10 @@ const parts: GuidePart[] = [
         </p>
         <ul>
           <li>
-            On your phone, tap <UI>Drop in with video</UI> or <UI>Drop in with audio</UI>.
-            If you have drop-in permission, even your regular <UI>Video call</UI> and{" "}
-            <UI>Audio call</UI> connect this way.
+            On your phone, tap <UI>Drop in</UI>. If both audio and video are approved, choose{" "}
+            <UI>Drop in with audio</UI> or <UI>Drop in with video</UI>.
+            If you have drop-in permission, <UI>Call</UI> and <UI>Video</UI> connect this way too while the
+            clock is showing.
           </li>
           <li>
             Your loved one can stop it by tapping <UI>Don’t connect</UI> or pressing 0.
