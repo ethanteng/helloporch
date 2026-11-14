@@ -1673,6 +1673,28 @@ final class CaregiverInputTests: XCTestCase {
         if PorchDevice.families.isEmpty { XCTAssertNil(tabs.viewControllers?[FamilyTabBarController.messagesTab].tabBarItem.badgeValue) }
     }
 
+    /// Each tab keeps its screens. Choosing another family closes the previous one's, such as a message being recorded
+    /// on Messages, so nothing left open there sends or shows things for the wrong family.
+    @MainActor func testChoosingAnotherFamilyClosesItsScreensOnTheOtherTabs() throws {
+        try preservingPairings {
+            let origin = URL(string: "https://example.invalid")!
+            let first = FamilyCredential(origin: origin, credential: "first-device.first-secret", role: .family)
+            let second = FamilyCredential(origin: origin, credential: "second-device.second-secret", role: .family)
+            try PorchDevice.save(first); try PorchDevice.save(second)
+            PorchDevice.select(first)
+            let tabs = FamilyTabBarController(); tabs.loadViewIfNeeded()
+            let messages = try XCTUnwrap(tabs.viewControllers?[FamilyTabBarController.messagesTab] as? UINavigationController)
+            messages.pushViewController(MessageComposerViewController(recipient: "Mom"), animated: false)
+            tabs.selectedIndex = FamilyTabBarController.youTab
+            // The same family again leaves it open.
+            NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+            XCTAssertEqual(messages.viewControllers.count, 2)
+            PorchDevice.select(second)
+            NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
+            XCTAssertEqual(messages.viewControllers.count, 1, "the first family's recording closed")
+        }
+    }
+
     /// You has the families and this phone's own settings. What belongs to one family, such as caregiver mode and
     /// leaving it, is on that family's page instead.
     @MainActor func testYouTabKeepsOnlyThisPhonesSettings() {

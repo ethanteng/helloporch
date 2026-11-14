@@ -264,7 +264,12 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
         recording = nil; phase = .idle; render()
     }
     private func send() {
-        guard let recording, phase == .recorded, let credential = family ?? PorchDevice.credential(for: .family) else { return }
+        guard let recording, phase == .recorded else { return }
+        // A family this phone has left since doesn't get it either.
+        guard let credential = family, PorchDevice.families.contains(where: { $0.deviceID == credential.deviceID }) else {
+            showPorchError(FamilyServiceError(message: "This phone isn't in that family anymore.", status: 409), on: self)
+            return
+        }
         phase = .sending; render()
         Task { [weak self] in
             guard let self else { return }
