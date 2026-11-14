@@ -125,9 +125,10 @@ export default defineAgent({
       if (track.kind === TrackKind.KIND_AUDIO && isPerson(participant)) listen(participant, track);
     });
     room.on(RoomEvent.TrackUnsubscribed, (_track, _publication, participant) => listeners.get(participant.identity)?.());
+    const leave = (reason: string) => { log(`leaving: ${reason}`); ctx.shutdown(reason); };
     room.on(RoomEvent.ParticipantDisconnected, participant => {
       listeners.get(participant.identity)?.();
-      if (!stillNeeded(room, config.bedside)) ctx.shutdown("the call no longer has both sides");
+      if (!stillNeeded(room, config.bedside)) leave("the call no longer has both sides");
     });
     // Only the calling server changes the language; data from people on the call carries no sender-less packets.
     room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
@@ -146,9 +147,11 @@ export default defineAgent({
       for (const stop of [...listeners.values()]) stop();
     });
 
+    // Right after connecting, the room's people may not have arrived yet (on LiveKit Cloud they hadn't).
+    const bedsideHere = await Promise.race([ctx.waitForParticipant(config.bedside).then(() => true), new Promise<false>(r => setTimeout(() => r(false), 20_000))]);
+    if (!bedsideHere) { leave("the bedside isn't on the call"); return; }
     listenAgain();
     send({ type: "state", on: true, language: interpreter.bedsideLanguage }, "everyone");
-    if (!stillNeeded(room, config.bedside)) ctx.shutdown("the call no longer has both sides");
   },
 });
 

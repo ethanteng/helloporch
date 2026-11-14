@@ -57,9 +57,14 @@ and `scripts/stt-bench.ts` compares speech recognition models.
 With the LiveKit CLI (`lk`), signed in to the HelloPorch project:
 
 ```bash
-lk agent create --secrets ANTHROPIC_API_KEY=… --secrets ELEVENLABS_API_KEY=…   # first time; writes livekit.toml
-lk agent deploy                                                                  # later versions
+lk agent create --region us-east --secrets-file <file with both keys>   # done 2026-11-14; wrote livekit.toml
+lk agent deploy                                                          # later versions
+lk agent status
+lk agent logs
 ```
+
+It runs as agent `CA_tVrpMbDprhhx` in `us-east` (Virginia), the only US region for agents. The `lk` commands take
+`LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` from the environment; no `lk cloud auth` is needed.
 
 Then set `LIVEKIT_TRANSLATOR_AGENT=porch-translator` on the calling server (Vercel project `porch-calling-prototype`).
 Until it's set, Porch doesn't offer translation.
