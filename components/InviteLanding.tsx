@@ -14,7 +14,7 @@ const playTesting = process.env.NEXT_PUBLIC_PLAY_TESTING_URL;
 const copy = {
   family: {
     title: "You're invited to a family's Porch",
-    lede: "Porch lets you call your loved one's bedside iPad, and drop in when their caregiver allows it. This invitation works once, for 24 hours.",
+    lede: "Porch lets you call your loved one's bedside iPad, and drop in when their caregiver allows it. This link expires after 24 hours.",
     device: "phone",
     open: "Open invitation in Porch",
     paste: "In Porch, choose Join a family and paste it.",
