@@ -659,9 +659,9 @@ const parts: GuidePart[] = [
           <li>To answer, lift the receiver and press 0.</li>
           <li>Putting the receiver back hangs up.</li>
           <li>
-            If the phone buttons stop working, you can run the connection test again under{" "}
-            <Path steps={["This iPad", "Connect the phone"]} />. On Android, use <UI>This tablet</UI>
-            instead of <UI>This iPad</UI>.
+            <UI>This iPad</UI> says whether the phone is connected. If the phone buttons stop working, test them
+            again under <Path steps={["This iPad", "Check the phone"]} />, or <UI>Connect the phone</UI> if it isn’t
+            connected. On Android, use <UI>This tablet</UI> instead of <UI>This iPad</UI>.
           </li>
         </ul>
         <Setting

@@ -323,8 +323,8 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLink
 /** The share sheet, with a note and the link, as iOS's `shareItems` sends it. */
 fun shareInvitation(context: Context, link: String) {
     // A web link opens Porch, or shows how to get it first.
-    val note = if (link.startsWith("https:")) "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It works once, for 24 hours."
-        else "Join our Porch! This link works once, for 24 hours."
+    val note = if (link.startsWith("https:")) "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It expires after 24 hours."
+        else "Join our Porch! This link expires after 24 hours."
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "$note\n$link")
     try { staysInCaregiverMode { context.startActivity(Intent.createChooser(send, null)) } } catch (_: ActivityNotFoundException) {}
 }

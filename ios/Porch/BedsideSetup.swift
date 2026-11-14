@@ -464,6 +464,8 @@ final class SetupCallingViewController: BedsideSetupStep {
 /// Do this later, or going back to choose another way, leaves the phone keypad off; This iPad in caregiver mode opens
 /// this screen again. The phone checked through the adapter, with no Cell2Jack on the driver, turns the phone keypad
 /// off: an iPad that moves from a Cell2Jack plugged straight in to the adapter stops looking for it.
+/// With the phone already connected, This iPad opens it as Check the phone (`checking`): it starts out done, saying
+/// the phone is connected, and a key and hanging up still check it. Done is the only way out.
 final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving {
     /// Builds without the Cell2Jack driver, iPhones, and iPads without an M chip listen only for the adapter.
     static var offered: Bool { Cell2JackKeypad.supportsDriverPlatform }
@@ -472,8 +474,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// Where Continue and Do this later go. Setup goes on to adding the caregiver's phone.
     /// This iPad sets this after `PorchStyle.navigation` has already loaded the view, so the title
     /// can't wait for `viewDidLoad`.
-    var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = "Connect the phone" } } }
-    private enum Progress: Equatable { case waiting, connected, heard(String), done(String) }
+    var onContinue: (() -> Void)? { didSet { if onContinue != nil { title = heading } } }
+    /// `confirmed` is the phone connected when Check the phone opened, before a key.
+    private enum Progress: Equatable { case waiting, connected, confirmed, heard(String), done(String) }
     /// Which path sent the key. The hang-up has to come back the same way: the adapter's
     /// hang-up key is a keyboard key, and the driver's hang-up is not.
     private enum HeardFrom { case keyboard, driver }
@@ -488,6 +491,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private let tryDriver: Bool
     /// The iPad is known to have an M chip (`IPadChip.hasMChip`). With the driver, it doesn't need the adapter.
     private let mChip: Bool
+    /// Check the phone, from This iPad with the phone already connected.
+    private let checking: Bool
+    private var heading: String { checking ? "Check the phone" : "Connect the phone" }
     /// The adapter is a keyboard to the iPad. Any keyboard counts, such as a keyboard case, so a key is the check.
     private let keyboardConnected: () -> Bool
     private var keys = CallTrigger()
@@ -500,6 +506,8 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     /// Leaving, so a stop callback doesn't put the waiting text back up.
     private var leaving = false
     private let status = PorchStyle.label("", size: 20, color: PorchStyle.ink, weight: .semibold)
+    /// Under the status, only while Check the phone says the phone is connected.
+    private let statusDetail = PorchStyle.label("Lift the receiver and press a key to try it.", size: 15)
     /// The step the check is on, as a picture over the status: plug in, press a key, put the receiver back, done.
     private let badge = UIView()
     private let statusIcon = UIImageView()
@@ -507,15 +515,17 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private var later: UIButton?
     init(_ setup: BedsideSetup, keypad: Cell2JackKeypad = .shared, tryDriver: Bool = SetupPhoneViewController.offered,
          mChip: Bool = IPadChip.hasMChip(model: PorchDevice.model),
-         keyboardConnected: @escaping () -> Bool = { GCKeyboard.coalesced != nil }) {
+         keyboardConnected: @escaping () -> Bool = { GCKeyboard.coalesced != nil }, checking: Bool = false) {
         self.keypad = keypad; self.tryDriver = tryDriver; self.mChip = mChip; self.keyboardConnected = keyboardConnected
+        self.checking = checking
         super.init(setup)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(_:keypad:tryDriver:mChip:keyboardConnected:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(_:keypad:tryDriver:mChip:keyboardConnected:checking:)") }
     deinit { NotificationCenter.default.removeObserver(self) }
     override func viewDidLoad() {
         super.viewDidLoad(); hideKeyboardControl()
-        if onContinue != nil { title = "Connect the phone" }
+        if onContinue != nil { title = heading }
+        if checking { proceed.configuration?.title = "Done"; proceed.configuration?.image = nil }
         proceed.accessibilityIdentifier = "setup.phoneDone"
         proceed.addAction(UIAction { [weak self] _ in self?.finish() }, for: .touchUpInside)
         status.textAlignment = .center; status.accessibilityIdentifier = "setup.phoneStatus"
@@ -530,18 +540,19 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         later.contentHorizontalAlignment = .center
         later.accessibilityIdentifier = "setup.phoneLater"; self.later = later
         var views: [UIView] = [guide, progressPanel(), proceed, later]
-        if tryDriver && mChip { views.append(mChipNote()) }
-        let card = section("Connect the phone", detail: "Plug the desk phone in with the Porch phone adapter.",
+        // Checking a phone that's plugged in needs neither how to plug it in nor the M chip's driver.
+        if tryDriver && mChip && !checking { views.append(mChipNote()) }
+        let card = section(heading, detail: checking ? nil : "Plug the desk phone in with the Porch phone adapter.",
                            views: views)
         if let stack = card.subviews.first as? UIStackView, let detail = stack.arrangedSubviews.dropFirst().first {
-            // The link reads as part of the explanation above it, and the panel stands apart from both.
-            stack.setCustomSpacing(4, after: detail); stack.setCustomSpacing(24, after: guide)
+            // The link reads as part of the explanation above it, or the heading, and the panel stands apart from both.
+            stack.setCustomSpacing(4, after: checking ? stack.arrangedSubviews[0] : detail); stack.setCustomSpacing(24, after: guide)
         }
         form.addArrangedSubview(card)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: .GCKeyboardDidDisconnect, object: nil)
         if tryDriver { NotificationCenter.default.addObserver(self, selector: #selector(keypadChanged), name: .cell2JackKeypadChanged, object: nil) }
-        progress = connected ? .connected : .waiting
+        progress = !connected ? .waiting : checking && confirmed ? .confirmed : .connected
         render(announce: false)
     }
     /// The status, under a round badge whose icon shows the step it's on. It's the part of the screen that changes, so
@@ -559,8 +570,10 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
             badge.topAnchor.constraint(equalTo: row.topAnchor), badge.bottomAnchor.constraint(equalTo: row.bottomAnchor),
             statusIcon.centerXAnchor.constraint(equalTo: badge.centerXAnchor), statusIcon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
         ])
-        let panel = UIStackView(arrangedSubviews: [row, status])
+        statusDetail.textAlignment = .center
+        let panel = UIStackView(arrangedSubviews: [row, status, statusDetail])
         panel.axis = .vertical; panel.spacing = 16
+        panel.setCustomSpacing(6, after: status)
         panel.isLayoutMarginsRelativeArrangement = true
         panel.directionalLayoutMargins = .init(top: 28, leading: 24, bottom: 28, trailing: 24)
         panel.backgroundColor = PorchStyle.page; panel.layer.cornerRadius = 16
@@ -590,6 +603,8 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     private var driverReady: Bool { tryDriver && keypad.isReady }
     /// The phone can be heard: through the adapter, or on the driver.
     private var connected: Bool { keyboardConnected() || driverReady }
+    /// Connected as This iPad says it is, where a keyboard counts only once the adapter has been heard here.
+    private var confirmed: Bool { keypad.deskPhone(driver: tryDriver, keyboardConnected: keyboardConnected()) == .connected }
     /// The path that sent the key is still up, so its hang-up can still arrive.
     private var heardPathIsUp: Bool {
         switch heardFrom {
@@ -619,6 +634,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         switch progress {
         case .done: break
         case .waiting: if connected { progress = .connected; render(announce: announce) }
+        case .confirmed: if !confirmed { progress = connected ? .connected : .waiting; render(announce: announce) }
         case .connected:
             if !connected {
                 progress = .waiting
@@ -676,7 +692,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         } else {
             heardFrom = nil
             progress = .done("Porch heard \(symbol). The phone is ready.")
-            if !fromDriver { checkedThroughAdapter = true; checkedWithoutDriver() }
+            if !fromDriver { keypad.noteAdapterHeard(); checkedThroughAdapter = true; checkedWithoutDriver() }
         }
         render()
     }
@@ -689,7 +705,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     func receiveCell2JackHangUp() -> String {
         guard case .heard = progress else { return "setup: hang-up before a key" }
         progress = .done("Porch heard you hang up. The phone is ready.")
-        if heardFrom == .keyboard { checkedThroughAdapter = true; checkedWithoutDriver() }
+        if heardFrom == .keyboard { keypad.noteAdapterHeard(); checkedThroughAdapter = true; checkedWithoutDriver() }
         render()
         return "setup: heard hang-up"
     }
@@ -718,6 +734,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         case .connected:
             showedDriverReady = driverReady
             status.text = driverReady ? "The phone is connected. Lift the receiver and press a key." : "Lift the receiver and press a key."
+        case .confirmed: status.text = "The phone is connected."
         case .heard(let symbol): status.text = "Porch heard \(symbol). Now put the receiver back."
         case .done(let text): status.text = text
         }
@@ -726,18 +743,23 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         case .waiting: symbol = "phone.connection"
         case .connected: symbol = "circle.grid.3x3.fill"
         case .heard: symbol = "phone.down.fill"
-        case .done: symbol = "checkmark"
+        case .confirmed, .done: symbol = "checkmark"
         }
         statusIcon.image = UIImage(systemName: symbol)
-        // Done fills the badge in. Waiting is grey until the phone is there.
-        badge.backgroundColor = checked ? PorchStyle.accent : PorchStyle.surface
-        statusIcon.tintColor = checked ? .white : progress == .waiting ? PorchStyle.secondary : PorchStyle.accent
-        proceed.isHidden = !checked; later?.isHidden = checked
+        statusDetail.isHidden = progress != .confirmed
+        // Done fills the badge in, as does a phone already connected. Waiting is grey until the phone is there.
+        let filled = checked || progress == .confirmed
+        badge.backgroundColor = filled ? PorchStyle.accent : PorchStyle.surface
+        statusIcon.tintColor = filled ? .white : progress == .waiting ? PorchStyle.secondary : PorchStyle.accent
+        // Checking has nothing to put off, so its Done is always there.
+        proceed.isHidden = !checked && !checking; later?.isHidden = checked || checking
         if announce { UIAccessibility.post(notification: .announcement, argument: status.text) }
     }
     private func finish() {
         // Do this later is the way out before the check finishes, and it leaves the keypad off.
-        leaveTrial(turnOff: enabledHere && !checked)
+        // Check the phone's Done is always there, including before a key, and it's the only way out of that screen.
+        // A Cell2Jack that answers during the check has just turned the keypad on, so Done must leave it on.
+        leaveTrial(turnOff: enabledHere && !checked && !checking)
         if let onContinue { onContinue(); return }
         navigationController?.setViewControllers([setup.screen(from: .yourPhone)], animated: true)
     }

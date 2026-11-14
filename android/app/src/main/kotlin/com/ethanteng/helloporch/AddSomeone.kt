@@ -462,7 +462,7 @@ internal fun InviteReady(title: String, heading: String, first: String, link: St
             FormCard("Send $first the invite") {
                 InvitationCode(it, "Invitation QR code")
                 FormButton("Share invite link", onClick = { shareInvitation(context, it) }, icon = R.drawable.ic_share)
-                Text("Works once, for 24 hours.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Text("Link expires after 24 hours.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center)
             }
         }

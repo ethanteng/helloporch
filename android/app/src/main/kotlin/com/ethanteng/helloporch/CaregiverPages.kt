@@ -17,18 +17,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,8 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ethanteng.helloporch.core.BedsideAttendance
 import com.ethanteng.helloporch.core.BedsideLanguage
 import com.ethanteng.helloporch.core.BedsidePreferences
@@ -111,6 +119,8 @@ fun CaregiverScreenContent(app: PorchApplication, admin: CaregiverAdmin, links: 
             }
         }
         CaregiverScreen.CONNECT_PHONE -> CordedPhoneSetup(app.cell2jack, onDone = onDone, onBack = onDone, title = "Connect the phone")
+        CaregiverScreen.CHECK_PHONE ->
+            CordedPhoneSetup(app.cell2jack, onDone = onDone, onBack = onDone, title = "Check the phone", checking = true)
     }
 }
 
@@ -518,12 +528,22 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
     val context = LocalContext.current
     val keypad = app.cell2jack
     var receiverHangUp by remember { mutableStateOf(keypad.receiverHangUp) }
+    val ready by keypad.isReady.collectAsStateWithLifecycle()
+    val setUp by keypad.enabled.collectAsStateWithLifecycle()
     // As on iOS, Connect the phone is the only way the phone keypad turns on, and opening it connects again at once,
     // so there's no switch or retry here. Once on it stays on: unplugging the Cell2Jack doesn't turn it off, and Porch
     // keeps trying to connect, backing off to every 15 seconds, until it's plugged back in. That's on purpose, since
-    // the guide says to unplug it for ten seconds. Android has no adapter check to turn it off, as iOS has.
+    // the guide says to unplug it for ten seconds. Android has no adapter check to turn it off, as iOS has. So once
+    // it's on, the phone has been set up here, and a row at the top says whether the Cell2Jack is answering now.
+    // Connected, the way in is Check the phone, which opens the check already done: it's still the one place to press
+    // a key without calling anyone.
     CaregiverGroup("Connect the physical phone", "Plug the Cell2Jack into this tablet's USB port.") {
-        ActionRow("Connect the phone") { onScreen(CaregiverScreen.CONNECT_PHONE) }
+        if (setUp) {
+            PhoneStatusRow(connected = ready)
+            HorizontalDivider()
+        }
+        if (ready) ActionRow("Check the phone") { onScreen(CaregiverScreen.CHECK_PHONE) }
+        else ActionRow("Connect the phone") { onScreen(CaregiverScreen.CONNECT_PHONE) }
         HorizontalDivider()
         ToggleRow("Hang up when the receiver is put back", receiverHangUp, onChange = { keypad.setReceiverHangUp(it); receiverHangUp = it })
         HorizontalDivider()
@@ -550,6 +570,23 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
         text = { Text("You can switch back later.") },
         confirmButton = { TextButton(onClick = { confirming = false; onClose(); app.switchExperience(PorchExperience.FAMILY) }) { Text("Use as family device") } },
         dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
+}
+
+/** Whether the phone is connected now: a filled check, or the amber of a message that's waiting with an exclamation
+ * mark, as on iOS. */
+@Composable
+private fun PhoneStatusRow(connected: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    CaregiverRow {
+        Surface(Modifier.size(28.dp), shape = CircleShape, color = if (connected) colors.primary else Color(0.98f, 0.74f, 0.24f, 0.26f)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(painterResource(if (connected) R.drawable.ic_check else R.drawable.ic_priority_high), contentDescription = null,
+                    Modifier.size(18.dp), tint = if (connected) colors.onPrimary else Color(0.52f, 0.32f, 0f))
+            }
+        }
+        Text(if (connected) "The phone is connected" else "The phone isn't connected", Modifier.weight(1f).testTag("device.phoneStatus"),
+            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 private fun open(context: Context, intent: Intent) {

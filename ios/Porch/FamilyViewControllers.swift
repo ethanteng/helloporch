@@ -650,8 +650,8 @@ final class FamilyInviteViewController: CaregiverFormViewController {
     /// What sharing an invitation sends: a note, then the link.
     static func shareItems(_ link: URL) -> [Any] {
         // A web link opens Porch, or shows how to get it first.
-        let note = link.scheme == "https" ? "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It works once, for 24 hours."
-            : "Join our Porch! This link works once, for 24 hours."
+        let note = link.scheme == "https" ? "Join our Porch! Open this link on your phone. If you don't have Porch yet, it shows you how to get it. It expires after 24 hours."
+            : "Join our Porch! This link expires after 24 hours."
         return [note, link]
     }
     private func shareInvite(_ link: URL) {

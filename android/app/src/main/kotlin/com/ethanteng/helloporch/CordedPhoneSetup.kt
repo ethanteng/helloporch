@@ -49,11 +49,16 @@ import com.ethanteng.helloporch.core.Cell2JackPhoneCheck
  *
  * Keys pressed here only show the one Porch heard, so nothing else should act on [Cell2JackKeypad.events] while this
  * screen is showing. Do this later, or going back to choose another way, leaves the phone keypad off unless the phone
- * was already checked; This tablet in caregiver mode can open this screen again, with `title` Connect the phone.
+ * was already checked; This tablet in caregiver mode can open this screen again, with `title` Connect the phone. With
+ * the phone already connected, This tablet opens it as Check the phone (`checking`): it starts out done, saying the
+ * phone is connected, and a key and hanging up still check it. Done is the only way out.
  */
 @Composable
-fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> Unit, title: String = "Set up Porch") {
-    var check by rememberSaveable(stateSaver = phoneCheckSaver) { mutableStateOf<Cell2JackPhoneCheck>(Cell2JackPhoneCheck.Waiting) }
+fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> Unit, title: String = "Set up Porch",
+    checking: Boolean = false) {
+    var check by rememberSaveable(stateSaver = phoneCheckSaver) {
+        mutableStateOf(if (checking && keypad.isReady.value) Cell2JackPhoneCheck.Confirmed else Cell2JackPhoneCheck.Waiting)
+    }
     // This screen turned the keypad on. Leaving before the check finishes undoes that; one that was already on stays on.
     var enabledHere by rememberSaveable { mutableStateOf(false) }
     // Leaving, so a late change can't put the waiting text back up or turn the keypad on again.
@@ -103,7 +108,7 @@ fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> 
 
     val needsPermission = access == Cell2JackKeypad.Access.NEEDS_PERMISSION && check == Cell2JackPhoneCheck.Waiting
     CordedPhoneSetupScreen(
-        title, check,
+        title, check, checking,
         status = if (needsPermission) "Porch needs permission to use the Cell2Jack." else check.status,
         needsPermission = needsPermission && !check.checked,
         onAllow = keypad::requestPermission,
@@ -118,14 +123,15 @@ fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> 
 /** What Connect the phone shows for a step of the check, apart from the Cell2Jack itself: the explanation and the guide,
  * then a panel with the step's icon over its status, then the way on. */
 @Composable
-internal fun CordedPhoneSetupScreen(title: String, check: Cell2JackPhoneCheck, status: String,
+internal fun CordedPhoneSetupScreen(title: String, check: Cell2JackPhoneCheck, checking: Boolean, status: String,
     needsPermission: Boolean, onAllow: () -> Unit, onGuide: () -> Unit, onContinue: () -> Unit, onLater: () -> Unit,
     onBack: () -> Unit) {
     FormScreen(title, navigation = { TextButton(onClick = onBack) { Text("Back") } }) {
-        FormCard("Connect the phone") {
-            // The link reads as part of the explanation, so they sit closer together than the rest of the card.
+        FormCard(if (checking) "Check the phone" else "Connect the phone") {
+            // The link reads as part of the explanation, so they sit closer together than the rest of the card. Checking
+            // a phone that's plugged in doesn't need how to plug it in.
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Plug the desk phone in with the Cell2Jack.",
+                if (!checking) Text("Plug the desk phone in with the Cell2Jack.",
                     Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 // The steps, the parts and the tips are on the website, which can change without an update.
@@ -139,7 +145,9 @@ internal fun CordedPhoneSetupScreen(title: String, check: Cell2JackPhoneCheck, s
             if (needsPermission) {
                 FormButton("Allow Porch to use the Cell2Jack", onClick = onAllow, Modifier.testTag("setup.phoneAllow"), filled = false)
             }
-            if (check.checked) FormButton("Continue", onClick = onContinue, Modifier.testTag("setup.phoneDone"))
+            // Checking has nothing to put off, so its Done is always there.
+            if (checking) FormButton("Done", onClick = onContinue, Modifier.testTag("setup.phoneDone"))
+            else if (check.checked) FormButton("Continue", onClick = onContinue, Modifier.testTag("setup.phoneDone"))
             else TextButton(onClick = onLater, Modifier.testTag("setup.phoneLater")) { Text("Do this later") }
         }
     }
@@ -154,23 +162,30 @@ private fun PhoneCheckPanel(check: Cell2JackPhoneCheck, status: String) {
         Cell2JackPhoneCheck.Waiting -> R.drawable.ic_phone_in_talk
         Cell2JackPhoneCheck.Connected -> R.drawable.ic_dialpad
         is Cell2JackPhoneCheck.Heard -> R.drawable.ic_call_end
-        is Cell2JackPhoneCheck.Done -> R.drawable.ic_check
+        Cell2JackPhoneCheck.Confirmed, is Cell2JackPhoneCheck.Done -> R.drawable.ic_check
     }
+    // Done fills the badge in, as does a phone already connected. Waiting is grey until the phone is there.
+    val filled = check.checked || check == Cell2JackPhoneCheck.Confirmed
     Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = colors.surfaceVariant.copy(alpha = 0.5f)) {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            // Done fills the badge in. Waiting is grey until the phone is there.
-            Surface(Modifier.size(72.dp), shape = CircleShape, color = if (check.checked) colors.primary else colors.surface) {
+            Surface(Modifier.size(72.dp), shape = CircleShape, color = if (filled) colors.primary else colors.surface) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(painterResource(icon), contentDescription = null, Modifier.size(34.dp), tint = when {
-                        check.checked -> colors.onPrimary
+                        filled -> colors.onPrimary
                         check == Cell2JackPhoneCheck.Waiting -> colors.onSurfaceVariant
                         else -> colors.primary
                     })
                 }
             }
-            Text(status, Modifier.fillMaxWidth().testTag("setup.phoneStatus").semantics { liveRegion = LiveRegionMode.Polite },
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(status, Modifier.fillMaxWidth().testTag("setup.phoneStatus").semantics { liveRegion = LiveRegionMode.Polite },
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                check.detail?.let {
+                    Text(it, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                        textAlign = TextAlign.Center)
+                }
+            }
         }
     }
 }
@@ -182,6 +197,7 @@ private val phoneCheckSaver = listSaver<Cell2JackPhoneCheck, String>(
         when (check) {
             Cell2JackPhoneCheck.Waiting -> listOf("waiting")
             Cell2JackPhoneCheck.Connected -> listOf("connected")
+            Cell2JackPhoneCheck.Confirmed -> listOf("confirmed")
             is Cell2JackPhoneCheck.Heard -> listOf("heard", check.symbol)
             is Cell2JackPhoneCheck.Done -> listOf("done", check.message)
         }
@@ -189,6 +205,7 @@ private val phoneCheckSaver = listSaver<Cell2JackPhoneCheck, String>(
     restore = { saved ->
         when (saved.firstOrNull()) {
             "connected" -> Cell2JackPhoneCheck.Connected
+            "confirmed" -> Cell2JackPhoneCheck.Confirmed
             "heard" -> Cell2JackPhoneCheck.Heard(saved[1])
             "done" -> Cell2JackPhoneCheck.Done(saved[1])
             else -> Cell2JackPhoneCheck.Waiting

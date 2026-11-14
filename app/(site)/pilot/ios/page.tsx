@@ -480,9 +480,10 @@ const parts: GuidePart[] = [
               a: (
                 <p>
                   Lift the receiver before pressing a key, and check that the charger is plugged into the hub and the
-                  adapter’s red light is on. Then open caregiver mode, <UI>This iPad</UI>, and run{" "}
-                  <UI>Connect the phone</UI> again. If you left the adapter out on an iPad with an M chip, tap{" "}
-                  <UI>Open Settings</UI> there and check that <UI>Cell2Jack USB Driver</UI> is on.
+                  adapter’s red light is on. Then open caregiver mode and <UI>This iPad</UI>, which says whether the
+                  phone is connected, and run <UI>Check the phone</UI> or <UI>Connect the phone</UI>. If you left the
+                  adapter out on an iPad with an M chip, tap <UI>Open Settings</UI> on <UI>Connect the phone</UI> and
+                  check that <UI>Cell2Jack USB Driver</UI> is on.
                 </p>
               ),
             },
