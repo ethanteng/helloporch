@@ -103,7 +103,7 @@ fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> 
 
     val needsPermission = access == Cell2JackKeypad.Access.NEEDS_PERMISSION && check == Cell2JackPhoneCheck.Waiting
     CordedPhoneSetupScreen(
-        title, LocalBedsideName.current, check,
+        title, check,
         status = if (needsPermission) "Porch needs permission to use the Cell2Jack." else check.status,
         needsPermission = needsPermission && !check.checked,
         onAllow = keypad::requestPermission,
@@ -118,14 +118,14 @@ fun CordedPhoneSetup(keypad: Cell2JackKeypad, onDone: () -> Unit, onBack: () -> 
 /** What Connect the phone shows for a step of the check, apart from the Cell2Jack itself: the explanation and the guide,
  * then a panel with the step's icon over its status, then the way on. */
 @Composable
-internal fun CordedPhoneSetupScreen(title: String, lovedOne: String, check: Cell2JackPhoneCheck, status: String,
+internal fun CordedPhoneSetupScreen(title: String, check: Cell2JackPhoneCheck, status: String,
     needsPermission: Boolean, onAllow: () -> Unit, onGuide: () -> Unit, onContinue: () -> Unit, onLater: () -> Unit,
     onBack: () -> Unit) {
     FormScreen(title, navigation = { TextButton(onClick = onBack) { Text("Back") } }) {
         FormCard("Connect the phone") {
             // The link reads as part of the explanation, so they sit closer together than the rest of the card.
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("$lovedOne can call by pressing a key on the desk phone. Plug it in with the Cell2Jack.",
+                Text("Plug the desk phone in with the Cell2Jack.",
                     Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 // The steps, the parts and the tips are on the website, which can change without an update.

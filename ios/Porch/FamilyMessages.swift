@@ -152,12 +152,12 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
             video.isEnabled = UIImagePickerController.isSourceTypeAvailable(.camera)
             let audio = PorchStyle.button("Record audio", symbol: "mic.fill", filled: kind == "voicemail")
             audio.addAction(UIAction { [weak self] _ in self?.startAudio() }, for: .touchUpInside)
-            content.addArrangedSubview(section("Message for \(recipient)", detail: "Up to two minutes. It waits on their Porch until they play it.", views: kind == "voicemail" ? [audio, video] : [video, audio]))
+            content.addArrangedSubview(section("Message for \(recipient)", detail: "Up to two minutes.", views: kind == "voicemail" ? [audio, video] : [video, audio]))
         case .recordingAudio:
             let stop = PorchStyle.button("Stop recording", symbol: "stop.fill")
             stop.addAction(UIAction { [weak self] _ in self?.recorder?.stop() }, for: .touchUpInside)
             updateTimer()
-            content.addArrangedSubview(section("Recording for \(recipient)…", detail: "Speak after the beep. You have two minutes.", views: [timerLabel, stop]))
+            content.addArrangedSubview(section("Recording for \(recipient)…", detail: "Speak after the beep.", views: [timerLabel, stop]))
         case .recorded, .sending:
             let sending = phase == .sending
             let play = PorchStyle.button("Play it back", symbol: "play.fill", filled: false)
@@ -270,7 +270,7 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
                 if let poster = self.recording?.poster ?? recording.poster { MessagePosters.save(poster, for: sent.id) }
                 try? FileManager.default.removeItem(at: recording.file)
                 self.recording = nil; self.phase = .idle
-                let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch. See when it's played in Messages with \(self.recipient).", preferredStyle: .alert)
+                let done = UIAlertController(title: "Message sent", message: "It's waiting on \(self.recipient)'s Porch.", preferredStyle: .alert)
                 done.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in self?.navigationController?.popViewController(animated: true) })
                 self.present(done, animated: true)
             } catch {
@@ -437,7 +437,6 @@ final class MessageThreadViewController: CaregiverFormViewController {
     }
     private let list = UIStackView()
     private let record = PorchStyle.button("Record a message", symbol: "mic.fill")
-    private let footer = PorchStyle.label("", size: 15)
     private var loading = false
     private var opening = false
     private var posterTask: Task<Void, Never>?
@@ -457,13 +456,12 @@ final class MessageThreadViewController: CaregiverFormViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         list.axis = .vertical; list.spacing = 16
-        footer.textAlignment = .center
         record.accessibilityIdentifier = "messages.record"
         record.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             self.navigationController?.pushViewController(MessageComposerViewController(recipient: self.name), animated: true)
         }, for: .touchUpInside)
-        [list, record, footer].forEach { form.addArrangedSubview($0) }
+        [list, record].forEach { form.addArrangedSubview($0) }
         hideKeyboardControl()
         familyChanged()
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
@@ -483,7 +481,6 @@ final class MessageThreadViewController: CaregiverFormViewController {
         title = "Messages with \(name)"
         record.configuration?.title = "Record a message for \(name)"
         record.isHidden = FamilyCoordinator.shared.state?.messagesEnabled == false
-        footer.text = "Your messages wait on \(name)'s Porch until they're played. When you miss a Porch call from \(name), they can leave you a message here."
     }
     @objc private func reloadMessages() {
         guard let credential = PorchDevice.credential(for: .family) else { return }

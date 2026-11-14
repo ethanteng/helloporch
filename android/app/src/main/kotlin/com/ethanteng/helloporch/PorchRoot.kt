@@ -134,7 +134,7 @@ fun PorchRoot(
 @Composable
 private fun Welcome(onSetUp: () -> Unit, onJoin: () -> Unit) {
     FormScreen("Porch") {
-        FormSection("Welcome to Porch", "Set up Porch on the tablet that stays with your loved one, or join your family's Porch from your phone.") {
+        FormSection("Welcome to Porch") {
             FormButton("Set up Porch for someone", onClick = onSetUp)
             FormButton("I'm joining my family", onClick = onJoin, filled = false)
         }
@@ -146,8 +146,7 @@ private fun Welcome(onSetUp: () -> Unit, onJoin: () -> Unit) {
 @Composable
 private fun BedsideOnTablet(onJoin: () -> Unit, onBack: () -> Unit) {
     FormScreen("Set up Porch", navigation = { TextButton(onClick = onBack) { Text("Back") } }) {
-        FormSection("Set up Porch on their tablet",
-            "Porch runs on the tablet that stays with your loved one. Open your setup link on that tablet: it opens Porch there, or shows how to get it. Once it's set up, you can add your phone from the tablet.") {
+        FormSection("Set up Porch on their tablet", "Open your setup link on the tablet that stays with your loved one.") {
             FormButton("I'm joining my family", onClick = onJoin, filled = false)
         }
     }

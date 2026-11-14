@@ -258,7 +258,7 @@ final class CaregiverPINViewController: CaregiverFormViewController {
         if creating { fields.append(field(confirmation, title: "Confirm your PIN", placeholder: "Repeat the six digits")) }
         submit.configuration?.title = creating ? "Save PIN and continue" : "Open caregiver mode"
         fields.append(submit)
-        content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", detail: creating ? "Caregivers also use it on their phones." : nil, views: fields))
+        content.addArrangedSubview(section(creating ? "Set your caregiver PIN" : "Your caregiver PIN", views: fields))
         // Reachable without the PIN, so anyone at the bedside can read it.
         let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
         privacy.accessibilityIdentifier = "caregiver.privacy"

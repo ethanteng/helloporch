@@ -117,7 +117,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             link?.accessRemoved != true && link?.state?.messagesEnabled != false
     }?.let { offer ->
         AlertDialog(onDismissRequest = { app.calls.messageOffer = null }, title = { Text(offer.title) },
-            text = { Text("Leave a message? It waits on their Porch until they play it.") },
+            text = { Text("Leave a message?") },
             confirmButton = {
                 TextButton(onClick = {
                     app.calls.messageOffer = null
@@ -176,7 +176,7 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
     var naming by rememberSaveable(stateSaver = namingSaver) { mutableStateOf<Naming?>(null) }
     val scope = rememberCoroutineScope()
     Text(if (adding) "Join another family" else "Join a family", style = MaterialTheme.typography.headlineMedium)
-    Text("Paste the invitation link a caregiver sent you. It works once, for 24 hours.")
+    Text("Paste the link a caregiver sent you.")
     OutlinedTextField(text, { text = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Invitation link") }, singleLine = true)
     if (adding) OutlinedTextField(nickname, { nickname = it }, Modifier.fillMaxWidth(), label = { Text("What you call this family (optional)") }, singleLine = true)
     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -309,7 +309,7 @@ private fun NameFamily(app: PorchApplication, naming: Naming, onDone: () -> Unit
         title = { Text("Name this family") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("You're in more than one family called ${naming.sharedName}. Until you name this one, it's ${naming.numberedName}.")
+                Text("You're in more than one family called ${naming.sharedName}. What do you call this one?")
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
             }
         },

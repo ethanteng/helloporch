@@ -311,8 +311,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         }
         phone.accessibilityIdentifier = "person.phone"
         rows.append(phone)
-        let fallback = linked && contact.phoneNumber != nil ? "If Porch isn't answered in \(CallPreferences.fallbackSeconds()) seconds, Porch calls their phone. Voice only." : nil
-        return group("Reach \(subject.firstName)", detail: fallback, rows: rows)
+        return group("Reach \(subject.firstName)", rows: rows)
     }
     /// Invites someone who's on the keypad by phone, and links their key to the invitation.
     private func invite() {
@@ -388,7 +387,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
             cards.append(("By phone", [toggleRow("Calls from \(PhoneNumberNormalization.display(number)) drop in", detail: "Audio only.", phone)]))
         }
         guard !cards.isEmpty else { return nil }
-        let detail = state?.dropInEnabled == false ? "Drop-ins are paused for everyone." : "Drop-ins connect without anyone answering."
+        let detail = state?.dropInEnabled == false ? "Drop-ins are paused for everyone." : "Connects without \(admin.lovedOne) answering."
         let stack = UIStackView(arrangedSubviews: heading("Drop-in", detail: detail))
         stack.axis = .vertical
         stack.spacing = 14
@@ -412,7 +411,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
             guard let admin, let caregiver else { return }
             Task { await admin.perform("setCaregiver", ["memberID": person.id, "enabled": caregiver.isOn]) }
         }, for: .valueChanged)
-        return group(rows: [toggleRow("Caregiver mode", detail: isMe ? "Another caregiver can change this." : "Can change settings from their phone with the PIN.", caregiver)])
+        return group(rows: [toggleRow("Caregiver mode", detail: isMe ? "Another caregiver can change this." : "Can change settings from their phone.", caregiver)])
     }
 
     // MARK: Removing

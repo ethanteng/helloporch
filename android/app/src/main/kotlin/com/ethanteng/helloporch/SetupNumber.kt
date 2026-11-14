@@ -98,10 +98,11 @@ class SetupNumber(
                 // With an area code near the tablet, getting the number is one tap.
                 if (PorchNumber.isAreaCode(areaCode)) {
                     showsAreaChoice = false; showsDifferent = true
-                    message = "Porch will get a number in area code $areaCode, near this tablet."
+                    message = "Porch will get a number in area code $areaCode."
                 } else {
+                    // The field says it's the area code.
                     showsAreaChoice = true
-                    message = "Type the area code you'd like, such as 510."
+                    message = ""
                 }
             } finally {
                 busy = false
@@ -111,7 +112,7 @@ class SetupNumber(
 
     fun chooseAreaCode() {
         showsAreaChoice = true; showsDifferent = false
-        message = "Choose an area code near this tablet, or type another."
+        message = ""
         focusRequests++
     }
 
@@ -122,7 +123,7 @@ class SetupNumber(
         val credential = app.device.credential(PorchExperience.BEDSIDE) ?: return
         val offeredAnother = showsDifferent
         busy = true; assigning = true; showsDifferent = false
-        message = "Getting a number in area code $code. This can take a little while."
+        message = "Getting a number in area code $code…"
         task = scope.launch {
             try {
                 // The first number Porch buys also sets up its phone line, which takes longer than most requests.
@@ -130,7 +131,7 @@ class SetupNumber(
                 app.coordinator.update(response)
                 val number = response.porchNumber
                 if (number != null) show(number)
-                else waiting("Porch is still getting ${lovedOne()}'s number. It keeps trying, and caregiver mode shows the number once it's ready.")
+                else waiting("Still getting ${lovedOne()}'s number. Caregiver mode shows it when it's ready.")
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -139,8 +140,8 @@ class SetupNumber(
                 // Another area code is up to the caregiver. Porch's own limit clears by itself, and it keeps trying.
                 when {
                     failure?.code == "noNumbers" || failure?.status == 400 -> { showsAreaChoice = true; message = text }
-                    failure?.code == "numberLimit" -> waiting("$text Porch keeps trying, and caregiver mode shows the number once it's ready.")
-                    else -> waiting("$text You can go on and get the number in caregiver mode later.")
+                    failure?.code == "numberLimit" -> waiting("$text Porch keeps trying.")
+                    else -> waiting("$text You can get it later in caregiver mode.")
                 }
             } finally {
                 busy = false; assigning = false
@@ -159,7 +160,7 @@ class SetupNumber(
     private fun show(number: String) {
         assigned = PorchNumber.display(number)
         showsAreaChoice = false; showsDifferent = false
-        message = "Anyone can call ${lovedOne()}'s Porch on this number. When ${lovedOne()} calls a regular phone, it shows this number too."
+        message = ""
         showsContinue = true
     }
 }
@@ -169,12 +170,13 @@ class SetupNumber(
 fun SetupNumberScreen(number: SetupNumber, lovedOne: String, onContinue: () -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(number.focusRequests) { if (number.focusRequests > 0) focus.requestFocus() }
-    FormSection("$lovedOne's Porch number", "People can call $lovedOne's Porch from any phone.") {
+    FormSection("$lovedOne's Porch number") {
         number.assigned?.let {
             Text(it, Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }, fontSize = 34.sp, fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center, style = MaterialTheme.typography.headlineLarge)
         }
-        Text(number.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyLarge)
+        // Empty once there's nothing to say, such as with the number shown.
+        if (number.message.isNotEmpty()) Text(number.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyLarge)
         if (number.assigned == null) {
             if (number.showsAreaChoice) {
                 FormField(number.areaCode, { typed -> number.areaCode = typed.filter(Char::isDigit).take(3) }, "Area code", "For example, 510",
