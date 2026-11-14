@@ -1394,6 +1394,46 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertNil(contact.phoneNumber)
     }
 
+    @MainActor func testAnInvitationIsReusedOnlyForTheSamePersonAndDropIn() async throws {
+        let (home, _, _) = try addSomeoneHome()
+        let draft = AddSomeoneDraft(key: 5, fromKeyTile: true)
+        draft.name = "Linda Park"
+        draft.viaApp = true
+        draft.dropInAudio = true
+        draft.dropInVideo = false
+        let link = URL(string: "https://helloporch.store/join#code=abc")!
+        let id = "99999999-8888-4777-8666-555555555555"
+        draft.invitation = .init(id: id, link: link, name: "Linda Park", audio: true, video: false)
+        XCTAssertEqual(draft.reusableInvitation()?.id, id)
+        draft.dropInVideo = true
+        XCTAssertNil(draft.reusableInvitation(), "Drop-in is part of the invitation")
+        draft.dropInVideo = false
+        draft.name = "David"
+        XCTAssertNil(draft.reusableInvitation(), "A different person needs their own invitation")
+        draft.name = "Linda Park"
+        draft.viaApp = false
+        XCTAssertNil(draft.reusableInvitation(), "Phone only doesn't keep the invitation")
+        draft.viaApp = true
+        let returned = try await AddCheckViewController.add(draft, admin: home)
+        XCTAssertEqual(returned, link, "The same name and drop-in reuse the invitation already made")
+        XCTAssertEqual(home.slots?.contact(for: 5)?.invitationID, id)
+        XCTAssertEqual(home.slots?.contact(for: 5)?.customName, "")
+
+        let person = try JSONDecoder().decode(FamilyPerson.self, from: JSONSerialization.data(withJSONObject: [
+            "id": "6B1F7C3A-2D5E-4F8A-9C0B-1E2D3F4A5B6C", "name": "Tom Reyes", "role": "family", "permissions": ["audio": true, "video": true], "online": true]))
+        let member = AddSomeoneDraft(key: 4, fromKeyTile: true)
+        member.member = person
+        member.name = person.name
+        member.viaApp = true
+        member.invitation = draft.invitation
+        let memberLink = try await AddCheckViewController.add(member, admin: home)
+        XCTAssertNil(memberLink, "Someone already on Porch isn't shown an invitation made for someone else")
+        let saved = try XCTUnwrap(home.slots?.contact(for: 4))
+        XCTAssertEqual(saved.familyMemberID, person.id)
+        XCTAssertNil(saved.invitationID)
+        XCTAssertEqual(saved.name, "Tom Reyes")
+    }
+
     @MainActor func testDynamicClockRetainsCurrentDateTimeAndReadableLayout() {
         let old = UserDefaults.standard.data(forKey: "porch.bedsideDisplay.v1")
         defer { UserDefaults.standard.set(old, forKey: "porch.bedsideDisplay.v1") }

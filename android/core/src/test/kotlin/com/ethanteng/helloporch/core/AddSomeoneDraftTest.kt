@@ -149,6 +149,21 @@ class AddSomeoneDraftTest {
         assertNull(contact.customPhotoData)
     }
 
+    @Test fun anInvitationIsReusedOnlyForTheSameNameAndDropIn() {
+        val made = AddSomeoneDraft(key = 5, name = "Linda Park", viaApp = true, dropInAudio = true, dropInVideo = false,
+            invitationID = newInvitation, link = "https://helloporch.store/join#code=abc",
+            invitationName = "Linda Park", invitationAudio = true, invitationVideo = false)
+        assertEquals(newInvitation, made.reusableInvitation())
+        assertEquals(newInvitation, made.copy(name = " Linda Park ").reusableInvitation(), "Spaces around the name don't make another invitation")
+        assertNull(made.copy(name = "David").reusableInvitation(), "A different person needs their own invitation")
+        assertNull(made.copy(dropInVideo = true).reusableInvitation(), "Drop-in is part of the invitation")
+        assertNull(made.copy(viaApp = false).reusableInvitation(), "Phone only doesn't keep the invitation")
+        assertNull(made.choosing(tom).reusableInvitation(), "Someone already on Porch isn't invited again")
+        assertNull(made.copy(invitationName = null).reusableInvitation())
+        // Coming back from a family member to the same new person can still use the invitation already made.
+        assertEquals(newInvitation, made.choosing(tom).someoneNew("Linda Park").reusableInvitation())
+    }
+
     @Test fun someoneMustBeReachable() {
         val draft = AddSomeoneDraft(key = 5, name = "Linda")
         assertFalse(draft.reachable)

@@ -145,11 +145,15 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
         scope.launch {
             try {
                 saved.numbers.firstOrNull()?.let { PhoneApprovals.authorize(app, it, refresh = true) }
-                var invitation = saved.invitationID.takeIf { saved.inviting }
+                // Only an invitation made for this name and drop-in is reused. One left over from a failed save must not
+                // follow a different person, phone only, or drop-in the caregiver has since changed.
+                var invitation = saved.reusableInvitation()
                 if (saved.inviting && invitation == null) {
-                    val made = createInvitation(app, admin, mediaAccess, saved.name, saved.dropInAudio, saved.dropInVideo) ?: return@launch
+                    val invitedName = saved.name.trim()
+                    val made = createInvitation(app, admin, mediaAccess, invitedName, saved.dropInAudio, saved.dropInVideo) ?: return@launch
                     invitation = made.id
-                    draft = draft.copy(invitationID = made.id, link = made.link)
+                    draft = draft.copy(invitationID = made.id, link = made.link,
+                        invitationName = invitedName, invitationAudio = saved.dropInAudio, invitationVideo = saved.dropInVideo)
                 }
                 val at = saved.key
                 if (at != null) {
