@@ -1740,10 +1740,17 @@ final class CaregiverInputTests: XCTestCase {
     }
 
     @MainActor func testFamilySettingsKeepRarelyUsedChoicesAsLinks() {
-        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
+        let settings = FamilyProfileViewController()
+        let navigation = UINavigationController(rootViewController: settings); settings.loadViewIfNeeded()
         XCTAssertEqual(settings.title, "Settings")
         let titles = buttons(in: settings.view).compactMap { $0.configuration?.title }
-        XCTAssertTrue(titles.contains("Privacy policy"))
+        // The page's own buttons, without the keyboard choice under it.
+        XCTAssertEqual(Array(buttons(in: settings.form).compactMap { $0.configuration?.title }.suffix(2)), ["Privacy policy", "About Porch"], "Last, as on Android")
+        let links = buttons(in: settings.view).filter { ["family.privacy", "family.about"].contains($0.accessibilityIdentifier) }
+        XCTAssertEqual(links.map(\.contentHorizontalAlignment), [.leading, .leading], "Left-aligned, as on Android")
+        links.last?.sendActions(for: .touchUpInside)
+        XCTAssertTrue(navigation.topViewController is AboutViewController)
+        navigation.popToRootViewController(animated: false)
         // Only an iPad can become the bedside.
         XCTAssertEqual(titles.contains("Use this iPad as the bedside Porch"), UIDevice.current.userInterfaceIdiom == .pad)
         XCTAssertFalse(titles.contains("Use this iPhone as the bedside Porch"))

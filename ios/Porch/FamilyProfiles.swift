@@ -239,9 +239,7 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         let linkStack = UIStackView(arrangedSubviews: links)
         linkStack.axis = .vertical; linkStack.alignment = .leading
         content.addArrangedSubview(linkStack)
-        let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
-        privacy.accessibilityIdentifier = "family.privacy"
-        content.addArrangedSubview(privacy)
+        content.addArrangedSubview(porchLinks())
     }
     private func profile(_ me: FamilyPerson) {
         let photo = FamilyPhotos.shared.data(for: me.profile?.photoID)

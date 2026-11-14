@@ -46,6 +46,22 @@ final class AboutViewController: CaregiverFormViewController {
     }
 }
 
+extension CaregiverFormViewController {
+    /// Privacy policy and About Porch, left-aligned at the bottom of a family device's screens, for anyone, not only a
+    /// family's caregivers. Android's PorchLinks (About.kt) matches.
+    func porchLinks() -> UIView {
+        let privacy = textLink("Privacy policy", size: 15) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
+        privacy.accessibilityIdentifier = "family.privacy"
+        let about = textLink("About Porch", size: 15) { [weak self] in
+            self?.navigationController?.pushViewController(AboutViewController(), animated: true)
+        }
+        about.accessibilityIdentifier = "family.about"
+        let links = UIStackView(arrangedSubviews: [privacy, about])
+        links.axis = .vertical; links.alignment = .leading
+        return links
+    }
+}
+
 /// How to reach the person who makes Porch. On a family device, the email starts one, and on an iPhone the number calls
 /// it. On the bedside they're only shown, since either would take the iPad away from Porch.
 final class ContactViewController: CaregiverFormViewController, MFMailComposeViewControllerDelegate {

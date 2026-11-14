@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -109,6 +110,17 @@ private fun AboutHome(navigation: (@Composable () -> Unit)?, onContact: () -> Un
                 Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+/** Privacy policy and About Porch, left-aligned at the bottom of a family device's screens, for anyone, not only a
+ * family's caregivers. iOS's `porchLinks()` (AboutViewController.swift) matches. */
+@Composable
+fun PorchLinks(onAbout: () -> Unit) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+        TextButton(onClick = { openPrivacyPolicy(context) }, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) { Text("Privacy policy") }
+        TextButton(onClick = onAbout, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) { Text("About Porch") }
     }
 }
 
