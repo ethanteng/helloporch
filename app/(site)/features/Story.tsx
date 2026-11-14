@@ -118,7 +118,10 @@ const CHAPTERS: Chapter[] = [
         </p>
       </>
     ),
-    watch: [{ id: "multi-language", label: "Switching languages" }],
+    watch: [
+      { id: "multi-language", label: "Switching languages" },
+      { id: "translated-texts", label: "A text, translated" },
+    ],
     scene: <LanguageDemo />,
     tint: "oklch(0.87 0.04 275)",
   },
