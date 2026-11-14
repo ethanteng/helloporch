@@ -413,6 +413,16 @@ const parts: GuidePart[] = [
               ),
             },
             {
+              q: "Porch keeps saying “Waiting for the phone…”",
+              a: (
+                <p>
+                  If the charger is plugged into the hub, unplug it. If the phone then connects, the tablet can’t charge
+                  and use the phone at the same time. See{" "}
+                  <Link href="/pilot/android/tablets">choosing an Android tablet</Link>.
+                </p>
+              ),
+            },
+            {
               q: "My phone says the tablet isn’t checking in.",
               a: (
                 <p>
@@ -508,7 +518,13 @@ export default function AndroidGuide() {
         </>
       }
       kit={{
-        intro: "The Cell2Jack connects the corded phone to the tablet through the USB-C hub. Prices are approximate.",
+        intro: (
+          <>
+            The Cell2Jack connects the corded phone to the tablet through the USB-C hub. Prices are approximate. Not
+            every Android tablet can charge and use the phone at the same time, so{" "}
+            <Link href="/pilot/android/tablets">check yours</Link> first.
+          </>
+        ),
         parts: kit,
         ready: [
           "The Wi-Fi password where your loved one lives.",
