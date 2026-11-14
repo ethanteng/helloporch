@@ -8,8 +8,8 @@ without the driver, stays only as a fallback that has to be chosen by hand.
 
 | Use | Xcode scheme | Cell2Jack driver | Installation |
 | --- | --- | --- | --- |
-| Every TestFlight tester | `Porch` | Included; optional and off by default | TestFlight (`variant=cell2jack`, the default); no Developer Mode |
-| Mom's bedside iPad, for now | `Porch` | Included; optional and off by default | Development signing, install from the Mac |
+| Every TestFlight tester, Mom's bedside iPad included | `Porch` | Included; optional and off by default | TestFlight (`variant=cell2jack`, the default); no Developer Mode |
+| Testing on your own devices | `Porch` | Included; optional and off by default | Development signing, install from the Mac |
 | Fallback only | `PorchFamily` | Excluded | TestFlight (`variant=family`), chosen by hand |
 
 All use the existing `com.ethanteng.helloporch` app identity and ordinary Porch
@@ -18,9 +18,9 @@ with an M chip and iPadOS 16 or later, once it's turned on in Settings → Porch
 Family iPhones use the touchscreen. A bedside iPad without an M chip uses the
 Porch phone adapter or the touchscreen, and Porch doesn't try the driver there. Never install a
 `PorchFamily` build on a bedside that uses a Cell2Jack plugged straight in,
-since it has no driver. Mom's iPad keeps getting `Porch`
-development builds in place until it moves to TestFlight on a visit
-(ONBOARDING-PLAN.md, phase 0); do not uninstall it first.
+since it has no driver. Mom's iPad is one of those bedsides. It moved from
+development builds to the TestFlight build on 2026-11-14, so it gets every
+TestFlight upload.
 
 ## Developing features
 
@@ -44,6 +44,14 @@ development builds in place until it moves to TestFlight on a visit
 `verify_only=false` to upload. That run also deploys the calling server as before.
 Uploading does not itself invite testers or publish to the App Store. Keep existing
 internal/external TestFlight groups and beta review requirements.
+
+Bedside iPads now run TestFlight builds, and two things follow from that:
+
+- TestFlight builds expire after 90 days. Upload a newer build before then, or
+  Porch stops opening on the bedside.
+- iOS closes Porch to update it and doesn't reopen it. The bedside's clock stays
+  gone until someone opens Porch, so expect that after an upload if TestFlight's
+  automatic updates are on there.
 
 Don't upload `variant=family` in the normal course: its build number would be
 higher than the driver build's, so it would replace the driver build on every
