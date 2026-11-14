@@ -19,6 +19,17 @@ export type Screenshot = {
   alt: string;
 };
 
+// Shown under both Calling and Accessibility. Every tab is in the page at once, so the second copy takes its own id.
+const translatedTexts: Clip = {
+  id: "translated-texts",
+  title: "Text in your language. They hear and read it in theirs.",
+  description:
+    "Families don’t always share a first language, especially across generations. I text my mom in English, and Porch reads it to her in Mandarin.",
+  duration: "26 sec",
+  src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/sms_translation.MP4",
+  poster: "/features/translated-texts.jpg",
+};
+
 export const calling: Clip[] = [
   {
     id: "first-real-call",
@@ -74,6 +85,7 @@ export const calling: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Auto-play%20messages%20compressed.mp4",
     poster: "/features/auto-play-messages.jpg",
   },
+  translatedTexts,
   // A film of the app's own 3-way calling screens, rendered by scripts/render-three-way-film.mjs.
   {
     id: "three-way-calling",
@@ -96,6 +108,7 @@ export const accessibility: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Multi-language%20support%20compressed.mp4",
     poster: "/features/multi-language.jpg",
   },
+  { ...translatedTexts, id: "translated-texts-accessibility" },
   {
     id: "choosing-the-keypad",
     title: "Why we chose a big-button phone",
