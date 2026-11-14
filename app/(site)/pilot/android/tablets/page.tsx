@@ -13,9 +13,12 @@ export const metadata: Metadata = pageMetadata({
 
 // The tablets come from LAVA's tested lists, which show which tablets charge while they use a USB device, as Porch
 // needs (https://lavalink.com/lavaaccessory/charge-plus-compatibility/ and
-// https://lavalink.com/lavasimulcharge/esync-usync-compatibility/), checked in November 2026. Only tablets that run
-// Android 15 or later and worked without trouble are listed. A tablet that can't do both has no USB Power Delivery or
-// won't use it to swap roles with the hub; the MUISOO KB10 has none.
+// https://lavalink.com/lavasimulcharge/esync-usync-compatibility/), checked in November 2026, and only those that run
+// Android 15 or later. The first group worked without trouble. The "likely" group has a catch: the Lenovo Tab (TB311FU)
+// drops USB when its screen is off (Porch keeps it on) and may need the hub replugged after a power cut; the Lenovo Tab
+// K11 (TB330NU) and Galaxy Tab A11+ (SM-X230) were tested only with LAVA's eSynC adapter; the Galaxy Tab Active4 Pro
+// (SM-T630) may drop USB for a moment when the charger goes in. A tablet that can't do both has no USB Power Delivery
+// or won't use it to swap roles with the hub; the MUISOO KB10 has none.
 const parts: GuidePart[] = [
   {
     id: "why",
@@ -34,20 +37,39 @@ const parts: GuidePart[] = [
     id: "work",
     title: "Tablets that work",
     body: (
-      <ul>
-        <li>
-          <strong>Lenovo Idea Tab</strong>, lower cost
-        </li>
-        <li>
-          <strong>Samsung Galaxy Tab S9+</strong>, higher cost
-        </li>
-        <li>
-          <strong>Samsung Galaxy Tab S10+</strong>, higher cost
-        </li>
-        <li>
-          <strong>Samsung Galaxy Tab S10 Ultra</strong>, higher cost
-        </li>
-      </ul>
+      <>
+        <ul>
+          <li>
+            <strong>Lenovo Idea Tab</strong>, lower cost
+          </li>
+          <li>
+            <strong>Samsung Galaxy Tab S9+</strong>, higher cost
+          </li>
+          <li>
+            <strong>Samsung Galaxy Tab S10+</strong>, higher cost
+          </li>
+          <li>
+            <strong>Samsung Galaxy Tab S10 Ultra</strong>, higher cost
+          </li>
+        </ul>
+        <p>
+          These are likely to work too. Do the <a href="#check">quick check</a> before you set one up.
+        </p>
+        <ul>
+          <li>
+            <strong>Lenovo Tab (10.1-inch)</strong>, lower cost
+          </li>
+          <li>
+            <strong>Lenovo Tab K11</strong>, lower cost
+          </li>
+          <li>
+            <strong>Samsung Galaxy Tab A11+</strong>, lower cost
+          </li>
+          <li>
+            <strong>Samsung Galaxy Tab Active4 Pro</strong>, higher cost
+          </li>
+        </ul>
+      </>
     ),
   },
   {
