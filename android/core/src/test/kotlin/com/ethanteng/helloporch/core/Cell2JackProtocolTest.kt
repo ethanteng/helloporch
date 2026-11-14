@@ -79,4 +79,22 @@ class Cell2JackProtocolTest {
         assertEquals(Cell2JackPhoneCheck.Waiting, connected.answering(false))
         assertEquals(Cell2JackPhoneCheck.Heard("1"), connected.key("1", receiverHangUp = true).answering(true))
     }
+
+    /** As the iOS test of Check the phone: it opens connected, and a key and hanging up still check the phone. */
+    @Test fun checkingAConnectedPhoneStartsDoneAndStillHearsAKeyAndHangingUp() {
+        var check: Cell2JackPhoneCheck = Cell2JackPhoneCheck.Confirmed
+        assertEquals("The phone is connected.", check.status)
+        assertEquals("Lift the receiver and press a key to try it.", check.detail)
+        assertFalse(check.checked)
+        assertEquals(check, check.answering(true))
+        assertEquals(check, check.hangUp(), "A hang-up before a key")
+        check = check.key("7", receiverHangUp = true)
+        assertEquals("Porch heard 7. Now put the receiver back.", check.status)
+        assertEquals(null, check.detail)
+        assertEquals("Porch heard you hang up. The phone is ready.", check.hangUp().status)
+        assertEquals("Porch heard 7. The phone is ready.", Cell2JackPhoneCheck.Confirmed.key("7", receiverHangUp = false).status)
+        assertEquals(Cell2JackPhoneCheck.Waiting, Cell2JackPhoneCheck.Confirmed.answering(false), "Unplugged while it's open")
+        assertEquals(Cell2JackPhoneCheck.Connected, Cell2JackPhoneCheck.Confirmed.answering(false).answering(true),
+            "Plugged back in, it checks as setup does")
+    }
 }

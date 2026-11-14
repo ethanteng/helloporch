@@ -615,7 +615,7 @@ final class AddInviteViewController: AddSomeoneScreen {
         code.heightAnchor.constraint(equalToConstant: 220).isActive = true
         share.accessibilityIdentifier = "add.share"
         share.addTarget(self, action: #selector(shareLink), for: .touchUpInside)
-        let expiry = PorchStyle.label("Works once, for 24 hours.", size: 15)
+        let expiry = PorchStyle.label("Link expires after 24 hours.", size: 15)
         expiry.textAlignment = .center
         form.addArrangedSubview(group(rows: [padded([title, code, share, expiry], spacing: 16)]))
         let done = PorchStyle.button("Done", filled: false)
