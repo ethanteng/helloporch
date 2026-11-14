@@ -63,7 +63,7 @@ board("ios-your-phone", "pair", "Add your own phone", [
     pair("Allow the microphone, so people can hear you.", "j04-joined", "k02-p-mic", (275, 552), on="side"),
     pair("Allow notifications, so calls can ring your iPhone.", "j04-joined", "k03-p-notif", (275, 517), on="side"),
     pair("The iPad says your phone joined. Tap Continue.", "j04-joined", "k04-p-home", (590, 241)),
-    pair("You’re set: call Rose and change Porch’s settings from your iPhone.", "j05-ready", "k04-p-home"),
+    pair("You’re set: call Rose from Call. Your settings, and caregiver mode, are under You.", "j05-ready", "k04-p-home"),
 ])
 
 board("ios-keypad", "tablet", "Set up the phone’s number keys", [
@@ -92,9 +92,9 @@ board("ios-language", "tablet", "Change the language or voice", [
     I("On the clock, tap the gear in the top right corner.", "g00-clock", (1130, 44)),
     I("Enter your PIN and tap Open caregiver mode.", "g02-gate-typed", (590, 298)),
     I("Open Display & voice.", "g03-caregiver", (180, 546)),
-    I("Under Bedside language, choose a language, such as Español.", "n02-languages", (496, 226)),
-    I("To pick a voice, tap the menu under Announcement voice.", "n03-espanol", (770, 494)),
-    I("Choose a voice. Preview announcement lets you hear it.", "n04-voices", (995, 484)),
+    I("Under Bedside language, choose a language, such as Español.", "n02-languages", (496, 383)),
+    I("To pick a voice, tap the menu under Announcement voice.", "n03-espanol", (784, 650)),
+    I("Choose a voice. Preview announcement lets you hear it.", "n04-voices", (995, 640)),
     I("Tap Save.", "n05-voice-picked", (1134, 54)),
     I("Tap Back to clock.", "n06-saved", (280, 54)),
     I("Porch now speaks and shows the clock in Spanish.", "n07-clock-es"),
@@ -134,7 +134,7 @@ board("android-your-phone", "pair", "Add your phone", [
     apair("Porch opens on your phone. Tap Join family.", "b03-qr", "b04-p-join", (540, 862), on="side"),
     apair("The tablet says your phone joined. Tap Continue.", "b05-t-joined", "b05-p-joined", (1280, 452)),
     apair("Then tap Back to the clock.", "b06-t-ready", "b07-p-home", (1280, 616)),
-    apair("You’re set: call Rose and change Porch’s settings from your phone.", "c01-clock", "b07-p-home"),
+    apair("You’re set: call Rose from Call. Your settings, and caregiver mode, are under You.", "c01-clock", "b07-p-home"),
 ])
 
 board("android-keypad", "tablet", "Set up the phone’s number keys", [
@@ -152,7 +152,9 @@ board("android-keypad", "tablet", "Set up the phone’s number keys", [
 ])
 
 board("android-invite", "phone", "Invite family members", [
-    F("In Porch on your phone, scroll down and tap Caregiver mode.", "d01-p-scrolled", (540, 1696)),
+    F("In Porch on your phone, tap You.", "d00-p-call", (906, 2274)),
+    F("Tap your loved one’s family, such as Rose.", "d01-p-you", (540, 513)),
+    F("Tap Caregiver mode.", "d01b-p-family", (540, 718)),
     F("Enter the PIN and tap Open caregiver mode.", "d03-p-gate-typed", (540, 862)),
     F("Open Family.", "d04-p-caregiver", (540, 820)),
     F("Tap Invite someone.", "d05-p-family", (540, 642)),

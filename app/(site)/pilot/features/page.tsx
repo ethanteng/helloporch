@@ -34,11 +34,11 @@ const parts: GuidePart[] = [
           width={1600}
           height={1112}
           device="tablet"
-          alt="Caregiver mode on the iPad. The menu on the left lists People, Calls, Drop-in, Messages, Display & voice, Privacy, Caregivers & PIN and This iPad, with People open on the right."
+          alt="Caregiver mode on the iPad. The menu on the left lists People, Calls, Drop-in, Messages, Display & voice, Privacy, Caregivers & PIN, This iPad and About, with People open on the right."
           caption="Caregiver mode on iPad. Choose a setting from the menu on the left."
         />
         <p>
-          Some settings can only be changed on your loved one’s tablet. They’re marked <em>tablet only</em>
+          Some settings can only be changed on your loved one’s tablet. They’re marked <em>tablet only</em>{" "}
           in this guide. On your phone, these settings appear locked under <UI>On the bedside iPad</UI> or{" "}
           <UI>On the bedside tablet</UI>.
         </p>
@@ -484,7 +484,7 @@ const parts: GuidePart[] = [
           </li>
           <li>
             Open <Path steps={["Messages", "Waiting messages"]} /> to review them. For voicemail,
-            tap <UI>Listen first</UI>. Then choose <UI>Let it play on Porch</UI>,
+            tap <UI>Listen first</UI>. Then choose <UI>Let it play on Porch</UI>,{" "}
             <UI>Let it show on Porch</UI> or <UI>Remove</UI>, as appropriate.
           </li>
           <li>Unread texts are removed after a week.</li>
@@ -757,7 +757,7 @@ const parts: GuidePart[] = [
       <>
         <ul>
           <li>
-            To change the PIN, open <Path steps={["Caregivers & PIN", "Change caregiver PIN"]} />
+            To change the PIN, open <Path steps={["Caregivers & PIN", "Change caregiver PIN"]} />{" "}
             on the tablet. Enter your current PIN and the new one twice, then tap <UI>Save new PIN</UI>.
           </li>
           <li>
@@ -831,6 +831,11 @@ const parts: GuidePart[] = [
           <li>Deleting a Porch and its data, including the phone number.</li>
           <li>Setting up a replacement tablet or its keypad.</li>
         </ul>
+        <p>
+          <UI>About</UI>, the last page in caregiver mode, shows which version of Porch is installed, with my
+          email and phone number under <UI>Contact me</UI>. On a family phone, tap <UI>You</UI>, then{" "}
+          <UI>About Porch</UI>.
+        </p>
       </>
     ),
   },

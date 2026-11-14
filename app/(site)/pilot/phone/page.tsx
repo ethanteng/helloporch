@@ -95,19 +95,26 @@ const parts: GuidePart[] = [
     id: "join",
     title: "Join your family",
     body: (
-      <ol>
-        <li>
-          On your phone, open the invitation link you received by text or email. If the person setting up
-          Porch is showing you a QR code on their tablet, scan it with your phone’s Camera instead.
-        </li>
-        <li>
-          When Porch opens, tap <UI>Join family</UI>.
-        </li>
-        <li>
-          If the link opens a web page instead of the app, tap <UI>Open invitation in Porch</UI>,
-          then tap <UI>Join family</UI>.
-        </li>
-      </ol>
+      <>
+        <ol>
+          <li>
+            On your phone, open the invitation link you received by text or email. If the person setting up
+            Porch is showing you a QR code on their tablet, scan it with your phone’s Camera instead.
+          </li>
+          <li>
+            When Porch opens, tap <UI>Join family</UI>.
+          </li>
+          <li>
+            If the link opens a web page instead of the app, tap <UI>Open invitation in Porch</UI>,
+            then tap <UI>Join family</UI>.
+          </li>
+        </ol>
+        <p>
+          Porch then opens on <UI>Call</UI>, where you can call your loved one or start a video call.{" "}
+          <UI>Messages</UI> has the messages you and your loved one send each other, and <UI>You</UI> has your name,
+          photo and settings. The <Link href="/pilot/features">features guide</Link> explains the rest.
+        </p>
+      </>
     ),
   },
   {
@@ -208,7 +215,8 @@ const parts: GuidePart[] = [
             a: (
               <p>
                 Tell me what happened and whether you use an iPhone or Android. If there’s an error, a
-                screenshot helps. You can <Contact />.
+                screenshot helps. To see which version of Porch you have, tap <UI>You</UI>, then <UI>About Porch</UI>. You
+                can <Contact />.
               </p>
             ),
           },
