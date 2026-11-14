@@ -757,7 +757,9 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
     }
     private func finish() {
         // Do this later is the way out before the check finishes, and it leaves the keypad off.
-        leaveTrial(turnOff: enabledHere && !checked)
+        // Check the phone's Done is always there, including before a key, and it's the only way out of that screen.
+        // A Cell2Jack that answers during the check has just turned the keypad on, so Done must leave it on.
+        leaveTrial(turnOff: enabledHere && !checked && !checking)
         if let onContinue { onContinue(); return }
         navigationController?.setViewControllers([setup.screen(from: .yourPhone)], animated: true)
     }

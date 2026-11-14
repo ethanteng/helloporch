@@ -2900,6 +2900,40 @@ final class BedsideSetupTests: XCTestCase {
         device.dismiss(animated: false)
     }
 
+    /// The adapter already counts as connected, so Check the phone is up, and a Cell2Jack on the driver answers while
+    /// it's open. Done is showing the whole time and is the only way out, so it must not turn that keypad back off.
+    @MainActor func testCheckThePhoneDoneLeavesACell2JackThatAnsweredOn() throws {
+        let name = "device-check-done-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var connections: [Connection] = []
+        let keypad = Cell2JackKeypad(defaults: defaults, isBedside: { true }, enqueueRetry: { _, _ in }) { update in
+            let connection = Connection(update); connections.append(connection); return connection
+        }
+        keypad.activate()
+        keypad.noteAdapterHeard()
+        let device = DeviceSettingsViewController(phoneKeypad: keypad, driver: true, mChip: true) { true }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 820, height: 1180))
+        window.rootViewController = device; window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        XCTAssertFalse(keypad.enabled, "The adapter left the driver's keypad off")
+        XCTAssertEqual(deskPhoneRows(device).action, "Check the phone")
+        try XCTUnwrap(buttons(in: device.view).first { $0.accessibilityIdentifier == "device.connectPhone" }).sendActions(for: .touchUpInside)
+        let phoneNav = try XCTUnwrap(device.presentedViewController as? UINavigationController)
+        let check = try XCTUnwrap(phoneNav.viewControllers.first as? SetupPhoneViewController)
+        check.loadViewIfNeeded(); check.viewDidAppear(false)
+        XCTAssertEqual(connections.count, 1, "Check the phone still tries a Cell2Jack plugged straight in")
+        XCTAssertFalse(keypad.enabled)
+        connections[0].update(.ready)
+        XCTAssertTrue(keypad.enabled, "A Cell2Jack that answers during the check turns the keypad on")
+        let done = try XCTUnwrap(buttons(in: check.view).first { $0.accessibilityIdentifier == "setup.phoneDone" })
+        XCTAssertFalse(done.isHidden)
+        done.sendActions(for: .touchUpInside)
+        XCTAssertTrue(keypad.enabled, "Done is not Do this later")
+        XCTAssertFalse(keypad.trying)
+        XCTAssertEqual(connections[0].stops, 0, "The keypad that just answered stays connected")
+    }
+
     @MainActor func testAddYourPhoneAsksForTheirNameAndItsCodeReadsAsTheInvitation() throws {
         let setup = BedsideSetup(); setup.name = "Mom"
         let screen = SetupYourPhoneViewController(setup); screen.loadViewIfNeeded()
