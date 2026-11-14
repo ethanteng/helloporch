@@ -1461,7 +1461,8 @@ final class CaregiverInputTests: XCTestCase {
         func labels(_ view: UIView) -> [String] { (view as? UILabel).flatMap { $0.text }.map { [$0] } ?? view.subviews.flatMap(labels) }
         let home = FamilyHomeViewController(); home.loadViewIfNeeded()
         XCTAssertFalse(labels(home.view).contains("Close, even from here."))
-        XCTAssertNotNil(home.navigationItem.rightBarButtonItem?.image)
+        // Settings and the list of families are on the You tab, not behind a button on Call.
+        XCTAssertNil(home.navigationItem.rightBarButtonItem)
         let pairing = FamilyPairingViewController(); pairing.loadViewIfNeeded()
         XCTAssertTrue(labels(pairing.view).contains("Your Porch invite"))
         let draft = AddSomeoneDraft(key: 1, fromKeyTile: true); draft.name = "David"; draft.viaApp = true
@@ -1659,29 +1660,53 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(home.navigationController?.viewControllers == [home], "The list stays beside the page")
     }
 
-    @MainActor func testFamilySettingsKeepRarelyUsedChoicesAsLinks() {
-        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
-        XCTAssertEqual(settings.title, "Settings")
-        let titles = buttons(in: settings.view).compactMap { $0.configuration?.title }
-        XCTAssertTrue(titles.contains("Privacy policy"))
-        // Only an iPad can become the bedside.
-        XCTAssertEqual(titles.contains("Use this iPad as the bedside Porch"), UIDevice.current.userInterfaceIdiom == .pad)
-        XCTAssertFalse(titles.contains("Use this iPhone as the bedside Porch"))
-        if FamilyCoordinator.shared.state?.me.caregiver != true {
-            XCTAssertFalse(rows(in: settings.view).contains { $0.accessibilityIdentifier == "family.caregiverMode" }, "Caregiver mode shows only for caregivers")
-        }
+    /// Family mode is three tabs: calls, every family's messages, and this phone's families and settings.
+    @MainActor func testFamilyModeHasCallMessagesAndYouTabs() {
+        let tabs = FamilyTabBarController(); tabs.loadViewIfNeeded()
+        XCTAssertEqual(tabs.viewControllers?.map { $0.tabBarItem.title }, ["Call", "Messages", "You"])
+        let roots = tabs.viewControllers?.compactMap { ($0 as? UINavigationController)?.viewControllers.first } ?? []
+        roots.forEach { $0.loadViewIfNeeded() }
+        XCTAssertEqual(roots.map { $0.navigationItem.title }, ["Porch", "Messages", "You"])
+        // Loading the screens doesn't rename their tabs.
+        XCTAssertEqual(tabs.viewControllers?.map { $0.tabBarItem.title }, ["Call", "Messages", "You"])
+        XCTAssertTrue(tabs.isShowingTabRoot)
+        if PorchDevice.families.isEmpty { XCTAssertNil(tabs.viewControllers?[FamilyTabBarController.messagesTab].tabBarItem.badgeValue) }
     }
 
-    /// Porch checks in every few seconds. One that changes nothing on the page leaves its controls in place, so an open
-    /// photo menu stays open and VoiceOver stays where it was.
-    @MainActor func testFamilySettingsStayPutWhenACheckInChangesNothing() {
-        let settings = FamilyProfileViewController(); settings.loadViewIfNeeded()
-        let before = buttons(in: settings.view)
+    /// You has the families and this phone's own settings. What belongs to one family, such as caregiver mode and
+    /// leaving it, is on that family's page instead.
+    @MainActor func testYouTabKeepsOnlyThisPhonesSettings() {
+        let you = FamilyYouViewController(); you.loadViewIfNeeded()
+        XCTAssertEqual(you.title, "You")
+        let titles = buttons(in: you.view).compactMap { $0.configuration?.title }
+        XCTAssertTrue(titles.contains("Privacy policy"))
+        XCTAssertTrue(titles.contains(PorchDevice.families.isEmpty ? "Join a family" : "Join another family") || PorchDevice.families.count >= FamilyNames.limit)
+        let rowLabels = rows(in: you.view).compactMap(\.accessibilityLabel)
+        // Only an iPad can become the bedside.
+        XCTAssertEqual(rowLabels.contains("Use this iPad as the bedside Porch"), UIDevice.current.userInterfaceIdiom == .pad)
+        XCTAssertFalse(rowLabels.contains("Use this iPhone as the bedside Porch"))
+        XCTAssertFalse(rows(in: you.view).contains { $0.accessibilityIdentifier == "family.caregiverMode" }, "Caregiver mode is on a family's page")
+        XCTAssertFalse(titles.contains { $0.hasPrefix("Leave") }, "Leaving is on a family's page")
+    }
+
+    /// Porch checks in every few seconds. One that changes nothing on the page leaves its controls in place, so a
+    /// switch being flipped stays put and VoiceOver stays where it was.
+    @MainActor func testYouTabStaysPutWhenACheckInChangesNothing() {
+        let you = FamilyYouViewController(); you.loadViewIfNeeded()
+        let before = buttons(in: you.view)
         NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
-        let after = buttons(in: settings.view)
+        let after = buttons(in: you.view)
         XCTAssertFalse(before.isEmpty)
         XCTAssertEqual(after.count, before.count)
         XCTAssertTrue(zip(before, after).allSatisfy { $0 === $1 }, "the same buttons are still showing")
+    }
+
+    @MainActor func testFamilyNameAndPhotoPageIsOnlyTheNameAndPhoto() {
+        let profile = FamilyProfileViewController(); profile.loadViewIfNeeded()
+        XCTAssertEqual(profile.title, "Your name and photo")
+        let titles = buttons(in: profile.view).compactMap { $0.configuration?.title }
+        XCTAssertFalse(titles.contains("Privacy policy"))
+        XCTAssertFalse(titles.contains("Join another family"))
     }
 
     @MainActor private func contrast(_ first: UIColor, _ second: UIColor) -> CGFloat {

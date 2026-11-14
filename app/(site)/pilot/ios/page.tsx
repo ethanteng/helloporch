@@ -300,8 +300,8 @@ const parts: GuidePart[] = [
         />
         <ol>
           <li>
-            In Porch on your phone, tap <UI>Caregiver mode</UI>, enter the PIN and tap <UI>Open caregiver mode</UI>.
-            On an iPhone, <UI>Caregiver mode</UI> is under the person icon in the top right corner.
+            In Porch on your phone, tap <UI>You</UI>, the family, then <UI>Caregiver mode</UI>. Enter the PIN
+            and tap <UI>Open caregiver mode</UI>.
           </li>
           <li>
             Open <UI>Family</UI> and tap <UI>Invite someone</UI>.

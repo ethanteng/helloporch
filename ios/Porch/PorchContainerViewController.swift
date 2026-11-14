@@ -35,7 +35,7 @@ final class PorchContainerViewController: UIViewController {
             if clock.isReleasingCamera { return false }
             return clock.presentedViewController == nil || clock.presentedViewController is PeoplePickerViewController || clock.presentedViewController is MessagePlayerViewController || clock.presentedViewController is BedsideVoicemailViewController
         }
-        if let nav = content as? UINavigationController { return nav.topViewController is FamilyHomeViewController && nav.presentedViewController == nil }
+        if let tabs = content as? FamilyTabBarController { return tabs.isShowingTabRoot }
         return false
     }
     private func installExperience() {
@@ -43,7 +43,7 @@ final class PorchContainerViewController: UIViewController {
         PorchDevice.rememberExperience()
         welcoming = PorchDevice.needsWelcome
         let child: UIViewController = welcoming ? PorchStyle.navigation(WelcomeViewController { [weak self] in self?.choose($0) })
-            : PorchDevice.experience == .bedside ? CallViewController() : PorchStyle.navigation(FamilyHomeViewController())
+            : PorchDevice.experience == .bedside ? CallViewController() : FamilyTabBarController()
         addChild(child); child.view.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(child.view)
         NSLayoutConstraint.activate([child.view.leadingAnchor.constraint(equalTo: view.leadingAnchor), child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor), child.view.topAnchor.constraint(equalTo: view.topAnchor), child.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
         child.didMove(toParent: self); content = child; setNeedsStatusBarAppearanceUpdate()
@@ -54,8 +54,7 @@ final class PorchContainerViewController: UIViewController {
         showExperience(experience) { [weak self] in
             // The clock presents setup once its camera has stopped, on the next turn so it's in its window.
             if experience == .bedside { DispatchQueue.main.async { (self?.content as? CallViewController)?.showSetup() }; return }
-            guard let nav = self?.content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
-            home.showPairing()
+            (self?.content as? FamilyTabBarController)?.showPairing()
         }
     }
     @objc private func changeExperience() {
@@ -165,8 +164,7 @@ final class PorchContainerViewController: UIViewController {
             return
         }
         showExperience(.family) { [weak self] in
-            guard let nav = self?.content as? UINavigationController, let home = nav.viewControllers.first as? FamilyHomeViewController else { return }
-            nav.popToRootViewController(animated: false); home.showPairing(invitation: url)
+            (self?.content as? FamilyTabBarController)?.showPairing(invitation: url)
         }
     }
     private func setUpBedside(_ url: URL, replacing: Bool) {

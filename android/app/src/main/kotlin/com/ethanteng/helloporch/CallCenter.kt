@@ -178,8 +178,8 @@ class CallCenter(private val app: PorchApplication) {
         if (app.systemCalls.takeAnswer(call.id)) ringing.answer()
     }
 
-    /** A family phone calls the bedside person. */
-    fun call(person: FamilyPerson, mode: NativeCall.Mode, family: FamilyCredential) {
+    /** A family phone calls the bedside person, or drops in when that's approved for it. */
+    fun call(person: FamilyPerson, mode: NativeCall.Mode, family: FamilyCredential, dropIn: Boolean = false) {
         // A call ringing through a notification is not [busy] until its screen is up. Starting this one would take that
         // call's service, and a failed start would leave its in-progress notification behind.
         if (busy || app.systemCalls.notification != null) return
@@ -190,7 +190,7 @@ class CallCenter(private val app: PorchApplication) {
         CallService.show(app, CallNotifications.ONGOING, CallNotifications.ongoing(app, person.name), serviceTypes(withMicrophone = true))
         app.scope.launch {
             try {
-                val session = app.coordinator.startCall(person, mode, dropIn = false, family = family)
+                val session = app.coordinator.startCall(person, mode, dropIn = dropIn, family = family)
                 show(session, person.name, person.photoID?.let { app.photos.familyMembers.data(it) },
                     onUnanswered = { offerMessage(family, person.name, "${person.name} didn't answer") })
             } catch (e: CancellationException) {
