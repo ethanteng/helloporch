@@ -68,10 +68,9 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
     q: "Can I use a tablet I already own?",
     a: (
       <>
-        Probably. Any iPad with iPadOS 15 or later works. An Android tablet needs Android 15 or later, and it has to be
-        able to charge and use the phone at the same time, which many can’t. See{" "}
-        <Link href="/pilot/android/tablets">choosing an Android tablet</Link> for which tablets work and how to check
-        yours.
+        Probably. Any iPad with iPadOS 15 or later works. An Android tablet needs Android 15 or later and has to be able
+        to charge and use the phone at the same time. See{" "}
+        <Link href="/pilot/android/tablets">choosing an Android tablet</Link>.
       </>
     ),
   },

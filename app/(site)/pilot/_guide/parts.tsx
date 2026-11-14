@@ -167,23 +167,6 @@ export function Choices({ label, items }: { label: string; items: { name: string
   );
 }
 
-/** Things to choose between, such as tablets: each one's name with a detail line under it, and a note beside it. */
-export function Picks({ label, items }: { label: string; items: { name: string; detail: string; note: ReactNode }[] }) {
-  return (
-    <ul className={styles.picks} aria-label={label}>
-      {items.map(({ name, detail, note }) => (
-        <li key={name}>
-          <div>
-            <strong>{name}</strong>
-            <span>{detail}</span>
-          </div>
-          <p>{note}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /** Each setting’s starting value and where to change it. */
 export function Defaults({ rows }: { rows: [feature: ReactNode, value: ReactNode, where: ReactNode][] }) {
   return (
