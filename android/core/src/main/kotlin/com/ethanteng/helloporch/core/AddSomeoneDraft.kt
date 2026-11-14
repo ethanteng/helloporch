@@ -25,9 +25,13 @@ data class AddSomeoneDraft(
     val dropInVideo: Boolean = true,
     /** The key's button color, or null for the default. */
     val colorHex: String? = null,
-    /** The invitation saving made, and its link. Kept, so trying again after a failure doesn't make another. */
+    /** The invitation saving made, and its link, for the name and drop-in it was made with. Trying again after a
+     * failure reuses it. A different name or drop-in makes another, and it isn't used when they aren't being invited. */
     val invitationID: String? = null,
     val link: String? = null,
+    val invitationName: String? = null,
+    val invitationAudio: Boolean? = null,
+    val invitationVideo: Boolean? = null,
 ) : java.io.Serializable {
     val fromKeyTile: Boolean get() = tile != null
     val member: Boolean get() = memberID != null
@@ -36,6 +40,12 @@ data class AddSomeoneDraft(
     val firstName: String get() = name.trim().split(" ").firstOrNull { it.isNotEmpty() } ?: name.trim()
     /** Porch can reach them: on Porch, invited to it, or by phone. */
     val reachable: Boolean get() = viaApp || member || numbers.isNotEmpty()
+
+    /** The invitation already made for this name and drop-in, so a failed save can be tried again without making another. */
+    fun reusableInvitation(): String? {
+        if (!inviting || invitationName != name.trim() || invitationAudio != dropInAudio || invitationVideo != dropInVideo) return null
+        return invitationID
+    }
 
     /** A family member already on Porch. They go by their Porch name, and only Porch calls them until a number is added. */
     fun choosing(person: FamilyPerson): AddSomeoneDraft =

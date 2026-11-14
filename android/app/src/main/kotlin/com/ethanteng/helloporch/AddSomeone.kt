@@ -145,7 +145,9 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
         scope.launch {
             try {
                 saved.numbers.firstOrNull()?.let { PhoneApprovals.authorize(app, it, refresh = true) }
-                var invitation = saved.invitationID.takeIf { saved.inviting }
+                // Only an invitation made for this name and drop-in is reused. One left over from a failed save must not
+                // follow a different person, phone only, or drop-in the caregiver has since changed.
+                var invitation = saved.reusableInvitation()
                 if (saved.inviting && invitation == null) {
                     // Drop-in answers on the bedside, so only the tablet can grant its own microphone and camera.
                     if ((saved.dropInAudio || saved.dropInVideo) && !mediaAccess.granted(saved.dropInVideo)) {
@@ -153,13 +155,15 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
                         return@launch
                     }
                     val origin = admin.origin ?: throw IllegalStateException("Go back to the clock and open caregiver mode to finish setup.")
-                    val response = admin.request("createInvite", mapOf("name" to JsonPrimitive(saved.name.trim()), "caregiver" to JsonPrimitive(false),
+                    val invitedName = saved.name.trim()
+                    val response = admin.request("createInvite", mapOf("name" to JsonPrimitive(invitedName), "caregiver" to JsonPrimitive(false),
                         "permissions" to JsonObject(mapOf("audio" to JsonPrimitive(saved.dropInAudio), "video" to JsonPrimitive(saved.dropInVideo)))))
                     val code = response.code
                     val id = response.invitationID
                     if (code == null || id == null) throw IllegalStateException("Couldn't make the invitation. Try again.")
                     invitation = id
-                    draft = draft.copy(invitationID = id, link = FamilyInvitation.url(origin, code, app.device.defaultOrigin))
+                    draft = draft.copy(invitationID = id, link = FamilyInvitation.url(origin, code, app.device.defaultOrigin),
+                        invitationName = invitedName, invitationAudio = saved.dropInAudio, invitationVideo = saved.dropInVideo)
                 }
                 val at = saved.key
                 if (at != null) {

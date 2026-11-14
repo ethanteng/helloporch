@@ -11,8 +11,16 @@ final class AddSomeoneDraft {
     let fromKeyTile: Bool
     /// The key the flow was opened from. It can be chosen again even if it holds a control, which they replace.
     let startKey: Int?
-    /// An invitation already made, kept if a later part of adding them fails and Add is tapped again.
-    var invitation: (id: String, link: URL)?
+    /// An invitation already made for this name and these drop-in choices. Add again after a failure reuses it.
+    /// A different name or drop-in makes another, and it is not used when this person is not being invited.
+    struct MadeInvitation {
+        var id: String
+        var link: URL
+        var name: String
+        var audio: Bool
+        var video: Bool
+    }
+    var invitation: MadeInvitation?
     /// Someone already on Porch, chosen in the first step.
     var member: FamilyPerson?
     var name = ""
@@ -35,6 +43,13 @@ final class AddSomeoneDraft {
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
     /// Asks Porch to make an invitation when they're added.
     var inviting: Bool { viaApp && member == nil }
+    /// The invitation already made for this name and drop-in, so a failed save can be tried again without making another.
+    func reusableInvitation() -> (id: String, link: URL)? {
+        guard inviting, let invitation else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard invitation.name == trimmed, invitation.audio == dropInAudio, invitation.video == dropInVideo else { return nil }
+        return (invitation.id, invitation.link)
+    }
     var keySymbol: String? { key.map { CallSlots.symbol(for: $0) } }
 
     /// The first key with nothing on it, in the order the keypad reads.
@@ -498,18 +513,22 @@ final class AddCheckViewController: AddSomeoneScreen {
             _ = try await NativeCallSettings.authorizePhone(number, server: server, refresh: true)
             try Task.checkCancellation()
         }
-        var invitation = draft.invitation
+        // Only an invitation made for this name and drop-in is reused. One left over from a failed save must not
+        // follow a different person, phone only, or drop-in the caregiver has since changed.
+        var invitation = draft.reusableInvitation()
         if draft.inviting, invitation == nil {
             guard let credential = PorchDevice.credential(for: .bedside), let pin = admin.caregiverPIN() else {
                 throw FamilyServiceError(message: "Finish setting up this iPad before inviting someone.", status: 409)
             }
             // Drop-in answers on this iPad, so only it can grant its own microphone and camera.
             if draft.dropInAudio || draft.dropInVideo { guard await admin.requestMedia(video: draft.dropInVideo) else { throw AddSomeoneCancelled.mediaRefused } }
-            let response = try await FamilyService(credential).send("createInvite", ["name": draft.name, "permissions": ["audio": draft.dropInAudio, "video": draft.dropInVideo], "caregiver": false], pin: pin)
+            let invitedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let response = try await FamilyService(credential).send("createInvite", ["name": invitedName, "permissions": ["audio": draft.dropInAudio, "video": draft.dropInVideo], "caregiver": false], pin: pin)
             guard let code = response.code, let id = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
             FamilyCoordinator.shared.update(response)
-            invitation = (id, FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin))
-            draft.invitation = invitation
+            let link = FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin)
+            draft.invitation = AddSomeoneDraft.MadeInvitation(id: id, link: link, name: invitedName, audio: draft.dropInAudio, video: draft.dropInVideo)
+            invitation = (id, link)
             try Task.checkCancellation()
         }
         if let key = draft.key {
