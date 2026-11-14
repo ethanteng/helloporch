@@ -324,7 +324,12 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     #if DEBUG
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if ProcessInfo.processInfo.arguments.contains("--preview-keyboard-help") {
+        let args = ProcessInfo.processInfo.arguments
+        // A keyboard preview opens on the form's first field, such as the name on someone's page.
+        if args.contains("--preview-touch-keyboard") || args.contains("--preview-system-keyboard"), activeField == nil, let field = fields.first(where: isVisible) {
+            field.becomeFirstResponder()
+        }
+        if args.contains("--preview-keyboard-help") {
             DispatchQueue.main.async { [weak self] in self?.requestSystemKeyboard() }
         }
     }

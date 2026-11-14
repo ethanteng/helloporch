@@ -1,14 +1,18 @@
 package com.ethanteng.helloporch
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.ContactsContract
 import android.icu.text.DateFormat as IcuDateFormat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.ethanteng.helloporch.core.AddSomeoneDraft
 import com.ethanteng.helloporch.core.CallContact
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
@@ -81,20 +86,23 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Where the People page is: its list, or a person, a key or an invitation opened from it. Kept across a rotation. */
-data class PeopleRoute(val kind: Kind, val memberID: String? = null, val slot: Int? = null, val action: KeypadAction = KeypadAction.PERSON) :
+/** Where the People page is: its list, or a person, Add someone or an invitation opened from it. Kept across a rotation. */
+data class PeopleRoute(val kind: Kind, val memberID: String? = null, val slot: Int? = null, val start: AddSomeoneStart = AddSomeoneStart.PEOPLE) :
     java.io.Serializable {
-    enum class Kind { PERSON, KEY, INVITE }
+    enum class Kind { PERSON, ADD, INVITE }
 }
 
 /**
  * The People page, as iOS's PeopleSettingsViewController shows it on the bedside: the keypad as it's laid out, and
- * everyone on Porch with the invitations still waiting. A person, a key or a new invitation opens in the page's place.
+ * everyone on Porch with the invitations still waiting. A person, Add someone or a new invitation opens in the page's
+ * place.
  */
 @Composable
 fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
@@ -107,8 +115,8 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
             PeopleList(app, admin, links, onOpen = { route = it })
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
-        PeopleRoute.Kind.KEY -> KeyEditor(app, admin, links, open.slot ?: 1, contact = null, initialAction = open.action, onDone = close)
-        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, returnsToPerson = false, onCreated = { _, _ -> }, onDone = close, fromKey = false)
+        PeopleRoute.Kind.ADD -> AddSomeone(app, admin, links, open.slot, open.start, onDone = close)
+        PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, prefilledName = null, onCreated = { _, _ -> }, onDone = close, fromKey = false)
     }
 }
 
@@ -124,14 +132,16 @@ private fun PeopleList(app: PorchApplication, admin: CaregiverAdmin, links: Fami
     }
     // As the keypad is laid out: 1 2 3, 4 5 6, 7 8 9, * 0 #.
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        keypadOrder.chunked(3).forEach { row ->
+        AddSomeoneDraft.keypadOrder.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { digit ->
                     KeyTile(app, digit, slots, state, Modifier.weight(1f).fillMaxHeight()) {
-                        val action = slots.action(digit) ?: KeypadAction.UNASSIGNED
-                        // A person opens their page. Any other key opens what it does.
-                        if (action == KeypadAction.PERSON && slots.contact(digit) != null) onOpen(PeopleRoute(PeopleRoute.Kind.PERSON, slot = digit))
-                        else onOpen(PeopleRoute(PeopleRoute.Kind.KEY, slot = digit, action = action))
+                        // A person opens their page, and an empty key adds someone to it. Any other key opens what it does.
+                        onOpen(when (slots.action(digit) ?: KeypadAction.UNASSIGNED) {
+                            KeypadAction.PERSON -> PeopleRoute(PeopleRoute.Kind.PERSON, slot = digit)
+                            KeypadAction.UNASSIGNED -> PeopleRoute(PeopleRoute.Kind.ADD, slot = digit, start = AddSomeoneStart.KEY_TILE)
+                            else -> PeopleRoute(PeopleRoute.Kind.ADD, slot = digit, start = AddSomeoneStart.CONTROL)
+                        })
                     }
                 }
             }
@@ -139,8 +149,6 @@ private fun PeopleList(app: PorchApplication, admin: CaregiverAdmin, links: Fami
     }
     FamilyGroup(app, admin, state, slots, onOpen)
 }
-
-private val keypadOrder = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, CallSlots.star, 0, CallSlots.pound)
 
 /** One key: who it calls, or what it does. */
 @Composable
@@ -232,7 +240,9 @@ private fun FamilyGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
             }
         }
         if (people.isNotEmpty() || invitations.isNotEmpty()) HorizontalDivider()
-        ActionRow("Invite someone") { onOpen(PeopleRoute(PeopleRoute.Kind.INVITE)) }
+        // The bedside adds someone a step at a time, on the first empty key. A family phone, which has no keypad, invites.
+        if (admin.onBedside) ActionRow("Add someone") { onOpen(PeopleRoute(PeopleRoute.Kind.ADD, slot = AddSomeoneDraft.firstFreeKey(slots))) }
+        else ActionRow("Invite someone") { onOpen(PeopleRoute(PeopleRoute.Kind.INVITE)) }
     }
 }
 
@@ -291,11 +301,11 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     val key = subject.slot
     when (screen) {
         PersonScreen.PHONE -> if (key != null && contact != null) {
-            KeyEditor(app, admin, links, key, contact, KeypadAction.PERSON, onDone = { screen = null })
+            PersonPhoneScreen(app, admin, links, key, contact, onDone = { screen = null })
             return
         }
         PersonScreen.INVITE -> if (key != null && contact != null) {
-            InviteScreen(app, admin, prefilledName = contact.name, returnsToPerson = false, onDone = { screen = null }, onCreated = { id, invitedName ->
+            InviteScreen(app, admin, prefilledName = contact.name, onDone = { screen = null }, onCreated = { id, invitedName ->
                 // The name moves to the invitation, and the key follows the name they choose once they join.
                 val current = latest()
                 val at = current.slot
@@ -629,7 +639,7 @@ private fun DropInGroup(app: PorchApplication, admin: CaregiverAdmin, state: Fam
  * still answers on the bedside, so the phone doesn't ask for its own microphone.
  */
 @Composable
-fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, returnsToPerson: Boolean, onCreated: (id: String, name: String) -> Unit,
+fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: String?, onCreated: (id: String, name: String) -> Unit,
     onDone: () -> Unit, fromKey: Boolean = true) {
     BackHandler(onBack = onDone)
     val context = LocalContext.current
@@ -685,8 +695,7 @@ fun InviteScreen(app: PorchApplication, admin: CaregiverAdmin, prefilledName: St
         val shown = link?.takeIf { expiresAt > System.currentTimeMillis() / 1000 }
         if (shown != null) {
             InvitationCode(shown, "QR code for ${name.trim().ifEmpty { "their" }} invitation")
-            Text(if (returnsToPerson) "Invitation ready. Show them this code or share it, tap Done, then tap Save."
-                else "Invitation ready. Show them this code or share it, then tap Done.",
+            Text("Invitation ready. Show them this code or share it, then tap Done.",
                 Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
         }
         FormButton(when { shown != null -> "Share invitation"; busy -> "Creating…"; else -> "Create invitation" }, enabled = !busy && (shown != null || !made), onClick = {
@@ -776,6 +785,26 @@ internal fun newRoom(): String = "contact-" + UUID.randomUUID().toString().take(
 
 /** The tablet's country, for numbers typed without a country code. */
 internal fun homeRegion(): String = Locale.getDefault().country.ifEmpty { "US" }
+
+/** Android's contact picker, showing only contacts' phone numbers. Porch may read the one number tapped. */
+internal class PickPhoneNumber : ActivityResultContract<Unit, Uri?>() {
+    override fun createIntent(context: Context, input: Unit) = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent?.data?.takeIf { resultCode == Activity.RESULT_OK }
+}
+
+/** The picked contact's name and the number tapped. */
+internal suspend fun pickedNumber(context: Context, uri: Uri): Pair<String?, String>? = withContext(Dispatchers.IO) {
+    try {
+        val columns = arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER)
+        context.contentResolver.query(uri, columns, null, null, null)?.use { row ->
+            if (!row.moveToFirst()) return@use null
+            val number = row.getString(1)?.takeIf { it.isNotBlank() } ?: return@use null
+            row.getString(0) to number
+        }
+    } catch (_: SecurityException) {
+        null
+    }
+}
 
 /** A number as people read it: national at home, international otherwise. */
 internal fun displayNumber(e164: String): String = PhoneNumberNormalization.display(e164, homeRegion())

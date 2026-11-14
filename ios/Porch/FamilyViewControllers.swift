@@ -718,7 +718,6 @@ final class RemoteCaregiverPINViewController: CaregiverFormViewController {
 
 final class FamilyInviteViewController: CaregiverFormViewController {
     var prefilledName: String?
-    var returnsToPerson = false
     /// Set when inviting from caregiver mode on a family phone.
     var remote: FamilyCredential?
     var onCreated: ((String, String) -> Void)?
@@ -793,7 +792,7 @@ final class FamilyInviteViewController: CaregiverFormViewController {
                 self.invitationLink = link; self.invitationExpiry = response.expiresAt ?? 0
                 self.personName.isEnabled = false; self.audio.isEnabled = false; self.video.isEnabled = false; self.caregiver.isEnabled = false
                 self.create.configuration?.title = "Share invitation again"
-                self.inviteHint.text = !self.returnsToPerson ? "Invitation ready. Share it, then tap Done." : "Invitation ready. Share it, tap Done, then tap Save."
+                self.inviteHint.text = "Invitation ready. Share it, then tap Done."
                 self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(self.finishedInvite))
                 self.shareInvite(link)
             } catch { showPorchError(error, on: self) }

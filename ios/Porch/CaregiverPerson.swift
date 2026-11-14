@@ -307,9 +307,7 @@ final class PersonViewController: CaregiverFormViewController, UIColorPickerView
         let number = contact.phoneNumber.map { PhoneNumberNormalization.display($0) + (others > 0 ? " +\(others)" : "") }
         let phone = linkRow("Phone", value: number ?? "Add") { [weak self, weak admin] in
             guard let self, let admin else { return }
-            let editor = SetupViewController(slot: key, contact: contact)
-            editor.onSaveSlot = { [weak admin] action, contact in try admin?.saveSlots { try $0.setContact(contact, for: key); try $0.setAction(action, for: key) } }
-            self.navigationController?.pushViewController(editor, animated: true)
+            self.navigationController?.pushViewController(AddPhoneNumbersViewController(admin: admin, key: key, contact: contact), animated: true)
         }
         phone.accessibilityIdentifier = "person.phone"
         rows.append(phone)

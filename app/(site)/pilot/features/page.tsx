@@ -108,24 +108,25 @@ const parts: GuidePart[] = [
             On the tablet, open <Path steps={["People"]} /> and tap an empty key.
           </li>
           <li>
-            Choose <UI>Call a person</UI> under the heading for that key, such as <UI>What key 1 does</UI>.
+            Tap someone who has already joined under <UI>On Porch</UI>. Otherwise, enter their name or tap{" "}
+            <UI>Choose from Contacts</UI>, then tap <UI>Next</UI>.
           </li>
           <li>
-            Under <UI>Their details</UI>, choose someone who has already joined using{" "}
-            <UI>Choose from Family on Porch</UI>. Otherwise, enter their name or tap{" "}
-            <UI>Choose from Contacts</UI>. If you invite them now with <UI>Invite them</UI> or later
-            with <UI>Invite someone</UI>, use the same name as their key. Porch will then switch the key
-            to their app when they join.
+            Choose how your loved one reaches them: <UI>Phone</UI>, <UI>Porch app</UI> or both. With both, Porch
+            rings the app first and <a href="#phone-fallback">their phone</a> if they miss it.
           </li>
           <li>
-            Under <UI>Calls start as</UI>, choose video or audio. Add a photo under{" "}
-            <UI>Photo &amp; button color</UI>.
+            Check the key. You can add a photo, pick a color, or tap <UI>Porch app</UI> to choose whether calls
+            start with video and whether they can drop in. Tap <UI>Add to key 1</UI>.
           </li>
           <li>
-            To call their regular phone if they miss an app call,{" "}
-            <a href="#phone-fallback">add their phone number</a>. Then tap <UI>Save</UI>.
+            If you chose <UI>Porch app</UI>, send them the invite shown next. Porch switches the key to their app
+            when they join.
           </li>
         </ol>
+        <p>
+          <Path steps={["People", "Add someone"]} /> works the same way and starts on the first empty key.
+        </p>
         <p>
           To move someone to a different button, open <UI>People</UI>, tap their name, then{" "}
           <UI>Keypad key</UI>. Choose another key or <UI>Take off the keypad</UI>.
@@ -135,19 +136,23 @@ const parts: GuidePart[] = [
           the physical buttons.
         </p>
         <h3>What else a key can do</h3>
+        <p>
+          Tap <UI>Use key 1 for something else</UI> on the first screen, or tap a key that already does
+          one of these:
+        </p>
         <ul>
           <li>
-            <UI>Answer / decline / hang up</UI> lets the button answer a call, stop a drop-in before
+            <UI>Answer / hang up</UI> lets the button answer a call, stop a drop-in before
             it connects or hang up. To decline a ringing call, tap <UI>Decline</UI> on the screen.
           </li>
           <li>
-            <UI>Turn video off / on</UI> controls the tablet’s camera during a video call.
+            <UI>Video on / off</UI> controls the tablet’s camera during a video call.
           </li>
           <li>
-            <UI>Play / stop messages</UI> plays waiting messages. You can assign it to * or #.
+            <UI>Play messages</UI> plays waiting messages. You can assign it to * or #.
           </li>
           <li>
-            <UI>No action</UI> leaves the key unused.
+            <UI>Nothing</UI> leaves the key unused.
           </li>
         </ul>
         <Setting
@@ -175,14 +180,15 @@ const parts: GuidePart[] = [
             On the tablet, open <Path steps={["People"]} /> and tap the person.
           </li>
           <li>
-            Tap <UI>Phone</UI>, turn on <UI>Call their phone</UI> and enter their <UI>Primary number</UI>.
+            Tap <UI>Phone</UI>. Type their number in <UI>Add a number</UI> and tap <UI>Add</UI>, or tap{" "}
+            <UI>Choose from Contacts</UI>.
           </li>
           <li>
-            Use <UI>Add another number</UI> to save any other numbers they might call from. You can
-            save up to five numbers per person, but Porch calls the primary number.
+            Porch calls the number marked <UI>Porch calls</UI>. Tap another number to change it. You can
+            save up to five numbers per person, and all of them can call your loved one.
           </li>
           <li>
-            Tap <UI>Save</UI>.
+            Tap <UI>Done</UI>.
           </li>
         </ol>
         <p>
@@ -193,7 +199,7 @@ const parts: GuidePart[] = [
           rows={[
             ["Default", "Porch tries their phone after 20 seconds, for anyone whose key has a phone number."],
             ["Change the wait", <><Path key="p" steps={["Calls", "Try their phone after"]} />, from 5 seconds to 2 minutes. Tablet only.</>],
-            ["Turn it off", <>For one person, turn off <UI>Call their phone</UI> on their page.</>],
+            ["Turn it off", <>For someone on the Porch app, remove their numbers under <UI>Phone</UI> on their page.</>],
           ]}
         />
       </>
@@ -666,10 +672,13 @@ const parts: GuidePart[] = [
     body: (
       <>
         <h3>Invite someone</h3>
+        <p>
+          On the tablet, <Path steps={["People", "Add someone"]} /> invites them as part of{" "}
+          <a href="#keypad">putting them on a key</a>. From your phone:
+        </p>
         <ol>
           <li>
-            Open <Path steps={["People", "Invite someone"]} /> on the tablet, or <Path steps={["Family", "Invite someone"]} />{" "}
-            on your phone.
+            Open <Path steps={["Family", "Invite someone"]} />.
           </li>
           <li>
             Enter their name. Choose whether they can drop in with audio or video. Drop-in calls
