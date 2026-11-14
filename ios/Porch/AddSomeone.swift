@@ -293,17 +293,12 @@ final class AddReachViewController: AddSomeoneScreen {
         let number = field(numberField, title: "\(draft.firstName)’s phone number", placeholder: "Phone number")
         // The option's own title says Phone, so the field needs no visible label.
         (number as? UIStackView)?.arrangedSubviews.first?.isHidden = true
-        numberField.text = draft.numbers.first.map { PhoneNumberNormalization.display($0) }
         numberField.addAction(UIAction { [weak self] _ in self?.clearError() }, for: .editingChanged)
         let numberStack = UIStackView(arrangedSubviews: [number, error]); numberStack.axis = .vertical; numberStack.spacing = 8
         phone = AddOptionCard(title: "Phone", subtitle: nil, symbol: "phone", body: numberStack)
         phone.header.accessibilityIdentifier = "add.viaPhone"
         app = AddOptionCard(title: "Porch app", subtitle: "Video calls, photos and messages", symbol: "video", body: nil)
         app.header.accessibilityIdentifier = "add.viaApp"
-        phone.set(!draft.numbers.isEmpty)
-        app.set(draft.viaApp)
-        // A phone number lives on a key, so someone without one can only be on Porch.
-        if draft.key == nil { phone.set(false); phone.header.isEnabled = false }
         phone.onChange = { [weak self] on in
             guard let self else { return }
             self.clearError()
@@ -315,6 +310,17 @@ final class AddReachViewController: AddSomeoneScreen {
         next.accessibilityIdentifier = "add.next"
         next.addTarget(self, action: #selector(goNext), for: .touchUpInside)
         form.addArrangedSubview(next)
+    }
+    // Back from Check, the Phone and Key screens there may have changed their numbers or key.
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); showDraft() }
+    /// The numbers, choices and key the draft holds now, so Next never saves a number this screen showed earlier.
+    private func showDraft() {
+        numberField.text = draft.numbers.first.map { PhoneNumberNormalization.display($0) }
+        clearError()
+        // A phone number lives on a key, so someone without one can only be on Porch.
+        phone.set(draft.key != nil && !draft.numbers.isEmpty)
+        phone.header.isEnabled = draft.key != nil
+        app.set(draft.viaApp)
     }
     private func clearError() {
         error.isHidden = true

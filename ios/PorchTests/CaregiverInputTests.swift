@@ -1308,6 +1308,21 @@ final class CaregiverInputTests: XCTestCase {
                        ["Default color", "Blue", "Teal", "Orange", "Red", "Purple"])
     }
 
+    @MainActor func testAddSomeoneReachStepShowsNumbersChangedOnTheCheckScreen() throws {
+        let (home, _, navigation) = try addSomeoneHome()
+        let draft = AddSomeoneDraft(key: 5, fromKeyTile: true)
+        draft.name = "Linda Park"; draft.numbers = ["+14155550142"]
+        let reach = AddReachViewController(admin: home, draft: draft)
+        navigation.pushViewController(reach, animated: false); reach.loadViewIfNeeded(); reach.viewWillAppear(false)
+        // On Check's Phone screen they add another number and make it the one Porch calls, then come back here.
+        draft.numbers = ["+14155550198", "+14155550142"]
+        reach.viewWillAppear(false)
+        let number = try XCTUnwrap(descendants(reach.view).first { $0.accessibilityIdentifier == "add.phoneNumber" } as? UITextField)
+        XCTAssertEqual(try PhoneNumberNormalization.e164(number.text ?? ""), "+14155550198")
+        buttons(in: reach.view).first { $0.accessibilityIdentifier == "add.next" }!.sendActions(for: .touchUpInside)
+        XCTAssertEqual(draft.numbers, ["+14155550198", "+14155550142"], "Next without changes keeps both numbers and the one Porch calls")
+    }
+
     @MainActor func testAddSomeoneInvitationShowsDropInOnItsRowAndPhoneNumbersCanBeReordered() throws {
         let (home, _, navigation) = try addSomeoneHome()
         let draft = AddSomeoneDraft(key: 5, fromKeyTile: true)
