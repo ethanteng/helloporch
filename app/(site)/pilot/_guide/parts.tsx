@@ -24,11 +24,13 @@ type GuideProps = {
   aside?: ReactNode;
   /** The parts to have ready, for a getting-started guide. */
   kit?: { intro: ReactNode; parts: KitPart[]; ready: ReactNode[] };
+  /** The contents list's heading, for a page that isn't a guide. */
+  contentsTitle?: string;
   parts: GuidePart[];
 };
 
 /** A whole guide: the hero, what to have ready, a contents list and the numbered parts. */
-export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
+export function Guide({ eyebrow, title, lede, aside, kit, contentsTitle = "In this guide", parts }: GuideProps) {
   return (
     <div className={`page ${styles.page}`}>
       <a href="#guide" className={styles.skip}>Skip to the guide</a>
@@ -64,7 +66,7 @@ export function Guide({ eyebrow, title, lede, aside, kit, parts }: GuideProps) {
         </section>}
 
         <nav className={`${styles.column} ${styles.contents}`} aria-labelledby="contents-title">
-          <h2 id="contents-title">In this guide</h2>
+          <h2 id="contents-title">{contentsTitle}</h2>
           <ol>
             {parts.map((part) => (
               <li key={part.id}>
@@ -159,6 +161,23 @@ export function Choices({ label, items }: { label: string; items: { name: string
         <li key={name}>
           {name}
           {note && <span>{note}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Things to choose between, such as tablets: each one's name with a detail line under it, and a note beside it. */
+export function Picks({ label, items }: { label: string; items: { name: string; detail: string; note: ReactNode }[] }) {
+  return (
+    <ul className={styles.picks} aria-label={label}>
+      {items.map(({ name, detail, note }) => (
+        <li key={name}>
+          <div>
+            <strong>{name}</strong>
+            <span>{detail}</span>
+          </div>
+          <p>{note}</p>
         </li>
       ))}
     </ul>

@@ -66,7 +66,14 @@ const QUESTIONS: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Can I use a tablet I already own?",
-    a: "Probably. Any iPad with iPadOS 15 or later works, and so does an Android tablet with Android 15 or later.",
+    a: (
+      <>
+        Probably. Any iPad with iPadOS 15 or later works. An Android tablet needs Android 15 or later, and it has to be
+        able to charge and use the phone at the same time, which many can’t. See{" "}
+        <Link href="/pilot/android/tablets">choosing an Android tablet</Link> for which tablets work and how to check
+        yours.
+      </>
+    ),
   },
   {
     q: "Do I need a special phone?",
@@ -135,8 +142,9 @@ export default function PilotPage() {
               <h2 className={styles.glanceLabel}>What you’ll need.</h2>
               <h3>You’ll provide most of the hardware. I’ll provide the app.</h3>
               <p className={styles.glanceText}>
-                Porch works with a compatible iPad or Android tablet and a big-button corded phone. You’ll also need a
-                Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
+                Porch works with a compatible iPad or{" "}
+                <Link href="/pilot/android/tablets">Android tablet</Link> and a big-button corded phone. You’ll also
+                need a Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
               </p>
               <p className={styles.glanceText}>
                 With an iPad, the phone also goes through a Porch phone adapter. I’ll provide this, already set up and
