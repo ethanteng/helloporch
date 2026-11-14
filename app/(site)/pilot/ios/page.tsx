@@ -385,8 +385,8 @@ const parts: GuidePart[] = [
         </p>
         <p>
           If the key doesn’t switch (for example, because two people share a name or the iPad was offline
-          for more than a day), open <UI>People</UI>, tap their key, then <UI>Choose from Family on Porch</UI>
-          and select them.
+          for more than a day), open <UI>People</UI>, tap their key, then <UI>Porch app</UI>. Tap{" "}
+          <UI>Choose from Family on Porch</UI> and select them.
         </p>
         <StepVideo
           name="ios-switch"

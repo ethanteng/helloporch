@@ -505,12 +505,14 @@ The pages follow [CaregiverSettings.swift](../ios/Porch/CaregiverSettings.swift)
 Page contents:
 
 - **People.** The keypad grid, plus Family on Porch with pending invitations and Cancel.
-- **Person page** ([CaregiverPerson.swift](../ios/Porch/CaregiverPerson.swift)):
-  - Name and photo override (`setMemberOverride`).
-  - Key menu, to move a person or take them off the keypad.
-  - Button color.
-  - "Reach X": Porch app status, Invite, Choose from Family on Porch, Calls start as, and phone numbers. Up to 5 numbers, with Make primary. A changed primary moves its drop-in approval (`setPhoneDropIn {replacing}`).
-  - Drop-in, both in their Porch app (audio and video) and by phone.
+- **Person page** ([CaregiverPerson.swift](../ios/Porch/CaregiverPerson.swift), [CaregiverPerson.kt](app/src/main/kotlin/com/ethanteng/helloporch/CaregiverPerson.kt)), laid out like Add someone's Check step:
+  - On a key, their button as the bedside shows it, with Photo and the six button colors (a color from the old picker shows as a seventh, chosen swatch). Off a key, their photo and status.
+  - A row each for Name, Porch app, Phone, Key and Drop-in, each opening its own screen:
+    - Name: the name override (`setMemberOverride`), or the key's own name for someone only on the keypad.
+    - Porch app: their status; an invite's expiry with Send a new invite (cancels the old one, then `createInvite`) and Cancel invite (the key stays, reached by phone); Invite and Choose from Family on Porch for someone not on Porch; Calls start with.
+    - Phone: up to 5 numbers, one marked Porch calls. A changed primary moves its drop-in approval (`setPhoneDropIn {replacing}`).
+    - Key: Add someone's key grid, with Take off the keypad.
+    - Drop-in: their Porch app's audio and video, and their number's phone drop-in. The Drop-in page's list opens this screen directly.
   - Caregiver switch.
   - Remove, as Take off keypad or Remove from Porch.
 - **Key editor.** Five actions per key. Saving a number calls `contacts/authorize`. Cache the approval until 5 minutes before its 30-day expiry. Show refusals as they come, such as "Porch can't call phone numbers in X yet."

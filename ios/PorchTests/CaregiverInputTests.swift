@@ -65,17 +65,23 @@ final class CaregiverInputTests: XCTestCase {
         home.onSaveSlots = { saved = $0 }
         let person = PersonViewController(admin: home, slot: 1); person.loadViewIfNeeded()
         XCTAssertEqual(person.title, "David")
-        let colorPicker = UIColorPickerViewController(); colorPicker.selectedColor = .white
-        person.colorPickerViewControllerDidSelectColor(colorPicker)
-        XCTAssertNil(saved, "The color is saved once the picker closes")
-        person.colorPickerViewControllerDidFinish(colorPicker)
-        XCTAssertEqual(saved?.contact(for: 1)?.buttonColorHex, "FFFFFF")
-        let remove = try XCTUnwrap(buttons(in: person.view).first { $0.accessibilityIdentifier == "person.removePhoto" })
-        remove.sendActions(for: .touchUpInside)
+        XCTAssertEqual(descendants(person.view).first { $0.accessibilityIdentifier == "person.preview" }?.accessibilityLabel, "David, press 1",
+                       "Their page starts with their button as the bedside shows it")
+        func swatch(_ hex: String) -> UIControl? { descendants(person.view).compactMap { $0 as? UIControl }.first { $0.accessibilityIdentifier == "add.color.\(hex)" } }
+        XCTAssertTrue(swatch("FFCC00")?.accessibilityTraits.contains(.selected) == true, "A color chosen before the six swatches stays, chosen")
+        try XCTUnwrap(swatch("1565C0")).sendActions(for: .touchUpInside)
+        XCTAssertEqual(saved?.contact(for: 1)?.buttonColorHex, "1565C0")
+        XCTAssertNil(swatch("FFCC00"), "and goes once another color is chosen")
+        func photo() -> UIButton? { buttons(in: person.view).first { $0.accessibilityIdentifier == "person.choosePhoto" } }
+        func choices(_ menu: UIMenu?) -> [String] { menu?.children.flatMap { ($0 as? UIMenu).map(choices) ?? [$0.title] } ?? [] }
+        XCTAssertEqual(photo()?.configuration?.title, "Change photo")
+        XCTAssertTrue(choices(photo()?.menu).contains("Remove photo"))
+        person.removePhoto()
         let contact = try XCTUnwrap(saved?.contact(for: 1))
-        XCTAssertNil(contact.photoData); XCTAssertEqual(contact.buttonColorHex, "FFFFFF")
+        XCTAssertNil(contact.photoData); XCTAssertEqual(contact.buttonColorHex, "1565C0")
         XCTAssertEqual(contact.phoneNumber, "+14155550123", "Changing one detail keeps the rest of the key")
-        XCTAssertFalse(buttons(in: person.view).contains { $0.accessibilityIdentifier == "person.removePhoto" })
+        XCTAssertEqual(photo()?.configuration?.title, "Photo")
+        XCTAssertFalse(choices(photo()?.menu).contains("Remove photo"))
     }
 
     @MainActor func testCaregiverHomeOpensEachBedsidePage() throws {
@@ -1095,7 +1101,8 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertFalse(share.isEnabled, "An older server without the setting can't change it")
         let me = PersonViewController(admin: admin, memberID: "me"); me.loadViewIfNeeded()
         XCTAssertFalse(buttons(in: me.view).contains { $0.accessibilityIdentifier == "person.remove" }, "A caregiver can't remove their own phone here")
-        XCTAssertFalse(buttons(in: me.view).contains { $0.accessibilityIdentifier == "person.key" }, "Keys are set on the bedside iPad")
+        XCTAssertFalse(descendants(me.view).contains { $0.accessibilityIdentifier == "person.key" }, "Keys are set on the bedside iPad")
+        XCTAssertEqual(rows(in: me.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("person.") }, ["person.row.name", "person.row.dropIn"])
         XCTAssertEqual(switches(me.view).filter { !$0.isEnabled }.map(\.accessibilityLabel), ["Caregiver mode"], "Another caregiver must change this phone's caregiver access")
         let sam = PersonViewController(admin: admin, memberID: "sam"); sam.loadViewIfNeeded()
         XCTAssertEqual(buttons(in: sam.view).filter { $0.configuration?.title == "Remove Sam" }.count, 1)
@@ -1115,9 +1122,25 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(rows(in: family.view).contains { $0.accessibilityLabel == "Mia. Porch is open. Audio and video drop-in." })
         func switches(_ view: UIView) -> [UISwitch] { descendants(view).compactMap { $0 as? UISwitch } }
         func texts(_ view: UIView) -> [String] { labels(in: view).compactMap(\.text) }
-        let mia = PersonViewController(admin: admin, memberID: "mia"); mia.loadViewIfNeeded()
-        XCTAssertTrue(texts(mia.view).contains("In Mia's Porch app"), "Porch app drop-ins are set apart from phone calls")
-        XCTAssertEqual(switches(mia.view).filter { $0.accessibilityIdentifier?.hasSuffix("DropIn") == true }.map(\.accessibilityLabel), ["Audio drop-in", "Video drop-in"])
+        let mia = PersonViewController(admin: admin, memberID: "mia")
+        let navigation = UINavigationController(rootViewController: mia); mia.loadViewIfNeeded()
+        let row = try XCTUnwrap(rows(in: mia.view).first { $0.accessibilityIdentifier == "person.row.dropIn" })
+        XCTAssertEqual(row.accessibilityLabel, "Drop-in, Audio and video")
+        XCTAssertTrue(switches(mia.view).filter { $0.accessibilityIdentifier?.hasSuffix("DropIn") == true }.isEmpty, "Drop-in has a screen of its own")
+        row.sendActions(for: .touchUpInside)
+        let screen = try XCTUnwrap(navigation.topViewController as? PersonDetailViewController); screen.loadViewIfNeeded()
+        XCTAssertEqual(screen.title, "Drop-in")
+        XCTAssertTrue(texts(screen.view).contains("Connects without Pat answering."))
+        XCTAssertTrue(texts(screen.view).contains("Porch app"), "Porch app drop-ins are set apart from phone calls")
+        XCTAssertEqual(switches(screen.view).filter { $0.accessibilityIdentifier?.hasSuffix("DropIn") == true }.map(\.accessibilityLabel), ["Audio drop-in", "Video drop-in"])
+        let noa = PersonViewController(admin: admin, memberID: "noa"); noa.loadViewIfNeeded()
+        XCTAssertEqual(rows(in: noa.view).first { $0.accessibilityIdentifier == "person.row.dropIn" }?.accessibilityLabel, "Drop-in, Off")
+        // The Drop-in page opens someone's drop-in itself, rather than their whole page.
+        let list = UINavigationController(rootViewController: dropIn)
+        try XCTUnwrap(rows(in: dropIn.view).first { $0.accessibilityLabel == "Noa, can't drop in" }).sendActions(for: .touchUpInside)
+        let noaDropIn = try XCTUnwrap(list.topViewController as? PersonDetailViewController); noaDropIn.loadViewIfNeeded()
+        XCTAssertEqual(noaDropIn.title, "Noa")
+        XCTAssertEqual(switches(noaDropIn.view).filter { $0.accessibilityIdentifier?.hasSuffix("DropIn") == true }.map(\.isOn), [false, false])
     }
 
     @MainActor func testCaregiverModeListsPhoneNumbersApprovedForDropIn() throws {
@@ -1415,24 +1438,39 @@ final class CaregiverInputTests: XCTestCase {
         let home = FamilyAdminViewController(slots: slots)
         var saved: CallSlots?
         home.onSaveSlots = { saved = $0 }
-        let person = PersonViewController(admin: home, slot: 2); person.loadViewIfNeeded()
-        func find(_ id: String) -> UITextField? { descendants(person.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == id } }
-        let name = try XCTUnwrap(find("person.name"))
+        let person = PersonViewController(admin: home, slot: 2)
+        let navigation = UINavigationController(rootViewController: person); person.loadViewIfNeeded()
+        func row(_ id: String) -> PorchListRow? { rows(in: person.view).first { $0.accessibilityIdentifier == id } }
+        XCTAssertEqual(rows(in: person.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("person.") },
+                       ["person.row.name", "person.row.app", "person.phone", "person.key"], "One row for each thing about them")
+        // The name is changed on a screen of its own, and Save goes back to their page.
+        try XCTUnwrap(row("person.row.name")).sendActions(for: .touchUpInside)
+        let nameScreen = try XCTUnwrap(navigation.topViewController as? PersonDetailViewController); nameScreen.loadViewIfNeeded()
+        XCTAssertEqual(nameScreen.title, "Name")
+        let name = try XCTUnwrap(descendants(nameScreen.view).compactMap { $0 as? UITextField }.first { $0.accessibilityIdentifier == "person.name" })
         XCTAssertEqual(name.text, "David")
-        name.text = "David Chen"; name.sendActions(for: .editingChanged)
-        try XCTUnwrap(buttons(in: person.view).first { $0.accessibilityLabel == "Save name" }).sendActions(for: .touchUpInside)
+        name.text = "David Chen"
+        try XCTUnwrap(buttons(in: nameScreen.view).first { $0.accessibilityIdentifier == "person.saveName" }).sendActions(for: .touchUpInside)
         XCTAssertEqual(saved?.contact(for: 2)?.name, "David Chen")
         XCTAssertEqual(person.title, "David Chen")
-        XCTAssertEqual(name.constraints.filter { $0.firstAttribute == .height }.count, 1, "redrawing the page doesn't add to the name field's constraints")
+        XCTAssertTrue(navigation.topViewController === person)
+        XCTAssertEqual(row("person.row.name")?.accessibilityLabel, "Name, David Chen")
+        nameScreen.render()
+        XCTAssertEqual(name.constraints.filter { $0.firstAttribute == .height }.count, 1, "redrawing doesn't add to the name field's constraints")
         XCTAssertEqual(name.autocapitalizationType, .words, "and keeps names capitalized")
-        XCTAssertTrue(rows(in: person.view).contains { $0.accessibilityIdentifier == "person.phone" })
-        XCTAssertTrue(descendants(person.view).contains { $0.accessibilityLabel == "Porch app, Not on Porch" })
-        XCTAssertTrue(buttons(in: person.view).contains { $0.configuration?.title == "Invite David" })
+        // Someone not on Porch can be invited from the Porch app row.
+        XCTAssertEqual(row("person.row.app")?.accessibilityLabel, "Porch app, Invite")
+        try XCTUnwrap(row("person.row.app")).sendActions(for: .touchUpInside)
+        let app = try XCTUnwrap(navigation.topViewController as? PersonDetailViewController); app.loadViewIfNeeded()
+        XCTAssertEqual(app.title, "Porch app")
+        XCTAssertTrue(buttons(in: app.view).contains { $0.configuration?.title == "Invite David" })
+        XCTAssertFalse(descendants(app.view).contains { $0.accessibilityIdentifier == "person.callMode" }, "Calls start in the app only once they're on Porch")
+        navigation.popToViewController(person, animated: false)
         XCTAssertFalse(descendants(person.view).contains { $0.accessibilityIdentifier == "person.caregiver" }, "Caregiver mode is for family members on Porch")
         XCTAssertEqual(buttons(in: person.view).filter { $0.configuration?.title == "Remove David" }.count, 1)
         // Their phone numbers open in the same Phone screen Add someone uses.
-        let navigation = UINavigationController(rootViewController: person)
-        try XCTUnwrap(rows(in: person.view).first { $0.accessibilityIdentifier == "person.phone" }).sendActions(for: .touchUpInside)
+        XCTAssertEqual(row("person.phone")?.accessibilityLabel, "Phone, \(PhoneNumberNormalization.display("+14155550123"))")
+        try XCTUnwrap(row("person.phone")).sendActions(for: .touchUpInside)
         let numbers = try XCTUnwrap(navigation.topViewController as? AddPhoneNumbersViewController)
         numbers.loadViewIfNeeded()
         XCTAssertEqual(numbers.title, "Phone")
@@ -1475,11 +1513,27 @@ final class CaregiverInputTests: XCTestCase {
         let navigation = UINavigationController(rootViewController: UIViewController())
         let person = PersonViewController(admin: home, slot: 2)
         navigation.pushViewController(person, animated: false); person.loadViewIfNeeded()
-        person.move(to: 3)
+        func keyRow() -> UIControl? { rows(in: person.view).first { $0.accessibilityIdentifier == "person.key" } }
+        XCTAssertEqual(keyRow()?.accessibilityLabel, "Key, 2")
+        try XCTUnwrap(keyRow()).sendActions(for: .touchUpInside)
+        let keys = try XCTUnwrap(navigation.topViewController as? AddKeyViewController); keys.loadViewIfNeeded()
+        func tile(_ key: String) -> UIControl? { descendants(keys.view).compactMap { $0 as? UIControl }.first { $0.accessibilityIdentifier == "add.key.\(key)" } }
+        XCTAssertEqual(tile("2")?.accessibilityValue, "Chosen", "Their own key is chosen to start with")
+        XCTAssertTrue(buttons(in: keys.view).contains { $0.accessibilityIdentifier == "person.takeOffKeypad" })
+        XCTAssertFalse(buttons(in: keys.view).contains { $0.accessibilityIdentifier == "add.noKey" })
+        try XCTUnwrap(tile("3")).sendActions(for: .touchUpInside)
+        try XCTUnwrap(buttons(in: keys.view).first { $0.accessibilityIdentifier == "add.doneKey" }).sendActions(for: .touchUpInside)
         XCTAssertNil(saved?.contact(for: 2))
         XCTAssertEqual(saved?.contact(for: 3)?.name, "David")
         XCTAssertTrue(navigation.topViewController === person, "their page stays open")
-        XCTAssertEqual(buttons(in: person.view).first { $0.accessibilityIdentifier == "person.key" }?.configuration?.title, "Key 3")
+        XCTAssertEqual(keyRow()?.accessibilityLabel, "Key, 3")
+        XCTAssertEqual(descendants(person.view).first { $0.accessibilityIdentifier == "person.preview" }?.accessibilityLabel, "David, press 3")
+    }
+
+    /// An invitation's expiry reads after "Expires", so a relative day isn't capitalized.
+    @MainActor func testInviteExpiryReadsAfterExpires() {
+        let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date().addingTimeInterval(86_400))!
+        XCTAssertTrue(PersonViewController.expiry(noon.timeIntervalSince1970).hasPrefix("tomorrow"))
     }
 
     /// Someone on the keypad by phone who joined Porch another way can be linked to it, keeping their key's numbers and color.
@@ -1517,7 +1571,7 @@ final class CaregiverInputTests: XCTestCase {
         let admin = FamilyAdminViewController(remote: remote, state: state); admin.loadViewIfNeeded()
         let sam = PersonViewController(admin: admin, memberID: "sam"); sam.loadViewIfNeeded()
         func photoButton() -> String? { buttons(in: sam.view).first { $0.accessibilityIdentifier == "person.choosePhoto" }?.configuration?.title }
-        XCTAssertEqual(photoButton(), "Add photo")
+        XCTAssertEqual(photoButton(), "Photo")
         try FamilyPhotos.shared.store.add(photo)
         NotificationCenter.default.post(name: .porchFamilyChanged, object: nil)
         XCTAssertEqual(photoButton(), "Change photo")

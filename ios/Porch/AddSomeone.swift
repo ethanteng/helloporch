@@ -26,9 +26,10 @@ final class AddSomeoneDraft {
     var photo: Data?
     var colorHex: String?
 
-    init(key: Int?, fromKeyTile: Bool) {
+    /// `startKey` is a key that stays free to choose though someone is on it: theirs, when moving them.
+    init(key: Int?, fromKeyTile: Bool, startKey: Int? = nil) {
         self.key = key; self.fromKeyTile = fromKeyTile
-        startKey = fromKeyTile ? key : nil
+        self.startKey = fromKeyTile ? key : startKey
     }
     /// The flow's title: the key, when it was opened from one, or Add someone.
     var title: String { fromKeyTile ? keySymbol.map { "Key \($0)" } ?? "Add someone" : "Add someone" }
@@ -94,32 +95,6 @@ class AddSomeoneScreen: CaregiverFormViewController {
         label.accessibilityTraits = .header
         label.accessibilityIdentifier = "add.headline"
         return label
-    }
-    /// Rows or views on a white card, with padding for views that aren't rows.
-    func padded(_ views: [UIView], spacing: CGFloat = 14) -> UIView {
-        let stack = UIStackView(arrangedSubviews: views)
-        stack.axis = .vertical; stack.spacing = spacing
-        stack.isLayoutMarginsRelativeArrangement = true
-        stack.directionalLayoutMargins = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
-        return stack
-    }
-    func centeredLink(_ title: String, action: @escaping () -> Void) -> UIButton {
-        let link = textLink(title, size: 17, action: action)
-        link.contentHorizontalAlignment = .center
-        return link
-    }
-    /// A row with an icon, its title, what it's set to, and a chevron.
-    func detailRow(_ title: String, value: String, symbol: String, valueIsAction: Bool = false, action: @escaping () -> Void) -> PorchListRow {
-        let icon = UIImageView(image: UIImage(systemName: symbol)); icon.tintColor = PorchStyle.accent
-        icon.contentMode = .scaleAspectFit
-        icon.setContentHuggingPriority(.required, for: .horizontal)
-        icon.widthAnchor.constraint(equalToConstant: 26).isActive = true
-        let label = PorchStyle.label(title, size: 18, color: PorchStyle.ink)
-        let detail = PorchStyle.label(value, size: 17, color: valueIsAction ? PorchStyle.accent : PorchStyle.secondary, weight: valueIsAction ? .semibold : .regular)
-        detail.numberOfLines = 1
-        detail.setContentHuggingPriority(.required, for: .horizontal)
-        detail.setContentCompressionResistancePriority(.required, for: .horizontal)
-        return PorchListRow([icon, label, detail], label: "\(title), \(value)", action: action)
     }
     func errorLabel() -> UILabel {
         let label = PorchStyle.label("", size: 16, color: .systemRed)
@@ -385,28 +360,31 @@ final class AddCheckViewController: AddSomeoneScreen {
         var rows: [UIView] = []
         if draft.member != nil || draft.viaApp {
             let value = draft.member != nil ? "Connected" : AddSomeoneDraft.dropInSummary(audio: draft.dropInAudio, video: draft.dropInVideo)
-            let row = detailRow("Porch app", value: value, symbol: "video") { [weak self] in self?.openApp() }
+            let row = linkRow("Porch app", value: value, symbol: "video") { [weak self] in self?.openApp() }
             row.accessibilityIdentifier = "add.row.app"
             rows.append(row)
         }
         if draft.key != nil {
             let number = draft.numbers.first.map { PhoneNumberNormalization.display($0) + (draft.numbers.count > 1 ? " +\(draft.numbers.count - 1)" : "") }
-            let row = detailRow("Phone", value: number ?? "Add", symbol: "phone", valueIsAction: number == nil) { [weak self] in self?.openPhone() }
+            let row = linkRow("Phone", value: number ?? "Add", symbol: "phone", valueIsAction: number == nil) { [weak self] in self?.openPhone() }
             row.accessibilityIdentifier = "add.row.phone"
             rows.append(row)
         }
-        let keyRow = detailRow("Key", value: draft.keySymbol ?? "None", symbol: "circle.grid.3x3") { [weak self] in self?.openKey() }
+        let keyRow = linkRow("Key", value: draft.keySymbol ?? "None", symbol: "circle.grid.3x3") { [weak self] in self?.openKey() }
         keyRow.accessibilityIdentifier = "add.row.key"
         rows.append(keyRow)
         form.addArrangedSubview(group(rows: rows))
         add.configuration?.title = saveTask != nil ? "Adding…" : draft.keySymbol.map { "Add to key \($0)" } ?? "Invite \(draft.firstName)"
         form.addArrangedSubview(add)
     }
-    /// Their button as the bedside shows it.
     private func preview(_ key: String) -> UIView {
-        let color = RecipientAppearance.color(hex: draft.colorHex)
-        let foreground = RecipientAppearance.foreground(on: color)
         let photo = draft.member.map { FamilyPhotos.shared.data(for: $0.photoID) } ?? draft.photo
+        return Self.preview(name: draft.name, photo: photo, colorHex: draft.colorHex, key: key, identifier: "add.preview")
+    }
+    /// Their button as the bedside shows it. Someone's page shows it too.
+    static func preview(name: String, photo: Data?, colorHex: String?, key: String, identifier: String) -> UIView {
+        let color = RecipientAppearance.color(hex: colorHex)
+        let foreground = RecipientAppearance.foreground(on: color)
         let picture: UIView
         if let image = RecipientAppearance.cardPhoto(photo, width: 96) {
             let view = UIImageView(image: image); view.contentMode = .scaleAspectFill
@@ -417,24 +395,24 @@ final class AddCheckViewController: AddSomeoneScreen {
             let circle = FamilyAdminViewController.circle(size: 64)
             circle.backgroundColor = foreground.withAlphaComponent(0.16)
             let initials = UILabel()
-            initials.text = draft.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+            initials.text = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
             initials.font = .systemFont(ofSize: 23, weight: .semibold)
             initials.textColor = foreground
             FamilyAdminViewController.center(initials, in: circle)
             picture = circle
         }
-        let name = PorchStyle.label(draft.name, size: 26, color: foreground, weight: .semibold)
+        let title = PorchStyle.label(name, size: 26, color: foreground, weight: .semibold)
         let press = PorchStyle.label("Press \(key)", size: 18, color: foreground.withAlphaComponent(0.8), weight: .medium)
-        [name, press].forEach { $0.textAlignment = .center }
-        let stack = UIStackView(arrangedSubviews: [picture, name, press])
+        [title, press].forEach { $0.textAlignment = .center }
+        let stack = UIStackView(arrangedSubviews: [picture, title, press])
         stack.axis = .vertical; stack.alignment = .center; stack.spacing = 6
         stack.isLayoutMarginsRelativeArrangement = true
         stack.directionalLayoutMargins = .init(top: 20, leading: 20, bottom: 20, trailing: 20)
         stack.backgroundColor = color
         stack.layer.cornerRadius = 24
         stack.isAccessibilityElement = true
-        stack.accessibilityLabel = "\(draft.name), press \(key)"
-        stack.accessibilityIdentifier = "add.preview"
+        stack.accessibilityLabel = "\(name), press \(key)"
+        stack.accessibilityIdentifier = identifier
         return stack
     }
     /// Photo, for someone not yet on Porch, and the button colors.
@@ -448,12 +426,7 @@ final class AddCheckViewController: AddSomeoneScreen {
             views.append(FamilyAdminViewController.singleLine(photo))
             views.append(UIView())
         }
-        let swatches = UIStackView(arrangedSubviews: AddSomeoneDraft.colors.map { choice in
-            AddSwatch(hex: choice.hex, name: choice.name, selected: choice.hex == draft.colorHex) { [weak self] in self?.draft.colorHex = choice.hex; self?.render() }
-        })
-        swatches.spacing = 2
-        swatches.setContentHuggingPriority(.required, for: .horizontal)
-        views.append(swatches)
+        views.append(AddSwatch.row(selected: draft.colorHex) { [weak self] hex in self?.draft.colorHex = hex; self?.render() })
         let row = UIStackView(arrangedSubviews: views)
         row.alignment = .center
         if draft.member != nil { row.addArrangedSubview(UIView()); row.insertArrangedSubview(UIView(), at: 0); row.distribution = .equalCentering }
@@ -500,15 +473,7 @@ final class AddCheckViewController: AddSomeoneScreen {
         }
         var invitation = draft.invitation
         if draft.inviting, invitation == nil {
-            guard let credential = PorchDevice.credential(for: .bedside), let pin = admin.caregiverPIN() else {
-                throw FamilyServiceError(message: "Finish setting up this iPad before inviting someone.", status: 409)
-            }
-            // Drop-in answers on this iPad, so only it can grant its own microphone and camera.
-            if draft.dropInAudio || draft.dropInVideo { guard await admin.requestMedia(video: draft.dropInVideo) else { throw AddSomeoneCancelled.mediaRefused } }
-            let response = try await FamilyService(credential).send("createInvite", ["name": draft.name, "permissions": ["audio": draft.dropInAudio, "video": draft.dropInVideo], "caregiver": false], pin: pin)
-            guard let code = response.code, let id = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
-            FamilyCoordinator.shared.update(response)
-            invitation = (id, FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin))
+            invitation = try await invite(draft.name, audio: draft.dropInAudio, video: draft.dropInVideo, admin: admin)
             draft.invitation = invitation
             try Task.checkCancellation()
         }
@@ -524,12 +489,38 @@ final class AddCheckViewController: AddSomeoneScreen {
         }
         return invitation?.link
     }
+    /// Makes an invitation in their name, with drop-in as chosen. Someone's page uses it to invite them again.
+    @MainActor static func invite(_ name: String, audio: Bool, video: Bool, admin: FamilyAdminViewController) async throws -> (id: String, link: URL) {
+        guard let credential = PorchDevice.credential(for: .bedside), let pin = admin.caregiverPIN() else {
+            throw FamilyServiceError(message: "Finish setting up this iPad before inviting someone.", status: 409)
+        }
+        // Drop-in answers on this iPad, so only it can grant its own microphone and camera.
+        if audio || video { guard await admin.requestMedia(video: video) else { throw AddSomeoneCancelled.mediaRefused } }
+        let response = try await FamilyService(credential).send("createInvite", ["name": name, "permissions": ["audio": audio, "video": video], "caregiver": false], pin: pin)
+        guard let code = response.code, let id = response.invitationID else { throw FamilyInvitation.InvitationError.invalid }
+        FamilyCoordinator.shared.update(response)
+        return (id, FamilyInvitation.url(origin: credential.origin, code: code, defaultOrigin: PorchDevice.defaultOrigin))
+    }
 }
 
 enum AddSomeoneCancelled: Error { case mediaRefused }
 
 /// One button color: a circle in a target big enough to tap, ringed when chosen.
 final class AddSwatch: UIControl {
+    /// The six colors in a row. A color chosen some other way gets a seventh swatch, chosen, so it isn't lost.
+    static func row(selected: String?, choose: @escaping (String?) -> Void) -> UIStackView {
+        func same(_ a: String?, _ b: String?) -> Bool { a?.uppercased() == b?.uppercased() }
+        var swatches = AddSomeoneDraft.colors.map { choice in
+            AddSwatch(hex: choice.hex, name: choice.name, selected: same(choice.hex, selected)) { choose(choice.hex) }
+        }
+        if let selected, !AddSomeoneDraft.colors.contains(where: { same($0.hex, selected) }) {
+            swatches.append(AddSwatch(hex: selected, name: "Color #\(selected.uppercased())", selected: true) {})
+        }
+        let row = UIStackView(arrangedSubviews: swatches)
+        row.spacing = 2
+        row.setContentHuggingPriority(.required, for: .horizontal)
+        return row
+    }
     init(hex: String?, name: String, selected: Bool, action: @escaping () -> Void) {
         super.init(frame: .zero)
         let circle = UIView()
@@ -557,6 +548,9 @@ final class AddSwatch: UIControl {
 
 final class AddInviteViewController: AddSomeoneScreen {
     private let link: URL
+    /// Where Done goes back to, when it isn't the People page: the page of someone invited again, whose name it's titled with.
+    weak var returnsTo: UIViewController?
+    override var showsFlowTitle: Bool { returnsTo == nil }
     private let share = PorchStyle.button("Share invite link", symbol: "square.and.arrow.up")
     init(admin: FamilyAdminViewController, draft: AddSomeoneDraft, link: URL) {
         self.link = link
@@ -566,6 +560,7 @@ final class AddInviteViewController: AddSomeoneScreen {
     override func viewDidLoad() {
         super.viewDidLoad()
         hideKeyboardControl()
+        if returnsTo != nil { title = draft.name }
         navigationItem.hidesBackButton = true
         let badge = UIImageView(image: UIImage(systemName: "checkmark.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 56, weight: .semibold)))
         badge.tintColor = PorchStyle.accent
@@ -590,7 +585,12 @@ final class AddInviteViewController: AddSomeoneScreen {
         form.addArrangedSubview(group(rows: [padded([title, code, share, expiry], spacing: 16)]))
         let done = PorchStyle.button("Done", filled: false)
         done.accessibilityIdentifier = "add.done"
-        done.addAction(UIAction { [weak self] _ in self?.finish() }, for: .touchUpInside)
+        done.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            if let page = self.returnsTo, self.navigationController?.viewControllers.contains(page) == true {
+                self.navigationController?.popToViewController(page, animated: true)
+            } else { self.finish() }
+        }, for: .touchUpInside)
         form.addArrangedSubview(done)
     }
     @objc private func shareLink() {
@@ -852,6 +852,10 @@ final class AddKeyViewController: AddSomeoneScreen {
     override var showsFlowTitle: Bool { false }
     private let grid = UIStackView()
     private var chosen: Int?
+    /// From someone's page: Done moves them to the key chosen, rather than changing a draft.
+    var onDone: ((Int?) -> Void)?
+    /// From someone's page: takes them off the keypad.
+    var takeOff: (() -> Void)?
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Key"
@@ -863,12 +867,17 @@ final class AddKeyViewController: AddSomeoneScreen {
         done.accessibilityIdentifier = "add.doneKey"
         done.addAction(UIAction { [weak self] _ in
             guard let self else { return }
+            if let onDone = self.onDone { onDone(self.chosen); return }
             self.draft.key = self.chosen
             self.navigationController?.popViewController(animated: true)
         }, for: .touchUpInside)
         form.addArrangedSubview(done)
+        if let takeOff {
+            let link = centeredLink("Take off the keypad", destructive: true, action: takeOff)
+            link.accessibilityIdentifier = "person.takeOffKeypad"
+            form.addArrangedSubview(link)
         // A phone number lives on a key, and someone already on Porch is added only to put them on one.
-        if draft.numbers.isEmpty, draft.inviting {
+        } else if draft.numbers.isEmpty, draft.inviting {
             let none = centeredLink("Not on the keypad") { [weak self] in
                 self?.draft.key = nil
                 self?.navigationController?.popViewController(animated: true)

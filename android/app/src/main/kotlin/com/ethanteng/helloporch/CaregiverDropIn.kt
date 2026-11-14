@@ -43,7 +43,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 private enum class DropInScreen { PERSON, ADD_PHONE }
 
-/** The Drop-in page, or a person or a new phone number opened from it in its place. */
+/** The Drop-in page, or a person's drop-in or a new phone number opened from it in its place. */
 @Composable
 fun DropInPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, onBack: (() -> Unit)?) {
     var screen by rememberSaveable { mutableStateOf<DropInScreen?>(null) }
@@ -53,7 +53,8 @@ fun DropInPages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
         null -> FormScreen(CaregiverPage.DROP_IN.title(admin.onBedside), navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
             DropInPage(app, admin, links, onPerson = { memberID = it; screen = DropInScreen.PERSON }, onAddPhone = { screen = DropInScreen.ADD_PHONE })
         }
-        DropInScreen.PERSON -> PersonPage(app, admin, links, memberID, null, onDone = { screen = null })
+        // Their drop-in, titled with their name, rather than their whole page.
+        DropInScreen.PERSON -> PersonDropInScreen(app, admin, links, memberID, null, title = null, onBack = { screen = null })
         DropInScreen.ADD_PHONE -> AddPhoneDropInScreen(admin, onDone = { screen = null })
     }
 }

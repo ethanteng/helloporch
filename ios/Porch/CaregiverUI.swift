@@ -431,7 +431,8 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     }
 
     /// A row that opens more: its title, what it's set to now, and a chevron.
-    func linkRow(_ title: String, value: String? = nil, symbol: String? = nil, action: @escaping () -> Void) -> PorchListRow {
+    /// `valueIsAction` shows the value as what tapping does, such as Add, in the accent color.
+    func linkRow(_ title: String, value: String? = nil, symbol: String? = nil, valueIsAction: Bool = false, action: @escaping () -> Void) -> PorchListRow {
         var views: [UIView] = []
         if let symbol {
             let icon = UIImageView(image: UIImage(systemName: symbol)); icon.tintColor = PorchStyle.accent
@@ -442,7 +443,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         }
         views.append(PorchStyle.label(title, size: 18, color: PorchStyle.ink))
         if let value {
-            let label = PorchStyle.label(value, size: 17)
+            let label = PorchStyle.label(value, size: 17, color: valueIsAction ? PorchStyle.accent : PorchStyle.secondary, weight: valueIsAction ? .semibold : .regular)
             label.numberOfLines = 1
             label.setContentHuggingPriority(.required, for: .horizontal)
             label.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -476,6 +477,21 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     }
 
     /// A plain text link, for things that matter less than the settings above them.
+    /// A text link centered on its own line, red for one that removes something.
+    func centeredLink(_ title: String, destructive: Bool = false, action: @escaping () -> Void) -> UIButton {
+        let link = textLink(title, size: 17, action: action)
+        link.contentHorizontalAlignment = .center
+        if destructive { link.configuration?.baseForegroundColor = .systemRed }
+        return link
+    }
+    /// Views that aren't rows, padded to sit on a white card.
+    func padded(_ views: [UIView], spacing: CGFloat = 14) -> UIView {
+        let stack = UIStackView(arrangedSubviews: views)
+        stack.axis = .vertical; stack.spacing = spacing
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.directionalLayoutMargins = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+        return stack
+    }
     func textLink(_ title: String, size: CGFloat = 16, action: @escaping () -> Void) -> UIButton {
         let button = UIButton(type: .system)
         var config = UIButton.Configuration.plain()

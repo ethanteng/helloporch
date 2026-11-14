@@ -702,7 +702,7 @@ final class DropInSettingsViewController: CaregiverPageViewController {
                                  FamilyAdminViewController.text(person.name, [modes], titleColor: ink)],
                                 label: "\(person.name), Porch app, \(modes)") { [weak self, weak admin] in
                 guard let self, let admin else { return }
-                self.push(PersonViewController(admin: admin, memberID: person.id))
+                self.push(PersonViewController.dropInScreen(admin: admin, memberID: person.id))
             }
         }
         can += (state?.phoneDropIns ?? []).map { approval in
@@ -730,7 +730,7 @@ final class DropInSettingsViewController: CaregiverPageViewController {
                                  FamilyAdminViewController.text(person.name, []), off],
                                 label: "\(person.name), can't drop in") { [weak self, weak admin] in
                 guard let self, let admin else { return }
-                self.push(PersonViewController(admin: admin, memberID: person.id))
+                self.push(PersonViewController.dropInScreen(admin: admin, memberID: person.id))
             }
         }
         if !cannot.isEmpty { content.addArrangedSubview(group("Can't drop in", rows: cannot)) }

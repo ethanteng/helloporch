@@ -147,19 +147,9 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
                 saved.numbers.firstOrNull()?.let { PhoneApprovals.authorize(app, it, refresh = true) }
                 var invitation = saved.invitationID.takeIf { saved.inviting }
                 if (saved.inviting && invitation == null) {
-                    // Drop-in answers on the bedside, so only the tablet can grant its own microphone and camera.
-                    if ((saved.dropInAudio || saved.dropInVideo) && !mediaAccess.granted(saved.dropInVideo)) {
-                        admin.error = "Grant microphone and camera access before approving drop-in."
-                        return@launch
-                    }
-                    val origin = admin.origin ?: throw IllegalStateException("Go back to the clock and open caregiver mode to finish setup.")
-                    val response = admin.request("createInvite", mapOf("name" to JsonPrimitive(saved.name.trim()), "caregiver" to JsonPrimitive(false),
-                        "permissions" to JsonObject(mapOf("audio" to JsonPrimitive(saved.dropInAudio), "video" to JsonPrimitive(saved.dropInVideo)))))
-                    val code = response.code
-                    val id = response.invitationID
-                    if (code == null || id == null) throw IllegalStateException("Couldn't make the invitation. Try again.")
-                    invitation = id
-                    draft = draft.copy(invitationID = id, link = FamilyInvitation.url(origin, code, app.device.defaultOrigin))
+                    val made = createInvitation(app, admin, mediaAccess, saved.name, saved.dropInAudio, saved.dropInVideo) ?: return@launch
+                    invitation = made.id
+                    draft = draft.copy(invitationID = made.id, link = made.link)
                 }
                 val at = saved.key
                 if (at != null) {
@@ -202,7 +192,30 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
 }
 
 /** Asks for the microphone, and the camera with `video`, and waits for the answer. */
-private suspend fun MediaAccess.granted(video: Boolean): Boolean = suspendCancellableCoroutine { waiting -> this(video) { waiting.resume(it) } }
+internal suspend fun MediaAccess.granted(video: Boolean): Boolean = suspendCancellableCoroutine { waiting -> this(video) { waiting.resume(it) } }
+
+/** An invitation just made, and the link that joins it. */
+internal class MadeInvitation(val id: String, val link: String)
+
+/**
+ * Invites `name` to Porch, with drop-in as approved and without caregiver mode, as Add someone and a person's page do.
+ * Drop-in answers on the bedside, so the tablet asks for its own microphone and camera first; null, with why shown, when
+ * they're refused. Throws with why the invitation couldn't be made.
+ */
+internal suspend fun createInvitation(app: PorchApplication, admin: CaregiverAdmin, mediaAccess: MediaAccess, name: String, audio: Boolean,
+    video: Boolean): MadeInvitation? {
+    if ((audio || video) && !mediaAccess.granted(video)) {
+        admin.error = "Grant microphone and camera access before approving drop-in."
+        return null
+    }
+    val origin = admin.origin ?: throw IllegalStateException("Go back to the clock and open caregiver mode to finish setup.")
+    val response = admin.request("createInvite", mapOf("name" to JsonPrimitive(name.trim()), "caregiver" to JsonPrimitive(false),
+        "permissions" to JsonObject(mapOf("audio" to JsonPrimitive(audio), "video" to JsonPrimitive(video)))))
+    val code = response.code
+    val id = response.invitationID
+    if (code == null || id == null) throw IllegalStateException("Couldn't make the invitation. Try again.")
+    return MadeInvitation(id, FamilyInvitation.url(origin, code, app.device.defaultOrigin))
+}
 
 // MARK: Step 1
 
@@ -315,7 +328,7 @@ private fun OptionCard(title: String, detail: String?, @DrawableRes icon: Int, c
 // MARK: Step 3
 
 /** Button colors that keep a name readable, as Step 3 offers them, after the bedside's own. */
-private val swatches = listOf(null to "Default color", "1565C0" to "Blue", "00838F" to "Teal", "EF6C00" to "Orange", "C62828" to "Red", "6A1B9A" to "Purple")
+internal val swatches = listOf(null to "Default color", "1565C0" to "Blue", "00838F" to "Teal", "EF6C00" to "Orange", "C62828" to "Red", "6A1B9A" to "Purple")
 
 @Composable
 private fun CheckStep(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks, draft: AddSomeoneDraft, photo: AddSomeonePhoto, title: String,
@@ -368,7 +381,7 @@ private fun CheckStep(app: PorchApplication, admin: CaregiverAdmin, links: Famil
         CaregiverGroup {
             rows.forEachIndexed { index, row ->
                 if (index > 0) HorizontalDivider()
-                SummaryRow(row, enabled = !saving) { onOpen(row.screen) }
+                DetailRow(row.icon, row.title, row.value, row.accent, enabled = !saving) { onOpen(row.screen) }
             }
         }
         FormButton(when { saving -> "Adding…"; key != null -> "Add to key $key"; else -> "Invite ${draft.firstName}" }, enabled = !saving, onClick = onSave)
@@ -378,7 +391,7 @@ private fun CheckStep(app: PorchApplication, admin: CaregiverAdmin, links: Famil
 /** A key's card as the bedside's people screen draws it (BedsidePeople's PersonCard), at a caregiver form's size: the
  * button color with lettering that reads on it, their photo or initials, their name, and the key to press. */
 @Composable
-private fun KeyPreview(name: String, photo: ByteArray?, key: String, color: Color?) {
+internal fun KeyPreview(name: String, photo: ByteArray?, key: String, color: Color?) {
     val background = color ?: CallColors.control
     val text = color?.let(::foreground) ?: CallColors.text
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(background).padding(20.dp).semantics(mergeDescendants = true) {},
@@ -396,7 +409,7 @@ private fun KeyPreview(name: String, photo: ByteArray?, key: String, color: Colo
 
 /** One button color: a 30 dp circle in a 40 dp target, ringed in the accent color when it's chosen. */
 @Composable
-private fun Swatch(hex: String?, label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+internal fun Swatch(hex: String?, label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Box(Modifier.size(40.dp).clip(CircleShape).selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
@@ -405,17 +418,18 @@ private fun Swatch(hex: String?, label: String, selected: Boolean, enabled: Bool
     }
 }
 
-/** A row of Step 3's card: what it's about, what it's set to, and the screen that changes it. `accent` is for a value
- * that's something to do, such as Add. */
+/** A row of Step 3's card, and the screen that changes it. */
 private class Summary(@param:DrawableRes val icon: Int, val title: String, val value: String, val screen: AddScreen, val accent: Boolean = false)
 
+/** A row that shows what something is set to and opens the screen that changes it, as Step 3's card and a person's page
+ * show them. `accent` is for a value that's something to do, such as Add. */
 @Composable
-private fun SummaryRow(row: Summary, enabled: Boolean, onClick: () -> Unit) {
+internal fun DetailRow(@DrawableRes icon: Int, title: String, value: String, accent: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     CaregiverRow(onClick = if (enabled) onClick else null) {
-        Icon(painterResource(row.icon), contentDescription = null, Modifier.size(24.dp), tint = colors.onSurfaceVariant)
-        Text(row.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-        Text(row.value, color = if (row.accent) colors.primary else colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+        Icon(painterResource(icon), contentDescription = null, Modifier.size(24.dp), tint = colors.onSurfaceVariant)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Text(value, color = if (accent) colors.primary else colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
         Chevron()
     }
 }
@@ -424,19 +438,26 @@ private fun SummaryRow(row: Summary, enabled: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun InviteStep(draft: AddSomeoneDraft, title: String, onDone: () -> Unit) {
-    val context = LocalContext.current
     val first = draft.firstName
+    InviteReady(title, draft.key?.let { "$first is on key ${CallSlots.symbol(it)}" } ?: "Invite ready", first, draft.link, onDone)
+}
+
+/** An invitation just made: its code for their phone's camera, and its link to send. It has no way back, since the
+ * invitation stays made: Done goes on. */
+@Composable
+internal fun InviteReady(title: String, heading: String, first: String, link: String?, onDone: () -> Unit) {
+    val context = LocalContext.current
     FormScreen(title) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Box(Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
                 Icon(painterResource(R.drawable.ic_check), contentDescription = null, Modifier.size(36.dp), tint = Color.White)
             }
         }
-        Heading(draft.key?.let { "$first is on key ${CallSlots.symbol(it)}" } ?: "Invite ready", TextAlign.Center)
-        draft.link?.let { link ->
+        Heading(heading, TextAlign.Center)
+        link?.let {
             FormCard("Send $first the invite") {
-                InvitationCode(link, "Invitation QR code")
-                FormButton("Share invite link", onClick = { shareInvitation(context, link) }, icon = R.drawable.ic_share)
+                InvitationCode(it, "Invitation QR code")
+                FormButton("Share invite link", onClick = { shareInvitation(context, it) }, icon = R.drawable.ic_share)
                 Text("Works once, for 24 hours.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center)
             }
@@ -607,21 +628,30 @@ private fun KeyScreen(admin: CaregiverAdmin, draft: AddSomeoneDraft, update: ((A
     var chosen by rememberSaveable { mutableStateOf(draft.key) }
     val slots = admin.slots
     FormScreen("Key", navigation = { BackButton(onBack) }) {
-        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            AddSomeoneDraft.keypadOrder.chunked(3).forEach { row ->
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { digit ->
-                        // The key Add someone was opened from is theirs to take, whatever it does now.
-                        val free = slots.action(digit) == KeypadAction.UNASSIGNED || digit == draft.tile
-                        val label = if (digit == chosen) draft.firstName else occupant(slots, digit)
-                        KeyChoice(CallSlots.symbol(digit), label, selected = digit == chosen, enabled = free, Modifier.weight(1f).fillMaxHeight()) { chosen = digit }
-                    }
-                }
-            }
-        }
+        // The key Add someone was opened from is theirs to take, whatever it does now.
+        KeyGrid(slots, chosen, draft.tile, draft.firstName) { chosen = it }
         FormButton("Done", onClick = { update { it.copy(key = chosen) }; onBack() })
         // Porch calls a phone from a key, and someone already on Porch is added only to put them on one.
         if (draft.numbers.isEmpty() && draft.inviting) FormLink("Not on the keypad", onClick = { update { it.copy(key = null) }; onBack() })
+    }
+}
+
+/**
+ * The keys as the keypad lays them out, to choose one for someone called `name`: keys with nothing on them, and `own`,
+ * which is theirs already. Keys in use say who or what is on them.
+ */
+@Composable
+internal fun KeyGrid(slots: CallSlots, chosen: Int?, own: Int?, name: String, onChoose: (Int) -> Unit) {
+    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AddSomeoneDraft.keypadOrder.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { digit ->
+                    val free = slots.action(digit) == KeypadAction.UNASSIGNED || digit == own
+                    val label = if (digit == chosen) name else occupant(slots, digit)
+                    KeyChoice(CallSlots.symbol(digit), label, selected = digit == chosen, enabled = free, Modifier.weight(1f).fillMaxHeight()) { onChoose(digit) }
+                }
+            }
+        }
     }
 }
 
@@ -701,17 +731,17 @@ private fun StepBars(step: Int) {
 }
 
 @Composable
-private fun Heading(text: String, align: TextAlign = TextAlign.Start) {
+internal fun Heading(text: String, align: TextAlign = TextAlign.Start) {
     Text(text, Modifier.fillMaxWidth().semantics { heading() }, style = MaterialTheme.typography.headlineMedium, textAlign = align)
 }
 
 @Composable
-private fun BackButton(onBack: () -> Unit, enabled: Boolean = true) {
+internal fun BackButton(onBack: () -> Unit, enabled: Boolean = true) {
     TextButton(onClick = onBack, enabled = enabled) { Text("Back") }
 }
 
 /** The row opens another screen. */
 @Composable
-private fun Chevron() {
+internal fun Chevron() {
     Text("›", Modifier.clearAndSetSemantics {}, fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

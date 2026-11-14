@@ -85,7 +85,7 @@ const parts: GuidePart[] = [
             ["Announcement voice", "Porch’s voice", <><Path steps={["Display & voice", "Announcement voice"]} />, tablet only</>],
             ["Clock", "Day & night", <><Path steps={["Display & voice", "Clock"]} />, tablet only</>],
             ["Keypad", "0 answers and hangs up, 9 turns video off and on, and the other keys are empty", <><Path steps={["People"]} />, tablet only</>],
-            ["New keypad calls", "Start as video", <>The key’s <UI>Calls start as</UI>, tablet only</>],
+            ["New keypad calls", "Start as video", <>Their page’s <UI>Porch app</UI>, then <UI>Calls start with</UI>, tablet only</>],
             ["Putting the receiver back hangs up", "On", <><Path steps={["This iPad", "Hang up when the receiver is put back"]} />, tablet only</>],
             ["Your camera at the start of video calls", "On", <>Your own Porch settings: <UI>Start video calls with my camera on</UI></>],
           ]}
@@ -124,12 +124,20 @@ const parts: GuidePart[] = [
             when they join.
           </li>
         </ol>
+        <Screenshot
+          src="/pilot/screens/ipad-check-key.png"
+          width={1600}
+          height={1103}
+          device="tablet"
+          alt="Check key 8 in caregiver mode on the iPad: Tom Reyes’s button as Rose’s screen will show it, with Press 8, a Photo button and six colors, rows for Porch app, Phone and Key, and an Add to key 8 button."
+          caption="Checking key 8 before adding Tom."
+        />
         <p>
           <Path steps={["People", "Add someone"]} /> works the same way and starts on the first empty key.
         </p>
         <p>
-          To move someone to a different button, open <UI>People</UI>, tap their name, then{" "}
-          <UI>Keypad key</UI>. Choose another key or <UI>Take off the keypad</UI>.
+          To move someone to a different button, open <UI>People</UI>, tap their key, then <UI>Key</UI>.
+          Choose another key and tap <UI>Done</UI>, or tap <UI>Take off the keypad</UI>.
         </p>
         <p>
           Use the <Link href="/labels">phone button label maker</Link> to print photos and names for
@@ -159,7 +167,7 @@ const parts: GuidePart[] = [
           rows={[
             ["Default", "Key 0 answers calls, stops drop-ins and hangs up. Key 9 turns the camera off and on. The other keys are empty."],
             ["Change it", <><Path key="p" steps={["People"]} />, then tap a key. Tablet only.</>],
-            ["New keys", <>Calls start as video when you set up the key under <UI>People</UI>. If you assign a key from someone’s page using <UI>Keypad key</UI>, their calls start as audio.</>],
+            ["New keys", <>Calls start as video when you set up the key under <UI>People</UI>. If you assign a key from someone’s page using <UI>Key</UI>, their calls start as audio.</>],
           ]}
         />
       </>
@@ -268,8 +276,8 @@ const parts: GuidePart[] = [
             Porch keeps each person’s permissions for when you turn it back on.
           </li>
           <li>
-            To change access for one person, tap their name under <UI>Drop-in</UI> or <UI>People</UI>. Turn <UI>Audio drop-in</UI> or{" "}
-            <UI>Video drop-in</UI> on or off.
+            To change access for one person, tap their name under <UI>Drop-in</UI>, or tap their name under{" "}
+            <UI>People</UI> and then <UI>Drop-in</UI>. Turn <UI>Audio</UI> or <UI>Video</UI> on or off.
           </li>
           <li>
             For someone new, choose their drop-in permissions when you invite them, using the{" "}
@@ -695,14 +703,30 @@ const parts: GuidePart[] = [
           <UI>Cancel</UI>.
         </p>
         <h3>Change what someone can do</h3>
-        <p>Open <UI>People</UI> on the tablet or <UI>Family</UI> on your phone, then tap their name.</p>
+        <p>
+          Open <UI>People</UI> on the tablet or <UI>Family</UI> on your phone, then tap their name. Each row
+          shows what it’s set to. Tap a row to change it.
+        </p>
+        <Screenshot
+          src="/pilot/screens/ipad-person.png"
+          width={1600}
+          height={1103}
+          device="tablet"
+          alt="David Chen’s page in caregiver mode on the iPad: his button as Rose’s screen shows it, a Photo button and six colors, rows for Name, Porch app (Connected), Phone, Key (1) and Drop-in (Audio and video), and a Caregiver mode switch."
+          caption="Someone’s page on the iPad. Each row opens its own screen."
+        />
         <ul>
           <li>
-            Change the name or photo your loved one sees. Tap <UI>Use their own photo</UI>
-            to restore the photo they chose.
+            Tap <UI>Name</UI> to change the name your loved one sees, and <UI>Photo</UI> to choose their
+            photo. To restore the photo they chose, tap <UI>Change photo</UI>, then{" "}
+            <UI>Use their own photo</UI>. On the tablet, tap a color to change their button.
           </li>
           <li>
-            Turn <UI>Audio drop-in</UI> and <UI>Video drop-in</UI> on or off.
+            Tap <UI>Drop-in</UI> to turn <UI>Audio</UI> and <UI>Video</UI> on or off.
+          </li>
+          <li>
+            On the tablet, tap <UI>Porch app</UI> to send a new invite, cancel one, or choose whether calls
+            start with voice or video.
           </li>
           <li>
             Turn on <UI>Caregiver mode</UI> if they need to change settings from their phone.

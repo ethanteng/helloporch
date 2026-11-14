@@ -53,6 +53,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -477,15 +478,16 @@ fun CaregiverRow(onClick: (() -> Unit)? = null, selected: Boolean = false, label
         horizontalArrangement = Arrangement.spacedBy(12.dp), content = content)
 }
 
-/** A setting that's on or off, with what it means under its name. */
+/** A setting that's on or off, with what it means under its name. `label` is what a screen reader calls the switch, when
+ * its name alone isn't enough, such as Audio under Drop-in. */
 @Composable
-fun ToggleRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, detail: String? = null, enabled: Boolean = true) {
+fun ToggleRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, detail: String? = null, enabled: Boolean = true, label: String? = null) {
     CaregiverRow {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(title, if (label != null) Modifier.clearAndSetSemantics {} else Modifier, style = MaterialTheme.typography.titleMedium)
             detail?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        Switch(checked, onChange, enabled = enabled)
+        Switch(checked, onChange, if (label != null) Modifier.semantics { contentDescription = label } else Modifier, enabled = enabled)
     }
 }
 
