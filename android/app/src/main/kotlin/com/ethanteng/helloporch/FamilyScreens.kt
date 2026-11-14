@@ -531,7 +531,16 @@ private fun MessagesTab(app: PorchApplication, links: FamilyLinks, families: Lis
     FormScreen("Messages") {
         val several = families.size > 1
         val shown = families.filter { links.link(it)?.accessRemoved != true && links.state(it) != null }
-        if (shown.isEmpty()) { Status("Connecting to your family…"); return@FormScreen }
+        // Families that removed this phone aren't listed. When that's all of them, say so rather than Connecting, as on iOS.
+        if (shown.isEmpty()) {
+            val removed = families.isNotEmpty() && families.all { links.link(it)?.accessRemoved == true }
+            Status(when {
+                !removed -> "Connecting to your family…"
+                families.size == 1 -> "This phone was removed from this family."
+                else -> "This phone was removed from these families."
+            })
+            return@FormScreen
+        }
         // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
         for (family in shown) {
             val state = links.state(family) ?: continue

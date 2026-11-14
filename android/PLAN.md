@@ -449,14 +449,14 @@ Calls can be tried locally with LiveKit's server in dev mode; see [android/READM
 
 ### Family phone
 
-- **Home screen.**
-  - One card per family. The bedside person's card holds:
+- **Call, Messages and You tabs**, as on iOS (`ios/Porch/FamilyTabs.swift`).
+  - Call: one card per family. The bedside person's card holds:
     - availability, and the attendance line from `bedsideAttendedAt` and `serverTime`, such as "Someone is at the iPad" or "at the tablet";
-    - Audio call and Video call;
-    - Drop in with audio and Drop in with video;
-    - the Messages thread.
-  - Drop-in buttons are enabled only when the bedside is online and not busy, drop-in is on, and the person has permission.
-  - Banners: new messages; N texts or voicemails need your review (`heldMessages` + `heldTexts`); drop-in paused.
+    - Call and Video;
+    - Drop in, which asks audio or video when both are approved.
+  - Drop-in buttons show only when drop-in is on and the person has permission, and work only when the bedside is online and not busy.
+  - Messages: N texts or voicemails need your review (`heldMessages` + `heldTexts`), then one thread per family with its new messages.
+  - You: the families, each with its own page (name and photo, family name, caregiver mode, Porch number, Leave), Join another family, and this phone's settings.
 - **Outgoing call.**
   1. `startCall`.
   2. `joinCall`.

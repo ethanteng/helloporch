@@ -137,7 +137,9 @@ final class FamilyTabBarController: UITabBarController {
 final class FamilyInboxViewController: CaregiverFormViewController {
     private let content = UIStackView()
     private struct Row: Equatable { let id: String; let name: String; let family: String?; let unheard: Int; let review: Int; let held: Int; let heldTexts: Int }
-    private var shown: [Row]?
+    /// The rows, or with none to show, what the page says instead.
+    private struct Shown: Equatable { let rows: [Row]; let empty: String? }
+    private var shown: Shown?
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Messages"
         content.axis = .vertical; content.spacing = 16
@@ -159,13 +161,19 @@ final class FamilyInboxViewController: CaregiverFormViewController {
             let family = several ? familyTitle(credential) : nil
             return Row(id: credential.deviceID, name: name, family: family == name ? nil : family, unheard: state.newMessages ?? 0, review: held + texts, held: held, heldTexts: texts)
         }
-        guard rows != shown else { return }
-        shown = rows
+        // Families that removed this phone aren't listed. When that's all of them, say so rather than Connecting.
+        let all = PorchDevice.families
+        let empty: String? = !rows.isEmpty ? nil : all.isEmpty ? "Join a family to send messages."
+            : families.isEmpty ? (all.count == 1 ? "This phone was removed from this family." : "This phone was removed from these families.")
+            : "Connecting to your family…"
+        let next = Shown(rows: rows, empty: empty)
+        guard next != shown else { return }
+        shown = next
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
-        guard !rows.isEmpty else {
-            let empty = PorchStyle.label(PorchDevice.families.isEmpty ? "Join a family to send messages." : "Connecting to your family…")
-            empty.textAlignment = .center
-            content.addArrangedSubview(empty); return
+        if let empty {
+            let label = PorchStyle.label(empty)
+            label.textAlignment = .center
+            content.addArrangedSubview(label); return
         }
         // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
         for row in rows where row.review > 0 {

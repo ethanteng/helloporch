@@ -119,7 +119,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         }
         // Ringing while locked is what's expected, so only its absence is mentioned.
         let push = SystemIncomingCalls.shared.pushReady ? nil : "Keep Porch open so you don't miss calls."
-        let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .denied ? "Allow microphone access in iPhone Settings → Porch to answer calls." : nil
+        let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
+        let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .denied ? "Allow microphone access in \(device) Settings → Porch to answer calls." : nil
         status.text = credentials.isEmpty ? "Ask the caregiver to invite you." : microphone ?? push
         status.isHidden = status.text == nil
         guard next != displayed else { return }
