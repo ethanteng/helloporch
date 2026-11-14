@@ -76,6 +76,21 @@ class AddSomeoneScreen: CaregiverFormViewController {
     required init?(coder: NSCoder) { fatalError("Use init(admin:draft:)") }
     override func viewDidLoad() { super.viewDidLoad(); if showsFlowTitle { title = draft.title } }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); if showsFlowTitle { title = draft.title } }
+    /// Back stays available until a save starts. The navigation bar is outside this view, so disabling the view
+    /// alone still lets Back cancel a save after the invitation, the drop-in move, or the key is already written.
+    private var allowPop = true
+    func setLeavingBlocked(_ blocked: Bool) {
+        if blocked {
+            allowPop = navigationController?.interactivePopGestureRecognizer?.isEnabled ?? true
+            navigationItem.hidesBackButton = true
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = false
+            view.isUserInteractionEnabled = false
+        } else {
+            view.isUserInteractionEnabled = true
+            navigationItem.hidesBackButton = false
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = allowPop
+        }
+    }
     /// The Phone, Porch app and Key screens have titles of their own.
     var showsFlowTitle: Bool { true }
     var lovedOne: String { admin?.current?.householdName ?? "your loved one" }
@@ -487,11 +502,11 @@ final class AddCheckViewController: AddSomeoneScreen {
         guard draft.viaApp || draft.member != nil || !draft.numbers.isEmpty else { showError("Choose Phone or Porch app."); return }
         let draft = draft
         add.isEnabled = false; add.configuration?.title = "Adding…"
-        view.isUserInteractionEnabled = false
+        setLeavingBlocked(true)
         saveTask = Task { [weak self] in
             defer {
                 self?.saveTask = nil
-                self?.view.isUserInteractionEnabled = true
+                self?.setLeavingBlocked(false)
                 self?.add.isEnabled = true
                 if let self, self.isViewLoaded { self.render() }
             }
@@ -765,11 +780,11 @@ final class AddPhoneNumbersViewController: AddSomeoneScreen, CNContactPickerDele
             show("Add a number so Porch can reach \(draft.firstName)."); return
         }
         done.isEnabled = false; done.configuration?.title = "Saving…"
-        view.isUserInteractionEnabled = false
+        setLeavingBlocked(true)
         saveTask = Task { [weak self] in
             defer {
                 self?.saveTask = nil
-                self?.view.isUserInteractionEnabled = true
+                self?.setLeavingBlocked(false)
                 self?.done.isEnabled = true; self?.done.configuration?.title = "Done"
             }
             do {
