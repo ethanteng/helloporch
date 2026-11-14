@@ -106,7 +106,7 @@ Open `ios/Porch.xcodeproj` in Xcode 26 or newer. The app runs on iOS and iPadOS 
 
 | Scheme | Use |
 |---|---|
-| `Porch` | The full app with the optional Cell2Jack USB driver. This is the TestFlight build for every device, and Mom's bedside iPad gets it as a development build. |
+| `Porch` | The full app with the optional Cell2Jack USB driver. This is the TestFlight build for every device, Mom's bedside iPad included. |
 | `PorchFamily` | The same app without the driver. A fallback TestFlight build, chosen by hand; CI also runs the family app's iPhone tests with it. |
 | `PorchCell2Jack`, `PorchCell2JackCalls`, `PorchKeypadPreview` | Earlier experiments and test fixtures. CI still runs some of their tests. |
 
@@ -177,9 +177,9 @@ The [phone button label maker](https://helloporch.store/labels) lets families ch
 
 ## Status
 
-- **Pilot.** Families join by invitation. Bedsides that use Cell2Jack run development builds installed from a Mac, while family devices and other bedsides use TestFlight.
-- **Waiting on Apple.** A TestFlight build with the Cell2Jack driver needs Apple's DriverKit USB entitlement, which was requested on 2026-10-18. App Review access is described in [ios/README.md](ios/README.md#app-review-access-and-resubmission).
-- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). Per-household phone numbers, the helloporch.store invitation links and the admin page are built. Porch won't open to families beyond the pilot until Apple approves the driver.
+- **Pilot.** Families join by invitation. Every iPhone and iPad runs the TestFlight build, including bedsides with a Cell2Jack plugged straight in. Mom's iPad moved to it from development builds on 2026-11-14.
+- **Cell2Jack driver approved.** Apple granted the DriverKit USB entitlement on 2026-11-10, and TestFlight builds have included the driver since 0.1.0 (76.1). App Review access is described in [ios/README.md](ios/README.md#app-review-access-and-resubmission).
+- **Self-serve setup.** It's planned in [ONBOARDING-PLAN.md](ONBOARDING-PLAN.md). Per-household phone numbers, the helloporch.store invitation links and the admin page are built.
 
 ## Legacy
 
