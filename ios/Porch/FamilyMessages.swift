@@ -107,6 +107,8 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
     private let recipient: String
     private let kind: String
     private let startAudioImmediately: Bool
+    /// The family this message is for. The other tabs stay open, so choosing another family meanwhile must not send it there.
+    private let family: FamilyCredential?
     private let content = UIStackView()
     private let uploader = MessageUploader()
     private var phase = Phase.idle
@@ -117,11 +119,12 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
     private var startedAutomatically = false
     private let timerLabel = PorchStyle.label("", size: 28, color: PorchStyle.ink, weight: .semibold)
 
-    init(recipient: String, kind: String = "message", startAudioImmediately: Bool = false) {
+    init(recipient: String, kind: String = "message", startAudioImmediately: Bool = false, family: FamilyCredential? = nil) {
         self.recipient = recipient; self.kind = kind; self.startAudioImmediately = startAudioImmediately
+        self.family = family ?? PorchDevice.credential(for: .family)
         super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(recipient:kind:startAudioImmediately:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(recipient:kind:startAudioImmediately:family:)") }
 
     override func viewDidLoad() {
         super.viewDidLoad(); title = kind == "voicemail" ? "Leave a message" : "Send a message"
@@ -261,7 +264,7 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
         recording = nil; phase = .idle; render()
     }
     private func send() {
-        guard let recording, phase == .recorded, let credential = PorchDevice.credential(for: .family) else { return }
+        guard let recording, phase == .recorded, let credential = family ?? PorchDevice.credential(for: .family) else { return }
         phase = .sending; render()
         Task { [weak self] in
             guard let self else { return }
@@ -427,6 +430,18 @@ final class MessageBubble: UIControl {
 /// to the bedside aren't shown. Playing one of theirs marks it played; each can be played again while the
 /// recording is kept (90 days).
 final class MessageThreadViewController: CaregiverFormViewController {
+    /// The family this thread was opened for. Call, Messages and You stay up together, so a later choice must not reload another family's messages here.
+    private let family: FamilyCredential?
+    init(family: FamilyCredential? = nil) {
+        self.family = family ?? PorchDevice.credential(for: .family)
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(family:)") }
+    private var credential: FamilyCredential? { family ?? PorchDevice.credential(for: .family) }
+    private var snapshot: FamilySnapshot? {
+        if let family { return FamilyCoordinator.shared.state(for: family) }
+        return FamilyCoordinator.shared.state
+    }
     private enum Entry {
         case sent(SentMessage), received(ReceivedMessage)
         var id: String { switch self { case .sent(let message): return message.id; case .received(let message): return message.id } }
@@ -450,7 +465,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
     /// The refresh button was tapped, so a failed load is reported rather than left for the next poll.
     private var reportFailure = false
     private var name: String {
-        let state = FamilyCoordinator.shared.state
+        let state = snapshot
         return state?.people.first(where: { $0.role == .bedside })?.name ?? loadedName ?? state?.householdName ?? "your loved one"
     }
     override func viewDidLoad() {
@@ -459,7 +474,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
         record.accessibilityIdentifier = "messages.record"
         record.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            self.navigationController?.pushViewController(MessageComposerViewController(recipient: self.name), animated: true)
+            self.navigationController?.pushViewController(MessageComposerViewController(recipient: self.name, family: self.family), animated: true)
         }, for: .touchUpInside)
         [list, record].forEach { form.addArrangedSubview($0) }
         hideKeyboardControl()
@@ -468,26 +483,33 @@ final class MessageThreadViewController: CaregiverFormViewController {
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(refreshTapped))
     }
     deinit { NotificationCenter.default.removeObserver(self) }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reloadMessages() }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Taken off this phone while another tab was showing: back to the list, rather than loading a family that's gone.
+        if let family, !PorchDevice.families.contains(where: { $0.deviceID == family.deviceID }) {
+            navigationController?.popViewController(animated: true); return
+        }
+        reloadMessages()
+    }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
     /// Reloads when a new message from the bedside arrives while this is open.
     @objc private func familyChanged() {
         updateName()
-        guard let count = FamilyCoordinator.shared.state?.newMessages, let unplayed else { return }
+        guard let count = snapshot?.newMessages, let unplayed else { return }
         // A new one counts as seen only once a load succeeds, so a failed load is tried again on the next poll.
         if count > unplayed { reloadMessages() } else { self.unplayed = count }
     }
     private func updateName() {
         title = "Messages with \(name)"
         record.configuration?.title = "Record a message for \(name)"
-        record.isHidden = FamilyCoordinator.shared.state?.messagesEnabled == false
+        record.isHidden = snapshot?.messagesEnabled == false
     }
     @objc private func reloadMessages() {
-        guard let credential = PorchDevice.credential(for: .family) else { return }
+        guard let credential else { return }
         // The load already running may have started before the newest message, so another follows it.
         guard !loading else { reloadQueued = true; return }
         loading = true
-        let count = FamilyCoordinator.shared.state?.newMessages
+        let count = snapshot?.newMessages
         Task { [weak self] in
             defer {
                 self?.loading = false
@@ -606,7 +628,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
         scroll.setContentOffset(CGPoint(x: 0, y: min(bottom, max(top, y))), animated: false)
     }
     private func play(_ entry: Entry) {
-        guard !opening, let credential = PorchDevice.credential(for: .family) else { return }
+        guard !opening, let credential else { return }
         opening = true
         Task { [weak self] in
             defer { self?.opening = false }
@@ -625,7 +647,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
     /// Makes missing preview frames one at a time; each is kept, so this happens once per video.
     private func loadPosters(_ missing: [(Entry, MessagePosterView)]) {
         posterTask?.cancel()
-        guard !missing.isEmpty, let credential = PorchDevice.credential(for: .family) else { return }
+        guard !missing.isEmpty, let credential else { return }
         posterTask = Task {
             for (entry, poster) in missing {
                 guard !Task.isCancelled else { return }
@@ -640,7 +662,7 @@ final class MessageThreadViewController: CaregiverFormViewController {
         let alert = UIAlertController(title: "Unsend this message?", message: "It will be removed from \(name)'s Porch before it plays.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Unsend", style: .destructive) { [weak self] _ in
-            guard let credential = PorchDevice.credential(for: .family) else { return }
+            guard let credential = self?.credential else { return }
             Task { [weak self] in
                 do { _ = try await FamilyService(credential).send("unsendMessage", ["messageID": message.id]) }
                 catch { if let self { showPorchError(error, on: self) } }

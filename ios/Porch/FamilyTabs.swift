@@ -66,23 +66,28 @@ final class FamilyTabBarController: UITabBarController {
         presentedViewController == nil && (selectedViewController as? UINavigationController)?.viewControllers.count == 1
     }
     /// Joining a family. It belongs with the list of families on You; before there are any, the Call tab says how.
+    /// An invitation is an interruption, so a caregiver session left open on another tab ends and each tab returns to its first screen.
     func showPairing(invitation: URL? = nil) {
+        RemoteCaregiverSession.shared.end()
         selectedIndex = PorchDevice.families.isEmpty ? Self.callTab : Self.youTab
+        for case let navigation as UINavigationController in viewControllers ?? [] {
+            navigation.popToRootViewController(animated: false)
+        }
         guard let navigation = selectedViewController as? UINavigationController else { return }
-        navigation.popToRootViewController(animated: false)
         let pairing = FamilyPairingViewController(); pairing.invitation = invitation
         navigation.pushViewController(pairing, animated: true)
     }
     /// A family's messages with its bedside, on the Messages tab. Nil keeps the family chosen last.
     func openMessages(for family: FamilyCredential?) {
         if let family { FamilyCoordinator.shared.select(family) }
-        guard PorchDevice.credential(for: .family) != nil else { return }
+        let chosen = family ?? PorchDevice.credential(for: .family)
+        guard chosen != nil else { return }
         if presentedViewController != nil { dismiss(animated: false) }
         selectedIndex = Self.messagesTab
         guard let navigation = selectedViewController as? UINavigationController else { return }
         if navigation.presentedViewController != nil { navigation.dismiss(animated: false) }
         navigation.popToRootViewController(animated: false)
-        navigation.pushViewController(MessageThreadViewController(), animated: true)
+        navigation.pushViewController(MessageThreadViewController(family: chosen), animated: true)
     }
     /// A message notification says which family it's from: each family knows this phone by its own ID.
     @objc private func openReceivedMessages(_ notification: Notification) {
@@ -153,7 +158,7 @@ final class FamilyInboxViewController: CaregiverFormViewController {
             let review = PorchStyle.button(FamilyHomeViewController.reviewTitle(voicemails: row.held, texts: row.heldTexts), symbol: "exclamationmark.bubble.fill")
             if several { review.configuration?.subtitle = row.family ?? row.name }
             review.accessibilityIdentifier = "family.heldVoicemail"
-            review.addAction(UIAction { [weak self] _ in FamilyCoordinator.shared.select(credential); self?.openCaregiverMode() }, for: .touchUpInside)
+            review.addAction(UIAction { [weak self] _ in FamilyCoordinator.shared.select(credential); self?.openCaregiverMode(for: credential) }, for: .touchUpInside)
             content.addArrangedSubview(review)
         }
         content.addArrangedSubview(group(rows: rows.compactMap { row in
@@ -173,13 +178,13 @@ final class FamilyInboxViewController: CaregiverFormViewController {
             return thread
         }))
     }
-    /// Caregiver mode for the family chosen last. Every visit starts with the PIN.
-    private func openCaregiverMode() {
-        guard FamilyCoordinator.shared.state?.me.caregiver == true else {
+    /// Caregiver mode for one family. Every visit starts with the PIN.
+    private func openCaregiverMode(for credential: FamilyCredential) {
+        guard FamilyCoordinator.shared.state(for: credential)?.me.caregiver == true else {
             let alert = UIAlertController(title: "Caregiver mode isn't on for you", message: "Ask the caregiver to turn it on for you.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true); return
         }
-        navigationController?.pushViewController(RemoteCaregiverPINViewController(), animated: true)
+        navigationController?.pushViewController(RemoteCaregiverPINViewController(family: credential), animated: true)
     }
 }
 
@@ -271,14 +276,19 @@ final class FamilyPageViewController: CaregiverFormViewController {
     deinit { NotificationCenter.default.removeObserver(self) }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // A family already taken off this phone has nothing to show; selecting it would point the other tabs at whoever is left.
+        guard isOnThisPhone else { return }
         FamilyCoordinator.shared.select(credential)
     }
     private var isOnThisPhone: Bool { PorchDevice.families.contains { $0.deviceID == credential.deviceID } }
     @objc private func render() {
         guard isViewLoaded else { return }
-        // Left, or taken off this phone: back to the list of families.
+        // Left, or taken off this phone: back to the list, including a name or photo page still open over this one.
+        // Once this page has left the stack, a later check-in must not pop whatever was opened next.
         guard isOnThisPhone else {
-            if navigationController?.topViewController === self { navigationController?.popToRootViewController(animated: true) }
+            if navigationController?.viewControllers.contains(where: { $0 === self }) == true {
+                navigationController?.popToRootViewController(animated: true)
+            }
             return
         }
         let link = FamilyCoordinator.shared.link(for: credential), state = link?.state
@@ -300,7 +310,8 @@ final class FamilyPageViewController: CaregiverFormViewController {
         }
         var rows: [UIView] = []
         let profile = linkRow("Your name and photo", value: next.me, symbol: "person.crop.circle") { [weak self] in
-            self?.navigationController?.pushViewController(FamilyProfileViewController(), animated: true)
+            guard let self else { return }
+            self.navigationController?.pushViewController(FamilyProfileViewController(family: self.credential), animated: true)
         }
         profile.accessibilityIdentifier = "family.profile"
         rows.append(profile)
@@ -312,7 +323,8 @@ final class FamilyPageViewController: CaregiverFormViewController {
         rows.append(name)
         if next.caregiver {
             let caregiver = linkRow("Caregiver mode", symbol: "lock.fill") { [weak self] in
-                self?.navigationController?.pushViewController(RemoteCaregiverPINViewController(), animated: true)
+                guard let self else { return }
+                self.navigationController?.pushViewController(RemoteCaregiverPINViewController(family: self.credential), animated: true)
             }
             caregiver.accessibilityIdentifier = "family.caregiverMode"
             rows.append(caregiver)

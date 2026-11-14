@@ -136,6 +136,8 @@ final class PhotoChooser: NSObject, PHPickerViewControllerDelegate, UIImagePicke
 /// this phone calls, drops in or sends a message, unless a caregiver chose others. Each family has its own, so the page
 /// is for the family chosen last, which the family's page chooses.
 final class FamilyProfileViewController: CaregiverFormViewController {
+    /// The family this page was opened for. You can switch families while this stays open on its own tab, and a name typed here must stay with this one.
+    private let family: FamilyCredential?
     private let content = UIStackView()
     /// Kept across redraws, which happen whenever anything in the family changes.
     private let nameField = UITextField()
@@ -158,10 +160,17 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
         self.saveProfile(["photo": data])
     }
-    private var me: FamilyPerson? { FamilyCoordinator.shared.state?.me }
+    init(family: FamilyCredential? = nil) {
+        self.family = family ?? PorchDevice.credential(for: .family)
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(family:)") }
+    /// Nil only when the page was opened with no family yet, in which case it follows the one chosen last.
+    private var credential: FamilyCredential? { family ?? PorchDevice.currentFamily }
+    private var snapshot: FamilySnapshot? { credential.flatMap { FamilyCoordinator.shared.state(for: $0) } }
+    private var me: FamilyPerson? { snapshot?.me }
     private var lovedOne: String {
-        let state = FamilyCoordinator.shared.state
-        return state?.people.first { $0.role == .bedside }?.name ?? state?.householdName ?? "your loved one"
+        snapshot?.people.first { $0.role == .bedside }?.name ?? snapshot?.householdName ?? "your loved one"
     }
 
     override func viewDidLoad() {
@@ -183,14 +192,14 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         guard isViewLoaded else { return }
         // Waits while a name is typed, so the keyboard doesn't close.
         guard !nameField.isFirstResponder else { renderAfterEditing = true; return }
-        let current = PorchDevice.currentFamily
-        // Another family chosen meanwhile drops a half-typed name. The field still showed the previous family until this redraw.
-        if current?.deviceID != formCredential?.deviceID { editedName = nil }
+        let current = credential
+        // An unpinned page follows a family chosen meanwhile, and drops a half-typed name. This page is for one family.
+        if family == nil, current?.deviceID != formCredential?.deviceID { editedName = nil }
         let photoID = me?.profile?.photoID
         let photo = photoID.map { FamilyPhotos.shared.store.contains($0) } == true
         // A new phone, or a photo saved elsewhere: download it, and try again on later check-ins if that fails.
-        if !photo, let photoID, let credential = PorchDevice.credential(for: .family) {
-            FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: credential)
+        if !photo, let photoID, let current {
+            FamilyPhotos.shared.load(photoID, values: ["source": "self"], credential: current)
         }
         let next = Shown(name: me?.name, invitedName: me?.invitedName, profile: me?.profile, override: me?.override, lovedOne: lovedOne, photo: photo)
         guard next != shown else { return }

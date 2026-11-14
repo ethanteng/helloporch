@@ -224,7 +224,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         alert.addAction(UIAlertAction(title: "Not now", style: .cancel))
         alert.addAction(UIAlertAction(title: "Leave a message", style: .default) { [weak self] _ in
             FamilyCoordinator.shared.select(family)
-            self?.navigationController?.pushViewController(MessageComposerViewController(recipient: name, kind: "voicemail", startAudioImmediately: true), animated: true)
+            self?.navigationController?.pushViewController(MessageComposerViewController(recipient: name, kind: "voicemail", startAudioImmediately: true, family: family), animated: true)
         })
         present(alert, animated: true)
     }
@@ -593,9 +593,16 @@ final class PhoneDropInViewController: CaregiverFormViewController, CNContactPic
 
 /// Opens caregiver mode on an approved family phone with the household's caregiver PIN.
 final class RemoteCaregiverPINViewController: CaregiverFormViewController {
+    /// The family whose PIN this screen checks. Opening another family's page while it sits on its tab must not switch that.
+    private let family: FamilyCredential?
     private let pin = UITextField()
     private let submit = PorchStyle.button("Open caregiver mode", symbol: "lock.fill")
     private var task: Task<Void, Never>?
+    init(family: FamilyCredential? = nil) {
+        self.family = family ?? PorchDevice.credential(for: .family)
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(family:)") }
     override func viewDidLoad() {
         super.viewDidLoad(); title = "Caregiver mode"
         pin.isSecureTextEntry = true; pin.keyboardType = .numberPad
@@ -605,7 +612,7 @@ final class RemoteCaregiverPINViewController: CaregiverFormViewController {
     }
     override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { task?.cancel() } }
     @objc private func unlock() {
-        guard task == nil, let credential = PorchDevice.credential(for: .family) else { return }
+        guard task == nil, let credential = family ?? PorchDevice.credential(for: .family) else { return }
         let value = pin.text ?? ""
         guard value.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else {
             showPorchError(FamilyServiceError(message: "Enter six digits.", status: 400), on: self); return
