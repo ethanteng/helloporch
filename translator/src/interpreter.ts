@@ -23,15 +23,21 @@ export type InterpreterDeps = {
 };
 export type InterpreterConfig = { bedside: string; bedsideLanguage: Language; familyLanguage: Language };
 
-/** How long the translator's own voice can come back through a microphone and still be recognized as an echo. */
-export const echoWindowMs = 20_000;
+/** How long after the translator stops speaking its voice, picked up by a microphone, can still arrive from speech
+ * recognition (about 1.2 s on test calls). Later speech is the person's own. */
+export const echoTailMs = 5_000;
+/** How closely recognized speech must match what the translator said to count as its echo. Recognition of the
+ * translator's own voice matched it at 0.9 to 1 on test calls; a reply such as "I am not coming on Saturday." after
+ * "Are you coming on Saturday?" is 0.71, and is the person's own. */
+export const echoSimilarity = 0.85;
 const recentLines = 6;
 
 export class Interpreter {
   bedsideLanguage: Language;
   readonly familyLanguage: Language;
   private readonly recent: Line[] = [];
-  private readonly spoken: { side: Side; text: string; at: number }[] = [];
+  /** What the translator said to each side; `ended` is unset while it's still speaking. */
+  private readonly spoken: { side: Side; text: string; ended?: number }[] = [];
   private readonly speakers = new Map<string, Promise<void>>();
   private readonly playing: Record<Side, Promise<void>> = { bedside: Promise.resolve(), family: Promise.resolve() };
   private count = 0;
@@ -93,23 +99,23 @@ export class Interpreter {
   }
 
   private async play(listener: Side, line: Line, said: string) {
-    this.spoken.push({ side: listener, text: said, at: this.deps.now() });
-    while (this.spoken.length && this.deps.now() - this.spoken[0].at > echoWindowMs) this.spoken.shift();
+    const entry: { side: Side; text: string; ended?: number } = { side: listener, text: said };
+    this.spoken.push(entry);
+    while (this.spoken.length > 1 && this.spoken[0].ended !== undefined && this.deps.now() - this.spoken[0].ended > echoTailMs) this.spoken.shift();
     if (listener === "bedside") this.deps.send({ type: "line", ...line }, "bedside");
     this.deps.send({ type: "speaking", on: true }, listener);
     try { await this.deps.speak(listener, said, line.language); }
     catch (error) { this.deps.log?.("speaking failed", error); }
     finally {
-      // The echo window runs from when the voice stops, not when it starts.
-      const entry = this.spoken.findLast(s => s.text === said);
-      if (entry) entry.at = this.deps.now();
+      entry.ended = this.deps.now();
       this.deps.send({ type: "speaking", on: false }, listener);
     }
   }
 
+  /** Only while the translator is speaking to this side, or just after, and only an almost exact match. */
   private isEcho(side: Side, text: string) {
     const now = this.deps.now();
-    return this.spoken.some(s => s.side === side && now - s.at <= echoWindowMs && similarity(s.text, text) >= 0.6);
+    return this.spoken.some(s => s.side === side && (s.ended === undefined || now - s.ended <= echoTailMs) && similarity(s.text, text) >= echoSimilarity);
   }
 }
 

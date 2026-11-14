@@ -336,6 +336,7 @@ extension Notification.Name {
                 }
                 let room = Room(); self.room = room; room.add(delegate: self)
                 try await room.connect(url: url, token: token)
+                CallTranslationTracks.keepOwn(in: room, bedside: profile.role == .bedside)
                 try Task.checkCancellation()
                 guard uuid == action.callUUID else { await room.disconnect(); action.fail(); return }
                 connected = true
@@ -491,6 +492,14 @@ extension Notification.Name {
         if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask); backgroundTask = .invalid }
     }
     private func changed() { NotificationCenter.default.post(name: .porchSystemCallChanged, object: self) }
+    /// This owns the call's room whether or not its screen is showing, as on a call answered while the phone is locked,
+    /// so it picks which translation track this side hears.
+    nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor in
+            guard room === self.room else { return }
+            CallTranslationTracks.keepOwn(publication, of: participant, bedside: self.credential?.role == .bedside)
+        }
+    }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         // The bedside is never left on with only a phone a family caregiver added; the caregiver stays on with it.
         Task { @MainActor in

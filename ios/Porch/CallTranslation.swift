@@ -9,6 +9,7 @@ import PorchCore
 /// translator says to it. Each side hears only its own translation track, with the other voices lowered under it.
 ///
 /// The call screen forwards its room's events here: data, subscribed tracks and people coming and going.
+/// Which translation track each side hears isn't up to the screen: see `CallTranslationTracks`.
 @MainActor final class CallTranslation {
     /// Family: the switch, the language and the conversation. Bedside: the banner and caption. Hidden until needed.
     let panel = UIStackView()
@@ -152,13 +153,10 @@ import PorchCore
         refresh()
     }
 
-    /// The translator speaks to each side on its own track. Leave the other side's track, in case the room didn't.
+    /// The translator's voice arriving means it's on.
     func subscribed(_ publication: RemoteTrackPublication, of participant: RemoteParticipant) {
         guard participant.kind == .agent, publication.kind == .audio else { return }
         translatorOn = true
-        if publication.name != CallTranslationMessage.trackName(forBedside: isBedside) {
-            Task { try? await publication.set(subscribed: false) }
-        }
         refresh()
     }
 
@@ -239,6 +237,26 @@ import PorchCore
             }
             for case let label as UILabel in entry.arrangedSubviews { label.numberOfLines = 3; label.textAlignment = .natural }
             transcript.addArrangedSubview(entry)
+        }
+    }
+}
+
+/// The translator speaks to each side on its own track (`CallTranslationMessage.trackName`), and each side should hear
+/// only its own. LiveKit's server can't unsubscribe someone who joined with auto-subscribe, so whoever owns the call's
+/// room drops the other side's track itself, for every call: a call answered on a locked phone has no call screen,
+/// and a family member rung into a call has no translation controls.
+@MainActor enum CallTranslationTracks {
+    static func keepOwn(_ publication: RemoteTrackPublication, of participant: RemoteParticipant, bedside: Bool) {
+        guard participant.kind == .agent, publication.kind == .audio, publication.name.hasPrefix("porch-translation"),
+              publication.name != CallTranslationMessage.trackName(forBedside: bedside) else { return }
+        Task { try? await publication.set(subscribed: false) }
+    }
+    /// The same for tracks already subscribed, such as any that arrived while the room was connecting.
+    static func keepOwn(in room: Room, bedside: Bool) {
+        for participant in room.remoteParticipants.values where participant.kind == .agent {
+            for case let publication as RemoteTrackPublication in participant.trackPublications.values where publication.isSubscribed {
+                keepOwn(publication, of: participant, bedside: bedside)
+            }
         }
     }
 }

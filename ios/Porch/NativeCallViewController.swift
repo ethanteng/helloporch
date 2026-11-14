@@ -926,6 +926,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor [weak self] in
             guard let self, room === self.room else { return }
+            // This screen owns the room, so it picks which translation track this side hears, translation controls or not.
+            CallTranslationTracks.keepOwn(publication, of: participant, bedside: (self.familySession?.credential.role ?? .bedside) == .bedside)
             self.translation?.subscribed(publication, of: participant); self.refresh(source: room)
         }
     }

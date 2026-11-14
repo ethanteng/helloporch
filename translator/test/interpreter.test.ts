@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { echoWindowMs, Interpreter, similarity, type InterpreterDeps, type Message, type Rendering, type Side } from "../src/interpreter.ts";
+import { echoTailMs, Interpreter, similarity, type InterpreterDeps, type Message, type Rendering, type Side } from "../src/interpreter.ts";
 import type { Language } from "../src/languages.ts";
 import { parseJobConfig } from "../src/agent.ts";
 import { translationRequest } from "../src/translate.ts";
@@ -58,10 +58,19 @@ test("The translator's own voice coming back through the bedside's microphone is
   await interpreter.settled();
   assert.equal(asked.length, 1, "the echo never reached translation");
   assert.equal(spoken.length, 1);
-  // Long after, the same words are Mom's own.
-  tick(echoWindowMs + 1);
+  // Once the translator's voice could no longer still be arriving, the same words are Mom's own.
+  tick(echoTailMs + 1);
   await interpreter.heard("mom", "Mom", "我禮拜六去看你。");
   assert.equal(asked.length, 2);
+});
+
+test("A reply that sounds like what the translator just said is still the person's own", async () => {
+  const { interpreter, asked } = setup({ "你禮拜六會來嗎？": { say: true, text: "Are you coming on Saturday?" } });
+  await interpreter.heard("mom", "Mom", "你禮拜六會來嗎？");
+  await interpreter.settled();
+  // Ethan answers right away: close to the question, but not the translator's words.
+  await interpreter.heard("ethan", "Ethan", "I am not coming on Saturday.");
+  assert.deepEqual(asked.map(a => a.heard), ["你禮拜六會來嗎？", "I am not coming on Saturday."]);
 });
 
 test("A speaker's sentences are said in the order they were spoken, even if a translation comes back late", async () => {
