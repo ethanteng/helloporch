@@ -261,9 +261,8 @@ final class FamilyYouViewController: CaregiverFormViewController {
             phone.append(linkRow("Use this \(device) as the bedside Porch", symbol: "ipad") { [weak self] in self?.confirmBedside() })
         }
         content.addArrangedSubview(group("On this \(device)", rows: phone))
-        let privacy = textLink("Privacy policy", size: 16) { [weak self] in if let self { showPrivacyPolicy(on: self) } }
-        privacy.accessibilityIdentifier = "family.privacy"
-        content.addArrangedSubview(privacy)
+        // Privacy policy and About Porch, as at the bottom of every family device's screens.
+        content.addArrangedSubview(porchLinks())
     }
     private func confirmBedside() {
         let alert = UIAlertController(title: "Use this \(device) as the bedside Porch?", message: "Only do this on the device next to your loved one. You can switch back later.", preferredStyle: .alert)

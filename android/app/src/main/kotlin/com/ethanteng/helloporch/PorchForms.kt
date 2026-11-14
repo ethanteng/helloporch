@@ -80,7 +80,7 @@ fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, acti
             HorizontalDivider()
             // Porch keyboard, once chosen, types in the fields here (PorchKeyboard.kt).
             PorchKeyboardHost {
-                // A page that scrolls a list of its own, such as About's licenses, fills the screen instead.
+                // A page that scrolls a list of its own, such as a Messages thread, fills the screen instead.
                 val scrolling = if (scrolls) Modifier.verticalScroll(rememberScrollState()) else Modifier
                 Box(Modifier.fillMaxSize().then(scrolling), contentAlignment = Alignment.TopCenter) {
                     val size = if (scrolls) Modifier.fillMaxWidth() else Modifier.fillMaxSize()

@@ -282,8 +282,8 @@ private fun JoinFamily(app: PorchApplication, initialLink: String, adding: Boole
         }
     })
     onCancel?.let { FormLink("Cancel", onClick = it) }
-    // The licenses, before a phone has joined any family.
-    if (!adding) FormLink("About Porch", onClick = onAbout)
+    // Before a phone has joined any family.
+    if (!adding) PorchLinks(onAbout)
     naming?.let { NameFamily(app, it, onDone = { naming = null; onJoined() }) }
 }
 
@@ -602,8 +602,8 @@ private fun YouTab(app: PorchApplication, links: FamilyLinks, families: List<Fam
                 camera = it
             })
         }
-        // The open-source licenses, for anyone, not only a family's caregivers.
-        FormLink("About Porch", onClick = onAbout)
+        // Privacy policy and About Porch, as at the bottom of every family device's screens, as on iOS.
+        PorchLinks(onAbout)
     }
 }
 

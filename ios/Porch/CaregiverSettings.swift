@@ -8,12 +8,12 @@ extension Notification.Name {
 }
 
 /// Caregiver settings, by what they're about. The bedside has every page. Caregiver mode on a family phone has the
-/// ones kept on the server, and lists the rest as set on the bedside.
+/// ones kept on the server, and About, and lists the rest as set on the bedside.
 enum CaregiverPage: String, CaseIterable {
-    case people, calls, dropIn, messages, display, privacy, caregivers, device
+    case people, calls, dropIn, messages, display, privacy, caregivers, device, about
 
     static func pages(onBedside: Bool) -> [CaregiverPage] {
-        onBedside ? allCases : [.people, .calls, .dropIn, .messages, .privacy, .caregivers]
+        onBedside ? allCases : [.people, .calls, .dropIn, .messages, .privacy, .caregivers, .about]
     }
     func title(onBedside: Bool) -> String {
         switch self {
@@ -25,6 +25,7 @@ enum CaregiverPage: String, CaseIterable {
         case .privacy: return "Privacy"
         case .caregivers: return onBedside ? "Caregivers & PIN" : "Caregivers"
         case .device: return UIDevice.current.userInterfaceIdiom == .phone ? "This iPhone" : "This iPad"
+        case .about: return "About"
         }
     }
     var symbol: String {
@@ -37,6 +38,7 @@ enum CaregiverPage: String, CaseIterable {
         case .privacy: return "hand.raised.fill"
         case .caregivers: return "lock.fill"
         case .device: return UIDevice.current.userInterfaceIdiom == .phone ? "iphone" : "ipad"
+        case .about: return "info.circle.fill"
         }
     }
 }
@@ -268,7 +270,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         case .caregivers:
             let count = state.people.filter { $0.caregiver == true }.count
             return count == 0 ? nil : "\(count)"
-        case .calls, .display, .privacy, .device: return nil
+        case .calls, .display, .privacy, .device, .about: return nil
         }
     }
     func controller(for page: CaregiverPage) -> UIViewController {
@@ -281,6 +283,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         case .privacy: return PrivacySettingsViewController(admin: self)
         case .caregivers: return CaregiverAccessViewController(admin: self)
         case .device: return DeviceSettingsViewController()
+        case .about: return AboutViewController()
         }
     }
     /// Shows a page beside this list on a wide iPad, or on its own otherwise.
