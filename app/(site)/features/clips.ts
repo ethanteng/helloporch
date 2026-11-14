@@ -22,9 +22,9 @@ export type Screenshot = {
 // Shown under both Calling and Accessibility. Every tab is in the page at once, so the second copy takes its own id.
 const translatedTexts: Clip = {
   id: "translated-texts",
-  title: "Texts arrive in their language",
+  title: "Text in your language. They read it in theirs.",
   description:
-    "I text my mom’s Porch number in English. Her tablet shows it in Mandarin, with my words underneath, and reads it aloud. It’s a simple way past language barriers, even between family members.",
+    "Families don’t always share a first language, especially across generations. I text my mom in English, and Porch reads it to her in Mandarin. Everyone writes the way that comes naturally, and she never has to puzzle out a message.",
   duration: "26 sec",
   src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/sms_translation.MP4",
   poster: "/features/translated-texts.jpg",
