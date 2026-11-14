@@ -116,9 +116,13 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
     private var recordTimer: Timer?
     private var startedAutomatically = false
     private let timerLabel = PorchStyle.label("", size: 28, color: PorchStyle.ink, weight: .semibold)
+    /// The family it was opened for. On a phone in several families another one can be chosen meanwhile, on another
+    /// tab, and the recording must still go to this one.
+    private let family: FamilyCredential?
 
     init(recipient: String, kind: String = "message", startAudioImmediately: Bool = false) {
         self.recipient = recipient; self.kind = kind; self.startAudioImmediately = startAudioImmediately
+        family = PorchDevice.credential(for: .family)
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(recipient:kind:startAudioImmediately:)") }
@@ -261,7 +265,8 @@ final class MessageComposerViewController: CaregiverFormViewController, UIImageP
         recording = nil; phase = .idle; render()
     }
     private func send() {
-        guard let recording, phase == .recorded, let credential = PorchDevice.credential(for: .family) else { return }
+        // A family this phone has left since doesn't get it either.
+        guard let recording, phase == .recorded, let credential = family, PorchDevice.families.contains(where: { $0.deviceID == credential.deviceID }) else { return }
         phase = .sending; render()
         Task { [weak self] in
             guard let self else { return }

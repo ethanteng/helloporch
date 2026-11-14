@@ -39,9 +39,23 @@ final class FamilyTabBarController: UITabBarController {
         tabBar.unselectedItemTintColor = PorchStyle.secondary
         tabBar.standardAppearance = appearance
         if #available(iOS 15.0, *) { tabBar.scrollEdgeAppearance = appearance }
-        NotificationCenter.default.addObserver(self, selector: #selector(updateBadge), name: .porchFamilyChanged, object: nil)
+        chosen = PorchDevice.currentFamily?.deviceID
+        NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(openReceivedMessages(_:)), name: .porchOpenReceivedMessages, object: nil)
         updateBadge()
+    }
+    /// The family chosen last, which a family's thread, caregiver mode and name and photo are for.
+    private var chosen: String?
+    /// Each tab keeps its screens, so one family's thread or recording could still be open on another tab when the
+    /// next family is chosen, and would then act for that one. Those tabs go back to their first screen instead.
+    @objc private func familyChanged() {
+        updateBadge()
+        let current = PorchDevice.currentFamily?.deviceID
+        defer { chosen = current }
+        guard let previous = chosen, current != previous else { return }
+        for case let navigation as UINavigationController in viewControllers ?? [] where navigation !== selectedViewController && navigation.viewControllers.count > 1 {
+            navigation.popToRootViewController(animated: false)
+        }
     }
     deinit { NotificationCenter.default.removeObserver(self) }
 
@@ -75,10 +89,11 @@ final class FamilyTabBarController: UITabBarController {
     }
     /// A family's messages with its bedside, on the Messages tab. Nil keeps the family chosen last.
     func openMessages(for family: FamilyCredential?) {
-        if let family { FamilyCoordinator.shared.select(family) }
-        guard PorchDevice.credential(for: .family) != nil else { return }
+        guard family != nil || PorchDevice.credential(for: .family) != nil else { return }
         if presentedViewController != nil { dismiss(animated: false) }
+        // Messages first, so choosing the family closes what's open for another one on the other tabs.
         selectedIndex = Self.messagesTab
+        if let family { FamilyCoordinator.shared.select(family) }
         guard let navigation = selectedViewController as? UINavigationController else { return }
         if navigation.presentedViewController != nil { navigation.dismiss(animated: false) }
         navigation.popToRootViewController(animated: false)
