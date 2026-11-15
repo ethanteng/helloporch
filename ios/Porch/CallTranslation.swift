@@ -91,6 +91,10 @@ import PorchCore
     /// Call whenever the household's call or the room changes.
     func refresh() {
         if let requested, call()?.translation?.on == requested { self.requested = nil }
+        // The call screen can open after the translator is already in the room, such as a call answered on the
+        // lock screen. Its first state message and track subscription are not delivered again, and the bedside
+        // hides its captions until it has heard one of those.
+        if room()?.remoteParticipants.values.contains(where: { $0.kind == .agent }) == true { translatorOn = true }
         if isBedside {
             panel.isHidden = !translatorOn
             return
