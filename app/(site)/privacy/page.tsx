@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 10, 2026";
+const updated = "November 14, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -32,15 +32,16 @@ const sections = [
 
 // Each provider, what it does for Porch, and what it receives to do it.
 const providers: [name: string, role: string, receives: string][] = [
-  ["LiveKit", "Carries live call audio and video between devices, and connects Porch calls to the phone network.", "Call audio and video as it happens, device and call identifiers, and the phone numbers on phone calls."],
+  ["LiveKit", "Carries live call audio and video between devices, connects Porch calls to the phone network, and, while translation is on, transcribes what is said with a Google speech model.", "Call audio and video as it happens, device and call identifiers, and the phone numbers on phone calls. While translation is on, the audio is also transcribed. We don’t keep the transcript."],
+  ["AssemblyAI", "Transcribes a call while translation is on, if the usual transcription is unavailable.", "The call audio while it is filling in. We don’t keep the transcript."],
   ["Twilio", "Phone service for a household’s Porch number, for calling a regular phone, for adding a phone number to a call, and for receiving text messages sent to that number.", "Phone numbers, call audio as it happens, voicemail recordings, and the text messages sent to the Porch number. We delete Twilio’s copy of each voicemail recording once we’ve saved it."],
   ["Vercel", "Hosts the website and our server, and keeps messages, photos, announcement audio and readings of text messages in private storage.", "Everything our server handles, including request logs with IP addresses."],
   ["Upstash", "Database for household details, settings, the list of waiting messages, and the words of text messages sent to a Porch number.", "The household details described above, including those text messages."],
   ["Apple", "Delivers call and message notifications to iPhones and iPads through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
   ["Google Firebase", "Delivers call and message notifications to Android phones and tablets through Firebase Cloud Messaging.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
   ["Google ML Kit", "Notices a face in view on an Android tablet, while noticing someone in front of the tablet is on, unless a caregiver turns it off. The noticing happens on the tablet.", "Details about the device and the app, identifiers, and how well the feature performed and any errors, which Google uses for diagnostics and usage analytics. Never an image or anything the camera sees."],
-  ["ElevenLabs", "Turns short announcements, and text messages sent to a Porch number, into natural speech, when a household uses a natural voice.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation."],
-  ["Anthropic", "Translates a text message into the language set on the tablet, when the message isn’t already in that language.", "The words of that text. Not the sender’s number or name."],
+  ["ElevenLabs", "Turns short announcements and text messages sent to a Porch number into natural speech, when a household uses a natural voice. Speaks live call translation aloud.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation. For a call, the translated sentence."],
+  ["Anthropic", "Translates a text message into the language set on the tablet, when the message isn’t already in that language. During a call with translation on, translates what was just said into the listener’s language.", "The words of that text, or what was just said on the call. Not a phone number or anyone’s name."],
   ["MailerLite", "Sends waitlist and pilot emails.", "Your email address, and your waitlist answer if you give one."],
   ["Google Analytics", "Counts visits to the website, so we can see which pages help people. It isn’t used in the Porch app.", "The pages you visit, the site that sent you, browser and device details, and your IP address, which it uses to estimate your general location."],
 ];
@@ -57,6 +58,7 @@ const retention: [what: string, howLong: string][] = [
   ["Blocked callers", "Up to the 30 most recent numbers, until a caregiver clears the list."],
   ["When someone was last at the tablet", "Only the most recent time, which replaces the one before."],
   ["Call history", "The 100 most recent calls, for up to 90 days, including calls with someone who was later removed."],
+  ["What is said while translation is on", "Not kept. It is transcribed, translated and spoken during the call, then discarded."],
   ["Text and voicemail history", "The sender’s number and when it arrived, for the 200 most recent texts and phone voicemails, for up to 90 days. Not the words or the recording."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
@@ -88,7 +90,7 @@ export default function PrivacyPage() {
           <h2 id="summary-title">The short version</h2>
           <ul>
             <li>We don’t sell your information, show ads, or track you across other apps and websites.</li>
-            <li>Calls go live between devices and aren’t recorded. Messages and voicemail are saved only when someone chooses to leave one. Text messages sent to a Porch number are saved until they’re read or removed.</li>
+            <li>Calls go live between devices and aren’t recorded. If someone turns on translation during a call, what is said is transcribed and translated as it happens and isn’t kept. Messages and voicemail are saved only when someone chooses to leave one. Text messages sent to a Porch number are saved until they’re read or removed.</li>
             <li>Unplayed messages, and unread text messages to a Porch number, are deleted after 7 days. Played messages are deleted after 90 days.</li>
             <li>When Porch notices someone in front of your loved one’s tablet, detection happens on the tablet. No image leaves it. Family see only when someone was last there.</li>
             <li>A few service providers help us run calls, phone service, storage, notifications, speech, translation, email and website analytics. They get only what they need.</li>
@@ -196,6 +198,13 @@ export default function PrivacyPage() {
               </li>
             </ul>
             <p>Call audio and video travel live between devices through our calling provider. We don’t record calls.</p>
+            <p>
+              A family member on a Porch call can turn on translation for that call. Every call starts with it off.
+              While it’s on, what each person says is transcribed and, when it isn’t already in the other person’s
+              language, translated and spoken to them. Your loved one’s tablet also shows the words spoken to them,
+              and the family member on the call can see what was heard and what was said. We don’t keep any of it.
+              A phone added to the call can hear the translation as well.
+            </p>
 
             <h3>When someone calls a Porch number</h3>
             <p>
@@ -270,8 +279,8 @@ export default function PrivacyPage() {
             <ul>
               <li>
                 To run Porch: pair devices, ring and connect calls, deliver messages and voicemail, show and read text
-                messages sent to a Porch number, send notifications, place and receive phone calls, and speak
-                announcements.
+                messages sent to a Porch number, send notifications, place and receive phone calls, speak
+                announcements, and, when someone turns it on, translate a call as it happens.
               </li>
               <li>
                 To keep it safe: check that requests come from your household’s devices, enforce caregiver permissions,
