@@ -529,18 +529,19 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       if (action === "poll") {
         requireValue(typeof input.available === "boolean", "Send this device's availability.");
         me.seenAt = now;
-        // The bedside's regular check-ins say what its app can do, so family phones offer only what it can show.
-        // Its other check-ins, and older apps, don't say, which changes nothing.
-        if (me.role === "bedside" && Array.isArray(input.features)) {
+        // A poll that left earlier can arrive after a newer one, the same as availability. The bedside's language
+        // and what its app can show follow the newest check-in only: an older one must not put the language back,
+        // or take the Translate button away, after Porch has gone to the background and stopped saying them.
+        // A check-in that doesn't say, and older apps, change nothing.
+        const newest = takesAvailability(me, input.launch, input.sequence);
+        if (newest && me.role === "bedside" && Array.isArray(input.features)) {
           const features = input.features.filter(f => f === translationFeature);
           if (features.length) me.features = features; else delete me.features;
         }
-        // They also say the language it's set to (chosen behind its caregiver PIN), so translation and phone voicemail
+        // The language the bedside is set to (chosen behind its caregiver PIN), so translation and phone voicemail
         // follow it even when no one has saved Display & voice since the server started keeping a copy.
-        if (me.role === "bedside" && isBedsideLanguage(input.language)) house.bedsideLanguage = input.language;
-        // Same ordering as availability. A poll that left earlier can arrive after a newer one, and its
-        // attendedSeconds were counted when it was sent.
-        if (takesAvailability(me, input.launch, input.sequence)) {
+        if (newest && me.role === "bedside" && isBedsideLanguage(input.language)) house.bedsideLanguage = input.language;
+        if (newest) {
           me.available = input.available;
           noteAttendance(house, me, input.attendedSeconds, now);
         }

@@ -75,6 +75,22 @@ test("the bedside's check-ins keep its language current, so translation starts i
   assert.equal((await f.json('poll',{available:true},bedside.credential)).state.bedsideLanguage,'ko');
 });
 
+test('an earlier check-in cannot put the bedside language back or hide translation', async () => {
+  const f=fixture(),{bedside,ethan}=await f.connected(), launch=randomUUID();
+  await f.json('poll',{available:true,features:['translation'],language:'ko',launch,sequence:2},bedside.credential);
+  // The one sent just before, arriving late: the language Porch had, and an app that says it can't translate.
+  await f.json('poll',{available:true,features:[],language:'en',launch,sequence:1},bedside.credential);
+  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.bedsideLanguage,'ko');
+  assert.equal((await f.json('poll',{available:true},ethan.credential)).state.call.translationAvailable,true);
+  // The newest check-in still counts, including one that says the app can't show translation.
+  await f.json('poll',{available:true,features:[],language:'es',launch,sequence:3},bedside.credential);
+  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.bedsideLanguage,'es');
+  assert.equal((await f.json('poll',{available:true},ethan.credential)).state.call.translationAvailable,undefined);
+  // Closing Porch sends a newer check-in that doesn't mention language. It must not wipe what was just said.
+  await f.json('poll',{available:false,launch,sequence:4},bedside.credential);
+  assert.equal((await f.json('poll',{available:true},bedside.credential)).state.bedsideLanguage,'es');
+});
+
 test('translation is offered only once the server knows the translator', async () => {
   const f=fixture(),{ethan,callID}=await f.connected();
   delete process.env.LIVEKIT_TRANSLATOR_AGENT;
