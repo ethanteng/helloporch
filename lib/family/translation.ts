@@ -60,6 +60,7 @@ function voiceFor(house: Household, language: BedsideLanguage) {
 export function translationOffered(house: Household, call: Call, me: Member) {
   const bedside = bedsideOf(house, call);
   return !!translatorName() && call.state === "accepted" && !call.phone && me.role === "family" && [call.from, call.to].includes(me.id) &&
+    call.left?.[me.id] === undefined && call.left?.[bedside?.id ?? ""] === undefined &&
     !!bedside?.features?.includes(translationFeature);
 }
 

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { test, beforeEach, afterEach } from 'node:test';
+import { leaveCall } from '../lib/family/household.ts';
 import { handleFamily } from '../lib/family/service.ts';
+import { translationOffered } from '../lib/family/translation.ts';
 
 // Fake storage and a fake translator service: these tests never reach LiveKit.
 class MemoryStore {
@@ -144,6 +146,29 @@ test('only the family member on the call can turn it on, and only while the call
   await f.json('endCall',{callID},ethan.credential);
   assert.equal((await f.send('setCallTranslation',{callID,on:true},ethan.credential)).status,409);
   assert.deepEqual(f.calls,[]);
+});
+
+test('a call that goes on turns translation off when either end leaves, and it is no longer offered', () => {
+  const call = () => ({ from: 'ethan', to: 'mom', state: 'accepted', left: {},
+    porchGuests: [{ id: 'g', memberID: 'david', state: 'joined' }],
+    translation: { on: true, language: 'zh-Hant', by: 'ethan', at: 1 } });
+  const guestLeft = call();
+  leaveCall(guestLeft, 'david', 2);
+  assert.equal(guestLeft.translation.on, true, 'a guest leaving leaves translation on');
+  assert.equal(guestLeft.porchGuests[0].state, 'left');
+  const ethanLeft = call();
+  leaveCall(ethanLeft, 'ethan', 3);
+  assert.deepEqual(ethanLeft.translation, { on: false, language: 'zh-Hant', by: 'ethan', at: 3 });
+  const momLeft = call();
+  leaveCall(momLeft, 'mom', 4);
+  assert.equal(momLeft.translation.on, false);
+  const bedside = { id: 'mom', role: 'bedside', revoked: false, features: ['translation'] };
+  const ethan = { id: 'ethan', role: 'family' };
+  const house = { members: [bedside, ethan] };
+  const live = { id: 'c', from: 'ethan', to: 'mom', state: 'accepted', left: {} };
+  assert.equal(translationOffered(house, live, ethan), true);
+  live.left = { mom: 4 };
+  assert.equal(translationOffered(house, live, ethan), false);
 });
 
 test('when the translator service fails, the call says so and nothing changes', async () => {

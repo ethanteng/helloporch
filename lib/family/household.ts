@@ -198,6 +198,9 @@ export function leaveCall(call: Call, id: string, now: number) {
   if (phone?.addedBy === id) phone.endedAt = now;
   const guest = call.porchGuests?.find(g => g.memberID === id && g.state === "joined");
   if (guest) { guest.state = "left"; guest.endedAt = now; }
+  // The translator leaves when either end does (translator/src/agent.ts): the person who turned it on, or the
+  // bedside, without whom it has nothing to translate. A guest who stays must not still be told that it's on.
+  if (call.translation?.on && (id === call.from || id === call.to)) call.translation = { ...call.translation, on: false, at: now };
 }
 /** The phone guest whose telephone leg may still be connected. A call has at most one. */
 export function activePhoneGuest(call?: Call): PhoneGuest | undefined { return call?.guests?.find(g => !g.endedAt); }
