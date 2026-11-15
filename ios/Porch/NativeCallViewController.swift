@@ -95,9 +95,7 @@ import PorchCore
         heading.axis = .vertical
         heading.spacing = 4
         heading.accessibilityIdentifier = "call.heading"
-        let row = UIStackView(arrangedSubviews: buttons)
-        row.distribution = .fillEqually
-        row.spacing = 8
+        let row = CallButtonRows(buttons)
         let controls = UIStackView(arrangedSubviews: (accessory.map { [$0] } ?? []) + (hint.map { [$0 as UIView] } ?? []) + [row])
         controls.axis = .vertical
         controls.spacing = 8
@@ -210,6 +208,75 @@ import PorchCore
     /// voice call already has. Hiding the preview is not enough: its constraints would keep the hole.
     static func releaseSelfView(in view: UIView) {
         (view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? CallOverlays)?.releaseSelfView()
+    }
+}
+
+/// A call's buttons, sharing one row while each button's longest word fits, and wrapping into even rows when they
+/// don't, such as Translate joining Mute, Camera off, Add someone and End call on a phone: Mute, Camera off and
+/// Translate, then Add someone and End call. Hidden buttons take no room.
+final class CallButtonRows: UIStackView {
+    private let buttons: [UIButton]
+    private var rows: [[ObjectIdentifier]] = []
+    private var observations: [NSKeyValueObservation] = []
+
+    init(_ buttons: [UIButton]) {
+        self.buttons = buttons
+        super.init(frame: .zero)
+        axis = .vertical
+        spacing = 8
+        regroup(width: .greatestFiniteMagnitude)
+        observations = buttons.map { button in
+            button.observe(\.isHidden) { [weak self] _, _ in Task { @MainActor [weak self] in self?.setNeedsLayout() } }
+        }
+    }
+    required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// After a button's words change, which may change how many fit in a row.
+    static func relayout(containing button: UIButton) {
+        var view = button.superview
+        while let current = view, !(current is CallButtonRows) { view = current.superview }
+        view?.setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        if bounds.width > 0 { regroup(width: bounds.width) }
+        super.layoutSubviews()
+    }
+
+    private func regroup(width: CGFloat) {
+        let visible = buttons.filter { !$0.isHidden }
+        let narrowest = visible.map(Self.narrowest).max() ?? 0
+        var perRow = max(visible.count, 1)
+        while perRow > 1 && (width - CGFloat(perRow - 1) * spacing) / CGFloat(perRow) < narrowest { perRow -= 1 }
+        // Even rows: five buttons that fit three to a row take three and two, four take two and two.
+        let count = max(1, Int((Double(visible.count) / Double(perRow)).rounded(.up)))
+        perRow = max(1, Int((Double(visible.count) / Double(count)).rounded(.up)))
+        let grouped = stride(from: 0, to: visible.count, by: perRow).map { Array(visible[$0..<min($0 + perRow, visible.count)]) }
+        let ids = grouped.map { $0.map(ObjectIdentifier.init) }
+        guard ids != rows else { return }
+        rows = ids
+        for case let row as UIStackView in arrangedSubviews {
+            for view in row.arrangedSubviews { row.removeArrangedSubview(view); view.removeFromSuperview() }
+            row.removeFromSuperview()
+        }
+        // A stack keeps a hidden button at zero width with a constraint on the button itself, which stays when the
+        // button leaves that stack. In its next row of equal widths it would squeeze every button to nothing.
+        for button in buttons { NSLayoutConstraint.deactivate(button.constraints.filter { $0.identifier?.hasPrefix("UISV-") == true }) }
+        for group in grouped {
+            let row = UIStackView(arrangedSubviews: group)
+            row.distribution = .fillEqually
+            row.spacing = spacing
+            addArrangedSubview(row)
+        }
+    }
+
+    /// How narrow a button can be without breaking a word: its longest word in the call buttons' type, and its padding.
+    private static func narrowest(_ button: UIButton) -> CGFloat {
+        let font = PorchStyle.font(16, weight: .semibold)
+        let words = (button.configuration?.title ?? "").split(whereSeparator: \.isWhitespace)
+        let longest = words.map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        let insets = button.configuration.map { $0.contentInsets.leading + $0.contentInsets.trailing } ?? 16
+        return ceil(longest) + insets + 2
     }
 }
 
@@ -518,7 +585,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                                  placeholder: placeholder, title: title, status: statusLabel,
                                  hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto,
                                  accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
-                                 buttons: [microphoneButton, cameraButton] + (guests.map { [$0.addButton] } ?? []) + [endButton])
+                                 buttons: [microphoneButton, cameraButton] + [translation?.button].compactMap { $0 }
+                                     + (guests.map { [$0.addButton] } ?? []) + [endButton])
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--preview-outgoing-call") {
             statusLabel.text = BedsideText.string("Calling %@ on Porch…", contact.name)

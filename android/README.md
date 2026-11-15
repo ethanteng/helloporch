@@ -89,7 +89,7 @@ Media goes over TCP through `adb`, because the LiveKit server offers only `127.0
 ### Translation
 
 `--translator` offers live translation on calls (`lib/family/translation.ts`), once the tablet says it can show it, which
-every check-in does. Turning Translate on in a call dispatches the translator into the local LiveKit, so run it against
+every check-in does. Tapping Translate in a call dispatches the translator into the local LiveKit, so run it against
 the same server, with speech recognition through LiveKit Cloud ([translator/README.md](../translator/README.md#testing-a-call)):
 
 ```bash

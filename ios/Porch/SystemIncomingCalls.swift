@@ -610,7 +610,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }
         CallScreenLayout.install(in: view, video: stage, preview: calls.isVideo ? localVideo : nil, placeholder: placeholder, title: title, status: status,
                                  photo: personPhoto.image == nil ? nil : personPhoto, accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
-                                 buttons: [microphone, camera] + (guests.map { [$0.addButton] } ?? []) + [end])
+                                 buttons: [microphone, camera] + [translation?.button].compactMap { $0 } + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
     }

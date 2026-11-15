@@ -140,14 +140,22 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
             }
             // As wide as the screen allows, up to a comfortable width on a tablet, with each button an equal share. Four
             // don't fit a phone's width with their words, and nor does Add someone beside two others, so there they take
-            // two rows. Mute, Camera and End call stay on one.
+            // two rows. Mute, Camera and End call stay on one, and so do Mute, Camera and Translate, with Add someone and
+            // End call below.
             val buttons = mutableListOf<@Composable (Modifier) -> Unit>()
             buttons += { CallButton(if (call.microphoneOn) "Mute" else "Unmute", call.controlsEnabled, onClick = call::toggleMicrophone, app = app, modifier = it) }
             if (call.video) buttons += { CallButton(if (call.cameraOn) "Camera off" else "Camera on", call.controlsEnabled, onClick = call::toggleCamera, app = app, modifier = it) }
+            val translating = call.translation?.takeIf { it.offered }
+            translating?.let { translation -> buttons += { TranslateButton(app, translation, it) } }
             val adding = call.guests?.takeIf { it.showsAdd }
             adding?.let { guests -> buttons += { CallButton(guests.addTitle, !guests.adding, onClick = guests::add, app = app, modifier = it) } }
             buttons += { CallButton(call.endTitle, call.endEnabled, onClick = call::endCall, color = CallColors.end, translated = true, app = app, modifier = it) }
-            val rows = if (narrow && (buttons.size > 3 || (adding != null && buttons.size > 2))) buttons.chunked(2) else listOf(buttons)
+            val rows = when {
+                !narrow -> listOf(buttons)
+                buttons.size == 5 -> listOf(buttons.take(3), buttons.drop(3))
+                buttons.size > 3 || (adding != null && buttons.size > 2) -> buttons.chunked(2)
+                else -> listOf(buttons)
+            }
             Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // The phone this one added, such as a bank: its keypad and its own hang-up.
                 call.guests?.let { PhoneGuestControls(app, it) }

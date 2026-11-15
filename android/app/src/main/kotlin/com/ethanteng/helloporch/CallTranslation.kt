@@ -26,10 +26,12 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Live translation on a Porch call with the bedside, as iOS's CallTranslation does (`lib/family/translation.ts`, and the
- * translator in `translator/`). The family member on the call turns it on when they can't get something across, and off
- * again; every call starts with it off. They can change the language the bedside hears for this call, and see what the
- * translator heard and said, so they can tell when something was misheard. The bedside shows "Translation on" and,
- * large, what the translator says to it. Other voices are lowered while the translator speaks.
+ * translator in `translator/`). The family member on the call taps Translate, among the call's buttons, when they can't
+ * get something across: it starts at once, in the bedside's language. Another tap on the button, now Translating, stops
+ * it; every call starts with it off. While it's on, a card above the buttons says which language the bedside hears and
+ * shows the latest exchange. Tapping the card opens a sheet to change the language for this call, read back the
+ * conversation (so they can tell when something was misheard) or stop. The bedside shows "Translation on" and, large,
+ * what the translator says to it. Other voices are lowered while the translator speaks.
  *
  * [PorchCall] owns it and forwards its room's data, subscriptions and people. Main thread only.
  */
@@ -49,8 +51,11 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
     var lines by mutableStateOf<List<CallTranslationLine>>(emptyList()); private set
     /** A change is being asked for. */
     var sending by mutableStateOf(false); private set
-    /** "Starting translation…", or why a change didn't go through. */
-    var notice by mutableStateOf<String?>(null); private set
+    /** Why the last change didn't go through, for a few seconds. */
+    var problem by mutableStateOf<String?>(null); private set
+    /** The sheet the card opens: the language, the conversation and Stop translating. */
+    var sheetOpen by mutableStateOf(false); private set
+    private var problemJob: Job? = null
     /** The language chosen on this phone for this call, before the server confirms it. */
     var chosen by mutableStateOf<BedsideLanguage?>(null); private set
     /** On or off as last asked, until the call record catches up. */
@@ -66,6 +71,8 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
     /** The language the bedside hears: chosen here, or confirmed by the server. Null until then: the bedside's own. */
     val language get() = chosen ?: record?.translation?.language?.let(BedsideLanguage::fromCode)
     val showsCaption get() = bedside && translatorOn
+    /** Turning on, before the server says it's on: the card says so instead of a language. */
+    val starting get() = sending && requested == true
     /** Whether a line was said by this phone's person, for the transcript's "You". */
     fun isMine(line: CallTranslationLine) = line.speaker == myID
 
@@ -115,7 +122,13 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
         }
     }
 
-    fun toggle(on: Boolean) = send(on, chosen)
+    /** Translate starts translating in the language last chosen on this call, or the bedside's own; Translating stops it. */
+    fun tapped() = send(!isOn, chosen)
+
+    fun stop() = send(false, chosen)
+
+    fun openSheet() { if (isOn) sheetOpen = true }
+    fun closeSheet() { sheetOpen = false }
 
     fun choose(option: BedsideLanguage) {
         val previous = chosen
@@ -127,23 +140,29 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
     private fun send(on: Boolean, language: BedsideLanguage?, onFailure: () -> Unit = {}) {
         if (sending) return
         requested = on; sending = true
-        notice = if (on) "Starting translation…" else "Turning translation off…"
+        show(problem = null)
+        if (!on) sheetOpen = false
         scope.launch {
             try {
                 val values = mutableMapOf<String, JsonElement>("callID" to JsonPrimitive(callID), "on" to JsonPrimitive(on))
                 language?.let { values["language"] = JsonPrimitive(it.code) }
                 app.coordinator.update(session.service.send("setCallTranslation", values))
-                notice = null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 requested = null
                 onFailure()
-                notice = error.message ?: "Translation couldn't change. Try again."
+                show(problem = error.message ?: "Translation couldn't change. Try again.")
             }
             sending = false
             refresh()
         }
+    }
+
+    private fun show(problem: String?) {
+        this.problem = problem
+        problemJob?.cancel()
+        if (problem != null) problemJob = scope.launch { delay(10_000); this@CallTranslation.problem = null }
     }
 
     private fun showCaption(text: String) {
@@ -154,6 +173,7 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
     }
 
     private fun ended() {
+        sheetOpen = false
         lowerVoices(false)
         captionJob?.cancel(); caption = null
     }

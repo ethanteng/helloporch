@@ -2137,6 +2137,50 @@ final class CallScreenLayoutTests: XCTestCase {
         }
     }
 
+    @MainActor func testTranslateWrapsTheCallButtonsIntoEvenRowsWithoutBreakingWords() throws {
+        let screen = UIViewController()
+        let titles = ["Mute", "Camera off", "Translating", "Add someone", "End call"]
+        let buttons = titles.map { _ in UIButton(type: .system) }
+        for (button, text) in zip(buttons, titles) {
+            CallScreenLayout.configure(button, title: text, symbol: "phone", isEnd: button === buttons.last)
+        }
+        CallScreenLayout.install(in: screen.view, video: VideoView(), title: PorchStyle.label("Mom", size: 26, color: .white),
+                                 status: PorchStyle.label("Video call connected", size: 17, color: .white), buttons: buttons)
+        func rows() -> [[String]] {
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            // A hidden or shown button regroups the rows on the next turn of the run loop.
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            screen.view.layoutIfNeeded()
+            let shown = buttons.filter { $0.window != nil && !$0.isHidden }
+            let grouped = Dictionary(grouping: shown) { Int($0.convert($0.bounds, to: screen.view).minY.rounded()) }
+            return grouped.keys.sorted().map { y in grouped[y]!.map { $0.configuration?.title ?? "" } }
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        window.rootViewController = screen; window.isHidden = false
+        // A phone: Mute, Camera off and Translating, then Add someone and End call.
+        XCTAssertEqual(rows(), [["Mute", "Camera off", "Translating"], ["Add someone", "End call"]])
+        for button in buttons {
+            let rect = button.convert(button.bounds, to: screen.view)
+            XCTAssertGreaterThanOrEqual(rect.height, 64)
+            XCTAssertTrue(screen.view.bounds.contains(rect))
+            // Each word fits on its line: no button is narrower than its longest word.
+            let longest = (button.configuration?.title ?? "").split(separator: " ")
+                .map { (String($0) as NSString).size(withAttributes: [.font: PorchStyle.font(16, weight: .semibold)]).width }.max() ?? 0
+            XCTAssertGreaterThanOrEqual(rect.width, longest + 16)
+        }
+        // Translate isn't offered, such as when the bedside's app can't show translation: no gap is left for it.
+        buttons[2].isHidden = true
+        XCTAssertFalse(rows().joined().contains("Translating"))
+        XCTAssertEqual(rows().joined().count, 4)
+        buttons[2].isHidden = false
+        XCTAssertEqual(rows().first, ["Mute", "Camera off", "Translating"])
+        // A tablet has room for four in a row.
+        buttons[3].isHidden = true
+        window.frame = CGRect(x: 0, y: 0, width: 1024, height: 768)
+        XCTAssertEqual(rows(), [["Mute", "Camera off", "Translating", "End call"]])
+        window.isHidden = true
+    }
+
     @MainActor func testSelfViewIsTheUsualSizeAndTurnsWithTheScreen() throws {
         // Like most calling apps: 30% of the short side, at most 200 points, upright on an upright screen.
         let screen = UIViewController(), remote = VideoView(), preview = VideoView()
