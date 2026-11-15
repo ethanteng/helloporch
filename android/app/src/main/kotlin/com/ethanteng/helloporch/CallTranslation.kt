@@ -118,11 +118,13 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
     fun toggle(on: Boolean) = send(on, chosen)
 
     fun choose(option: BedsideLanguage) {
+        val previous = chosen
         chosen = option
-        if (isOn) send(true, option)
+        // A change the server didn't take leaves the language as it was.
+        if (isOn) send(true, option) { chosen = previous }
     }
 
-    private fun send(on: Boolean, language: BedsideLanguage?) {
+    private fun send(on: Boolean, language: BedsideLanguage?, onFailure: () -> Unit = {}) {
         if (sending) return
         requested = on; sending = true
         notice = if (on) "Starting translation…" else "Turning translation off…"
@@ -136,6 +138,7 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
                 throw cancelled
             } catch (error: Exception) {
                 requested = null
+                onFailure()
                 notice = error.message ?: "Translation couldn't change. Try again."
             }
             sending = false
