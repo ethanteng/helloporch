@@ -5,9 +5,10 @@ import { assertAdmin, type AdminSession } from "./session.ts";
 
 /** What the admin page shows about a household. It never includes messages, family members' names, keypad contents or
  * call details. `bedsideName` is the person the Porch is for, such as "Mom". `androidBedside` and `androidPhones` say which
- * of its devices run Android; the rest are iPads and iPhones. */
+ * of its devices run Android; the rest are iPads and iPhones. `bedsideVersion` is the version of Porch the bedside last
+ * reported, such as "0.1.0 (78)"; a bedside on an app from before it was reported has none. */
 export type PorchRow = { id: string; bedsideName: string; invitationLabel?: string; porchNumber?: string; numberPending: boolean;
-  setUpAt?: number; lastSeenAt?: number; familyPhones: number; androidBedside?: true; androidPhones?: number; setupFinished: boolean };
+  setUpAt?: number; lastSeenAt?: number; bedsideVersion?: string; familyPhones: number; androidBedside?: true; androidPhones?: number; setupFinished: boolean };
 
 /** Every listed household that still exists. */
 export async function readHouseholds(store: FamilyStore): Promise<Household[]> {
@@ -27,7 +28,7 @@ export async function listPorches(session: AdminSession, store: FamilyStore): Pr
     return { id: house.id, bedsideName: bedside?.name ?? house.name, ...(invitation ? { invitationLabel: invitation.label } : {}),
       ...(house.porchNumber ? { porchNumber: house.porchNumber.number } : {}), numberPending: !house.porchNumber && !!house.phoneSetup,
       ...(house.createdAt ?? invitation?.setUpAt ? { setUpAt: house.createdAt ?? invitation?.setUpAt } : {}),
-      ...(bedside ? { lastSeenAt: bedside.seenAt } : {}), familyPhones,
+      ...(bedside ? { lastSeenAt: bedside.seenAt } : {}), ...(bedside?.appVersion ? { bedsideVersion: bedside.appVersion } : {}), familyPhones,
       ...(bedside?.platform === "android" ? { androidBedside: true as const } : {}), ...(androidPhones ? { androidPhones } : {}),
       // Until the setup screens have a checklist, a Porch is set up once it has its number and a family phone.
       setupFinished: !!house.porchNumber && familyPhones > 0 };

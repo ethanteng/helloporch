@@ -42,6 +42,11 @@ function devicePlatform(value: unknown): { platform?: "android" } {
   requireValue(value === undefined || value === "ios" || value === "android", "Update Porch, then try again.");
   return value === "android" ? { platform: "android" } : {};
 }
+/** The bedside app's version as its check-ins report it, such as "0.1.0 (78)", the way TestFlight and Google Play show it.
+ * Anything else is ignored rather than refused, so a malformed version never stops a check-in. */
+function appVersion(value: unknown): string | undefined {
+  return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z.() _+-]{0,39}$/.test(value) ? value : undefined;
+}
 function registration(input: Record<string, unknown>) {
   requireValue(typeof input.deviceID === "string" && uuid.test(input.deviceID) && typeof input.deviceSecret === "string" && codePattern.test(input.deviceSecret), "Retry pairing from your Porch app.");
   return { deviceID: input.deviceID, secret: input.deviceSecret };
@@ -541,6 +546,9 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         // The language the bedside is set to (chosen behind its caregiver PIN), so translation and phone voicemail
         // follow it even when no one has saved Display & voice since the server started keeping a copy.
         if (newest && me.role === "bedside" && isBedsideLanguage(input.language)) house.bedsideLanguage = input.language;
+        // Which version of Porch the bedside runs, for the admin Porches list. Apps from before it was sent say nothing.
+        const version = appVersion(input.appVersion);
+        if (newest && me.role === "bedside" && version) me.appVersion = version;
         if (newest) {
           me.available = input.available;
           noteAttendance(house, me, input.attendedSeconds, now);

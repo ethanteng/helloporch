@@ -62,7 +62,7 @@ internal object TestFamilies {
 
 /** A device, its server and its coordinator, on a test's virtual time. */
 @OptIn(ExperimentalCoroutinesApi::class)
-internal class FamilyHarness(scope: TestScope, canBeBedside: Boolean = false) {
+internal class FamilyHarness(scope: TestScope, canBeBedside: Boolean = false, appVersion: String? = null) {
     val settings = MemorySettings()
     val secrets = MemorySecretStore()
     val device = PorchDevice(settings, secrets, TestFamilies.origin, canBeBedside)
@@ -77,5 +77,5 @@ internal class FamilyHarness(scope: TestScope, canBeBedside: Boolean = false) {
     val serviceAt: (String) -> FamilyService = { FamilyService(it, null, transport) }
     /** The bedside's display language, as the app's settings hold it. */
     var bedsideLanguage: BedsideLanguage? = null
-    val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver, { bedsideLanguage }) { changes += it; onChange(it) }
+    val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver, { bedsideLanguage }, appVersion) { changes += it; onChange(it) }
 }

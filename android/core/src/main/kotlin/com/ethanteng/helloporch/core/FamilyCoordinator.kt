@@ -68,6 +68,9 @@ class FamilyCoordinator(
     private val caregiver: RemoteCaregiverSession = RemoteCaregiverSession.shared,
     /** The bedside's display language, which its check-ins report so phone voicemail and call translation follow it. */
     private val bedsideLanguage: () -> BedsideLanguage? = { null },
+    /** The app's version, such as "1.0 (12)" as Google Play shows it, which the bedside's check-ins report for the admin
+     * Porches list. */
+    private val appVersion: String? = null,
     private val afterChange: (FamilyLinks) -> Unit = {},
 ) {
     private class Link(val credential: FamilyCredential) {
@@ -127,10 +130,12 @@ class FamilyCoordinator(
                     attendance.secondsSince?.let { values["attendedSeconds"] = JsonPrimitive(it) }
                 }
                 // The bedside's regular check-ins say what this app can show, a call's translation, and its language,
-                // which translation and phone voicemail follow.
+                // which translation and phone voicemail follow, and which version of Porch it runs, so the admin
+                // Porches list can tell which bedsides have an update.
                 if (credential.role == PorchExperience.BEDSIDE) {
                     values["features"] = JsonArray(listOf(JsonPrimitive("translation")))
                     bedsideLanguage()?.let { values["language"] = JsonPrimitive(it.code) }
+                    appVersion?.let { values["appVersion"] = JsonPrimitive(it) }
                 }
                 val result = serviceFor(credential).send("poll", pollOrder.next(values))
                 if (this.generation != generation) return
