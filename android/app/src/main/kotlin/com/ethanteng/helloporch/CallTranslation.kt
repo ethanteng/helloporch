@@ -57,6 +57,8 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
     private var requested by mutableStateOf<Boolean?>(null)
     private var record by mutableStateOf<FamilyCallRecord?>(null)
     private var captionJob: Job? = null
+    /** The translator said it stopped. A speaker event must not bring the banner back while it is still leaving. */
+    private var turnedOff = false
 
     val isOn get() = requested ?: record?.translation?.on ?: translatorOn
     /** Family: Translate shows once the bedside's app can show translation, or while it's on. */
@@ -72,15 +74,24 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
         record = app.coordinator.state(session.credential)?.call?.takeIf { it.id == callID }
         if (requested != null && record?.translation?.on == requested) requested = null
         // The screen can open after the translator joined, such as a call answered from the lock screen. Its first
-        // message isn't sent again, so the room says it's here.
-        if (translatorPresent()) translatorOn = true
+        // message isn't sent again, so the room says it's here. An explicit stop stands until that agent has left,
+        // or the next one subscribes: otherwise the next speaker event paints "Translation on" again.
+        if (!translatorPresent()) {
+            if (translatorOn || turnedOff) ended()
+            translatorOn = false
+            turnedOff = false
+        } else if (!turnedOff) translatorOn = true
     }
 
     /** Data on the call. Only the translator's messages are used, so no one on the call can put words on the bedside. */
     fun received(event: RoomEvent.DataReceived) {
         if (event.topic != CallTranslationMessage.topic || event.participant?.kind != Participant.Kind.AGENT) return
         when (val message = CallTranslationMessage.decode(event.data) ?: return) {
-            is CallTranslationMessage.State -> { translatorOn = message.on; if (!message.on) ended() }
+            is CallTranslationMessage.State -> {
+                translatorOn = message.on
+                turnedOff = !message.on
+                if (!message.on) ended()
+            }
             is CallTranslationMessage.Line ->
                 if (bedside) message.line.said?.let(::showCaption) else lines = (lines + message.line).takeLast(20)
             is CallTranslationMessage.Speaking -> lowerVoices(message.on)
@@ -89,12 +100,19 @@ class CallTranslation(private val app: PorchApplication, private val session: Fa
 
     /** The translator's voice arriving means it's on. */
     fun subscribed(participant: Participant, publication: TrackPublication) {
-        if (participant.kind == Participant.Kind.AGENT && publication.kind == Track.Kind.AUDIO) translatorOn = true
+        if (participant.kind == Participant.Kind.AGENT && publication.kind == Track.Kind.AUDIO) {
+            turnedOff = false
+            translatorOn = true
+        }
     }
 
     /** Someone left. When it's the translator, captions go and voices return to normal. */
     fun peopleChanged() {
-        if (translatorOn && !translatorPresent()) { translatorOn = false; ended() }
+        if (!translatorPresent() && (translatorOn || turnedOff)) {
+            translatorOn = false
+            turnedOff = false
+            ended()
+        }
     }
 
     fun toggle(on: Boolean) = send(on, chosen)
