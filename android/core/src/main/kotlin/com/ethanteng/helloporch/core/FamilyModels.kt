@@ -73,7 +73,16 @@ data class FamilyCallRecord(
     val porchGuest: FamilyPorchGuest? = null,
     /** This device was rung into someone else's call with the bedside: `from` rang it in, and `id` is its invitation. */
     val guest: Boolean? = null,
+    /** Live translation on this call, once someone has turned it on. Older servers don't send it. */
+    val translation: FamilyCallTranslation? = null,
+    /** The family member on the call can turn translation on: the bedside's app can show it. */
+    val translationAvailable: Boolean? = null,
 )
+
+/** Live translation on a call with the bedside (`lib/family/translation.ts`): on or off, and the language the bedside
+ * hears, a [BedsideLanguage] code. `by` last turned it on or off, or changed the language. */
+@Serializable
+data class FamilyCallTranslation(val on: Boolean, val language: String, val by: String, val at: Long)
 
 /** A family member rung into a call with the bedside, and how their invitation went. */
 @Serializable

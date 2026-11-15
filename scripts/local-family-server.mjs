@@ -42,6 +42,11 @@
 // Messaging pushes, from the Firebase project the key belongs to (the one in the app's google-services.json). Only its
 // project ID, client email and private key are read, and never printed. Keep the key out of the repo.
 //   node scripts/local-family-server.mjs 3010 --livekit --fcm ../firebase-adminsdk.json
+//
+// --translator, with --livekit, offers live translation on calls (lib/family/translation.ts) once the bedside app says it
+// can show it. Turning it on dispatches the translator to the local LiveKit, so run translator/ against it too, with
+// speech recognition still through LiveKit Cloud (translator/README.md, "Testing a call"):
+//   node scripts/local-family-server.mjs 3010 --livekit --translator
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -51,6 +56,7 @@ import { blockCall } from '../lib/family/screening.ts';
 import { receivePhoneVoicemail } from '../lib/family/messages.ts';
 import { receiveText } from '../lib/family/texts.ts';
 import { handlePhoneCall } from '../lib/calls/phone.ts';
+import { translationServices } from '../lib/family/translation.ts';
 
 const options = process.argv.slice(2), livekit = options.includes('--livekit');
 const valueOf = flag => { const at = options.indexOf(flag); return at < 0 ? undefined : options[at + 1]; };
@@ -177,7 +183,12 @@ const phoneGuestServices = () => ({
     throw Object.assign(new Error("This test server has no phone line. Start it with --phone and without --livekit."), { code: 'failed_precondition' });
   } },
 });
-const dependencies = { store, numberServices, endRoom, media, phoneGuestServices };
+// Live translation through the local LiveKit, over plain HTTP as for rooms.
+const translator = livekit && options.includes('--translator');
+if (translator) process.env.LIVEKIT_TRANSLATOR_AGENT = 'porch-translator';
+const translating = translator ? { translationServices: () => translationServices({ apiKey: localLiveKit.key, apiSecret: localLiveKit.secret,
+  serverUrl: localLiveKit.url.replace(/^ws:/, 'http:') }) } : {};
+const dependencies = { store, numberServices, endRoom, media, phoneGuestServices, ...translating };
 
 const time = () => new Date().toISOString().slice(11, 19);
 const call = async (action, values = {}, credential, code) => {

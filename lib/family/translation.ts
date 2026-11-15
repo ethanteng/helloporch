@@ -31,7 +31,7 @@ export type TranslationContext = { store: FamilyStore; now: number; house: House
 export function translatorName() { return process.env.LIVEKIT_TRANSLATOR_AGENT || undefined; }
 
 export function translationServices(config: { apiKey: string; apiSecret: string; serverUrl: string }): TranslationServices {
-  const host = config.serverUrl.replace(/^wss:/, "https:");
+  const host = config.serverUrl.replace(/^wss:/, "https:").replace(/^ws:/, "http:");
   const rooms = new RoomServiceClient(host, config.apiKey, config.apiSecret, { requestTimeout: 8 });
   const dispatch = new AgentDispatchClient(host, config.apiKey, config.apiSecret);
   const name = () => translatorName() ?? "porch-translator";

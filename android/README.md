@@ -86,6 +86,19 @@ adb reverse tcp:3010 tcp:3010 && adb reverse tcp:7880 tcp:7880 && adb reverse tc
 
 Media goes over TCP through `adb`, because the LiveKit server offers only `127.0.0.1`. The apps accept an unencrypted `ws://` LiveKit address only for this device; Porch's server only gives out `wss://` ones. A tablet over wireless debugging works the same way.
 
+### Translation
+
+`--translator` offers live translation on calls (`lib/family/translation.ts`), once the tablet says it can show it, which
+every check-in does. Turning Translate on in a call dispatches the translator into the local LiveKit, so run it against
+the same server, with speech recognition through LiveKit Cloud ([translator/README.md](../translator/README.md#testing-a-call)):
+
+```bash
+node scripts/local-family-server.mjs 3010 --livekit --translator
+```
+
+An emulator's microphone hears nothing, so to hear translation work, join the call's room as an extra person who plays
+recorded speech, as `translator/scripts/call-test.ts` does.
+
 ### Phone fallback
 
 When someone on the bedside's keypad doesn't answer Porch, the bedside calls their regular phone. LiveKit's dev server can't call phones, so `--phone` makes those calls real: through LiveKit Cloud's phone trunk and Twilio, which ring a real phone and cost money. It takes LiveKit Cloud's address, key and secret and the outbound trunk ID from an env file, and nothing else, so it never reaches Redis. `--phone-from` is the caller ID. It must be a number the Twilio account owns, since the local household's own number is made up.

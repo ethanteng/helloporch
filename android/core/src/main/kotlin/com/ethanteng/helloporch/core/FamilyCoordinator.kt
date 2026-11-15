@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -125,8 +126,12 @@ class FamilyCoordinator(
                 else if (credential.role == PorchExperience.BEDSIDE && link.state?.shareAttendance == true) {
                     attendance.secondsSince?.let { values["attendedSeconds"] = JsonPrimitive(it) }
                 }
-                // Not `features`: this app can't show a call's translation yet, so the server doesn't offer it here.
-                if (credential.role == PorchExperience.BEDSIDE) bedsideLanguage()?.let { values["language"] = JsonPrimitive(it.code) }
+                // The bedside's regular check-ins say what this app can show, a call's translation, and its language,
+                // which translation and phone voicemail follow.
+                if (credential.role == PorchExperience.BEDSIDE) {
+                    values["features"] = JsonArray(listOf(JsonPrimitive("translation")))
+                    bedsideLanguage()?.let { values["language"] = JsonPrimitive(it.code) }
+                }
                 val result = serviceFor(credential).send("poll", pollOrder.next(values))
                 if (this.generation != generation) return
                 link.state = result.state; link.error = null; link.accessRemoved = false

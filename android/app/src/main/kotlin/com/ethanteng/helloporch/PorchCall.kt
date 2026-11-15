@@ -27,7 +27,6 @@ import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
-import io.livekit.android.room.track.RemoteTrackPublication
 import io.livekit.android.room.track.VideoTrack
 import io.livekit.android.util.flow
 import kotlinx.coroutines.CancellationException
@@ -85,6 +84,10 @@ class PorchCall(
     /** Family on a Porch call with the bedside can ring in another family member. Someone rung in can't add anyone. */
     val guests: CallGuests? = session?.takeIf { it.credential.role == PorchExperience.FAMILY && it.call.source != "phone" && it.call.guest != true }
         ?.let { CallGuests(app, it, scope) { room } }
+    /** Live translation on a Porch call between family and the bedside: the family member on the call turns it on
+     * when they need it, and the bedside shows what the translator says to it. */
+    val translation: CallTranslation? = session?.takeIf { it.call.source != "phone" && it.call.guest != true }
+        ?.let { CallTranslation(app, it, scope, { room }, name) }
     /** On the bedside, someone who left a call that goes on, for a few seconds. */
     private var leftNotice: String? = null
     /** Each person's name while they're in the room, by identity: LiveKit has cleared it by the time they've left. */
@@ -320,6 +323,7 @@ class PorchCall(
     private fun refresh() {
         if (ending || failed) return
         updateKeypadHint()
+        translation?.refresh()
         val peers = people
         for (peer in peers) {
             val identity = peer.identity?.value ?: continue
@@ -460,22 +464,21 @@ class PorchCall(
             is RoomEvent.Disconnected -> if (!ending && !switchingToPhone && mediaReady) finish(returning("The call disconnected."))
             // Even a word between the timer's ticks starts the silence over.
             is RoomEvent.ActiveSpeakersChanged -> checkInactivity(speaking = event.speakers.isNotEmpty())
-            // The call translator speaks to each side on its own track (translator/ in the repository). This app
-            // doesn't show translation yet, but it shouldn't hear the other side's either.
+            // The call translator speaks to each side on its own track (translator/ in the repository). This call owns
+            // the room, so it picks which one this side hears, translation controls or not.
             is RoomEvent.TrackSubscribed -> {
-                val mine = if (role == PorchExperience.BEDSIDE) "porch-translation-bedside" else "porch-translation-family"
-                val name = event.publication.name
-                if (event.participant.kind == Participant.Kind.AGENT && name.startsWith("porch-translation") && name != mine) {
-                    (event.publication as? RemoteTrackPublication)?.setSubscribed(false)
-                }
+                CallTranslation.keepOwn(event.participant, event.publication, bedside = role == PorchExperience.BEDSIDE)
+                translation?.subscribed(event.participant, event.publication)
                 refresh()
             }
+            is RoomEvent.DataReceived -> translation?.received(event)
             else -> refresh()
         }
     }
 
     private fun participantLeft(participant: Participant) {
         if (ending) return
+        translation?.peopleChanged()
         if (onPhone && participant.identity?.value == PHONE_IDENTITY) { finishPhoneCall(); return }
         if (switchingToPhone || onPhone) return
         // The bedside is never left on with only a phone a family caregiver added, such as a bank.
@@ -609,6 +612,7 @@ class PorchCall(
             return
         }
         if (role == PorchExperience.BEDSIDE) refresh() else guests?.refresh()
+        translation?.refresh()
         if (call.state == "accepted" && !accepted) {
             accepted = true
             waitJob?.cancel()
