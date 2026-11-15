@@ -98,20 +98,26 @@ internal fun TranslationControls(app: PorchApplication, translation: CallTransla
         .padding(horizontal = 12.dp, vertical = 6.dp).testTag("call.translation"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val language = translation.language
         if (on) CardHeader(translation, language)
-        // The latest exchange takes what's left under the header, scrolled to the newest line.
-        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(bottom = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (on && !translation.starting && language != null && translation.lines.isEmpty() && translation.problem == null) {
-                Text("Talk as you usually do, even mixing languages. ${translation.peerName} hears it in ${language.displayName} and sees the words on screen.",
-                    color = CallColors.secondary, fontSize = 16.sp)
-            }
-            if (on && translation.lines.isNotEmpty()) {
-                Column(Modifier.fillMaxWidth().testTag("call.translation.transcript"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    translation.lines.takeLast(2).forEach { Entry(translation, it, maxLines = 3) }
+        val hint = on && !translation.starting && language != null && translation.lines.isEmpty() && translation.problem == null
+        if (hint || (on && translation.lines.isNotEmpty())) {
+            // The latest exchange takes what's left under the header, scrolled to the newest line.
+            val scroll = rememberScrollState()
+            LaunchedEffect(translation.lines.size, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hint && language != null) {
+                    Text("Talk as you usually do, even mixing languages. ${translation.peerName} hears it in ${language.displayName} and sees the words on screen.",
+                        color = CallColors.secondary, fontSize = 16.sp)
+                }
+                if (on && translation.lines.isNotEmpty()) {
+                    Column(Modifier.fillMaxWidth().testTag("call.translation.transcript"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        translation.lines.takeLast(2).forEach { Entry(translation, it, maxLines = 3) }
+                    }
                 }
             }
-            translation.problem?.let { Text(it, Modifier.fillMaxWidth(), color = CallColors.secondary, fontSize = 15.sp) }
         }
+        // Under the exchange, so a change that didn't go through stays visible when the card is full.
+        translation.problem?.let { Text(it, Modifier.fillMaxWidth().padding(bottom = 6.dp), color = CallColors.secondary, fontSize = 15.sp) }
     }
 }
 
