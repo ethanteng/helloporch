@@ -110,23 +110,31 @@ export default function FeaturesPage() {
   );
 }
 
+// A widescreen film is much shorter than the portrait clips, so beside them its card would stretch to their height.
+// It gets a row of its own after them instead, where the card is only as tall as what's in it.
 function Clips({ clips }: { clips: Clip[] }) {
+  const portrait = clips.filter((clip) => !clip.landscape);
+  const landscape = clips.filter((clip) => clip.landscape);
+  return (
+    <div className={styles.clipRows}>
+      <ClipRow clips={portrait} />
+      {landscape.length > 0 ? <ClipRow clips={landscape} /> : null}
+    </div>
+  );
+}
+
+function ClipRow({ clips }: { clips: Clip[] }) {
   return (
     <div className={styles.clips}>
       {clips.map((clip) => (
-        <article
-          key={clip.id}
-          id={clip.id}
-          className={clip.wide ? `${styles.clip} ${styles.wide}` : styles.clip}
-          aria-labelledby={`${clip.id}-title`}
-        >
+        <article key={clip.id} id={clip.id} className={styles.clip} aria-labelledby={`${clip.id}-title`}>
           <StoryVideo
             src={clip.src}
             poster={clip.poster}
             title={clip.title}
-            width={clip.wide ? 1920 : 1080}
-            height={clip.wide ? 1080 : 1920}
-            className={styles.player}
+            width={clip.landscape ? 1920 : 1080}
+            height={clip.landscape ? 1080 : 1920}
+            className={clip.landscape ? `${styles.player} ${styles.landscape}` : styles.player}
           />
           <div className={styles.clipCopy}>
             <p className={styles.duration}>{clip.duration}</p>
