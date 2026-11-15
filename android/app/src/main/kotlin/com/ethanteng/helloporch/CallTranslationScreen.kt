@@ -41,10 +41,10 @@ import com.ethanteng.helloporch.core.BedsideLanguage
  * phone, the Translate switch, the language the bedside hears, and the last few things said. As iOS lays them out.
  * It's at most [maxHeight] tall, so the call's buttons always fit; longer words scroll inside it. */
 @Composable
-internal fun TranslationControls(app: PorchApplication, translation: CallTranslation, maxHeight: Dp) {
+internal fun TranslationControls(app: PorchApplication, translation: CallTranslation, maxHeight: Dp, modifier: Modifier = Modifier) {
     if (translation.bedside) {
         if (!translation.showsCaption) return
-        Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+        Column(modifier.fillMaxWidth().heightIn(max = maxHeight).background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
             .padding(12.dp).testTag("call.translation"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(BedsideText.string(app, "Translation on"), color = CallColors.secondary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             translation.caption?.let {
@@ -58,7 +58,7 @@ internal fun TranslationControls(app: PorchApplication, translation: CallTransla
         return
     }
     if (!translation.offered) return
-    Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+    Column(modifier.fillMaxWidth().heightIn(max = maxHeight).background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
         .padding(12.dp).testTag("call.translation"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // The conversation takes what's left after the switch, scrolled to the newest line.
         if (translation.isOn) {
