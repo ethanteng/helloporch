@@ -25,12 +25,12 @@ sealed interface CallTranslationMessage {
         const val attribute = "porch.translator"
         fun trackName(bedside: Boolean) = if (bedside) "porch-translation-bedside" else "porch-translation-family"
 
-        fun decode(data: ByteArray): CallTranslationMessage? {
+        fun decode(data: ByteArray): CallTranslationMessage? = runCatching {
             val text = data.decodeToString()
-            val fields = runCatching { PorchJson.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
+            val fields = PorchJson.parseToJsonElement(text) as? JsonObject ?: return@runCatching null
             val on = fields["on"]?.jsonPrimitive?.booleanOrNull
-            return when (fields["type"]?.jsonPrimitive?.contentOrNull) {
-                "line" -> runCatching { Line(PorchJson.decodeFromString(CallTranslationLine.serializer(), text)) }.getOrNull()
+            when (fields["type"]?.jsonPrimitive?.contentOrNull) {
+                "line" -> Line(PorchJson.decodeFromString(CallTranslationLine.serializer(), text))
                 "state" -> {
                     val language = fields["language"]?.jsonPrimitive?.contentOrNull
                     if (on == null || language == null) null else State(on, language)
@@ -38,7 +38,7 @@ sealed interface CallTranslationMessage {
                 "speaking" -> on?.let(::Speaking)
                 else -> null
             }
-        }
+        }.getOrNull()
     }
 }
 

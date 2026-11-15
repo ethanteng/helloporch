@@ -20,6 +20,8 @@ class CallTranslationTest {
     @Test fun unknownOrBrokenMessagesAreIgnored() {
         assertNull(CallTranslationMessage.decode("""{"type":"dtmf","digit":"1"}""".encodeToByteArray()))
         assertNull(CallTranslationMessage.decode("""{"type":"state"}""".encodeToByteArray()))
+        assertNull(CallTranslationMessage.decode("""{"type":"state","on":{"bad":true},"language":"en"}""".encodeToByteArray()))
+        assertNull(CallTranslationMessage.decode("""{"type":{"bad":true}}""".encodeToByteArray()))
         assertNull(CallTranslationMessage.decode("not json".encodeToByteArray()))
         assertEquals("porch-translation-bedside", CallTranslationMessage.trackName(bedside = true))
         assertEquals("porch-translation-family", CallTranslationMessage.trackName(bedside = false))
