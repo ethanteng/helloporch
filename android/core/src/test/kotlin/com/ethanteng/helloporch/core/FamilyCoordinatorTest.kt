@@ -69,7 +69,7 @@ class FamilyCoordinatorTest {
     }
 
     @Test fun everyPollSaysWhetherThisDeviceCanRingAndIsNumbered() = runTest {
-        val phone = FamilyHarness(this)
+        val phone = FamilyHarness(this, appVersion = "1.0 (12)")
         phone.device.save(family(1))
         phone.answerPolls()
         phone.coordinator.start()
@@ -83,10 +83,11 @@ class FamilyCoordinatorTest {
         assertNull(first["attendedSeconds"], "only the bedside says when someone was there")
         assertNull(first["language"], "only the bedside says its language")
         assertNull(first["features"], "or what it can show")
+        assertNull(first["appVersion"], "or which version of Porch it runs")
     }
 
-    @Test fun theBedsideSaysItsLanguageAndThatItCanShowTranslation() = runTest {
-        val tablet = FamilyHarness(this, canBeBedside = true)
+    @Test fun theBedsideSaysItsLanguageItsVersionAndThatItCanShowTranslation() = runTest {
+        val tablet = FamilyHarness(this, canBeBedside = true, appVersion = "1.0 (12)")
         tablet.device.save(TestFamilies.bedside(1))
         tablet.bedsideLanguage = BedsideLanguage.TRADITIONAL_CHINESE
         tablet.answerPolls { snapshot(it.deviceID!!, role = "bedside") }
@@ -96,6 +97,7 @@ class FamilyCoordinatorTest {
         // Phone voicemail and call translation follow it without anyone saving Display & voice.
         assertEquals(JsonPrimitive("zh-Hant"), poll["language"])
         assertEquals(JsonArray(listOf(JsonPrimitive("translation"))), poll["features"], "so the family phone offers Translate")
+        assertEquals(JsonPrimitive("1.0 (12)"), poll["appVersion"], "so the admin Porches list shows which version it runs")
     }
 
     /** A family's household is noted as it checks in, so a call that rings before the next check-in can say which

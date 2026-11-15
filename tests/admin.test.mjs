@@ -319,6 +319,37 @@ test('the Porches list covers older households and holds no private details', as
   for (const secret of ['Private cousin name', 'Private message text', '+14155559999', 'secretHash']) assert.ok(!text.includes(secret), secret);
 });
 
+test("the Porches list shows the version of Porch each bedside's newest check-in reported", async () => {
+  const f = await fixture();
+  const { session } = await f.session();
+  const family = (action, values = {}, credential, code) => handleFamily(new Request('https://porch.example/api/family', { method: 'POST',
+    headers: { ...(credential ? { Authorization: `Bearer ${credential}` } : {}), ...(code ? { 'X-Porch-Setup-Code': code } : {}) },
+    body: JSON.stringify({ action, ...(['createHousehold', 'claimInvite'].includes(action) ? { deviceID: randomUUID(), deviceSecret: randomBytes(32).toString('hex') } : {}), ...values }) }),
+    { store: f.store, now: f.now }).then(async r => { assert.equal(r.status, 200, await r.clone().text()); return r.json(); });
+  const mom = await family('createHousehold', { name: 'Mom' }, undefined, env.PORCH_CONTACT_SETUP_CODE);
+  const version = async () => (await listPorches(session, f.store))[0].bedsideVersion;
+  // An app from before versions were reported says nothing.
+  await family('poll', { available: true }, mom.credential);
+  assert.equal(await version(), undefined);
+  const launch = randomUUID();
+  await family('poll', { available: true, appVersion: '0.1.0 (79)', launch, sequence: 2 }, mom.credential);
+  assert.equal(await version(), '0.1.0 (79)');
+  // A check-in sent earlier that arrives late, a check-in that doesn't say, and anything that isn't a version change nothing.
+  await family('poll', { available: true, appVersion: '0.1.0 (78)', launch, sequence: 1 }, mom.credential);
+  await family('poll', { available: false, launch, sequence: 3 }, mom.credential);
+  for (const appVersion of ['<script>', 'x'.repeat(41), 79, ''])
+    await family('poll', { available: true, appVersion }, mom.credential);
+  assert.equal(await version(), '0.1.0 (79)');
+  // A family phone's version isn't the bedside's.
+  const invite = await family('createInvite', { name: 'Ethan', permissions: { audio: true, video: true } }, mom.credential, env.PORCH_CONTACT_SETUP_CODE);
+  const ethan = await family('claimInvite', { code: invite.code, name: 'Ethan' });
+  await family('poll', { available: true, appVersion: '9.9 (99)' }, ethan.credential);
+  assert.equal(await version(), '0.1.0 (79)');
+  // An Android tablet reports its own numbering, as Google Play shows it.
+  await family('poll', { available: true, appVersion: '1.0 (12)' }, mom.credential);
+  assert.equal(await version(), '1.0 (12)');
+});
+
 test('System counts Porch numbers against the limit', async () => {
   const f = await fixture();
   const { session } = await f.session();

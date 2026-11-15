@@ -10,6 +10,8 @@ export const metadata: Metadata = { title: "Porches" };
 // A bedside that hasn't checked in for a day is likely off, unplugged or offline.
 const offlineAfter = 86400;
 const phoneNumber = (number: string) => number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
+// Bedside apps only started reporting their version in November 2026, so one that hasn't is older than that.
+const notReported = "This bedside's app is from before Porch reported its version, or it hasn't checked in since updating.";
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 function seen(row: PorchRow, now: number) {
@@ -55,7 +57,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
       {rows.length ? (
         <div className="table">
           <table>
-            <thead><tr><th>Porch for</th><th>Porch number</th><th>Set up</th><th>Bedside last seen</th><th>Family phones</th><th>Setup</th></tr></thead>
+            <thead><tr><th>Porch for</th><th>Porch number</th><th>Set up</th><th>Bedside last seen</th><th>Bedside app</th><th>Family phones</th><th>Setup</th></tr></thead>
             <tbody>
               {rows.map(row => (
                 <tr key={row.id}>
@@ -63,6 +65,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                   <td>{row.porchNumber ? phoneNumber(row.porchNumber) : row.numberPending ? <span className="muted">Being set up</span> : <span className="muted">None</span>}</td>
                   <td>{row.setUpAt ? day(row.setUpAt) : <span className="muted">Before this list</span>}</td>
                   <td>{seen(row, now)}</td>
+                  <td>{row.bedsideVersion ?? <span className="muted" title={notReported}>Not reported</span>}</td>
                   <td>{row.familyPhones}{row.androidPhones ? <span className="sub">{row.androidPhones} Android</span> : null}</td>
                   <td>{row.setupFinished ? <span className="tag good">Finished</span> : <span className="tag warn">Not finished</span>}</td>
                 </tr>
