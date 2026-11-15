@@ -186,8 +186,8 @@ import PorchCore
     // MARK: Bedside
 
     private func showCaption(_ text: String) {
+        // The translator says it aloud already, so VoiceOver doesn't announce it again.
         caption.text = text
-        UIAccessibility.post(notification: .announcement, argument: nil)
         captionTask?.cancel()
         captionTask = Task { [weak self] in
             do { try await Task.sleep(nanoseconds: Self.captionSeconds * 1_000_000_000) } catch { return }

@@ -77,8 +77,9 @@ export async function handleTranslationAction(_action: string, { store, now, hou
   const room = callRoom(call);
   try {
     if (input.on && !current?.on) {
+      // `by`: the translator leaves when they do, since no one else on the call can turn it off.
       await services.start(room, JSON.stringify({ bedside: bedside.id, bedsideLanguage: language, bedsideVoice: voiceFor(house, language),
-        familyLanguage, familyVoice: voiceFor(house, familyLanguage) }));
+        familyLanguage, familyVoice: voiceFor(house, familyLanguage), by: me.id }));
     } else if (input.on && current?.language !== language) {
       await services.configure(room, { type: "language", language, voice: voiceFor(house, language) });
     } else if (!input.on && current?.on) {

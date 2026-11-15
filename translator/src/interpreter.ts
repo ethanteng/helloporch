@@ -53,9 +53,12 @@ export class Interpreter {
 
   sideOf(identity: string): Side { return identity === this.config.bedside ? "bedside" : "family"; }
 
-  /** Something a person finished saying. Each speaker's sentences are handled in order. */
+  /** Something a person finished saying. Each speaker's sentences are handled in order, and one that fails, say
+   * because a message couldn't be sent, doesn't stop the ones after it. Never rejects. */
   heard(identity: string, name: string, text: string): Promise<void> {
-    const next = (this.speakers.get(identity) ?? Promise.resolve()).then(() => this.handle(identity, name, text));
+    const next = (this.speakers.get(identity) ?? Promise.resolve())
+      .then(() => this.handle(identity, name, text))
+      .catch(error => this.deps.log?.("a sentence couldn't be handled", error));
     this.speakers.set(identity, next);
     return next;
   }
@@ -95,7 +98,8 @@ export class Interpreter {
     // Family see everything heard and said, so they can tell when something was misheard. The bedside sees
     // only what the translator says to it, as it says it.
     this.deps.send({ type: "line", ...line }, "family");
-    if (said) this.playing[listener] = this.playing[listener].then(() => this.play(listener, line, said));
+    if (said) this.playing[listener] = this.playing[listener].then(() => this.play(listener, line, said))
+      .catch(error => this.deps.log?.("a translation couldn't be played", error));
   }
 
   private async play(listener: Side, line: Line, said: string) {

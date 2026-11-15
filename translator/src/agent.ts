@@ -17,8 +17,9 @@ export const agentName = "porch-translator";
 export const topics = { lines: "porch-translation", control: "porch-translation-control" } as const;
 export const trackNames: Record<Side, string> = { bedside: "porch-translation-bedside", family: "porch-translation-family" };
 
-/** The dispatch's metadata: who the bedside is, its language and voice, and the family's. */
-export type JobConfig = { bedside: string; bedsideLanguage: Language; bedsideVoice: string; familyLanguage: Language; familyVoice: string };
+/** The dispatch's metadata: who the bedside is, its language and voice, the family's, and who turned translation on
+ * (`by`; older servers don't send it). */
+export type JobConfig = { bedside: string; bedsideLanguage: Language; bedsideVoice: string; familyLanguage: Language; familyVoice: string; by?: string };
 
 export function parseJobConfig(metadata: string): JobConfig {
   const value: unknown = JSON.parse(metadata);
@@ -26,7 +27,8 @@ export function parseJobConfig(metadata: string): JobConfig {
   const v = value as Record<string, unknown>;
   if (typeof v.bedside !== "string" || !v.bedside || !isLanguage(v.bedsideLanguage) || !isLanguage(v.familyLanguage) ||
       typeof v.bedsideVoice !== "string" || typeof v.familyVoice !== "string") throw new Error("The translator's call details are incomplete.");
-  return { bedside: v.bedside, bedsideLanguage: v.bedsideLanguage, bedsideVoice: v.bedsideVoice, familyLanguage: v.familyLanguage, familyVoice: v.familyVoice };
+  return { bedside: v.bedside, bedsideLanguage: v.bedsideLanguage, bedsideVoice: v.bedsideVoice, familyLanguage: v.familyLanguage, familyVoice: v.familyVoice,
+    ...(typeof v.by === "string" && v.by ? { by: v.by } : {}) };
 }
 
 /** Google's live transcription handled mixed English and Mandarin best (scripts/stt-bench.ts); AssemblyAI is the fallback. */
@@ -128,7 +130,10 @@ export default defineAgent({
     const leave = (reason: string) => { log(`leaving: ${reason}`); ctx.shutdown(reason); };
     room.on(RoomEvent.ParticipantDisconnected, participant => {
       listeners.get(participant.identity)?.();
-      if (!stillNeeded(room, config.bedside)) leave("the call no longer has both sides");
+      // Only the person who turned translation on can turn it off, so it goes when they do, such as Ethan hanging up
+      // while Mom and the brother he rang in keep talking.
+      if (participant.identity === config.by) leave("the person who turned it on left");
+      else if (!stillNeeded(room, config.bedside)) leave("the call no longer has both sides");
     });
     // Only the calling server changes the language; data from people on the call carries no sender-less packets.
     room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {

@@ -102,7 +102,7 @@ test('turning translation on brings the translator in with the bedside language 
   const f=fixture(),{bedside,ethan,callID,room,ids}=await f.connected();
   const on=await f.json('setCallTranslation',{callID,on:true},ethan.credential);
   assert.deepEqual(f.calls,[{ start:room, metadata:{ bedside:ids.mom, bedsideLanguage:'zh-Hant', bedsideVoice:'Z8Aisvg1z70p27kGvkZZ',
-    familyLanguage:'en', familyVoice:'OYTbf65OHHFELVut7v2H' } }]);
+    familyLanguage:'en', familyVoice:'OYTbf65OHHFELVut7v2H', by:ids.ethan } }]);
   assert.deepEqual(on.translation,{on:true,language:'zh-Hant',by:ids.ethan,at:f.now()});
   assert.deepEqual(on.state.call.translation,on.translation);
   assert.deepEqual((await f.json('poll',{available:true,features:['translation']},bedside.credential)).state.call.translation,on.translation);

@@ -49,7 +49,7 @@ class PorchApplication : Application() {
     var screenReady = false
     val coordinator by lazy {
         FamilyCoordinator(device, scope, { service(it) }, PollOrder(), canReceive = { onScreen && screenReady }, attendance = AttendanceTracker.shared,
-            afterChange = ::afterSnapshot)
+            afterChange = ::afterSnapshot, bedsideLanguage = { BedsidePreferences.load(settings).language })
     }
     val keypadReport by lazy { KeypadNumberReport(scope, { service(it) }, pin = { caregiverPIN }, now = SystemClock::elapsedRealtime) }
     /** The call this device is ringing for or on. */

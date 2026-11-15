@@ -101,6 +101,21 @@ test("A failed translation is shown to family as heard and not spoken", async ()
   assert.deepEqual(sent.map(m => m.type === "line" && m.said), [null]);
 });
 
+test("A sentence that can't be sent doesn't stop that person's later sentences", async () => {
+  let failNext = true;
+  const spoken: string[] = [];
+  const interpreter = new Interpreter({ bedside: "mom", bedsideLanguage: "zh-Hant", familyLanguage: "en" }, {
+    translate: async heard => ({ say: true, text: `[${heard}]` }),
+    speak: async (_to, text) => { spoken.push(text); },
+    send: () => { if (failNext) { failNext = false; throw new Error("room closed"); } },
+    now: () => 0,
+  });
+  await interpreter.heard("ethan", "Ethan", "first");
+  await interpreter.heard("ethan", "Ethan", "second");
+  await interpreter.settled();
+  assert.deepEqual(spoken, ["[second]"]);
+});
+
 test("Changing the bedside's language changes what family speech is translated into", async () => {
   const { interpreter, asked, sent } = setup({});
   interpreter.setLanguage("yue-Hant");

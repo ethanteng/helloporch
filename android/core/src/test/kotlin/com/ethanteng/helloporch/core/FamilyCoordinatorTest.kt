@@ -80,6 +80,20 @@ class FamilyCoordinatorTest {
         assertEquals(first["launch"], second["launch"])
         assertEquals(listOf(1L, 2L), listOf(first, second).map { it["sequence"]!!.jsonPrimitive.content.toLong() })
         assertNull(first["attendedSeconds"], "only the bedside says when someone was there")
+        assertNull(first["language"], "only the bedside says its language")
+    }
+
+    @Test fun theBedsideSaysItsLanguageButNotThatItCanShowTranslation() = runTest {
+        val tablet = FamilyHarness(this, canBeBedside = true)
+        tablet.device.save(TestFamilies.bedside(1))
+        tablet.bedsideLanguage = BedsideLanguage.TRADITIONAL_CHINESE
+        tablet.answerPolls { snapshot(it.deviceID!!, role = "bedside") }
+        tablet.coordinator.start()
+        runCurrent()
+        val poll = tablet.transport.requests("poll").first()
+        // Phone voicemail and call translation follow it without anyone saving Display & voice.
+        assertEquals(JsonPrimitive("zh-Hant"), poll["language"])
+        assertNull(poll["features"], "this app can't show a call's translation yet")
     }
 
     /** A family's household is noted as it checks in, so a call that rings before the next check-in can say which

@@ -75,5 +75,7 @@ internal class FamilyHarness(scope: TestScope, canBeBedside: Boolean = false) {
     var onChange: (FamilyLinks) -> Unit = {}
     val serviceFor: (FamilyCredential) -> FamilyService = { FamilyService(it, transport) }
     val serviceAt: (String) -> FamilyService = { FamilyService(it, null, transport) }
-    val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver) { changes += it; onChange(it) }
+    /** The bedside's display language, as the app's settings hold it. */
+    var bedsideLanguage: BedsideLanguage? = null
+    val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver, { bedsideLanguage }) { changes += it; onChange(it) }
 }
