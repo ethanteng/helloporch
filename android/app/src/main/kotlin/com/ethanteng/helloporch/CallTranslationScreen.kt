@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -15,6 +18,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,30 +32,40 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ethanteng.helloporch.core.BedsideLanguage
 
 /** Above a call's buttons: on the bedside, "Translation on" and what the translator just said to it, large; on a family
- * phone, the Translate switch, the language the bedside hears, and the last few things said. As iOS lays them out. */
+ * phone, the Translate switch, the language the bedside hears, and the last few things said. As iOS lays them out.
+ * It's at most [maxHeight] tall, so the call's buttons always fit; longer words scroll inside it. */
 @Composable
-internal fun TranslationControls(app: PorchApplication, translation: CallTranslation) {
+internal fun TranslationControls(app: PorchApplication, translation: CallTranslation, maxHeight: Dp) {
     if (translation.bedside) {
         if (!translation.showsCaption) return
-        Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp)).padding(12.dp)
-            .testTag("call.translation"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+            .padding(12.dp).testTag("call.translation"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(BedsideText.string(app, "Translation on"), color = CallColors.secondary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             translation.caption?.let {
-                Text(it, Modifier.testTag("call.translation.caption"), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center)
+                // A new caption starts at its beginning.
+                val scroll = rememberScrollState()
+                LaunchedEffect(it) { scroll.scrollTo(0) }
+                Text(it, Modifier.weight(1f, fill = false).verticalScroll(scroll).testTag("call.translation.caption"), color = Color.White,
+                    fontSize = 30.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             }
         }
         return
     }
     if (!translation.offered) return
-    Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp)).padding(12.dp)
-        .testTag("call.translation"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (translation.isOn) Transcript(translation)
+    Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+        .padding(12.dp).testTag("call.translation"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // The conversation takes what's left after the switch, scrolled to the newest line.
+        if (translation.isOn) {
+            val scroll = rememberScrollState()
+            LaunchedEffect(translation.lines.size, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) { Transcript(translation) }
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Translate", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Box(Modifier.weight(1f)) { LanguageChoice(translation) }

@@ -142,7 +142,8 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
             val rows = if (narrow && (buttons.size > 3 || (adding != null && buttons.size > 2))) buttons.chunked(2) else listOf(buttons)
             Column(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Live translation: the bedside's caption, or the family's Translate switch and what was said.
-                call.translation?.let { TranslationControls(app, it) }
+                // At most about a third of the screen, so Mute and End call always fit below it.
+                call.translation?.let { TranslationControls(app, it, maxHeight = this@BoxWithConstraints.maxHeight * 0.35f) }
                 // The phone this one added, such as a bank: its keypad and its own hang-up.
                 call.guests?.let { PhoneGuestControls(app, it) }
                 rows.forEach { row ->
