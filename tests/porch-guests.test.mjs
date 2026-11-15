@@ -104,7 +104,7 @@ test('ringing David in: his phone gets its own incoming call, and answering join
   const token=await new TokenVerifier(env.LIVEKIT_API_KEY,env.LIVEKIT_API_SECRET).verify(join.token);
   assert.equal(token.video.room,room); assert.equal(token.sub,ids.david);
   assert.deepEqual(token.video.canPublishSources,['microphone','camera']);
-  assert.equal(token.video.canPublishData,false); assert.equal(token.roomConfig.maxParticipants,4);
+  assert.equal(token.video.canPublishData,false); assert.equal(token.roomConfig.maxParticipants,5);
   assert.equal((await f.json('poll',{available:true},david.credential)).state.call.state,'accepted');
   assert.equal((await f.json('poll',{available:true},ethan.credential)).state.call.porchGuest.state,'joined');
   assert.equal((await f.send('acceptCall',{callID:invite.id,available:true},david.credential)).status,409);

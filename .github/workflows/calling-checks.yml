@@ -2,9 +2,9 @@ name: Calling server checks
 
 on:
   push:
-    paths: ['app/**', 'lib/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
+    paths: ['app/**', 'lib/**', 'scripts/**', 'tests/**', 'translator/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
   pull_request:
-    paths: ['app/**', 'lib/**', 'scripts/**', 'tests/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
+    paths: ['app/**', 'lib/**', 'scripts/**', 'tests/**', 'translator/**', 'package*.json', 'tsconfig.json', '.github/workflows/calling-checks.yml']
   workflow_dispatch:
 
 permissions:
@@ -25,3 +25,21 @@ jobs:
       - run: node --check scripts/check-calling.mjs
       - run: npm run typecheck
       - run: npm run build
+
+  # The call translator (translator/, a LiveKit agent) is its own package, deployed to LiveKit Cloud rather than Vercel.
+  translator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: translator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: translator/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck

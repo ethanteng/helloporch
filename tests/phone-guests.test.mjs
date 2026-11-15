@@ -372,5 +372,5 @@ test('rooms make space for a phone and a family guest, and only caregivers can s
   const verify=async credential=>new TokenVerifier(env.LIVEKIT_API_KEY,env.LIVEKIT_API_SECRET).verify((await f.json('joinCall',{callID},credential)).token);
   const ethan=await verify(family.credential), mom=await verify(bedside.credential);
   assert.equal(ethan.video.canPublishData,true); assert.equal(mom.video.canPublishData,false);
-  assert.equal(ethan.roomConfig.maxParticipants,4);
+  assert.equal(ethan.roomConfig.maxParticipants,5);
 });

@@ -296,7 +296,8 @@ extension Notification.Name {
             if let room {
                 // A bank's hold can be silent, so an added phone keeps the call from ending as quiet.
                 let speaking = room.localParticipant.isSpeaking || room.remoteParticipants.values.contains { $0.isSpeaking || (call?.source == "porch" && $0.kind == .sip) }
-                if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected && audioActive && room.connectionState == .connected && !room.remoteParticipants.isEmpty, speaking: speaking) {
+                let someone = room.remoteParticipants.values.contains { $0.kind != .agent }
+                if inactivity.update(at: ProcessInfo.processInfo.systemUptime, connected: connected && audioActive && room.connectionState == .connected && someone, speaking: speaking) {
                     requestEnd(); return
                 }
             }
@@ -335,6 +336,7 @@ extension Notification.Name {
                 }
                 let room = Room(); self.room = room; room.add(delegate: self)
                 try await room.connect(url: url, token: token)
+                CallTranslationTracks.keepOwn(in: room, bedside: profile.role == .bedside)
                 try Task.checkCancellation()
                 guard uuid == action.callUUID else { await room.disconnect(); action.fail(); return }
                 connected = true
@@ -490,11 +492,20 @@ extension Notification.Name {
         if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask); backgroundTask = .invalid }
     }
     private func changed() { NotificationCenter.default.post(name: .porchSystemCallChanged, object: self) }
+    /// This owns the call's room whether or not its screen is showing, as on a call answered while the phone is locked,
+    /// so it picks which translation track this side hears.
+    nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
+        Task { @MainActor in
+            guard room === self.room else { return }
+            CallTranslationTracks.keepOwn(publication, of: participant, bedside: self.credential?.role == .bedside)
+        }
+    }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         // The bedside is never left on with only a phone a family caregiver added; the caregiver stays on with it.
         Task { @MainActor in
             let bedside = self.credential?.role == .bedside && self.call?.source == "porch"
-            if room === self.room && self.connected && !room.remoteParticipants.values.contains(where: { !bedside || $0.kind != .sip }) { self.finish(reason: .remoteEnded) }
+            // The translator isn't someone to stay on the call with.
+            if room === self.room && self.connected && !room.remoteParticipants.values.contains(where: { $0.kind != .agent && (!bedside || $0.kind != .sip) }) { self.finish(reason: .remoteEnded) }
             else { self.changed() }
         }
     }
@@ -521,6 +532,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private weak var observedRoom: Room?
     private var keypad = CallTrigger()
     private var guests: CallGuestControls?
+    private var translation: CallTranslation?
     private var leftNotice: String?
     private var leftNoticeTask: Task<Void, Never>?
     override var canBecomeFirstResponder: Bool { true }
@@ -588,8 +600,16 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                 .init(call: SystemIncomingCalls.shared.call, canAddPhone: SystemIncomingCalls.shared.canAddPhoneGuests, family: FamilyCoordinator.shared.state(for: credential)?.family ?? [])
             }
         }
+        // On a Porch call between family and the bedside, the family member turns translation on when they need it,
+        // and the bedside shows what the translator says to it.
+        if let credential = calls.familyCredential, let call = calls.call, call.source == "porch", call.guest != true {
+            translation = CallTranslation(bedside: credential.role == .bedside, credential: credential, callID: call.id,
+                                          peerName: calls.callerName, room: { SystemIncomingCalls.shared.room }) {
+                SystemIncomingCalls.shared.call.flatMap { $0.id == call.id ? $0 : nil }
+            }
+        }
         CallScreenLayout.install(in: view, video: stage, preview: calls.isVideo ? localVideo : nil, placeholder: placeholder, title: title, status: status,
-                                 photo: personPhoto.image == nil ? nil : personPhoto, accessory: guests?.bar,
+                                 photo: personPhoto.image == nil ? nil : personPhoto, accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
                                  buttons: [microphone, camera] + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
@@ -603,7 +623,8 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }
         status.text = calls.status
         guests?.refresh()
-        let peers = calls.room?.remoteParticipants.values.map { $0 } ?? []
+        translation?.refresh()
+        let peers = calls.room?.remoteParticipants.values.filter { $0.kind != .agent } ?? []
         let bedside = PorchDevice.experience == .bedside
         // Family see Mom first. The bedside sees whoever called it first.
         let mom = calls.familyCredential.flatMap { FamilyCoordinator.shared.state(for: $0) }?.people.first { $0.role == .bedside }
@@ -629,7 +650,10 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         localVideo.isHidden = localVideo.track == nil
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        Task { @MainActor [weak self] in self?.refresh() }
+        Task { @MainActor [weak self] in self?.translation?.subscribed(publication, of: participant); self?.refresh() }
+    }
+    nonisolated func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
+        Task { @MainActor [weak self] in self?.translation?.receive(data, topic: topic, from: participant) }
     }
     nonisolated func room(_ room: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
         Task { @MainActor [weak self] in self?.refresh() }
@@ -641,14 +665,15 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         Task { @MainActor [weak self] in self?.refresh() }
     }
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor [weak self] in self?.refresh() }
+        Task { @MainActor [weak self] in self?.translation?.peopleChanged(); self?.refresh() }
     }
     /// The bedside says when someone leaves a call that goes on, such as Ethan leaving Mom and David talking.
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         let name = participant.name, kind = participant.kind
         Task { @MainActor [weak self] in
-            guard let self, PorchDevice.experience == .bedside, kind != .sip, let name, !name.isEmpty,
-                  SystemIncomingCalls.shared.room?.remoteParticipants.isEmpty == false else { return }
+            self?.translation?.peopleChanged()
+            guard let self, PorchDevice.experience == .bedside, kind != .sip, kind != .agent, let name, !name.isEmpty,
+                  SystemIncomingCalls.shared.room?.remoteParticipants.values.contains(where: { $0.kind != .agent }) == true else { return }
             self.leftNotice = BedsideText.string("%@ left the call", name); self.leftNoticeTask?.cancel()
             self.leftNoticeTask = Task { [weak self] in
                 do { try await Task.sleep(nanoseconds: 6_000_000_000) } catch { return }

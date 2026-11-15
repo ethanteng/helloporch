@@ -61,6 +61,19 @@ public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let porchGuest: FamilyPorchGuest?
     /// This device was rung into someone else's call with the bedside: `from` rang it in, and `id` is its invitation.
     public let guest: Bool?
+    /// Live translation on this call, once someone has turned it on. Older servers don't send it.
+    public let translation: FamilyCallTranslation?
+    /// The family member on the call can turn translation on: the bedside's app can show it.
+    public let translationAvailable: Bool?
+}
+/// Live translation on a call with the bedside: on or off, and the language the bedside hears.
+public struct FamilyCallTranslation: Codable, Equatable {
+    public let on: Bool
+    /// A `BedsideLanguage` raw value.
+    public let language: String
+    /// Who last turned it on or off, or changed the language.
+    public let by: String
+    public let at: TimeInterval
 }
 /// A family member rung into a call with the bedside, and how their invitation went.
 public struct FamilyPorchGuest: Codable, Equatable {
