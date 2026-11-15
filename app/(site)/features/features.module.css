@@ -103,6 +103,24 @@
   scroll-margin-top: 24px;
 }
 
+/* A widescreen film takes the whole row, with its copy beside it. */
+.wide {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 3vw, 40px);
+  padding: 12px clamp(24px, 3vw, 44px) 12px 12px;
+}
+
+.wide .clipCopy {
+  padding: 0;
+}
+
+.wide .clipCopy h2 {
+  font-size: clamp(28px, 3vw, 36px);
+}
+
 /* Copy above the picture: the roomier padding moves to the top. */
 .textFirst {
   padding: 32px 12px 12px;
@@ -120,6 +138,10 @@
   height: auto;
   aspect-ratio: 9 / 16;
   object-fit: cover;
+}
+
+.wide .player video {
+  aspect-ratio: 16 / 9;
 }
 
 .player > p {
@@ -170,6 +192,16 @@
 
   .clip {
     flex-basis: 100%;
+  }
+
+  /* On a phone the film sits above its copy, like the clips. */
+  .wide {
+    display: flex;
+    padding: 12px 12px 32px;
+  }
+
+  .wide .clipCopy {
+    padding: 0 14px;
   }
 }
 
