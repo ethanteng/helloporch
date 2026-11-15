@@ -610,14 +610,14 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }
         CallScreenLayout.install(in: view, video: stage, preview: calls.isVideo ? localVideo : nil, placeholder: placeholder, title: title, status: status,
                                  photo: personPhoto.image == nil ? nil : personPhoto, accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
-                                 buttons: [microphone, camera] + (guests.map { [$0.addButton] } ?? []) + [end])
+                                 buttons: [microphone, camera] + [translation?.button].compactMap { $0 } + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
         refresh()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
-        guard calls.hasCall else { stage.show([]); localVideo.track = nil; dismiss(animated: true); return }
+        guard calls.hasCall else { stage.show([]); localVideo.track = nil; closeCallScreen(animated: true); return }
         if let room = calls.room, room !== observedRoom {
             room.add(delegate: self); observedRoom = room
         }
