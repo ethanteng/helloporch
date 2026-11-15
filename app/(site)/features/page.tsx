@@ -7,7 +7,7 @@ import { JoinSection, PilotButton } from "@/components/PilotJoin";
 import { WaitlistProvider } from "@/components/Waitlist";
 import { pageMetadata } from "@/lib/site-metadata";
 import FeatureTabs from "./FeatureTabs";
-import { accessibility, calling, clip, safety, type Clip, type Screenshot } from "./clips";
+import { accessibility, calling, clip, safety, translation, type Clip, type Screenshot } from "./clips";
 import styles from "./features.module.css";
 import Story from "./Story";
 import story from "./story.module.css";
@@ -94,6 +94,7 @@ export default function FeaturesPage() {
                   label: "Calling",
                   content: <Clips clips={calling} />,
                 },
+                { id: "translation", label: "Translation", content: <Clips clips={translation} /> },
                 { id: "accessibility", label: "Accessibility", content: <Clips clips={accessibility} /> },
                 { id: "safety", label: "Safety", content: <Screenshots shots={safety} /> },
               ]}
