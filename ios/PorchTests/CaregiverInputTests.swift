@@ -2187,19 +2187,22 @@ final class CallScreenLayoutTests: XCTestCase {
         let window = UIWindow(windowScene: scene)
         let home = UIViewController(), call = UIViewController(), sheet = UIViewController()
         window.rootViewController = home; window.makeKeyAndVisible()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        defer { window.isHidden = true }
+        // Opening and closing screens takes a few turns of the run loop, more on a busy CI simulator.
+        func wait(until done: () -> Bool) {
+            let deadline = Date().addingTimeInterval(5)
+            while !done(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        }
+        wait { window.isKeyWindow && home.view.window != nil }
         home.present(call, animated: false)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        wait { home.presentedViewController === call && call.view.window != nil && !call.isBeingPresented }
         call.present(sheet, animated: false)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        wait { call.presentedViewController === sheet && sheet.view.window != nil && !sheet.isBeingPresented }
         XCTAssertTrue(home.presentedViewController === call)
         XCTAssertTrue(call.presentedViewController === sheet)
         call.closeCallScreen(animated: false)
-        // Closing a stack of screens takes a few turns of the run loop.
-        let deadline = Date().addingTimeInterval(2)
-        while home.presentedViewController != nil, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        wait { home.presentedViewController == nil }
         XCTAssertNil(home.presentedViewController)
-        window.isHidden = true
     }
 
     @MainActor func testSelfViewIsTheUsualSizeAndTurnsWithTheScreen() throws {
