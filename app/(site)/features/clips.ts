@@ -8,7 +8,7 @@ export type Clip = {
   duration: string;
   src: string;
   poster: string;
-  /** A 16:9 film rather than a portrait clip. It sits in the same card, at its own shape rather than cropped. */
+  /** A 16:9 film rather than a portrait clip: the same card, at its own shape rather than cropped, on a row of its own. */
   landscape?: boolean;
 };
 

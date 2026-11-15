@@ -110,7 +110,20 @@ export default function FeaturesPage() {
   );
 }
 
+// A widescreen film is much shorter than the portrait clips, so beside them its card would stretch to their height.
+// It gets a row of its own after them instead, where the card is only as tall as what's in it.
 function Clips({ clips }: { clips: Clip[] }) {
+  const portrait = clips.filter((clip) => !clip.landscape);
+  const landscape = clips.filter((clip) => clip.landscape);
+  return (
+    <div className={styles.clipRows}>
+      <ClipRow clips={portrait} />
+      {landscape.length > 0 ? <ClipRow clips={landscape} /> : null}
+    </div>
+  );
+}
+
+function ClipRow({ clips }: { clips: Clip[] }) {
   return (
     <div className={styles.clips}>
       {clips.map((clip) => (

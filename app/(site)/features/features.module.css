@@ -83,6 +83,13 @@
   width: 100%;
 }
 
+/* The portrait clips, then a row for any widescreen film, the same gap apart as rows of clips. */
+.clipRows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /* Three to a row, with a short last row centered. */
 .clips {
   display: flex;
@@ -167,6 +174,10 @@
 }
 
 @media (max-width: 900px) {
+  .clipRows {
+    gap: 24px;
+  }
+
   .clips {
     max-width: 440px;
     margin-inline: auto;
