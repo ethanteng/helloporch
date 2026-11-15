@@ -8,8 +8,8 @@ export type Clip = {
   duration: string;
   src: string;
   poster: string;
-  /** A 16:9 film rather than a portrait clip: it takes a whole row, beside its copy. */
-  wide?: boolean;
+  /** A 16:9 film rather than a portrait clip. It sits in the same card, at its own shape rather than cropped. */
+  landscape?: boolean;
 };
 
 export type Screenshot = {
@@ -34,7 +34,7 @@ const liveTranslation: Clip = {
   duration: "59 sec",
   src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/helloporch-live-translation.mp4",
   poster: "/features/live-translation.jpg",
-  wide: true,
+  landscape: true,
 };
 
 const translatedTexts: Clip = {
@@ -58,7 +58,6 @@ const multiLanguage: Clip = {
 };
 
 export const calling: Clip[] = [
-  { ...liveTranslation, id: "live-translation-calling" },
   {
     id: "first-real-call",
     title: "Mom’s first real call",
@@ -122,12 +121,13 @@ export const calling: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/3-way%20calling%20v2%20compressed.mp4",
     poster: "/features/three-way-calling.jpg",
   },
+  { ...liveTranslation, id: "live-translation-calling" },
 ];
 
-export const translation: Clip[] = [liveTranslation, translatedTexts, multiLanguage];
+// Wherever they appear, the language clips go in this order, live translation last.
+export const translation: Clip[] = [multiLanguage, translatedTexts, liveTranslation];
 
 export const accessibility: Clip[] = [
-  { ...liveTranslation, id: "live-translation-accessibility" },
   { ...multiLanguage, id: "multi-language-accessibility" },
   { ...translatedTexts, id: "translated-texts-accessibility" },
   {
@@ -139,6 +139,7 @@ export const accessibility: Clip[] = [
     src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Form%20factor%20selection%20with%20closing%20card%20compressed.mp4",
     poster: "/features/choosing-the-keypad.jpg",
   },
+  { ...liveTranslation, id: "live-translation-accessibility" },
 ];
 
 export const safety: Screenshot[] = [
