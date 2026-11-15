@@ -1,4 +1,4 @@
-// Short portrait clips of the Porch prototype, grouped by tab on the features page.
+// Short portrait clips of the Porch prototype, grouped by tab on the features page, and the odd widescreen film.
 // Posters are caption-free frames (or crops) from the clips, so the player controls don't cover burned-in text.
 // Settings with nothing to watch get a screenshot instead, cropped to the part of the screen that matters.
 export type Clip = {
@@ -8,6 +8,8 @@ export type Clip = {
   duration: string;
   src: string;
   poster: string;
+  /** A 16:9 film rather than a portrait clip: it takes a whole row, beside its copy. */
+  wide?: boolean;
 };
 
 export type Screenshot = {
@@ -20,7 +22,21 @@ export type Screenshot = {
 };
 
 // The language clips live under Translation and are shown again under Calling and Accessibility. Every tab is in
-// the page at once, so each copy takes its own id; the plain ids (#translated-texts, #multi-language) open Translation.
+// the page at once, so each copy takes its own id; the plain ids (#live-translation, #translated-texts,
+// #multi-language) open Translation.
+
+// The launch film for in-call translation, the story from the launch email.
+const liveTranslation: Clip = {
+  id: "live-translation",
+  title: "Live translation on our calls",
+  description:
+    "My mom speaks Mandarin, and my Mandarin doesn’t go much past asking where the bathroom is. Everyday chats are fine, but harder talks, like her health or a doctor’s appointment, used to fall apart. Now I can turn on translation during a call: she hears me in Mandarin and I hear her in English, even when I mix the two.",
+  duration: "59 sec",
+  src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/helloporch-live-translation.mp4",
+  poster: "/features/live-translation.jpg",
+  wide: true,
+};
+
 const translatedTexts: Clip = {
   id: "translated-texts",
   title: "I text in English, Mom hears it in Mandarin",
@@ -42,6 +58,7 @@ const multiLanguage: Clip = {
 };
 
 export const calling: Clip[] = [
+  { ...liveTranslation, id: "live-translation-calling" },
   {
     id: "first-real-call",
     title: "Mom’s first real call",
@@ -107,9 +124,10 @@ export const calling: Clip[] = [
   },
 ];
 
-export const translation: Clip[] = [translatedTexts, multiLanguage];
+export const translation: Clip[] = [liveTranslation, translatedTexts, multiLanguage];
 
 export const accessibility: Clip[] = [
+  { ...liveTranslation, id: "live-translation-accessibility" },
   { ...multiLanguage, id: "multi-language-accessibility" },
   { ...translatedTexts, id: "translated-texts-accessibility" },
   {
