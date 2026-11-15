@@ -617,7 +617,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
-        guard calls.hasCall else { stage.show([]); localVideo.track = nil; dismiss(animated: true); return }
+        guard calls.hasCall else { stage.show([]); localVideo.track = nil; closeCallScreen(animated: true); return }
         if let room = calls.room, room !== observedRoom {
             room.add(delegate: self); observedRoom = room
         }

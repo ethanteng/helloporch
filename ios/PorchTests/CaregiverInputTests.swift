@@ -2181,6 +2181,27 @@ final class CallScreenLayoutTests: XCTestCase {
         window.isHidden = true
     }
 
+    @MainActor func testEndingACallClosesWhatTheCallScreenPresented() throws {
+        // Such as the translation sheet, open when the other person hangs up.
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let home = UIViewController(), call = UIViewController(), sheet = UIViewController()
+        window.rootViewController = home; window.makeKeyAndVisible()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        home.present(call, animated: false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        call.present(sheet, animated: false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertTrue(home.presentedViewController === call)
+        XCTAssertTrue(call.presentedViewController === sheet)
+        call.closeCallScreen(animated: false)
+        // Closing a stack of screens takes a few turns of the run loop.
+        let deadline = Date().addingTimeInterval(2)
+        while home.presentedViewController != nil, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        XCTAssertNil(home.presentedViewController)
+        window.isHidden = true
+    }
+
     @MainActor func testSelfViewIsTheUsualSizeAndTurnsWithTheScreen() throws {
         // Like most calling apps: 30% of the short side, at most 200 points, upright on an upright screen.
         let screen = UIViewController(), remote = VideoView(), preview = VideoView()

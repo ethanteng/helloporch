@@ -211,6 +211,15 @@ import PorchCore
     }
 }
 
+extension UIViewController {
+    /// Closes a call screen and anything it presented, such as the translation sheet or Add someone's menu. Called on a
+    /// screen that has presented another, `dismiss` would close only that one and leave the ended call on screen.
+    func closeCallScreen(animated: Bool, completion: (() -> Void)? = nil) {
+        if let presenter = presentingViewController { presenter.dismiss(animated: animated, completion: completion) }
+        else { dismiss(animated: animated, completion: completion) }
+    }
+}
+
 /// A call's buttons, sharing one row while each button's longest word fits, and wrapping into even rows when they
 /// don't, such as Translate joining Mute, Camera off, Add someone and End call on a phone: Mute, Camera off and
 /// Translate, then Add someone and End call. Hidden buttons take no room.
@@ -941,7 +950,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                 }
             }
             if message != nil { try? await Task.sleep(nanoseconds: 1_500_000_000) }
-            dismiss(animated: true) {
+            closeCallScreen(animated: true) {
                 Cell2JackKeypad.shared.record(["kind": "callScreenClosed"])
                 // Read on the main queue, same as a receiver hang-up, after the disconnect wait.
                 if self.skipUnansweredHandoff { self.skipUnansweredHandoff = false; return }
