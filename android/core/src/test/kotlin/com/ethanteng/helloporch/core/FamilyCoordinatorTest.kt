@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -81,9 +82,10 @@ class FamilyCoordinatorTest {
         assertEquals(listOf(1L, 2L), listOf(first, second).map { it["sequence"]!!.jsonPrimitive.content.toLong() })
         assertNull(first["attendedSeconds"], "only the bedside says when someone was there")
         assertNull(first["language"], "only the bedside says its language")
+        assertNull(first["features"], "or what it can show")
     }
 
-    @Test fun theBedsideSaysItsLanguageButNotThatItCanShowTranslation() = runTest {
+    @Test fun theBedsideSaysItsLanguageAndThatItCanShowTranslation() = runTest {
         val tablet = FamilyHarness(this, canBeBedside = true)
         tablet.device.save(TestFamilies.bedside(1))
         tablet.bedsideLanguage = BedsideLanguage.TRADITIONAL_CHINESE
@@ -93,7 +95,7 @@ class FamilyCoordinatorTest {
         val poll = tablet.transport.requests("poll").first()
         // Phone voicemail and call translation follow it without anyone saving Display & voice.
         assertEquals(JsonPrimitive("zh-Hant"), poll["language"])
-        assertNull(poll["features"], "this app can't show a call's translation yet")
+        assertEquals(JsonArray(listOf(JsonPrimitive("translation"))), poll["features"], "so the family phone offers Translate")
     }
 
     /** A family's household is noted as it checks in, so a call that rings before the next check-in can say which
