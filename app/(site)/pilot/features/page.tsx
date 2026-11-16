@@ -128,7 +128,7 @@ const parts: GuidePart[] = [
           width={1600}
           height={1103}
           device="tablet"
-          alt="Check key 8 in caregiver mode on the iPad: Tom Reyes’s button as Rose’s screen will show it, with Press 8, a Photo button and six colors, rows for Porch app, Phone and Key, and an Add to key 8 button."
+          alt="Check key 8 in caregiver mode on the iPad: Tom Reyes’s button as Rose’s screen will show it, with Press 8 and six colors, rows for Porch app, Phone and Key, and an Add to key 8 button."
           caption="Checking key 8 before adding Tom."
         />
         <p>
