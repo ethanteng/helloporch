@@ -6,7 +6,5 @@ export const shopping = {
   // I flash, test and mail the Porch phone adapter.
   adapter: { price: "Free" },
   hub: { price: "About $19", href: "https://www.amazon.com/dp/B0BQLLB61B" },
-  // For an iPad with a Lightning port, in place of the USB-C hub.
-  lightningHub: { price: "About $8", href: "https://www.amazon.com/dp/B0F8NHNBG8" },
   stand: { price: "About $30", href: "https://www.amazon.com/dp/B0H3N2YPKJ" },
 } as const;

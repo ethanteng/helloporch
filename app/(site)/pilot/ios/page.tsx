@@ -13,11 +13,13 @@ export const metadata = guideMetadata(
 );
 
 const kit: KitPart[] = [
-  { name: "An iPad", rule: "iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
+  { name: "An iPad", rule: "With a USB-C port and iPadOS 15 or later", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Connects the phone to the iPad", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
   { name: "The Porch phone adapter", rule: "I will mail it to you", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "Two USB-C cables", rule: "One for the Porch phone adapter, one for the charger", photo: "/pilot/usb-c-cables.svg" },
+  { name: "A USB-C charger", rule: "Plugs into the wall or a power strip", photo: "/pilot/power-adapter.svg" },
   { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
 
@@ -88,38 +90,26 @@ const parts: GuidePart[] = [
     id: "ipad",
     title: "Get the iPad ready",
     body: (
-      <>
-        <ol>
-          <li>
-            <strong>Charge it and connect it to Wi-Fi.</strong> If you’re setting up at your loved one’s home, use their Wi-Fi.
-          </li>
-          <li>
-            <strong>Update it.</strong> Open <UI>Settings</UI>, then <UI>General</UI> and <UI>Software Update</UI>.
-            Porch needs iPadOS 15 or later.
-          </li>
-          <li>
-            <strong>Check the date and time.</strong> Under <UI>Settings</UI>, <UI>General</UI>,{" "}
-            <UI>Date &amp; Time</UI>, make sure <UI>Set Automatically</UI> is on.
-          </li>
-          <li>
-            <strong>Sign in to the App Store</strong> with an Apple ID, so the iPad can install TestFlight.
-          </li>
-          <li>
-            <strong>Have your setup link ready on the iPad.</strong> Open it from email or messages, or
-            send it from your iPhone using AirDrop.
-          </li>
-        </ol>
-        <Tip label="An older iPad?">
-          <p>
-            If your iPad has a Lightning charging port rather than USB-C, you’ll need a Lightning adapter
-            with a charging port, such as{" "}
-            <a href={shopping.lightningHub.href} target="_blank" rel="noopener noreferrer">
-              this one on Amazon
-            </a>{" "}
-            ({shopping.lightningHub.price.toLowerCase()}). Not sure which one to get? Ask me before buying.
-          </p>
-        </Tip>
-      </>
+      <ol>
+        <li>
+          <strong>Charge it and connect it to Wi-Fi.</strong> If you’re setting up at your loved one’s home, use their Wi-Fi.
+        </li>
+        <li>
+          <strong>Update it.</strong> Open <UI>Settings</UI>, then <UI>General</UI> and <UI>Software Update</UI>.
+          Porch needs iPadOS 15 or later.
+        </li>
+        <li>
+          <strong>Check the date and time.</strong> Under <UI>Settings</UI>, <UI>General</UI>,{" "}
+          <UI>Date &amp; Time</UI>, make sure <UI>Set Automatically</UI> is on.
+        </li>
+        <li>
+          <strong>Sign in to the App Store</strong> with an Apple ID, so the iPad can install TestFlight.
+        </li>
+        <li>
+          <strong>Have your setup link ready on the iPad.</strong> Open it from email or messages, or
+          send it from your iPhone using AirDrop.
+        </li>
+      </ol>
     ),
   },
   {
@@ -181,13 +171,14 @@ const parts: GuidePart[] = [
         />
         <ol>
           <li>
-            <strong>Plug the iPad’s charger into the hub first,</strong> then connect the hub to the iPad.
-            This powers the iPad, adapter and Cell2Jack.
+            <strong>Power the hub first.</strong> Plug the charger into the wall or a power strip, and connect it to the
+            hub’s charging port with a USB-C cable. Then connect the hub to the iPad. This powers the iPad, adapter and
+            Cell2Jack.
           </li>
           <li>Plug the phone’s cord into the Cell2Jack, and the Cell2Jack’s USB cable into the adapter.</li>
           <li>
-            Plug the adapter’s USB-C cable into the hub. The adapter’s red light blinks, then stays on. That takes a few
-            seconds.
+            Connect the adapter to the hub with the other USB-C cable. The adapter’s red light blinks, then stays on. That
+            takes a few seconds.
           </li>
         </ol>
         <Tip label="If Porch says the iPad has an M chip">

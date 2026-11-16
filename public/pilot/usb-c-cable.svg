@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A USB-C cable">
+  <rect width="400" height="300" fill="#f2d39f"/>
+  <g transform="translate(200 150) scale(0.8) translate(-200 -150)">
+  <ellipse cx="205" cy="238" rx="120" ry="12" fill="#3a2a21" opacity="0.08"/>
+  <path d="M100.0,150.0 a92,58 0 1,0 184,0 a92,58 0 1,0 -184,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M100.0,150.0 a92,58 0 1,0 184,0 a92,58 0 1,0 -184,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M108.6,125.5 Q88,112 78,70" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M108.6,125.5 Q88,112 78,70" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(78.0 70.0) rotate(-13.4)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="-7.5" y="-8" width="15" height="14" rx="4" fill="#fdfcf8"/>
+    <rect x="-15" y="-48" width="30" height="42" rx="9" fill="#fdfcf8"/>
+    <rect x="-10.5" y="-64" width="21" height="17" rx="4" fill="#d6d9dd"/>
+    <rect x="-6.5" y="-60" width="3" height="10" rx="1.5" fill="#ffffff" stroke="none" opacity="0.8"/>
+  </g>
+  <path d="M108.0,158.0 a92,58 0 1,0 184,0 a92,58 0 1,0 -184,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M108.0,158.0 a92,58 0 1,0 184,0 a92,58 0 1,0 -184,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M116.0,166.0 a92,58 0 1,0 184,0 a92,58 0 1,0 -184,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M116.0,166.0 a92,58 0 1,0 184,0 a92,58 0 1,0 -184,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M291.4,190.5 Q312,214 330,250" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M291.4,190.5 Q312,214 330,250" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(330.0 250.0) rotate(153.4)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="-7.5" y="-8" width="15" height="14" rx="4" fill="#fdfcf8"/>
+    <rect x="-15" y="-48" width="30" height="42" rx="9" fill="#fdfcf8"/>
+    <rect x="-10.5" y="-64" width="21" height="17" rx="4" fill="#d6d9dd"/>
+    <rect x="-6.5" y="-60" width="3" height="10" rx="1.5" fill="#ffffff" stroke="none" opacity="0.8"/>
+  </g>
+  </g>
+</svg>

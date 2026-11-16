@@ -13,6 +13,8 @@ const kit: KitPart[] = [
   { name: "A big-button corded phone", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Connects the phone to the tablet", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
   { name: "A USB-C hub", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "A USB-C cable", rule: "For the charger", photo: "/pilot/usb-c-cable.svg" },
+  { name: "A USB-C charger", rule: "Plugs into the wall or a power strip", photo: "/pilot/power-adapter.svg" },
   { name: "A sturdy stand", rule: "Optional", ...shopping.stand, photo: "/pilot/stand.jpg" },
 ];
 
@@ -145,7 +147,10 @@ const parts: GuidePart[] = [
         <Chain label="How it connects" items={["Corded phone", "Cell2Jack", "USB-C hub", "Tablet"]} />
         <ol>
           <li>Plug the phone’s cord into the Cell2Jack. Then plug the Cell2Jack’s USB cable into the hub.</li>
-          <li>Connect the hub to the tablet, then plug the tablet’s charger into the hub’s charging port.</li>
+          <li>
+            Connect the hub to the tablet. Then plug the charger into the wall or a power strip, and connect it to the
+            hub’s charging port with the USB-C cable.
+          </li>
           <li>
             When Android asks whether Porch can use the Cell2Jack, select the option to{" "}
             <strong>always open Porch</strong> and tap <UI>OK</UI>. If you miss the prompt, tap{" "}

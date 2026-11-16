@@ -95,7 +95,7 @@
 
 .kitGrid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 20px 16px;
   margin: 0;
   padding: 0;
@@ -335,9 +335,6 @@
 @media (max-width: 1140px) {
   .stepRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .kitGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
