@@ -426,7 +426,7 @@ final class AddCheckViewController: AddSomeoneScreen {
             circle.backgroundColor = foreground.withAlphaComponent(0.16)
             let initials = UILabel()
             initials.text = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-            initials.font = .systemFont(ofSize: 23, weight: .semibold)
+            initials.font = PorchFonts.sans(23, weight: .semibold)
             initials.textColor = foreground
             FamilyAdminViewController.center(initials, in: circle)
             picture = circle

@@ -429,8 +429,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         }
         let label = UILabel()
         label.text = initials
-        label.font = .systemFont(ofSize: size * 0.36, weight: .semibold)
-        label.textColor = PorchStyle.accent
+        label.font = PorchFonts.sans(size * 0.36, weight: .semibold)
+        label.textColor = PorchStyle.ink
         center(label, in: badge)
         return badge
     }
@@ -445,7 +445,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     }
     static func circle(size: CGFloat) -> UIView {
         let circle = UIView()
-        circle.backgroundColor = PorchStyle.accent.withAlphaComponent(0.12)
+        // Honey, as a placeholder photo on the website and on Android.
+        circle.backgroundColor = PorchStyle.honey
         circle.layer.cornerRadius = size / 2
         circle.isAccessibilityElement = false
         NSLayoutConstraint.activate([circle.widthAnchor.constraint(equalToConstant: size), circle.heightAnchor.constraint(equalToConstant: size)])

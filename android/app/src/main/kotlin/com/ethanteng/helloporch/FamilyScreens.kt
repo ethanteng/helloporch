@@ -436,7 +436,7 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
         if (needed.isEmpty()) app.calls.call(call.person, call.mode, call.family, call.dropIn)
         else { request = call; permissions.launch(needed.toTypedArray()) }
     }
-    FormScreen("Porch") {
+    FormScreen("Porch", wordmark = true) {
         RingWhenClosed(app)
         val several = families.size > 1
         for (family in families) {
@@ -451,10 +451,10 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(name, size = 56.dp)
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(name, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            Text(name, Modifier.semantics { heading() }, style = porchTitleStyle().copy(fontSize = 24.sp))
                             familyName?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             Text(status, style = MaterialTheme.typography.bodyLarge, fontWeight = if (present) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (present) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                color = if (present) PorchBrand.go else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     when {
@@ -520,7 +520,7 @@ private fun CallButton(text: String, @DrawableRes icon: Int, label: String, enab
     }
     val described = modifier.heightIn(min = 50.dp).semantics { contentDescription = label }
     val padding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-    if (filled) Button(onClick, described, enabled = enabled, contentPadding = padding, content = content)
+    if (filled) Button(onClick, described, enabled = enabled, colors = porchButtonColors(), contentPadding = padding, content = content)
     else OutlinedButton(onClick, described, enabled = enabled, contentPadding = padding, content = content)
 }
 

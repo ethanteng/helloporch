@@ -578,10 +578,10 @@ private fun DevicePage(app: PorchApplication, onScreen: (CaregiverScreen) -> Uni
 private fun PhoneStatusRow(connected: Boolean) {
     val colors = MaterialTheme.colorScheme
     CaregiverRow {
-        Surface(Modifier.size(28.dp), shape = CircleShape, color = if (connected) colors.primary else Color(0.98f, 0.74f, 0.24f, 0.26f)) {
+        Surface(Modifier.size(28.dp), shape = CircleShape, color = if (connected) PorchBrand.go else Color(0.98f, 0.74f, 0.24f, 0.26f)) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(painterResource(if (connected) R.drawable.ic_check else R.drawable.ic_priority_high), contentDescription = null,
-                    Modifier.size(18.dp), tint = if (connected) colors.onPrimary else Color(0.52f, 0.32f, 0f))
+                    Modifier.size(18.dp), tint = if (connected) Color.White else Color(0.52f, 0.32f, 0f))
             }
         }
         Text(if (connected) "The phone is connected" else "The phone isn't connected", Modifier.weight(1f).testTag("device.phoneStatus"),

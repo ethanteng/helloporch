@@ -108,15 +108,18 @@ fun PorchRoot(
         bedside && voicemail != null -> BedsideVoicemailScreen(app, voicemail)
         bedside && playback != null -> MessagePlayerScreen(app, playback)
         family -> PorchTheme { FamilyScreens(app, if (joining) link else null, onLinkHandled, onReady = { familyReady = it }) }
-        welcoming && page == WelcomePage.ON_TABLET -> BedsideOnTablet(onJoin = { page = WelcomePage.JOINING }, onBack = { page = WelcomePage.WELCOME })
-        welcoming -> Welcome(
-            onSetUp = {
-                if (app.device.canBeBedside) { app.switchExperience(PorchExperience.BEDSIDE); setup.start() } else page = WelcomePage.ON_TABLET
-            },
-            onJoin = { page = WelcomePage.JOINING })
-        setup.open -> BedsideSetupFlow(app, setup, cordedPhoneSetup)
-        setup.unlocking -> CaregiverGate(setup)
-        setup.caregiver -> CaregiverMode(app, links, onClose = setup::closeCaregiver)
+        // Setup and caregiver screens have the family app's look; the clock, calls and messages keep the system font.
+        welcoming && page == WelcomePage.ON_TABLET -> PorchTheme { BedsideOnTablet(onJoin = { page = WelcomePage.JOINING }, onBack = { page = WelcomePage.WELCOME }) }
+        welcoming -> PorchTheme {
+            Welcome(
+                onSetUp = {
+                    if (app.device.canBeBedside) { app.switchExperience(PorchExperience.BEDSIDE); setup.start() } else page = WelcomePage.ON_TABLET
+                },
+                onJoin = { page = WelcomePage.JOINING })
+        }
+        setup.open -> PorchTheme { BedsideSetupFlow(app, setup, cordedPhoneSetup) }
+        setup.unlocking -> PorchTheme { CaregiverGate(setup) }
+        setup.caregiver -> PorchTheme { CaregiverMode(app, links, onClose = setup::closeCaregiver) }
         // The dialogs below cover the clock, so its presence camera stops while one shows.
         else -> BedsideHome(app, links, setup, covered = notice != null || calls.error != null || replacement != null)
     }

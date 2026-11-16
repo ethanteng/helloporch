@@ -13,8 +13,8 @@ import PorchCore
     let addButton = UIButton(type: .system)
     /// Who is being added and what the added phone is doing, with its keypad and hang-up; hidden until needed.
     let bar = UIStackView()
-    private let porchStatus = PorchStyle.label("", size: 17, color: .white, weight: .semibold)
-    private let status = PorchStyle.label("", size: 17, color: .white, weight: .semibold)
+    private let porchStatus = PorchStyle.systemLabel("", size: 17, color: .white, weight: .semibold)
+    private let status = PorchStyle.systemLabel("", size: 17, color: .white, weight: .semibold)
     private let phoneRow = UIStackView()
     private let keypadButton = UIButton(type: .system)
     private let hangUpButton = UIButton(type: .system)

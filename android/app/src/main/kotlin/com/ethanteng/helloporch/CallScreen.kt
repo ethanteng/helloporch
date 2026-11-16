@@ -70,8 +70,10 @@ internal object CallColors {
     val text = PorchColors.nightText
     val secondary = PorchColors.nightSecondary
     val control = PorchColors.nightSurface
-    val end = Color(0.68f, 0.19f, 0.19f)
-    val answer = Color(0xFF2E7D32)
+    val end = PorchBrand.danger
+    val answer = PorchBrand.go
+    /** Translating: the cream page, with ink words, lit up among the dark buttons. */
+    val on = PorchBrand.page
 }
 
 /**
@@ -218,14 +220,14 @@ fun VideoTrackView(room: Room, track: VideoTrack?, modifier: Modifier, mirror: B
 
 @Composable
 internal fun CallButton(title: String, enabled: Boolean, onClick: () -> Unit, app: PorchApplication, modifier: Modifier = Modifier,
-    color: Color = CallColors.control, translated: Boolean = false) {
+    color: Color = CallColors.control, translated: Boolean = false, textColor: Color = Color.White) {
     // Three buttons share a phone's width, so the words get the room a button's usual padding would take.
     val narrow = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() } < 600.dp
     Button(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 64.dp),
         contentPadding = PaddingValues(horizontal = if (narrow) 8.dp else 16.dp, vertical = 8.dp),
         // Names use the night text color. Controls stay white, as on iOS, so End and Answer stay readable on red and green.
-        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White,
-            disabledContainerColor = color.copy(alpha = 0.4f), disabledContentColor = Color.White.copy(alpha = 0.6f))) {
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = textColor,
+            disabledContainerColor = color.copy(alpha = 0.4f), disabledContentColor = textColor.copy(alpha = 0.6f))) {
         Text(if (translated) title else BedsideText.string(app, title), fontSize = if (narrow) 16.sp else 20.sp, maxLines = 1,
             softWrap = false, overflow = TextOverflow.Ellipsis)
     }

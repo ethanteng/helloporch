@@ -53,7 +53,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
     private var displayed: Presentation?
     override func viewDidLoad() {
         // Not `title`, which would rename the Call tab too.
-        super.viewDidLoad(); navigationItem.title = "Porch"
+        super.viewDidLoad(); navigationItem.title = "Porch"; navigationItem.titleView = PorchWordmark()
         cards.axis = .vertical; cards.spacing = 16
         status.textAlignment = .center
         form.spacing = 16
@@ -114,7 +114,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         for credential in credentials {
             let (text, present) = Self.status(of: coordinator.link(for: credential)), label = statusLine(for: credential)
             label.text = text
-            label.textColor = present ? PorchStyle.accent : PorchStyle.secondary
+            label.textColor = present ? PorchStyle.go : PorchStyle.secondary
             label.font = PorchStyle.font(16, weight: present ? .semibold : .regular)
         }
         // Ringing while locked is what's expected, so only its absence is mentioned.
@@ -135,7 +135,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         for (credential, card) in zip(credentials, next.cards) { cards.addArrangedSubview(view(for: card, credential: credential, in: next)) }
     }
     private func view(for card: Card, credential: FamilyCredential, in presentation: Presentation) -> UIView {
-        let name = PorchStyle.label(card.name, size: 21, color: PorchStyle.ink, weight: .semibold)
+        let name = PorchStyle.label(card.name, size: 21, color: PorchStyle.ink)
+        name.font = PorchStyle.titleFont(24)
         name.accessibilityTraits = .header
         let text = UIStackView(arrangedSubviews: [name] + (card.family.map { [PorchStyle.label($0, size: 15)] } ?? []) + [statusLine(for: credential)])
         text.axis = .vertical; text.spacing = 2
@@ -512,7 +513,7 @@ final class CallHistoryViewController: CaregiverFormViewController {
         let video = call.via == "porch" && call.mode == .video
         let symbol = call.isIncoming ? (video ? "arrow.down.left.video" : "phone.arrow.down.left") : (video ? "arrow.up.right.video" : "phone.arrow.up.right")
         let icon = UIImageView(image: UIImage(systemName: symbol))
-        icon.tintColor = call.isMissed ? .systemRed : PorchStyle.accent
+        icon.tintColor = call.isMissed ? .systemRed : PorchStyle.secondary
         icon.contentMode = .scaleAspectFit
         icon.setContentHuggingPriority(.required, for: .horizontal)
         icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
@@ -730,8 +731,8 @@ final class IncomingFamilyCallViewController: UIViewController {
     private let countdown = UILabel()
     private let callerContact: CallContact?
     private let callerPhoto: Data?
-    private let answer = PorchStyle.button("Answer", symbol: "phone.fill")
-    private let keypadHint = PorchStyle.label("", size: 18, color: PorchStyle.nightSecondary)
+    private let answer = PorchStyle.systemButton("Answer", symbol: "phone.fill")
+    private let keypadHint = PorchStyle.systemLabel("", size: 18, color: PorchStyle.nightSecondary)
     private let audio: IncomingCallAudioPlaying
     private var timer: Timer?
     private var remaining = 5
@@ -796,13 +797,14 @@ final class IncomingFamilyCallViewController: UIViewController {
     required init?(coder: NSCoder) { fatalError("Use init(call:credential:)") }
     override func viewDidLoad() {
         super.viewDidLoad(); overrideUserInterfaceStyle = .dark; view.backgroundColor = PorchStyle.night
-        let name = PorchStyle.label(session.peerName, size: 48, color: PorchStyle.nightText, weight: .semibold)
+        let name = PorchStyle.systemLabel(session.peerName, size: 48, color: PorchStyle.nightText, weight: .semibold)
         name.textAlignment = .center
-        countdown.font = PorchStyle.font(28); countdown.textColor = PorchStyle.nightText; countdown.numberOfLines = 0; countdown.textAlignment = .center
+        countdown.font = PorchStyle.systemFont(28); countdown.textColor = PorchStyle.nightText; countdown.numberOfLines = 0; countdown.textAlignment = .center
         answer.configuration?.title = BedsideText.string(call.mode == .video ? "Answer video call" : "Answer audio call")
+        answer.configuration?.baseBackgroundColor = PorchStyle.go
         answer.addTarget(self, action: #selector(accept), for: .touchUpInside)
-        let decline = PorchStyle.button(BedsideText.string(call.kind == "dropIn" ? "Don't connect" : "Decline"), symbol: "phone.down.fill")
-        decline.configuration?.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
+        let decline = PorchStyle.systemButton(BedsideText.string(call.kind == "dropIn" ? "Don't connect" : "Decline"), symbol: "phone.down.fill")
+        decline.configuration?.baseBackgroundColor = PorchStyle.danger
         decline.addTarget(self, action: #selector(reject), for: .touchUpInside)
         answer.isHidden = call.kind == "dropIn"
         updateKeypadHint()

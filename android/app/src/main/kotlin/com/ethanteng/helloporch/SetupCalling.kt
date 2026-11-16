@@ -68,7 +68,7 @@ fun SetupCallingScreen(lovedOne: String, offersCordedPhone: Boolean, onCordedPho
 /** A choice, which opens the screen for connecting it. That screen can come back here to choose another. */
 @Composable
 private fun CallingOption(title: String, detail: String, onClick: () -> Unit) {
-    Button(onClick, Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
+    Button(onClick, Modifier.fillMaxWidth().heightIn(min = 50.dp), colors = porchButtonColors()) {
         Column(Modifier.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
             Text(detail, Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)

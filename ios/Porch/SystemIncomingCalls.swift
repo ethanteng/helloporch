@@ -526,8 +526,8 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private let localVideo = VideoView()
     private let placeholder = UILabel()
     private lazy var personPhoto = RecipientAppearance.photoView(SystemIncomingCalls.shared.callerContact?.photoData)
-    private let microphone = PorchStyle.button("Mute", symbol: "mic.slash")
-    private let camera = PorchStyle.button("Camera on", symbol: "video")
+    private let microphone = PorchStyle.systemButton("Mute", symbol: "mic.slash")
+    private let camera = PorchStyle.systemButton("Camera on", symbol: "video")
     private var cameraEnabled = false
     private weak var observedRoom: Room?
     private var keypad = CallTrigger()
@@ -567,11 +567,11 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         super.viewDidLoad(); view.backgroundColor = PorchStyle.night
         overrideUserInterfaceStyle = .dark
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
-        let title = PorchStyle.label(SystemIncomingCalls.shared.callerName, size: 40, color: .white, weight: .semibold)
-        status.font = PorchStyle.font(17); status.adjustsFontForContentSizeCategory = true
+        let title = PorchStyle.systemLabel(SystemIncomingCalls.shared.callerName, size: 40, color: .white, weight: .semibold)
+        status.font = PorchStyle.systemFont(17); status.adjustsFontForContentSizeCategory = true
         status.textColor = .white; status.textAlignment = .center; status.numberOfLines = 0
         microphone.addAction(UIAction { _ in SystemIncomingCalls.shared.requestMute() }, for: .touchUpInside)
-        let end = PorchStyle.button("End call", symbol: "phone.down.fill")
+        let end = PorchStyle.systemButton("End call", symbol: "phone.down.fill")
         end.addAction(UIAction { _ in SystemIncomingCalls.shared.requestEnd() }, for: .touchUpInside)
         CallScreenLayout.configure(microphone, title: "Mute", symbol: "mic.slash")
         CallScreenLayout.configure(camera, title: "Camera on", symbol: "video")
@@ -589,7 +589,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
             }
         }, for: .touchUpInside)
         placeholder.text = "Voice call"; placeholder.textColor = .white; placeholder.textAlignment = .center
-        placeholder.font = PorchStyle.font(28)
+        placeholder.font = PorchStyle.systemFont(28)
         localVideo.isHidden = true
         localVideo.accessibilityLabel = BedsideText.string("Your camera preview")
         // On the bedside's call, family can ring in another family member and caregivers can add a phone. Someone

@@ -43,13 +43,14 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlinx.coroutines.delay
 
-/** iOS's PorchStyle colors for the bedside. */
+/** iOS's PorchStyle colors for the bedside: warm darks, each as bright as the green-tinted one it replaced, so the
+ * bedside lights the room no more than it did, and the website's ink by day. */
 internal object PorchColors {
-    val night = Color(0.035f, 0.055f, 0.05f)
-    val nightSurface = Color(0.085f, 0.12f, 0.105f)
-    val nightText = Color(0.78f, 0.83f, 0.79f)
-    val nightSecondary = Color(0.56f, 0.64f, 0.59f)
-    val ink = Color(0.12f, 0.19f, 0.17f)
+    val night = Color(0xFF100C09)
+    val nightSurface = Color(0xFF221B16)
+    val nightText = Color(0xFFD9CEC1)
+    val nightSecondary = Color(0xFFAB9A8A)
+    val ink = PorchBrand.ink
 }
 
 /**

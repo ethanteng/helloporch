@@ -1,0 +1,15 @@
+{
+  "uniqueId": "fonts:bricolage-grotesque",
+  "artifactVersion": "",
+  "name": "Bricolage Grotesque",
+  "description": "The HelloPorch wordmark’s typeface.",
+  "website": "https://github.com/ateliertriay/bricolage",
+  "developers": [
+    {
+      "name": "The Bricolage Grotesque Project Authors"
+    }
+  ],
+  "licenses": [
+    "OFL-1.1-BricolageGrotesque"
+  ]
+}
