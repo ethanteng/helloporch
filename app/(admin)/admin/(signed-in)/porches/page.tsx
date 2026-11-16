@@ -80,8 +80,9 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
   const rangeQuery: Record<string, string> = "custom" in range ? { from: range.custom.from, to: range.custom.to } : { range: range.preset };
   const porches = (query: Record<string, string>) => `/porches?${new URLSearchParams(query)}`;
   const dates = `${day(range.from)} – ${range.to >= now ? "now" : day(range.to - 1)}`;
-  // Each trend line's points: a day each (named by the day most of it falls on) or a week each.
+  // Each trend line's points: a day each (named by the day most of it falls on), a week each, or 30 days each.
   const points = trendPoints(range);
+  const bucket = points.seconds === 86400 ? "a day" : points.seconds === 7 * 86400 ? "a week" : "every 30 days";
   const labels = Array.from({ length: points.count }, (_, i) => {
     const start = range.from + i * points.seconds, end = Math.min(range.to, start + points.seconds);
     return points.seconds === 86400 ? shortDay((start + end) / 2) : `${shortDay(start)} – ${shortDay(end - 1)}`;
@@ -190,7 +191,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                       </dl>
                     </div>
                     {any ? (
-                      <TrendChart labels={labels} description={`${row.bedsideName}: calls in, calls out, messages and texts ${points.seconds === 86400 ? "a day" : "a week"}, ${dates}`}
+                      <TrendChart labels={labels} description={`${row.bedsideName}: calls in, calls out, messages and texts ${bucket}, ${dates}`}
                         series={columns.map(c => ({ name: c.name, color: c.color, values: c.line(u) }))} />
                     ) : <p className="quiet">{unsure ? "No calls, messages or texts found, but some of this range may be missing from Porch’s records."
                       : "No calls, messages or texts in this range."}</p>}
