@@ -959,6 +959,8 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.go, PorchStyle.surface), 4.5)
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.nightText, PorchStyle.nightSurface), 4.5)
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.ink, CallTranslationColors.on), 4.5)
+        // "Played" is 15-point text on a faint green tag, which sits on the cream page. `go` there is 3.9:1.
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.played, blended(PorchStyle.go, alpha: 0.12, over: PorchStyle.page)), 4.5)
     }
 
     /// Family and caregiver screens use the website's fonts; Mom's own screens keep the system font.
@@ -1873,6 +1875,15 @@ final class CaregiverInputTests: XCTestCase {
         }
         let a = luminance(first), b = luminance(second)
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
+    /// `foreground` at `alpha` drawn over an opaque `background`, as a tinted tag sits on the page.
+    @MainActor private func blended(_ foreground: UIColor, alpha: CGFloat, over background: UIColor) -> UIColor {
+        var fr: CGFloat = 0, fg: CGFloat = 0, fb: CGFloat = 0, fa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        foreground.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
+        background.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return UIColor(red: fr * alpha + br * (1 - alpha), green: fg * alpha + bg * (1 - alpha), blue: fb * alpha + bb * (1 - alpha), alpha: 1)
     }
 
     @MainActor func testTextsAreReadInTheirOwnLanguageOnlyWhenPorchCouldntTranslateThem() {

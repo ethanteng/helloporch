@@ -381,7 +381,7 @@ private fun StatusTag(status: MessageStatus) {
     val accent = MaterialTheme.colorScheme.primary
     val (foreground, background) = when (status.tone) {
         MessageStatus.Tone.NEW -> MaterialTheme.colorScheme.onPrimary to accent
-        MessageStatus.Tone.PLAYED -> PorchBrand.go to PorchBrand.go.copy(alpha = 0.12f)
+        MessageStatus.Tone.PLAYED -> PorchBrand.played to PorchBrand.go.copy(alpha = 0.12f)
         MessageStatus.Tone.WAITING -> Color(0.52f, 0.32f, 0f) to Color(0.98f, 0.74f, 0.24f, 0.26f)
         MessageStatus.Tone.ENDED -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
         MessageStatus.Tone.FAILED -> Color(0.68f, 0.13f, 0.1f) to Color(1f, 0.23f, 0.19f, 0.12f)

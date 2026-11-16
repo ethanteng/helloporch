@@ -355,7 +355,7 @@ struct MessageStatus {
         let colors: (foreground: UIColor, background: UIColor)
         switch tone {
         case .new: colors = (.white, PorchStyle.accent)
-        case .played: colors = (PorchStyle.go, PorchStyle.go.withAlphaComponent(0.12))
+        case .played: colors = (PorchStyle.played, PorchStyle.go.withAlphaComponent(0.12))
         case .waiting: colors = (UIColor(red: 0.52, green: 0.32, blue: 0, alpha: 1), UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26))
         case .ended: colors = (PorchStyle.secondary, PorchStyle.border.withAlphaComponent(0.45))
         case .failed: colors = (UIColor(red: 0.68, green: 0.13, blue: 0.1, alpha: 1), UIColor.systemRed.withAlphaComponent(0.12))

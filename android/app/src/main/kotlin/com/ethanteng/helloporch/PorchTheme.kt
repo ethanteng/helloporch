@@ -53,6 +53,9 @@ internal object PorchBrand {
     val honey = Color(0xFFF2D39F)
     /** Green only where it means go: someone is at the bedside, a keypad is connected, Answer. */
     val go = Color(0xFF2F7A55)
+    /** "Played" on its faint green tag. `go` itself is 3.9:1 over the cream page there, short of 4.5:1 for the label,
+     * so the words are this darker shade of the same green. iOS's PorchStyle.played matches. */
+    val played = Color(0xFF255F42)
     /** End call and Decline: the site's --help. */
     val danger = Color(0xFFC13D34)
     /** The wordmark's brown, --brown-ink, and the logo's tomato. */
