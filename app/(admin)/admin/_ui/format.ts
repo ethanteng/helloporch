@@ -3,6 +3,9 @@ const dateTime = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angel
 const date = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric" });
 export const when = (seconds: number) => dateTime.format(new Date(seconds * 1000));
 export const day = (seconds: number) => date.format(new Date(seconds * 1000));
+const monthDay = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric" });
+/** A Pacific day without its year, such as "Nov 9". */
+export const shortDay = (seconds: number) => monthDay.format(new Date(seconds * 1000));
 export function ago(seconds: number, now: number) {
   const elapsed = Math.max(0, now - seconds);
   if (elapsed < 120) return "just now";

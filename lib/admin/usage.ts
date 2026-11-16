@@ -20,15 +20,19 @@ export type Tally = { count: number; people: number; partial?: true; peopleParti
  * approved to drop in, or allowed by a caregiver. `activeContacts`: those who called, left a recorded message or texted
  * the bedside in the range. `voicemails`: how many audio messages were left by phone callers. */
 export type UsageRow = { id: string; contacts: { porchApp: number; phoneNumbers: number }; activeContacts: number;
-  callsReceived: Tally & { answered: number }; audioMessages: Tally & { voicemails: number }; videoMessages: Tally; texts: Tally; callsMade: Tally };
+  callsReceived: Tally & { answered: number }; audioMessages: Tally & { voicemails: number }; videoMessages: Tally; texts: Tally; callsMade: Tally;
+  trend: Trend };
+/** The same counts a point at a time, for trend lines (see `trendPoints`): calls received and made, recorded messages
+ * (audio and video messages and phone voicemail, together) and texts. Each is a minimum when its total is. */
+export type Trend = { callsIn: number[]; callsMade: number[]; messages: number[]; texts: number[] };
 
 /** From the start of `from` up to, not including, `to`, in seconds. */
 export type UsageRange = { from: number; to: number };
 export const usagePresets = [
-  { key: "1w", label: "Last week", days: 7 },
-  { key: "2w", label: "Last 2 weeks", days: 14 },
-  { key: "1m", label: "Last month", days: 30 },
-  { key: "3m", label: "Last 3 months", days: 90 },
+  { key: "1w", label: "Last week", short: "Week", days: 7 },
+  { key: "2w", label: "Last 2 weeks", short: "2 weeks", days: 14 },
+  { key: "1m", label: "Last month", short: "Month", days: 30 },
+  { key: "3m", label: "Last 3 months", short: "3 months", days: 90 },
 ] as const;
 export const defaultPreset = "1m";
 /** Call history, and the log of texts and phone voicemail, go back this far. */
@@ -74,6 +78,13 @@ export function usageRange(params: { range?: Param; from?: Param; to?: Param }, 
   return { from: now - preset.days * 86400, to: now, preset: preset.key, ...(error ? { error } : {}) };
 }
 
+/** How a range splits into the points of its trend lines, counted from its start: a day each for up to a month, a week
+ * each for up to six months, and 30 days each beyond that. The last point is shorter when the range doesn't divide evenly. */
+export function trendPoints({ from, to }: UsageRange) {
+  const days = (to - from) / 86400, seconds = (days <= 31 ? 1 : days <= 183 ? 7 : 30) * 86400;
+  return { seconds, count: Math.max(1, Math.ceil((to - from) / seconds)) };
+}
+
 // A family member's recorded message, or a phone caller's voicemail, that reached the bedside. One its sender unsent
 // before it was played doesn't count, nor does one that never finished uploading.
 const reachedBedside = new Set<MessageState>(["queued", "played", "expired", "removed"]);
@@ -102,24 +113,28 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
 
   const callsIn = new Set<string>(), callsOut = new Set<string>(), audio = new Set<string>(), video = new Set<string>(), texts = new Set<string>();
   const add = (people: Set<string>, key: string | undefined) => { if (key) people.add(key); };
+  const points = trendPoints({ from, to }), zeros = () => new Array<number>(points.count).fill(0);
+  const trend: Trend = { callsIn: zeros(), callsMade: zeros(), messages: zeros(), texts: zeros() };
+  const point = (at: number) => Math.min(points.count - 1, Math.floor((at - from) / points.seconds));
   let callsInCount = 0, answered = 0, callsOutCount = 0, audioCount = 0, voicemails = 0, videoCount = 0, textCount = 0, callersDropped = false;
   for (const call of calls.entries) {
     if (!within(call.startedAt)) continue;
     const key = call.memberID ? memberKey(call.memberID) : realNumber(call.number) ? numberKey(call.number) : undefined;
-    if (call.direction === "outgoing") { callsOutCount++; add(callsOut, key); continue; }
-    callsInCount++; add(callsIn, key);
+    if (call.direction === "outgoing") { callsOutCount++; add(callsOut, key); trend.callsMade[point(call.startedAt)]++; continue; }
+    callsInCount++; add(callsIn, key); trend.callsIn[point(call.startedAt)]++;
     if (call.outcome === "answered" || call.outcome === "ongoing") answered++;
   }
   for (const { id, records } of members) for (const record of records) {
     // `to` marks the bedside's own messages for family, which family members' records don't have.
     if (record.to !== undefined || record.sentAt === undefined || !within(record.sentAt) || !reachedBedside.has(record.state)) continue;
     if (record.mode === "video") { videoCount++; video.add(memberKey(id)); } else { audioCount++; audio.add(memberKey(id)); }
+    trend.messages[point(record.sentAt)]++;
   }
   // Phone voicemail records don't keep the caller's number. The received log does, for those left since it started.
   const callers = new Map(received.entries.filter(e => e.kind === "voicemail").map(e => [e.id, e.from]));
   for (const record of phone.records) {
     if (record.sentAt === undefined || !within(record.sentAt) || !reachedBedside.has(record.state)) continue;
-    audioCount++; voicemails++;
+    audioCount++; voicemails++; trend.messages[point(record.sentAt)]++;
     const caller = callers.get(record.id);
     if (realNumber(caller)) audio.add(numberKey(caller));
     // Not in a full log: who left it may have dropped off with the log's oldest entries.
@@ -127,7 +142,7 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
   }
   for (const entry of received.entries) {
     if (entry.kind !== "text" || !within(entry.at)) continue;
-    textCount++; if (realNumber(entry.from)) texts.add(numberKey(entry.from));
+    textCount++; trend.texts[point(entry.at)]++; if (realNumber(entry.from)) texts.add(numberKey(entry.from));
   }
 
   const porchApp = family.filter(m => !m.revoked);
@@ -137,5 +152,5 @@ async function usageOf(store: FamilyStore, house: Household, { from, to }: Usage
   return { id: house.id, contacts: { porchApp: porchApp.length, phoneNumbers: numbers.size }, activeContacts,
     callsReceived: { ...tallied(callsInCount, callsIn, callsPartial), answered },
     audioMessages: { ...tallied(audioCount, audio, messagesPartial || voicemailsPartial, callersDropped), voicemails }, videoMessages: tallied(videoCount, video, messagesPartial),
-    texts: tallied(textCount, texts, receivedPartial), callsMade: tallied(callsOutCount, callsOut, callsPartial) };
+    texts: tallied(textCount, texts, receivedPartial), callsMade: tallied(callsOutCount, callsOut, callsPartial), trend };
 }
