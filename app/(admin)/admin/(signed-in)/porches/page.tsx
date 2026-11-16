@@ -104,6 +104,8 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
             </ul>
           </Help>
         </div>
+        {/* On its own row, above the controls: the custom form hangs down from them and would cover a message below. */}
+        {"error" in range && range.error && <p className="error range-error" role="alert">{range.error} Showing {preset?.label.toLowerCase()} instead.</p>}
         {rows.length > 0 && (
           <div className="controls">
             <span className="muted">Activity</span>
@@ -140,7 +142,6 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
           </div>
         )}
       </div>
-      {"error" in range && range.error && <p className="error" role="alert">{range.error} Showing {preset?.label.toLowerCase()} instead.</p>}
       {rows.length > 0 && range.from < historyStarts && <p className="muted">Calls, texts and phone voicemail senders only go back 90 days, to {day(historyStarts)}.</p>}
 
       {listed.length ? (

@@ -152,6 +152,7 @@ table.narrow td:first-child { overflow-wrap: anywhere; }
 /* The Porches page: a title row with the time range, then one row a Porch whose details open below it. */
 .titlerow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
 .titlerow h1 { margin: 0; }
+.titlerow .range-error { flex: 1 0 100%; margin: 0; }
 .hgroup { display: flex; align-items: center; gap: 2px; }
 .controls { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .seg { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
