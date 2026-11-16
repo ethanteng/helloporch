@@ -111,7 +111,8 @@ internal class ScenePalette(scene: BedsideScene) {
     val skyBottom: Color
     val foreground: Color = if (scene.isDay) PorchColors.ink else PorchColors.nightText
     val clockWash: Color = if (scene.isDay) Color(1f, 0.99f, 0.95f, 0.66f) else Color(0f, 0f, 0f, 0.80f)
-    val controlBackground: Color = if (scene.isDay) Color(0.97f, 0.98f, 0.94f) else PorchColors.nightSurface
+    // By day a warm white, as bright as the pale green it replaced, as on iOS.
+    val controlBackground: Color = if (scene.isDay) Color(0xFFFCF8F1) else PorchColors.nightSurface
     val controlForeground: Color = if (scene.isDay) PorchColors.ink else PorchColors.nightText
     val illumination: Double = if (scene.isDay) 0.4 + 0.6 * sin(PI * scene.progress)
         else 0.4 * (1 - min(1.0, min(scene.progress, 1 - scene.progress) / 0.16))

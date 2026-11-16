@@ -949,7 +949,7 @@ final class CaregiverInputTests: XCTestCase {
 
     /// The website's palette: links and the chosen tab in deep tomato read on cards and on the page, white reads on
     /// ink buttons and on End call, and the night colors read on the bedside's night.
-    @MainActor func testBrandColorsMeetContrast() {
+    @MainActor func testBrandColorsMeetContrast() throws {
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.accent, PorchStyle.surface), 4.5)
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.accent, PorchStyle.page), 4.5)
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.secondary, PorchStyle.page), 4.5)
@@ -961,9 +961,9 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.ink, CallTranslationColors.on), 4.5)
         // "Played" is 15-point text on a faint green tag, which sits on the cream page. `go` there is 3.9:1.
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.played, blended(PorchStyle.go, alpha: 0.12, over: PorchStyle.page)), 4.5)
-        // "Porch calls" is 14-point text on a faint tomato wash over a card. Tomato there is 4.3:1.
+        // "Porch calls" is 14-point text on its honey chip, as on Android. Tomato on a faint tomato wash was 4.3:1.
         let calls = PaddedLabel("Porch calls")
-        XCTAssertGreaterThanOrEqual(contrast(calls.textColor, blended(PorchStyle.accent, alpha: 0.12, over: PorchStyle.surface)), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(calls.textColor, try XCTUnwrap(calls.backgroundColor)), 4.5)
     }
 
     /// Family and caregiver screens use the website's fonts; Mom's own screens keep the system font.
