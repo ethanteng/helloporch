@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="A USB-C power adapter">
+  <rect width="400" height="300" fill="#f2d39f"/>
+  <g transform="translate(200 150) scale(1) translate(-200 -150)">
+  <ellipse cx="208" cy="226" rx="128" ry="11" fill="#3a2a21" opacity="0.08"/>
+  <rect x="100.4" y="125.1" width="80" height="28" rx="3" fill="#bfc3c8" stroke="#3a2a21" stroke-width="2.6"/><circle cx="114.4" cy="139.1" r="4.2" fill="#f2d39f" stroke="#3a2a21" stroke-width="2"/>
+  <rect x="89.6" y="131.9" width="80" height="28" rx="3" fill="#d6d9dd" stroke="#3a2a21" stroke-width="2.6"/><circle cx="103.6" cy="145.9" r="4.2" fill="#f2d39f" stroke="#3a2a21" stroke-width="2"/>
+  <polygon points="170.0,112.0 200.0,93.0 280.0,93.0 280.0,173.0 250.0,192.0 170.0,192.0" fill="#3a2a21" stroke="#3a2a21" stroke-width="45.2" stroke-linejoin="round"/>
+  <polygon points="170.0,112.0 200.0,93.0 280.0,93.0 280.0,173.0 250.0,192.0 170.0,192.0" fill="#ece7db" stroke="#ece7db" stroke-width="40" stroke-linejoin="round"/>
+  <polygon points="170.0,92.0 200.0,73.0 280.0,73.0 250.0,92.0" fill="#f6f3ec"/>
+  <rect x="150" y="92" width="120" height="120" rx="20" fill="#fdfcf8" stroke="#3a2a21" stroke-width="2.6"/>
+  <path d="M329.0,142.5 C363.0,142.5 365.0,212.5 345.0,252.5 S355.0,312.5 385.0,332.5" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M329.0,142.5 C363.0,142.5 365.0,212.5 345.0,252.5 S355.0,312.5 385.0,332.5" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(285.0 142.5)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="6" y="-13" width="40" height="26" rx="8" fill="#fdfcf8"/>
+    <rect x="-2" y="-8" width="10" height="16" rx="3" fill="#d6d9dd"/>
+  </g>
+  </g>
+</svg>

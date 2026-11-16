@@ -23,14 +23,16 @@ export const metadata: Metadata = pageMetadata({
 // goes through the Porch phone adapter (phone-adapter/), which I flash and test, then mail or drop off, so it is free and
 // has no link. Every iPad family gets one, whatever the iPad, so the pages don't ask families which iPad they have; an
 // iPad with an M chip could take the Cell2Jack straight in, and Porch and the iPad guide mention that. The tablet has
-// no price: most families use one they have. The links are the ones I use, on Amazon, and the prices are roughly what
-// they cost there.
+// no price: most families use one they have. Nor do the cables and charger, which are drawings rather than photos. The
+// links are the ones I use, on Amazon, and the prices are roughly what they cost there.
 const KIT: { name: string; rule: string; price?: string; optional?: boolean; photo: string; href?: string }[] = [
-  { name: "A tablet", rule: "iPad or Android", photo: "/pilot/ipad.jpg" },
+  { name: "A tablet", rule: "iPad with USB-C, or Android", photo: "/pilot/ipad.jpg" },
   { name: "A big-button corded phone", rule: "Any brand", ...shopping.phone, photo: "/pilot/phone.jpg" },
   { name: "A Cell2Jack", rule: "Must be a Cell2Jack", ...shopping.cell2jack, photo: "/pilot/cell2jack.jpg" },
   { name: "A Porch phone adapter", rule: "For iPads. I will mail it to you.", ...shopping.adapter, photo: "/pilot/adapter.jpg" },
   { name: "A USB-C hub", rule: "Any brand", ...shopping.hub, photo: "/pilot/hub.jpg" },
+  { name: "USB-C cables", rule: "Two with an iPad, one with Android", photo: "/pilot/usb-c-cables.svg" },
+  { name: "A USB-C charger", rule: "Plugs into the wall or a power strip", photo: "/pilot/power-adapter.svg" },
   { name: "A sturdy stand", rule: "Any brand", ...shopping.stand, optional: true, photo: "/pilot/stand.jpg" },
 ];
 
@@ -62,13 +64,14 @@ const STEPS: { title: string; text: string[] }[] = [
 const QUESTIONS: { q: string; a: ReactNode }[] = [
   {
     q: "Do I need to buy a tablet from HelloPorch?",
-    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack and a USB-C hub. With an iPad, you’ll also use one more small adapter, which I’ll provide.",
+    a: "No. Porch is an app you install on a compatible tablet you already own or purchase yourself. For the current pilot, you’ll also need a big-button phone, a Cell2Jack, a USB-C hub, and a USB-C charger and cables. With an iPad, you’ll also use one more small adapter, which I’ll provide.",
   },
   {
     q: "Can I use a tablet I already own?",
     a: (
       <>
-        Probably. Any iPad with iPadOS 15 or later works. An Android tablet needs Android 15 or later and has to be able
+        Probably. Any iPad with a USB-C port and iPadOS 15 or later works, but not an older iPad with a Lightning port.
+        An Android tablet needs Android 15 or later and has to be able
         to charge and use the phone at the same time. See{" "}
         <Link href="/pilot/android/tablets">choosing an Android tablet</Link>.
       </>
@@ -143,7 +146,8 @@ export default function PilotPage() {
               <p className={styles.glanceText}>
                 Porch works with a compatible iPad or{" "}
                 <Link href="/pilot/android/tablets">Android tablet</Link> and a big-button corded phone. You’ll also
-                need a Cell2Jack adapter and a USB-C hub. A sturdy tablet stand is helpful, but optional.
+                need a Cell2Jack adapter, a USB-C hub, and a USB-C charger and cables. A sturdy tablet stand is
+                helpful, but optional.
               </p>
               <p className={styles.glanceText}>
                 With an iPad, the phone also goes through a Porch phone adapter. I’ll provide this, already set up and
@@ -157,7 +161,7 @@ export default function PilotPage() {
               {KIT.map((part) => (
                 <li key={part.name}>
                   <span className={styles.kitPhoto}>
-                    <Image src={part.photo} alt="" fill sizes="(max-width: 760px) 45vw, (max-width: 1140px) 30vw, 220px" />
+                    <Image src={part.photo} alt="" fill sizes="(max-width: 760px) 45vw, (max-width: 1140px) 22vw, 280px" />
                     <KitTag part={part} />
                   </span>
                   <strong className={styles.kitName}>

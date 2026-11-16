@@ -134,7 +134,6 @@ export default function AndroidTablets() {
       lede={
         <p>Porch needs an Android tablet that can charge and use the big-button phone at the same time. Not every tablet can.</p>
       }
-      aside={<>Any iPad with iPadOS 15 or later works with Porch.</>}
       contentsTitle="On this page"
       parts={parts}
     />

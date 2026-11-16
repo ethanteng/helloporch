@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Two USB-C cables">
+  <rect width="400" height="300" fill="#f2d39f"/>
+  <g transform="translate(200 150) scale(0.78) translate(-200 -150)">
+  <ellipse cx="200" cy="250" rx="150" ry="12" fill="#3a2a21" opacity="0.08"/>
+  <path d="M64.0,120.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M64.0,120.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M75.9,95.9 Q60,96 48,56" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M75.9,95.9 Q60,96 48,56" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(48.0 56.0) rotate(-16.7)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="-7.5" y="-8" width="15" height="14" rx="4" fill="#fdfcf8"/>
+    <rect x="-15" y="-48" width="30" height="42" rx="9" fill="#fdfcf8"/>
+    <rect x="-10.5" y="-64" width="21" height="17" rx="4" fill="#d6d9dd"/>
+    <rect x="-6.5" y="-60" width="3" height="10" rx="1.5" fill="#ffffff" stroke="none" opacity="0.8"/>
+  </g>
+  <path d="M72.0,128.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M72.0,128.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M80.0,136.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M80.0,136.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M88.8,157.0 Q72,196 68,240" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M88.8,157.0 Q72,196 68,240" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(68.0 240.0) rotate(185.2)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="-7.5" y="-8" width="15" height="14" rx="4" fill="#fdfcf8"/>
+    <rect x="-15" y="-48" width="30" height="42" rx="9" fill="#fdfcf8"/>
+    <rect x="-10.5" y="-64" width="21" height="17" rx="4" fill="#d6d9dd"/>
+    <rect x="-6.5" y="-60" width="3" height="10" rx="1.5" fill="#ffffff" stroke="none" opacity="0.8"/>
+  </g>
+  <path d="M194.0,168.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M194.0,168.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M317.2,147.0 Q344,120 356,74" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M317.2,147.0 Q344,120 356,74" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(356.0 74.0) rotate(14.6)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="-7.5" y="-8" width="15" height="14" rx="4" fill="#fdfcf8"/>
+    <rect x="-15" y="-48" width="30" height="42" rx="9" fill="#fdfcf8"/>
+    <rect x="-10.5" y="-64" width="21" height="17" rx="4" fill="#d6d9dd"/>
+    <rect x="-6.5" y="-60" width="3" height="10" rx="1.5" fill="#ffffff" stroke="none" opacity="0.8"/>
+  </g>
+  <path d="M202.0,176.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M202.0,176.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M210.0,184.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M210.0,184.0 a66,42 0 1,0 132,0 a66,42 0 1,0 -132,0" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <path d="M333.2,205.0 Q336,212 344,246" fill="none" stroke="#3a2a21" stroke-width="15" stroke-linecap="round"/>
+  <path d="M333.2,205.0 Q336,212 344,246" fill="none" stroke="#fdfcf8" stroke-width="9.6" stroke-linecap="round"/>
+  <g transform="translate(344.0 246.0) rotate(166.8)" stroke="#3a2a21" stroke-width="2.6" stroke-linejoin="round">
+    <rect x="-7.5" y="-8" width="15" height="14" rx="4" fill="#fdfcf8"/>
+    <rect x="-15" y="-48" width="30" height="42" rx="9" fill="#fdfcf8"/>
+    <rect x="-10.5" y="-64" width="21" height="17" rx="4" fill="#d6d9dd"/>
+    <rect x="-6.5" y="-60" width="3" height="10" rx="1.5" fill="#ffffff" stroke="none" opacity="0.8"/>
+  </g>
+  </g>
+</svg>
