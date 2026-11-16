@@ -50,12 +50,14 @@ import com.ethanteng.helloporch.core.CallTranslationLine
 /** The translation colors on a call's night background, as iOS's CallTranslationColors. */
 internal object TranslationColors {
     val live = Color(0xFF5FD08A)
-    val link = Color(0xFF9FD1AE)
-    val sheet = Color(0xFF1B2420)
-    val well = Color(0xFF222D29)
-    val title = Color(0xFFE4ECE6)
-    val chipBorder = Color(0xFF3A4842)
-    val chipChosen = Color(0xFF2E5A42)
+    /** Change: the site's honey. */
+    val link = PorchBrand.honey
+    // Warm darks, each as bright as the green-tinted one it replaced, as on iOS.
+    val sheet = Color(0xFF27201B)
+    val well = Color(0xFF312823)
+    val title = Color(0xFFF0E9DD)
+    val chipBorder = Color(0xFF4D423A)
+    val chipChosen = Color(0xFF644839)
     val stop = Color(0xFFC94A4A)
     val stopText = Color(0xFFF4C2BF)
 }
@@ -66,7 +68,7 @@ internal object TranslationColors {
 internal fun TranslateButton(app: PorchApplication, translation: CallTranslation, modifier: Modifier) {
     val on = translation.isOn
     CallButton(if (on) "Translating" else "Translate", !translation.sending, onClick = translation::tapped,
-        color = if (on) CallColors.answer else CallColors.control, translated = true, app = app,
+        color = if (on) CallColors.on else CallColors.control, textColor = if (on) PorchBrand.ink else Color.White, translated = true, app = app,
         modifier = modifier.testTag("call.translation.toggle"))
 }
 

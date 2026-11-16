@@ -7,7 +7,6 @@ import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -37,7 +36,7 @@ class MainActivity : ComponentActivity() {
             override fun onStop(owner: LifecycleOwner) { if (!isChangingConfigurations) RemoteCaregiverSession.shared.leftForeground() }
         })
         setContent {
-            MaterialTheme {
+            PorchBedsideTheme {
                 CompositionLocalProvider(LocalKeyListener provides keys) {
                     PorchRoot(app, link.value, onLinkHandled = { link.value = null },
                         cordedPhoneSetup = { onDone, onBack -> CordedPhoneSetup(app.cell2jack, onDone, onBack) })

@@ -13,13 +13,13 @@ import PorchCore
         configuration.imagePadding = 6
         configuration.titleAlignment = .center
         configuration.baseBackgroundColor = isEnd
-            ? UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1) : PorchStyle.nightSurface
+            ? PorchStyle.danger : PorchStyle.nightSurface
         configuration.baseForegroundColor = .white
         configuration.cornerStyle = .large
         configuration.contentInsets = .init(top: 12, leading: 8, bottom: 12, trailing: 8)
         configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = PorchStyle.centeredTextAttributes(attributes)
-            attributes.font = PorchStyle.font(16, weight: .semibold)
+            attributes.font = PorchStyle.systemFont(16, weight: .semibold)
             return attributes
         }
         configuration.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { PorchStyle.centeredTextAttributes($0) }
@@ -281,7 +281,7 @@ final class CallButtonRows: UIStackView {
 
     /// How narrow a button can be without breaking a word: its longest word in the call buttons' type, and its padding.
     private static func narrowest(_ button: UIButton) -> CGFloat {
-        let font = PorchStyle.font(16, weight: .semibold)
+        let font = PorchStyle.systemFont(16, weight: .semibold)
         let words = (button.configuration?.title ?? "").split(whereSeparator: \.isWhitespace)
         let longest = words.map { (String($0) as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
         let insets = button.configuration.map { $0.contentInsets.leading + $0.contentInsets.trailing } ?? 16
@@ -348,7 +348,7 @@ private final class CallOverlays: UIScrollView {
             super.init(frame: .zero)
             axis = .vertical; alignment = .center; spacing = 12
             photo.contentMode = .scaleAspectFill; photo.clipsToBounds = true; photo.layer.cornerRadius = 16
-            name.font = PorchStyle.font(28, weight: .semibold); name.textColor = .white; name.textAlignment = .center
+            name.font = PorchStyle.systemFont(28, weight: .semibold); name.textColor = .white; name.textAlignment = .center
             name.numberOfLines = 2; name.adjustsFontForContentSizeCategory = true
             NSLayoutConstraint.activate([photo.widthAnchor.constraint(equalToConstant: 120), photo.heightAnchor.constraint(equalToConstant: 120)])
             addArrangedSubview(photo); addArrangedSubview(name)
@@ -410,7 +410,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let server: NativeCallServer
     private(set) var room = Room()
     private let statusLabel = UILabel()
-    private let keypadHint = PorchStyle.label("", size: 16, color: PorchStyle.nightSecondary)
+    private let keypadHint = PorchStyle.systemLabel("", size: 16, color: PorchStyle.nightSecondary)
     private let stage = CallVideoStage()
     private let localVideo = VideoView()
     private let placeholder = UILabel()
@@ -542,13 +542,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         room.add(delegate: self)
         let title = UILabel()
         title.text = contact.name
-        title.font = PorchStyle.font(40, weight: .semibold)
+        title.font = PorchStyle.systemFont(40, weight: .semibold)
         title.textColor = PorchStyle.nightText
         title.textAlignment = .center
         title.numberOfLines = 0
         title.adjustsFontForContentSizeCategory = true
         statusLabel.text = BedsideText.string("Connecting…")
-        statusLabel.font = PorchStyle.font(17)
+        statusLabel.font = PorchStyle.systemFont(17)
         statusLabel.textColor = PorchStyle.nightText
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
@@ -559,7 +559,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         localVideo.accessibilityLabel = BedsideText.string("Your camera preview")
         placeholder.text = BedsideText.string(call.mode == .voice ? "Voice call\nCamera is off" : "Waiting for video")
         placeholder.textColor = .white
-        placeholder.font = PorchStyle.font(28)
+        placeholder.font = PorchStyle.systemFont(28)
         placeholder.textAlignment = .center
         placeholder.numberOfLines = 0
         placeholder.adjustsFontForContentSizeCategory = true

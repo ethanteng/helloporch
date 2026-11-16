@@ -85,6 +85,13 @@ android {
     }
 }
 
+// The website's fonts (res/font) aren't Gradle dependencies, so config/ lists them and their licenses for About → Licenses.
+aboutLibraries {
+    collect {
+        configPath.set(layout.projectDirectory.dir("config"))
+    }
+}
+
 dependencies {
     implementation(project(":core"))
     implementation(libs.androidx.core.ktx)

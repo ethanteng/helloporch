@@ -426,7 +426,7 @@ final class AddCheckViewController: AddSomeoneScreen {
             circle.backgroundColor = foreground.withAlphaComponent(0.16)
             let initials = UILabel()
             initials.text = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-            initials.font = .systemFont(ofSize: 23, weight: .semibold)
+            initials.font = PorchFonts.sans(23, weight: .semibold)
             initials.textColor = foreground
             FamilyAdminViewController.center(initials, in: circle)
             picture = circle
@@ -837,8 +837,9 @@ final class PaddedLabel: UILabel {
         super.init(frame: .zero)
         self.text = text
         font = PorchStyle.font(14, weight: .semibold)
-        textColor = PorchStyle.accent
-        backgroundColor = PorchStyle.accent.withAlphaComponent(0.12)
+        // Ink on honey, as Android's chip: tomato on a faint tomato wash was 4.3:1 on a card, under 4.5:1 for 14-point text.
+        textColor = PorchStyle.ink
+        backgroundColor = PorchStyle.honey
         layer.cornerRadius = 12; clipsToBounds = true
         setContentHuggingPriority(.required, for: .horizontal)
         setContentCompressionResistancePriority(.required, for: .horizontal)

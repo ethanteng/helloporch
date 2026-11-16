@@ -1,21 +1,62 @@
 import UIKit
+import CoreText
 import GameController
 import PorchCore
 import ImageIO
 
+/// Porch's look, from the website's design system (app/(site)/globals.css): a cream page, paper cards, ink text and
+/// buttons, and deep tomato for the small things. Android's PorchTheme.kt has the same colors.
 enum PorchStyle {
-    static let page = UIColor(red: 0.95, green: 0.96, blue: 0.94, alpha: 1)
-    static let surface = UIColor.white
-    static let ink = UIColor(red: 0.12, green: 0.19, blue: 0.17, alpha: 1)
-    static let secondary = UIColor(red: 0.35, green: 0.41, blue: 0.38, alpha: 1)
-    static let accent = UIColor(red: 0.16, green: 0.36, blue: 0.29, alpha: 1)
-    static let border = UIColor(red: 0.77, green: 0.81, blue: 0.78, alpha: 1)
-    static let night = UIColor(red: 0.035, green: 0.055, blue: 0.05, alpha: 1)
-    static let nightSurface = UIColor(red: 0.085, green: 0.12, blue: 0.105, alpha: 1)
-    static let nightText = UIColor(red: 0.78, green: 0.83, blue: 0.79, alpha: 1)
-    static let nightSecondary = UIColor(red: 0.56, green: 0.64, blue: 0.59, alpha: 1)
+    /// The site's page, --bg.
+    static let page = rgb(0xF9EFDA)
+    /// Cards and grouped rows: the site's --paper.
+    static let surface = rgb(0xFEFBF6)
+    /// Text: the site's --ink.
+    static let ink = rgb(0x2E1D15)
+    /// Secondary text: the site's --muted, 8:1 on cards.
+    static let secondary = rgb(0x5B493F)
+    /// Links, the chosen tab, switches, icons and badges: the site's --tomato-deep. The logo's own tomato is too light
+    /// for text; this one is 5:1 on cards and 4.6:1 on the page.
+    static let accent = rgb(0xC0401F)
+    /// Filled buttons: ink, as the site's own buttons are, so red stays for ending and declining calls.
+    static let action = ink
+    static let border = rgb(0xDCCDB9)
+    /// Highlights, such as a photo's placeholder: the site's --honey.
+    static let honey = rgb(0xF2D39F)
+    /// Green only where it means go: someone is at the bedside, a keypad is connected.
+    static let go = rgb(0x2F7A55)
+    /// "Played" on its faint green tag. `go` itself is 3.9:1 over the cream page there, short of 4.5:1 for that
+    /// 15-point label, so the words are this darker shade of the same green. Android's PorchBrand.played matches.
+    static let played = rgb(0x255F42)
+    /// End call and Decline: the site's --help.
+    static let danger = rgb(0xC13D34)
+    /// The bedside at night and the call screens: warm darks, each as bright as the green-tinted one it replaced, so the
+    /// bedside lights the room no more than it did.
+    static let night = rgb(0x100C09)
+    static let nightSurface = rgb(0x221B16)
+    static let nightText = rgb(0xD9CEC1)
+    static let nightSecondary = rgb(0xAB9A8A)
+    /// The wordmark's brown, --brown-ink, and the logo's tomato.
+    static let wordmark = rgb(0x64281A)
+    static let tomato = rgb(0xE05D3D)
 
+    static func rgb(_ value: UInt32) -> UIColor {
+        UIColor(red: CGFloat(value >> 16 & 0xFF) / 255, green: CGFloat(value >> 8 & 0xFF) / 255, blue: CGFloat(value & 0xFF) / 255, alpha: 1)
+    }
+
+    /// Text on the family's and caregivers' screens: DM Sans, the website's text font, following the reader's text size.
     static func font(_ size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+        UIFontMetrics(forTextStyle: .body).scaledFont(for: PorchFonts.sans(size, weight: weight))
+    }
+
+    /// Names on the Call tab: Newsreader, the website's headings, following the reader's text size.
+    static func titleFont(_ size: CGFloat) -> UIFont {
+        UIFontMetrics(forTextStyle: .body).scaledFont(for: PorchFonts.serif(size))
+    }
+
+    /// Text on Mom's own screens (the bedside clock and its people, its messages, the call screens): the system font
+    /// they were sized and tested with.
+    static func systemFont(_ size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
         UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: size, weight: weight))
     }
 
@@ -28,16 +69,43 @@ enum PorchStyle {
     }
 
     static func label(_ text: String, size: CGFloat = 17, color: UIColor = secondary, weight: UIFont.Weight = .regular) -> UILabel {
+        styledLabel(text, font: font(size, weight: weight), color: color)
+    }
+
+    /// A label on Mom's own screens, in the system font (systemFont).
+    static func systemLabel(_ text: String, size: CGFloat = 17, color: UIColor = secondary, weight: UIFont.Weight = .regular) -> UILabel {
+        styledLabel(text, font: systemFont(size, weight: weight), color: color)
+    }
+
+    private static func styledLabel(_ text: String, font: UIFont, color: UIColor) -> UILabel {
         let label = UILabel()
         label.text = text
-        label.font = font(size, weight: weight)
+        label.font = font
         label.textColor = color
         label.numberOfLines = 0
         label.adjustsFontForContentSizeCategory = true
         return label
     }
 
+    /// A button on the family's and caregivers' screens, its title in DM Sans Medium, the website's button weight. A
+    /// configured button ignores its title label's font and draws the configuration's, 17-point text, so the
+    /// configuration sets this one at that size.
     static func button(_ title: String, symbol: String? = nil, filled: Bool = true) -> UIButton {
+        let button = styledButton(title, symbol: symbol, filled: filled, font: font(17, weight: .medium))
+        button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer {
+            var attributes = centeredTextAttributes($0)
+            attributes.font = font(17, weight: .medium)
+            return attributes
+        }
+        return button
+    }
+
+    /// A button on Mom's own screens, as they were sized and tested: the system font.
+    static func systemButton(_ title: String, symbol: String? = nil, filled: Bool = true) -> UIButton {
+        styledButton(title, symbol: symbol, filled: filled, font: systemFont(18, weight: .semibold))
+    }
+
+    private static func styledButton(_ title: String, symbol: String?, filled: Bool, font: UIFont) -> UIButton {
         let button = UIButton(type: .system)
         var config = filled ? UIButton.Configuration.filled() : .plain()
         config.title = title
@@ -46,11 +114,11 @@ enum PorchStyle {
         config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { centeredTextAttributes($0) }
         if let symbol { config.image = UIImage(systemName: symbol); config.imagePadding = 10 }
         config.baseForegroundColor = filled ? .white : accent
-        config.baseBackgroundColor = accent
+        config.baseBackgroundColor = action
         config.cornerStyle = .large
         config.contentInsets = .init(top: 15, leading: 20, bottom: 15, trailing: 20)
         button.configuration = config
-        button.titleLabel?.font = font(18, weight: .semibold)
+        button.titleLabel?.font = font
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.titleLabel?.numberOfLines = 0
         button.titleLabel?.textAlignment = .center
@@ -70,12 +138,13 @@ enum PorchStyle {
         let control = UISegmentedControl(items: items)
         control.selectedSegmentTintColor = accent
         control.backgroundColor = page
-        control.setTitleTextAttributes([.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 16, weight: .medium)], for: .normal)
-        control.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 16, weight: .semibold)], for: .selected)
+        control.setTitleTextAttributes([.foregroundColor: ink, .font: PorchFonts.sans(16, weight: .medium)], for: .normal)
+        control.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: PorchFonts.sans(16, weight: .semibold)], for: .selected)
         control.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         return control
     }
 
+    /// Screen titles in Newsreader, as the website's headings, and the bar's buttons in DM Sans.
     static func navigation(_ root: UIViewController) -> UINavigationController {
         let nav = UINavigationController(rootViewController: root)
         nav.overrideUserInterfaceStyle = .light
@@ -85,12 +154,109 @@ enum PorchStyle {
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = page
         appearance.shadowColor = .clear
-        appearance.titleTextAttributes = [.foregroundColor: ink, .font: UIFont.systemFont(ofSize: 19, weight: .semibold)]
-        appearance.largeTitleTextAttributes = [.foregroundColor: ink]
+        appearance.titleTextAttributes = [.foregroundColor: ink, .font: PorchFonts.serif(21)]
+        appearance.largeTitleTextAttributes = [.foregroundColor: ink, .font: PorchFonts.serif(34)]
+        let buttons = UIBarButtonItemAppearance()
+        buttons.normal.titleTextAttributes = [.font: PorchFonts.sans(17, weight: .regular)]
+        let done = UIBarButtonItemAppearance()
+        done.normal.titleTextAttributes = [.font: PorchFonts.sans(17, weight: .semibold)]
+        appearance.buttonAppearance = buttons
+        appearance.backButtonAppearance = buttons
+        appearance.doneButtonAppearance = done
         nav.navigationBar.standardAppearance = appearance
         nav.navigationBar.scrollEdgeAppearance = appearance
         nav.navigationBar.compactAppearance = appearance
         return nav
+    }
+}
+
+/// The website's fonts: DM Sans for text, Newsreader for titles, Bricolage Grotesque for the wordmark. They're data sets
+/// in the asset catalog (Assets.xcassets/Fonts), which every app target already bundles, and each registers for this
+/// process the first time a font is asked for. Their licenses (OFL, ios/FontLicenses) are in Acknowledgements.
+enum PorchFonts {
+    static let names = ["DMSans-Regular", "DMSans-Medium", "DMSans-SemiBold", "DMSans-Bold",
+                        "Newsreader-Medium", "BricolageGrotesque-ExtraBold"]
+    /// Whether every font registered. One that's missing falls back to the system font.
+    static let registered: Bool = names.allSatisfy { name in
+        guard let data = NSDataAsset(name: name)?.data, let provider = CGDataProvider(data: data as CFData),
+              let font = CGFont(provider) else { return false }
+        // Registered already, by an earlier test host in this process say, is as good.
+        return CTFontManagerRegisterGraphicsFont(font, nil) || UIFont(name: name, size: 12) != nil
+    }
+
+    static func named(_ name: String, size: CGFloat) -> UIFont? {
+        _ = registered
+        return UIFont(name: name, size: size)
+    }
+
+    static func sans(_ size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let name = weight.rawValue >= UIFont.Weight.bold.rawValue ? "DMSans-Bold"
+            : weight.rawValue >= UIFont.Weight.semibold.rawValue ? "DMSans-SemiBold"
+            : weight.rawValue >= UIFont.Weight.medium.rawValue ? "DMSans-Medium" : "DMSans-Regular"
+        return named(name, size: size) ?? .systemFont(ofSize: size, weight: weight)
+    }
+
+    static func serif(_ size: CGFloat) -> UIFont {
+        named("Newsreader-Medium", size: size) ?? .systemFont(ofSize: size, weight: .semibold)
+    }
+
+    static func wordmark(_ size: CGFloat) -> UIFont {
+        named("BricolageGrotesque-ExtraBold", size: size) ?? .systemFont(ofSize: size, weight: .heavy)
+    }
+}
+
+/// The HelloPorch logo as the website draws it (components/PorchLogo.tsx): the smiling "p" in tomato beside "Porch" in
+/// the wordmark's brown. The Call tab's title; VoiceOver reads it as the "Porch" heading it replaces.
+final class PorchWordmark: UIView {
+    private let mark = CAShapeLayer()
+    private let text = UILabel()
+    private let markSize: CGSize
+    private let gap: CGFloat
+
+    init(size: CGFloat = 24) {
+        // The mark is 1.05em tall and its viewBox 82 by 88, with 0.2em between it and the word.
+        markSize = CGSize(width: size * 1.05 * 82 / 88, height: size * 1.05)
+        gap = size * 0.2
+        super.init(frame: .zero)
+        isAccessibilityElement = true
+        accessibilityLabel = "Porch"
+        accessibilityTraits = .header
+        accessibilityIdentifier = "porch.wordmark"
+        text.attributedText = NSAttributedString(string: "Porch", attributes: [
+            .font: PorchFonts.wordmark(size), .foregroundColor: PorchStyle.wordmark, .kern: -0.045 * size])
+        text.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(text)
+        let height = markSize.height, width = markSize.width, scale = height / 88
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 20, y: 44)); path.addLine(to: CGPoint(x: 20, y: 91))
+        path.append(UIBezierPath(arcCenter: CGPoint(x: 52, y: 44), radius: 32, startAngle: 0, endAngle: 2 * .pi, clockwise: true))
+        path.move(to: CGPoint(x: 36, y: 42)); path.addQuadCurve(to: CGPoint(x: 68, y: 42), controlPoint: CGPoint(x: 52, y: 60))
+        path.apply(CGAffineTransform(scaleX: scale, y: scale).translatedBy(x: -11, y: -7.5))
+        mark.path = path.cgPath
+        mark.fillColor = nil
+        mark.strokeColor = PorchStyle.tomato.cgColor
+        mark.lineWidth = 9 * scale
+        mark.lineCap = .round
+        let markView = UIView()
+        markView.layer.addSublayer(mark)
+        markView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(markView)
+        NSLayoutConstraint.activate([
+            markView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            markView.widthAnchor.constraint(equalToConstant: width),
+            markView.heightAnchor.constraint(equalToConstant: height),
+            markView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            text.leadingAnchor.constraint(equalTo: markView.trailingAnchor, constant: gap),
+            text.trailingAnchor.constraint(equalTo: trailingAnchor),
+            text.topAnchor.constraint(equalTo: topAnchor),
+            text.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(size:)") }
+    /// A navigation bar sizes its title view by this.
+    override var intrinsicContentSize: CGSize {
+        let word = text.intrinsicContentSize
+        return CGSize(width: markSize.width + gap + word.width, height: max(markSize.height, word.height))
     }
 }
 
@@ -357,7 +523,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         field.leftViewMode = .always
         field.rightView = UIView(frame: padding.frame)
         field.rightViewMode = .always
-        field.font = .preferredFont(forTextStyle: .body)
+        field.font = PorchStyle.font(17)
         field.adjustsFontForContentSizeCategory = true
         field.returnKeyType = .next
         field.inputView = useTouchKeyboard ? emptyInput : nil

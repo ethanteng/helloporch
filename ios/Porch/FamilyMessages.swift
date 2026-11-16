@@ -350,12 +350,12 @@ struct MessageStatus {
         }
     }
 
-    /// The tag itself: filled for new, green once played, amber while it waits, gray once it's gone.
+    /// The tag itself: filled in tomato for new, green once played, amber while it waits, gray once it's gone.
     func tag() -> UIButton {
         let colors: (foreground: UIColor, background: UIColor)
         switch tone {
         case .new: colors = (.white, PorchStyle.accent)
-        case .played: colors = (PorchStyle.accent, PorchStyle.accent.withAlphaComponent(0.12))
+        case .played: colors = (PorchStyle.played, PorchStyle.go.withAlphaComponent(0.12))
         case .waiting: colors = (UIColor(red: 0.52, green: 0.32, blue: 0, alpha: 1), UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26))
         case .ended: colors = (PorchStyle.secondary, PorchStyle.border.withAlphaComponent(0.45))
         case .failed: colors = (UIColor(red: 0.68, green: 0.13, blue: 0.1, alpha: 1), UIColor.systemRed.withAlphaComponent(0.12))
@@ -381,14 +381,14 @@ struct MessageStatus {
     }
 }
 
-/// One message in the thread; tapping it plays the message. This phone's own are green.
+/// One message in the thread; tapping it plays the message. This phone's own are ink, as buttons are.
 final class MessageBubble: UIControl {
     private(set) var poster: MessagePosterView?
     private var labels: [UILabel] = []
     init(mine: Bool, title: String, length: String, video: Bool, poster image: UIImage?, showsPoster: Bool, playable: Bool, new: Bool) {
         super.init(frame: .zero)
         let ink = mine ? UIColor.white : PorchStyle.ink
-        backgroundColor = mine ? PorchStyle.accent : PorchStyle.surface
+        backgroundColor = mine ? PorchStyle.action : PorchStyle.surface
         layer.cornerRadius = 22; layer.cornerCurve = .continuous
         if !mine { layer.borderWidth = new ? 2 : 1; layer.borderColor = (new ? PorchStyle.accent : PorchStyle.border).cgColor }
         let icon = UIImageView(image: UIImage(systemName: video ? "video.fill" : playable ? "play.circle.fill" : "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: video ? 22 : 34)))

@@ -65,7 +65,8 @@ struct BedsideScenePalette {
         usesDarkText = scene.isDay
         foreground = scene.isDay ? PorchStyle.ink : PorchStyle.nightText
         clockWash = scene.isDay ? rgb(1, 0.99, 0.95).withAlphaComponent(0.66) : UIColor.black.withAlphaComponent(0.80)
-        controlBackground = scene.isDay ? rgb(0.97, 0.98, 0.94) : PorchStyle.nightSurface
+        // By day a warm white, as bright as the pale green it replaced, so the buttons read on the sky as they did.
+        controlBackground = scene.isDay ? PorchStyle.rgb(0xFCF8F1) : PorchStyle.nightSurface
         controlForeground = scene.isDay ? PorchStyle.ink : PorchStyle.nightText
         illumination = scene.isDay ? 0.4 + 0.6 * sin(.pi * scene.progress) : 0.4 * (1 - min(1, min(scene.progress, 1 - scene.progress) / 0.16))
     }
@@ -164,7 +165,7 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
     private let example = BedsideSceneView()
     /// Only the Day & night clock follows the schedule and the seasons.
     private var scheduleGroup = UIView(), seasonsGroup = UIView()
-    private let previewClock = PorchStyle.label("", size: 24, color: PorchStyle.ink, weight: .semibold)
+    private let previewClock = PorchStyle.systemLabel("", size: 24, color: PorchStyle.ink, weight: .semibold)
     init(defaults: UserDefaults = .standard,
          naturalVoices: @escaping @MainActor () -> NaturalVoices? = { PorchDevice.experience == .bedside ? FamilyCoordinator.shared.state?.speech : nil }) {
         self.defaults = defaults
@@ -182,8 +183,8 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         hemisphere.accessibilityLabel = "Season hemisphere"
         for control in [appearance, hemisphere] {
             control.selectedSegmentTintColor = PorchStyle.accent; control.backgroundColor = PorchStyle.page
-            control.setTitleTextAttributes([.foregroundColor: PorchStyle.ink], for: .normal)
-            control.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
+            control.setTitleTextAttributes([.foregroundColor: PorchStyle.ink, .font: PorchFonts.sans(13, weight: .regular)], for: .normal)
+            control.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: PorchFonts.sans(13, weight: .semibold)], for: .selected)
             control.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
             control.addTarget(self, action: #selector(update), for: .valueChanged)
         }

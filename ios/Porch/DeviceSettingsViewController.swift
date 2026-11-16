@@ -80,7 +80,7 @@ final class DeviceSettingsViewController: CaregiverFormViewController {
     /// Whether the phone is connected now: a filled check, or the amber of a message that's waiting with an exclamation mark.
     private func statusRow(connected: Bool) -> UIView {
         let badge = UIView()
-        badge.backgroundColor = connected ? PorchStyle.accent : UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26)
+        badge.backgroundColor = connected ? PorchStyle.go : UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26)
         badge.layer.cornerRadius = 14
         let icon = UIImageView(image: UIImage(systemName: connected ? "checkmark" : "exclamationmark",
                                               withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .bold)))

@@ -1,0 +1,15 @@
+{
+  "uniqueId": "fonts:dm-sans",
+  "artifactVersion": "",
+  "name": "DM Sans",
+  "description": "A low-contrast geometric sans serif, the website’s text font.",
+  "website": "https://github.com/googlefonts/dm-fonts",
+  "developers": [
+    {
+      "name": "The DM Sans Project Authors"
+    }
+  ],
+  "licenses": [
+    "OFL-1.1-DMSans"
+  ]
+}

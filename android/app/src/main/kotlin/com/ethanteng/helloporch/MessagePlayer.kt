@@ -311,7 +311,7 @@ fun MessagePlayerScreen(app: PorchApplication, playback: MessagePlayback) = Larg
                 }
             }
             Button(onClick = playback::stop, modifier = Modifier.heightIn(min = 96.dp), contentPadding = PaddingValues(horizontal = 48.dp, vertical = 24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0.68f, 0.19f, 0.19f), contentColor = Color.White)) {
+                colors = ButtonDefaults.buttonColors(containerColor = PorchBrand.danger, contentColor = Color.White)) {
                 Text(BedsideText.string(app, "Stop"), fontSize = 36.sp, fontWeight = FontWeight.SemiBold)
             }
         }

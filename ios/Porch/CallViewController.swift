@@ -51,9 +51,9 @@ final class CallViewController: UIViewController {
     private let statusLabel = UILabel()
     private var statusTimer: Timer?
     private let caregiver = UIButton(type: .system)
-    private let callButton = PorchStyle.button("Call someone", symbol: "phone.fill")
+    private let callButton = PorchStyle.systemButton("Call someone", symbol: "phone.fill")
     /// A quiet notice when family messages are waiting; tapping it plays them.
-    private let messagesButton = PorchStyle.button("", symbol: "envelope.fill")
+    private let messagesButton = PorchStyle.systemButton("", symbol: "envelope.fill")
     private var clockTop: NSLayoutConstraint!
     private var clockTimer: Timer?
     private var timeFormatter = DateFormatter()
@@ -102,10 +102,10 @@ final class CallViewController: UIViewController {
         view.addSubview(sceneView)
         NSLayoutConstraint.activate([sceneView.leadingAnchor.constraint(equalTo: view.leadingAnchor), sceneView.trailingAnchor.constraint(equalTo: view.trailingAnchor), sceneView.topAnchor.constraint(equalTo: view.topAnchor), sceneView.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
         contextLabel.textColor = PorchStyle.nightText; contextLabel.textAlignment = .center
-        contextLabel.font = PorchStyle.font(32, weight: .semibold)
+        contextLabel.font = PorchStyle.systemFont(32, weight: .semibold)
         contextLabel.accessibilityIdentifier = "clock.context"
         contextLabel.adjustsFontSizeToFitWidth = true; contextLabel.minimumScaleFactor = 0.5
-        weekdayLabel.font = PorchStyle.font(72, weight: .medium)
+        weekdayLabel.font = PorchStyle.systemFont(72, weight: .medium)
         timeLabel.font = clockFont
         timeLabel.adjustsFontSizeToFitWidth = true
         timeLabel.minimumScaleFactor = 0.28
@@ -113,7 +113,7 @@ final class CallViewController: UIViewController {
         timeLabel.accessibilityIdentifier = "clock.time"
         weekdayLabel.accessibilityIdentifier = "clock.weekday"
         dateLabel.accessibilityIdentifier = "clock.date"
-        dateLabel.font = PorchStyle.font(58)
+        dateLabel.font = PorchStyle.systemFont(58)
         for label in [weekdayLabel, dateLabel] {
             label.adjustsFontSizeToFitWidth = true
             label.minimumScaleFactor = 0.5
@@ -125,7 +125,7 @@ final class CallViewController: UIViewController {
         }
         timeLabel.accessibilityTraits.insert(.updatesFrequently)
         [contextLabel, weekdayLabel, timeLabel, dateLabel].forEach { clock.addArrangedSubview($0) }
-        phoneKeypadStatus.font = PorchStyle.font(16)
+        phoneKeypadStatus.font = PorchStyle.systemFont(16)
         phoneKeypadStatus.textColor = PorchStyle.nightSecondary
         phoneKeypadStatus.textAlignment = .center
         phoneKeypadStatus.numberOfLines = 1
@@ -145,7 +145,7 @@ final class CallViewController: UIViewController {
         callConfig.baseBackgroundColor = PorchStyle.nightSurface
         callConfig.baseForegroundColor = PorchStyle.nightText
         callConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(UIDevice.current.userInterfaceIdiom == .pad ? 48 : 32, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(UIDevice.current.userInterfaceIdiom == .pad ? 48 : 32, weight: .semibold); return attributes
         }
         callConfig.contentInsets = .init(top: 24, leading: 24, bottom: 24, trailing: 24)
         callConfig.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: UIDevice.current.userInterfaceIdiom == .pad ? 40 : 28, weight: .semibold)
@@ -167,7 +167,7 @@ final class CallViewController: UIViewController {
         hold.allowableMovement = 30
         caregiver.addGestureRecognizer(hold)
         caregiver.addTarget(self, action: #selector(tappedSetup), for: .touchUpInside)
-        statusLabel.font = PorchStyle.font(17)
+        statusLabel.font = PorchStyle.systemFont(17)
         statusLabel.textColor = PorchStyle.nightSecondary
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
@@ -175,7 +175,7 @@ final class CallViewController: UIViewController {
         statusLabel.accessibilityIdentifier = "clock.feedback"
         var messageConfig = messagesButton.configuration!
         messageConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(26, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(26, weight: .semibold); return attributes
         }
         messageConfig.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
         messageConfig.cornerStyle = .capsule
@@ -336,7 +336,7 @@ final class CallViewController: UIViewController {
         let fontSize: CGFloat = large ? 48 : size.width < 400 ? 28 : 32
         callHeight.constant = large ? 124 : size.height < 500 ? 80 : 96
         callButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(fontSize, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(fontSize, weight: .semibold); return attributes
         }
         callButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: large ? 40 : 24, weight: .semibold)
         callButton.configuration?.contentInsets = .init(top: 20, leading: 16, bottom: 20, trailing: 16)
@@ -346,7 +346,7 @@ final class CallViewController: UIViewController {
         let width = max(200, size.width - 64)
         let height = max(80, size.height - callHeight.constant - 132 - clockTop.constant + 16)
         clock.spacing = min(24, height * 0.025)
-        contextLabel.font = PorchStyle.font(max(18, min(32, height * 0.07)), weight: .semibold)
+        contextLabel.font = PorchStyle.systemFont(max(18, min(32, height * 0.07)), weight: .semibold)
         weekdayLabel.font = .systemFont(ofSize: min(width * 0.075, height * 0.13), weight: .medium)
         dateLabel.font = .systemFont(ofSize: min(width * 0.061, height * 0.11))
         clockFont = .monospacedDigitSystemFont(ofSize: min(width * 0.43, height * 0.48), weight: .medium)
@@ -801,13 +801,13 @@ final class PeoplePickerViewController: UIViewController {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .dark
         view.backgroundColor = PorchStyle.night
-        let heading = PorchStyle.label(BedsideText.string("Who would you like to call?"), size: UIDevice.current.userInterfaceIdiom == .pad ? 60 : 40, color: PorchStyle.nightText, weight: .semibold)
-        let hint = PorchStyle.label(BedsideText.string("Tap a name or press their number on the keypad."), size: UIDevice.current.userInterfaceIdiom == .pad ? 34 : 28, color: PorchStyle.nightText)
+        let heading = PorchStyle.systemLabel(BedsideText.string("Who would you like to call?"), size: UIDevice.current.userInterfaceIdiom == .pad ? 60 : 40, color: PorchStyle.nightText, weight: .semibold)
+        let hint = PorchStyle.systemLabel(BedsideText.string("Tap a name or press their number on the keypad."), size: UIDevice.current.userInterfaceIdiom == .pad ? 34 : 28, color: PorchStyle.nightText)
         heading.textAlignment = .center; hint.textAlignment = .center
-        let back = PorchStyle.button(BedsideText.string("Back to clock"), symbol: "clock", filled: false)
+        let back = PorchStyle.systemButton(BedsideText.string("Back to clock"), symbol: "clock", filled: false)
         back.configuration?.baseForegroundColor = PorchStyle.nightText
         back.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(UIDevice.current.userInterfaceIdiom == .pad ? 40 : 30, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(UIDevice.current.userInterfaceIdiom == .pad ? 40 : 30, weight: .semibold); return attributes
         }
         back.configuration?.baseBackgroundColor = PorchStyle.nightSurface
         back.configuration?.background.backgroundColor = PorchStyle.nightSurface
@@ -850,13 +850,13 @@ final class PeoplePickerViewController: UIViewController {
         grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
         let people = CallSlots.digits.compactMap { index in slots.contact(for: index).map { (index, $0) } }
         if people.isEmpty {
-            grid.addArrangedSubview(PorchStyle.label(BedsideText.string("Your caregiver can add people using the settings icon on the clock screen."), size: 24, color: PorchStyle.nightText))
+            grid.addArrangedSubview(PorchStyle.systemLabel(BedsideText.string("Your caregiver can add people using the settings icon on the clock screen."), size: 24, color: PorchStyle.nightText))
         }
         for start in stride(from: 0, to: people.count, by: columns) {
             let row = UIStackView(); row.spacing = 16; row.distribution = .fillEqually
             for index in start..<min(start + columns, people.count) {
                 let (number, person) = people[index]
-                let button = PorchStyle.button(person.name)
+                let button = PorchStyle.systemButton(person.name)
                 button.configuration?.subtitle = BedsideText.string("Press %@", CallSlots.symbol(for: number))
                 button.configuration?.image = RecipientAppearance.cardPhoto(person.photoData, width: cardWidth - 40)
                 button.configuration?.imagePlacement = .top
@@ -873,10 +873,10 @@ final class PeoplePickerViewController: UIViewController {
                 button.configuration?.baseBackgroundColor = color
                 button.configuration?.baseForegroundColor = foreground
                 button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(nameSize, weight: .semibold); return attributes
+                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(nameSize, weight: .semibold); return attributes
                 }
                 button.configuration?.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(numberSize, weight: .medium); attributes.foregroundColor = foreground; return attributes
+                    var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(numberSize, weight: .medium); attributes.foregroundColor = foreground; return attributes
                 }
                 button.accessibilityIdentifier = "people.person.\(CallSlots.symbol(for: number))"
                 button.accessibilityLanguage = BedsideText.language.speechLanguage

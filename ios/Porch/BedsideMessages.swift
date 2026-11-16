@@ -340,7 +340,7 @@ final class MessagePlayerViewController: UIViewController {
     /// Who and when, kept on screen over a playing video.
     private let banner = UILabel()
     private let bannerView = UIView()
-    private let stopButton = PorchStyle.button("Stop", symbol: "stop.fill")
+    private let stopButton = PorchStyle.systemButton("Stop", symbol: "stop.fill")
     private let announcer = MessageAnnouncer()
     private var session: SessionRequirementHandle?
     private var observers: [NSObjectProtocol] = []
@@ -366,8 +366,8 @@ final class MessagePlayerViewController: UIViewController {
         playerLayer.videoGravity = .resizeAspect
         videoView.layer.addSublayer(playerLayer)
         view.addSubview(videoView)
-        nameLabel.font = PorchStyle.font(48, weight: .semibold); nameLabel.textColor = PorchStyle.nightText
-        detailLabel.font = PorchStyle.font(28); detailLabel.textColor = PorchStyle.nightSecondary
+        nameLabel.font = PorchStyle.systemFont(48, weight: .semibold); nameLabel.textColor = PorchStyle.nightText
+        detailLabel.font = PorchStyle.systemFont(28); detailLabel.textColor = PorchStyle.nightSecondary
         for label in [nameLabel, detailLabel] { label.textAlignment = .center; label.numberOfLines = 0; label.adjustsFontSizeToFitWidth = true; label.minimumScaleFactor = 0.5 }
         identity.axis = .vertical; identity.spacing = 20; identity.alignment = .center
         identity.translatesAutoresizingMaskIntoConstraints = false
@@ -375,17 +375,17 @@ final class MessagePlayerViewController: UIViewController {
         bannerView.backgroundColor = UIColor.black.withAlphaComponent(0.6)
         bannerView.layer.cornerRadius = 24; bannerView.layer.cornerCurve = .continuous
         bannerView.isHidden = true; bannerView.translatesAutoresizingMaskIntoConstraints = false
-        banner.font = PorchStyle.font(30, weight: .semibold); banner.textColor = .white
+        banner.font = PorchStyle.systemFont(30, weight: .semibold); banner.textColor = .white
         banner.textAlignment = .center; banner.numberOfLines = 2; banner.adjustsFontSizeToFitWidth = true; banner.minimumScaleFactor = 0.6
         banner.accessibilityIdentifier = "messages.banner"
         banner.translatesAutoresizingMaskIntoConstraints = false
         bannerView.addSubview(banner)
         view.addSubview(bannerView)
-        textTitle.font = PorchStyle.font(40, weight: .semibold); textTitle.textColor = PorchStyle.nightText
-        textDetail.font = PorchStyle.font(26); textDetail.textColor = PorchStyle.nightSecondary
+        textTitle.font = PorchStyle.systemFont(40, weight: .semibold); textTitle.textColor = PorchStyle.nightText
+        textDetail.font = PorchStyle.systemFont(26); textDetail.textColor = PorchStyle.nightSecondary
         textBody.textColor = PorchStyle.nightText; textBody.accessibilityIdentifier = "messages.text"
-        textNote.font = PorchStyle.font(22); textNote.textColor = PorchStyle.nightSecondary
-        textOriginal.font = PorchStyle.font(26); textOriginal.textColor = PorchStyle.nightSecondary
+        textNote.font = PorchStyle.systemFont(22); textNote.textColor = PorchStyle.nightSecondary
+        textOriginal.font = PorchStyle.systemFont(26); textOriginal.textColor = PorchStyle.nightSecondary
         for label in [textTitle, textDetail, textBody, textNote, textOriginal] { label.textAlignment = .center; label.numberOfLines = 0 }
         // Labels take the stack's width so a long text wraps instead of staying one clipped line.
         textStack.axis = .vertical; textStack.spacing = 16; textStack.alignment = .fill
@@ -395,9 +395,9 @@ final class MessagePlayerViewController: UIViewController {
         view.addSubview(textScroll)
         var config = stopButton.configuration!
         config.title = BedsideText.string("Stop")
-        config.baseBackgroundColor = UIColor(red: 0.68, green: 0.19, blue: 0.19, alpha: 1)
+        config.baseBackgroundColor = PorchStyle.danger
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(36, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(36, weight: .semibold); return attributes
         }
         config.contentInsets = .init(top: 24, leading: 48, bottom: 24, trailing: 48)
         stopButton.configuration = config
@@ -528,7 +528,7 @@ final class MessagePlayerViewController: UIViewController {
         textBody.text = text.text; textBody.isHidden = text.text.isEmpty
         // As large as fits: most texts are a line or two.
         let length = text.text.count
-        textBody.font = PorchStyle.font(length <= 80 ? 52 : length <= 200 ? 44 : length <= 500 ? 36 : 30, weight: .medium)
+        textBody.font = PorchStyle.systemFont(length <= 80 ? 52 : length <= 200 ? 44 : length <= 500 ? 36 : 30, weight: .medium)
         textBody.textAlignment = length <= 200 ? .center : .natural
         textNote.text = ([text.translated ? Self.translatedNote(text.sourceLanguage) : nil].compactMap { $0 } + Self.attachmentNotes(text)).joined(separator: "\n")
         textNote.isHidden = textNote.text?.isEmpty != false
@@ -979,11 +979,11 @@ final class BedsideVoicemailViewController: UIViewController {
         previewView.accessibilityLabel = BedsideText.string("Your camera preview")
         view.addSubview(previewView)
         titleLabel.text = BedsideText.string("Leave a message for %@", contact.name)
-        titleLabel.font = PorchStyle.font(large ? 60 : 36, weight: .semibold)
+        titleLabel.font = PorchStyle.systemFont(large ? 60 : 36, weight: .semibold)
         statusLabel.text = "\(reasonText)\n\(BedsideText.string("Speak after the beep."))"
-        statusLabel.font = PorchStyle.font(large ? 38 : 26)
+        statusLabel.font = PorchStyle.systemFont(large ? 38 : 26)
         timerLabel.font = .monospacedDigitSystemFont(ofSize: large ? 64 : 44, weight: .semibold)
-        hintLabel.font = PorchStyle.font(large ? 32 : 22)
+        hintLabel.font = PorchStyle.systemFont(large ? 32 : 22)
         for label in [titleLabel, statusLabel, timerLabel, hintLabel] {
             label.textColor = label === hintLabel ? PorchStyle.nightSecondary : PorchStyle.nightText
             label.textAlignment = .center; label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true
@@ -1083,7 +1083,7 @@ final class BedsideVoicemailViewController: UIViewController {
         config.cornerStyle = .large
         config.contentInsets = .init(top: 20, leading: 20, bottom: 20, trailing: 20)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(size, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(size, weight: .semibold); return attributes
         }
         button.configuration = config
         button.titleLabel?.numberOfLines = 0
@@ -1398,12 +1398,12 @@ final class MessageNoticeView: UIView {
         glow.layer.shadowColor = Self.warm.cgColor; glow.layer.shadowRadius = 36; glow.layer.shadowOpacity = 1; glow.layer.shadowOffset = .zero
         let icon = UIImageView(image: UIImage(systemName: "envelope.open.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 72, weight: .semibold)))
         icon.tintColor = Self.warm; icon.contentMode = .scaleAspectFit; icon.isAccessibilityElement = false
-        messageLabel.text = text; messageLabel.font = PorchStyle.font(44, weight: .semibold); messageLabel.textColor = PorchStyle.nightText
+        messageLabel.text = text; messageLabel.font = PorchStyle.systemFont(44, weight: .semibold); messageLabel.textColor = PorchStyle.nightText
         messageLabel.textAlignment = .center; messageLabel.numberOfLines = 0; messageLabel.adjustsFontSizeToFitWidth = true; messageLabel.minimumScaleFactor = 0.5
         messageLabel.accessibilityIdentifier = "messages.notice"
-        let notNowButton = PorchStyle.button(BedsideText.string("Not now"), symbol: "xmark")
+        let notNowButton = PorchStyle.systemButton(BedsideText.string("Not now"), symbol: "xmark")
         notNowButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(32, weight: .semibold); return attributes
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.systemFont(32, weight: .semibold); return attributes
         }
         notNowButton.configuration?.contentInsets = .init(top: 20, leading: 40, bottom: 20, trailing: 40)
         notNowButton.configuration?.baseBackgroundColor = UIColor(white: 0.32, alpha: 1)

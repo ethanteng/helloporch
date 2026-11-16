@@ -749,7 +749,7 @@ final class SetupPhoneViewController: BedsideSetupStep, Cell2JackDigitReceiving 
         statusDetail.isHidden = progress != .confirmed
         // Done fills the badge in, as does a phone already connected. Waiting is grey until the phone is there.
         let filled = checked || progress == .confirmed
-        badge.backgroundColor = filled ? PorchStyle.accent : PorchStyle.surface
+        badge.backgroundColor = filled ? PorchStyle.go : PorchStyle.surface
         statusIcon.tintColor = filled ? .white : progress == .waiting ? PorchStyle.secondary : PorchStyle.accent
         // Checking has nothing to put off, so its Done is always there.
         proceed.isHidden = !checked && !checking; later?.isHidden = checked || checking

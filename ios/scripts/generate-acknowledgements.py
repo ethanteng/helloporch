@@ -10,7 +10,8 @@ Each pinned package's license comes from its checkout. The WebRTC and LiveKit
 UniFFI binaries compile in other libraries and Rust crates without shipping
 their notices, so those are found in the binaries and their licenses are
 fetched from upstream and crates.io. The family bundle leaves out the
-Cell2Jack driver's Apple sample code, which only the Porch build embeds.
+Cell2Jack driver's Apple sample code, which only the Porch build embeds. The
+fonts' licenses come from ios/FontLicenses.
 """
 import argparse
 import base64
@@ -28,6 +29,8 @@ resolved = ios / "Porch.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Packa
 porch_settings = ios / "Porch/Settings.bundle"
 family_settings = ios / "Porch/FamilySettings/Settings.bundle"
 apple_sample = ios / "Cell2JackDriver/APPLE-SAMPLE-LICENSE.txt"
+# The website's fonts, bundled in Assets.xcassets/Fonts, with their licenses beside this folder.
+FONTS = [("Bricolage Grotesque", "BricolageGrotesque"), ("DM Sans", "DMSans"), ("Newsreader", "Newsreader")]
 
 PACKAGES = {
     "client-sdk-swift": ("LiveKit Swift SDK", "Apache-2.0"),
@@ -169,6 +172,10 @@ def rust_crates(packages):
     return [crate(name, version) for name, version in sorted(found)]
 
 
+def fonts():
+    return [entry(title, "OFL-1.1", clean((ios / "FontLicenses" / f"{name}-OFL.txt").read_text())) for title, name in FONTS]
+
+
 def write(bundle, entries):
     header = {"Type": "PSGroupSpecifier",
               "FooterText": "Porch includes the open-source software below, each under the license shown."}
@@ -182,7 +189,7 @@ def main():
     packages = parser.parse_args().packages or find_packages()
     pins = json.loads(resolved.read_text())["pins"]
     shared = sorted(swift_packages(packages, pins), key=lambda item: item["Title"].lower())
-    shared += webrtc(packages) + rust_crates(packages)
+    shared += webrtc(packages) + rust_crates(packages) + fonts()
     write(family_settings, shared)
     driver = entry("Apple DriverKit sample code", "MIT", clean(apple_sample.read_text()))
     write(porch_settings, shared + [driver])

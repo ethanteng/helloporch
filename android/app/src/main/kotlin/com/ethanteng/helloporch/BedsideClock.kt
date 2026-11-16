@@ -43,13 +43,14 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlinx.coroutines.delay
 
-/** iOS's PorchStyle colors for the bedside. */
+/** iOS's PorchStyle colors for the bedside: warm darks, each as bright as the green-tinted one it replaced, so the
+ * bedside lights the room no more than it did, and the website's ink by day. */
 internal object PorchColors {
-    val night = Color(0.035f, 0.055f, 0.05f)
-    val nightSurface = Color(0.085f, 0.12f, 0.105f)
-    val nightText = Color(0.78f, 0.83f, 0.79f)
-    val nightSecondary = Color(0.56f, 0.64f, 0.59f)
-    val ink = Color(0.12f, 0.19f, 0.17f)
+    val night = Color(0xFF100C09)
+    val nightSurface = Color(0xFF221B16)
+    val nightText = Color(0xFFD9CEC1)
+    val nightSecondary = Color(0xFFAB9A8A)
+    val ink = PorchBrand.ink
 }
 
 /**
@@ -110,7 +111,8 @@ internal class ScenePalette(scene: BedsideScene) {
     val skyBottom: Color
     val foreground: Color = if (scene.isDay) PorchColors.ink else PorchColors.nightText
     val clockWash: Color = if (scene.isDay) Color(1f, 0.99f, 0.95f, 0.66f) else Color(0f, 0f, 0f, 0.80f)
-    val controlBackground: Color = if (scene.isDay) Color(0.97f, 0.98f, 0.94f) else PorchColors.nightSurface
+    // By day a warm white, as bright as the pale green it replaced, as on iOS.
+    val controlBackground: Color = if (scene.isDay) Color(0xFFFCF8F1) else PorchColors.nightSurface
     val controlForeground: Color = if (scene.isDay) PorchColors.ink else PorchColors.nightText
     val illumination: Double = if (scene.isDay) 0.4 + 0.6 * sin(PI * scene.progress)
         else 0.4 * (1 - min(1.0, min(scene.progress, 1 - scene.progress) / 0.16))

@@ -325,9 +325,10 @@ private fun ThreadRow(entry: ThreadEntry, name: String, poster: Bitmap?, onPlay:
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Column(Modifier.fillMaxWidth(0.84f).widthIn(max = 520.dp), horizontalAlignment = alignment, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(caption, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // This phone's own are ink, as buttons are; a new one from the bedside is edged in the accent.
             val accent = MaterialTheme.colorScheme.primary
-            val ink = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-            Surface(shape = RoundedCornerShape(22.dp), color = if (mine) accent else MaterialTheme.colorScheme.surfaceContainerLow,
+            val ink = if (mine) Color.White else MaterialTheme.colorScheme.onSurface
+            Surface(shape = RoundedCornerShape(22.dp), color = if (mine) PorchBrand.ink else MaterialTheme.colorScheme.surfaceContainerLow,
                 border = if (mine) null else BorderStroke(if (entry.isNew) 2.dp else 1.dp, if (entry.isNew) accent else MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth().clearAndSetSemantics {
                     contentDescription = listOfNotNull(spoken, status.text, status.note).joinToString(". ")
@@ -380,7 +381,7 @@ private fun StatusTag(status: MessageStatus) {
     val accent = MaterialTheme.colorScheme.primary
     val (foreground, background) = when (status.tone) {
         MessageStatus.Tone.NEW -> MaterialTheme.colorScheme.onPrimary to accent
-        MessageStatus.Tone.PLAYED -> accent to accent.copy(alpha = 0.12f)
+        MessageStatus.Tone.PLAYED -> PorchBrand.played to PorchBrand.go.copy(alpha = 0.12f)
         MessageStatus.Tone.WAITING -> Color(0.52f, 0.32f, 0f) to Color(0.98f, 0.74f, 0.24f, 0.26f)
         MessageStatus.Tone.ENDED -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
         MessageStatus.Tone.FAILED -> Color(0.68f, 0.13f, 0.1f) to Color(1f, 0.23f, 0.19f, 0.12f)

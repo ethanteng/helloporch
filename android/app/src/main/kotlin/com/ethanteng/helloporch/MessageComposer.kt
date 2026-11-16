@@ -427,7 +427,7 @@ private fun CameraRecording(composer: MessageComposer, recipient: String) {
                 }
                 Button(onClick = if (recording) composer::stop else composer::startVideo, Modifier.weight(1f).heightIn(min = 56.dp),
                     enabled = !finishing && composer.recorder != null && (recording || composer.cameraReady),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0.68f, 0.19f, 0.19f), contentColor = Color.White)) {
+                    colors = ButtonDefaults.buttonColors(containerColor = PorchBrand.danger, contentColor = Color.White)) {
                     Text(when {
                         finishing -> "Finishing…"
                         recording -> "Stop recording"

@@ -30,8 +30,8 @@ import PorchCore
 
     // Family
     private let header = CallTranslationHeader()
-    private let hint = PorchStyle.label("", size: 16, color: PorchStyle.nightSecondary)
-    private let notice = PorchStyle.label("", size: 15, color: PorchStyle.nightSecondary)
+    private let hint = PorchStyle.systemLabel("", size: 16, color: PorchStyle.nightSecondary)
+    private let notice = PorchStyle.systemLabel("", size: 15, color: PorchStyle.nightSecondary)
     private let transcript = UIStackView()
     /// The last few things said, newest last.
     private(set) var lines: [CallTranslationLine] = []
@@ -46,8 +46,8 @@ import PorchCore
     private weak var sheet: CallTranslationSheet?
 
     // Bedside
-    private let banner = PorchStyle.label("", size: 17, color: PorchStyle.nightSecondary, weight: .semibold)
-    private let caption = PorchStyle.label("", size: 30, color: .white, weight: .semibold)
+    private let banner = PorchStyle.systemLabel("", size: 17, color: PorchStyle.nightSecondary, weight: .semibold)
+    private let caption = PorchStyle.systemLabel("", size: 30, color: .white, weight: .semibold)
     private var captionTask: Task<Void, Never>?
     /// How long a caption stays after the translator stops adding to it.
     private static let captionSeconds: UInt64 = 30
@@ -107,6 +107,7 @@ import PorchCore
             button.configuration?.title = on ? "Translating" : "Translate"
             button.configuration?.image = UIImage(systemName: on ? "character.bubble.fill" : "character.bubble")
             button.configuration?.baseBackgroundColor = on ? CallTranslationColors.on : PorchStyle.nightSurface
+            button.configuration?.baseForegroundColor = on ? PorchStyle.ink : .white
             button.accessibilityHint = on ? "Stops translating." : "Translates what you say for \(peerName), and what \(peerName) says for you."
             // The words got longer or shorter, so the call's buttons may wrap differently.
             if wasHidden == button.isHidden { CallButtonRows.relayout(containing: button) }
@@ -289,12 +290,12 @@ import PorchCore
     func entry(for line: CallTranslationLine, maxLines: Int) -> UIView {
         let entry = UIStackView(); entry.axis = .vertical; entry.spacing = 2
         if line.fromBedside {
-            entry.addArrangedSubview(PorchStyle.label("\(line.name): \(line.said ?? line.heard)", size: 17, color: .white, weight: .semibold))
-            if line.said != nil { entry.addArrangedSubview(PorchStyle.label(line.heard, size: 15, color: PorchStyle.nightSecondary)) }
+            entry.addArrangedSubview(PorchStyle.systemLabel("\(line.name): \(line.said ?? line.heard)", size: 17, color: .white, weight: .semibold))
+            if line.said != nil { entry.addArrangedSubview(PorchStyle.systemLabel(line.heard, size: 15, color: PorchStyle.nightSecondary)) }
         } else {
             let who = isMine(line) ? "You" : line.name
-            entry.addArrangedSubview(PorchStyle.label("\(who): \(line.heard)", size: 15, color: PorchStyle.nightSecondary))
-            if let said = line.said { entry.addArrangedSubview(PorchStyle.label("\(peerName) hears: \(said)", size: 17, color: .white, weight: .semibold)) }
+            entry.addArrangedSubview(PorchStyle.systemLabel("\(who): \(line.heard)", size: 15, color: PorchStyle.nightSecondary))
+            if let said = line.said { entry.addArrangedSubview(PorchStyle.systemLabel("\(peerName) hears: \(said)", size: 17, color: .white, weight: .semibold)) }
         }
         for case let label as UILabel in entry.arrangedSubviews { label.numberOfLines = maxLines; label.textAlignment = .natural }
         return entry
@@ -302,15 +303,18 @@ import PorchCore
 }
 
 enum CallTranslationColors {
-    /// Translating, like Answer.
-    static let on = UIColor(red: 0.18, green: 0.49, blue: 0.2, alpha: 1)
+    /// Translating: the cream page, with ink words, lit up among the dark call buttons.
+    static let on = PorchStyle.page
+    /// Live stays green: it means it's on.
     static let live = UIColor(red: 0.37, green: 0.82, blue: 0.54, alpha: 1)
-    static let link = UIColor(red: 0.62, green: 0.82, blue: 0.68, alpha: 1)
-    static let sheet = UIColor(red: 0.105, green: 0.14, blue: 0.125, alpha: 1)
-    static let well = UIColor(red: 0.13, green: 0.175, blue: 0.16, alpha: 1)
-    static let title = UIColor(red: 0.89, green: 0.925, blue: 0.9, alpha: 1)
-    static let chipBorder = UIColor(red: 0.23, green: 0.28, blue: 0.26, alpha: 1)
-    static let chipChosen = UIColor(red: 0.18, green: 0.35, blue: 0.26, alpha: 1)
+    /// Change: the site's honey.
+    static let link = PorchStyle.honey
+    // Warm darks, each as bright as the green-tinted one it replaced.
+    static let sheet = PorchStyle.rgb(0x27201B)
+    static let well = PorchStyle.rgb(0x312823)
+    static let title = PorchStyle.rgb(0xF0E9DD)
+    static let chipBorder = PorchStyle.rgb(0x4D423A)
+    static let chipChosen = PorchStyle.rgb(0x644839)
     static let stop = UIColor(red: 0.79, green: 0.29, blue: 0.29, alpha: 1)
     static let stopText = UIColor(red: 0.96, green: 0.76, blue: 0.75, alpha: 1)
 
@@ -326,13 +330,13 @@ enum CallTranslationColors {
 
 /// The top of the family's card: which language the bedside hears, and Change, which opens the sheet.
 private final class CallTranslationHeader: UIControl {
-    let title = PorchStyle.label("", size: 16, color: .white, weight: .semibold)
+    let title = PorchStyle.systemLabel("", size: 16, color: .white, weight: .semibold)
     /// Change and its arrow, hidden while translation is starting.
     private(set) var change: [UIView] = []
 
     init() {
         super.init(frame: .zero)
-        let words = PorchStyle.label("Change", size: 15, color: CallTranslationColors.link, weight: .semibold)
+        let words = PorchStyle.systemLabel("Change", size: 15, color: CallTranslationColors.link, weight: .semibold)
         words.numberOfLines = 1
         let chevron = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)))
         chevron.tintColor = CallTranslationColors.link
@@ -370,8 +374,8 @@ private final class CallTranslationSheet: UIViewController {
     private var chipButtons: [(BedsideLanguage, UIButton)] = []
     private let conversation = UIStackView()
     private let scroll = UIScrollView()
-    private let empty = PorchStyle.label("Nothing said yet.", size: 15, color: PorchStyle.nightSecondary)
-    private let notice = PorchStyle.label("", size: 15, color: PorchStyle.nightSecondary)
+    private let empty = PorchStyle.systemLabel("Nothing said yet.", size: 15, color: PorchStyle.nightSecondary)
+    private let notice = PorchStyle.systemLabel("", size: 15, color: PorchStyle.nightSecondary)
     private let stop = UIButton(type: .system)
     private var shownLines: [String] = []
 
@@ -398,7 +402,7 @@ private final class CallTranslationSheet: UIViewController {
         view.backgroundColor = CallTranslationColors.sheet
         view.accessibilityIdentifier = "call.translation.sheet"
 
-        let title = PorchStyle.label("Translating", size: 20, color: CallTranslationColors.title, weight: .semibold)
+        let title = PorchStyle.systemLabel("Translating", size: 20, color: CallTranslationColors.title, weight: .semibold)
         title.accessibilityTraits = .header
         var closeConfiguration = UIButton.Configuration.gray()
         closeConfiguration.image = UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold))
@@ -446,7 +450,7 @@ private final class CallTranslationSheet: UIViewController {
         stopConfiguration.background.strokeWidth = 1.5
         stopConfiguration.cornerStyle = .large
         stopConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes; attributes.font = PorchStyle.font(18, weight: .semibold); return attributes
+            var attributes = attributes; attributes.font = PorchStyle.systemFont(18, weight: .semibold); return attributes
         }
         stop.configuration = stopConfiguration
         stop.accessibilityIdentifier = "call.translation.stop"
@@ -475,7 +479,7 @@ private final class CallTranslationSheet: UIViewController {
     }
 
     private func section(_ text: String) -> UILabel {
-        let label = PorchStyle.label(text.uppercased(with: Locale(identifier: "en_US")), size: 13, color: PorchStyle.nightSecondary, weight: .semibold)
+        let label = PorchStyle.systemLabel(text.uppercased(with: Locale(identifier: "en_US")), size: 13, color: PorchStyle.nightSecondary, weight: .semibold)
         label.accessibilityLabel = text
         label.accessibilityTraits = .header
         return label
@@ -498,7 +502,7 @@ private final class CallTranslationSheet: UIViewController {
             configuration.background.cornerRadius = 12
             configuration.contentInsets = .init(top: 11, leading: 14, bottom: 11, trailing: 14)
             configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                var attributes = attributes; attributes.font = PorchStyle.font(16); return attributes
+                var attributes = attributes; attributes.font = PorchStyle.systemFont(16); return attributes
             }
             chip.configuration = configuration
             chip.isEnabled = !translation.sending

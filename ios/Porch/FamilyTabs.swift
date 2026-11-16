@@ -32,9 +32,10 @@ final class FamilyTabBarController: UITabBarController {
         appearance.backgroundColor = PorchStyle.page
         for item in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
             item.normal.iconColor = PorchStyle.secondary
-            item.normal.titleTextAttributes = [.foregroundColor: PorchStyle.secondary]
+            item.normal.titleTextAttributes = [.foregroundColor: PorchStyle.secondary, .font: PorchFonts.sans(10, weight: .medium)]
             item.selected.iconColor = PorchStyle.accent
-            item.selected.titleTextAttributes = [.foregroundColor: PorchStyle.accent]
+            item.selected.titleTextAttributes = [.foregroundColor: PorchStyle.accent, .font: PorchFonts.sans(10, weight: .medium)]
+            item.normal.badgeBackgroundColor = PorchStyle.accent
         }
         tabBar.unselectedItemTintColor = PorchStyle.secondary
         tabBar.standardAppearance = appearance

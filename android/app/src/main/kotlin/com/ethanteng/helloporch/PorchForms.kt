@@ -63,7 +63,7 @@ import com.ethanteng.helloporch.core.RemoteCaregiverSession
  * 760 dp wide like the iOS card, that scrolls. `navigation` is the bar's button, such as Cancel or Back. */
 @Composable
 fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, actions: (@Composable () -> Unit)? = null,
-    scrolls: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    scrolls: Boolean = true, wordmark: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     // The page, which FormCard's cards sit on. Material's own theme makes it the same color as a surface.
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
@@ -71,10 +71,15 @@ fun FormScreen(title: String, navigation: (@Composable () -> Unit)? = null, acti
             // smaller before it's cut short, as beside Back to clock in caregiver mode's list on a 10-inch tablet.
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 navigation?.invoke()
-                val style = MaterialTheme.typography.titleLarge
-                Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = style, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, textAlign = if (navigation == null) TextAlign.Center else TextAlign.Start,
-                    autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = style.fontSize))
+                // The Call tab's title is the logo, as the website's; the others are in Newsreader where the theme has it.
+                if (wordmark) Box(Modifier.weight(1f).padding(horizontal = 8.dp), contentAlignment = if (navigation == null) Alignment.Center else Alignment.CenterStart) {
+                    PorchWordmark()
+                } else {
+                    val style = porchTitleStyle()
+                    Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = style, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, textAlign = if (navigation == null) TextAlign.Center else TextAlign.Start,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = style.fontSize))
+                }
                 actions?.invoke()
             }
             HorizontalDivider()
@@ -126,7 +131,9 @@ fun FormButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     @DrawableRes icon: Int? = null) {
     val size = modifier.fillMaxWidth().heightIn(min = 50.dp)
     val shape = LocalFormButtonShape.current
-    if (filled) Button(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.shape) { ButtonLabel(text, icon) }
+    if (filled) Button(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.shape, colors = porchButtonColors()) {
+        ButtonLabel(text, icon)
+    }
     else OutlinedButton(onClick, size, enabled = enabled, shape = shape ?: ButtonDefaults.outlinedShape) { ButtonLabel(text, icon) }
 }
 

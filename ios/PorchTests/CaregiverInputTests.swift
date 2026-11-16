@@ -947,6 +947,54 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(field.textColor, PorchStyle.ink)
     }
 
+    /// The website's palette: links and the chosen tab in deep tomato read on cards and on the page, white reads on
+    /// ink buttons and on End call, and the night colors read on the bedside's night.
+    @MainActor func testBrandColorsMeetContrast() throws {
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.accent, PorchStyle.surface), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.accent, PorchStyle.page), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.secondary, PorchStyle.page), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(.white, PorchStyle.action), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(.white, PorchStyle.danger), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(.white, PorchStyle.go), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.go, PorchStyle.surface), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.nightText, PorchStyle.nightSurface), 4.5)
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.ink, CallTranslationColors.on), 4.5)
+        // "Played" is 15-point text on a faint green tag, which sits on the cream page. `go` there is 3.9:1.
+        XCTAssertGreaterThanOrEqual(contrast(PorchStyle.played, blended(PorchStyle.go, alpha: 0.12, over: PorchStyle.page)), 4.5)
+        // "Porch calls" is 14-point text on its honey chip, as on Android. Tomato on a faint tomato wash was 4.3:1.
+        let calls = PaddedLabel("Porch calls")
+        XCTAssertGreaterThanOrEqual(contrast(calls.textColor, try XCTUnwrap(calls.backgroundColor)), 4.5)
+    }
+
+    /// Family and caregiver screens use the website's fonts; Mom's own screens keep the system font.
+    @MainActor func testBrandFontsLoadAndBedsideKeepsSystemFont() {
+        XCTAssertTrue(PorchFonts.registered)
+        XCTAssertEqual(PorchStyle.font(17).fontName, "DMSans-Regular")
+        XCTAssertEqual(PorchStyle.font(17, weight: .medium).fontName, "DMSans-Medium")
+        XCTAssertEqual(PorchStyle.font(17, weight: .semibold).fontName, "DMSans-SemiBold")
+        XCTAssertEqual(PorchStyle.font(17, weight: .bold).fontName, "DMSans-Bold")
+        XCTAssertEqual(PorchStyle.titleFont(24).fontName, "Newsreader-Medium")
+        XCTAssertEqual(PorchFonts.wordmark(24).fontName, "BricolageGrotesque-ExtraBold")
+        XCTAssertEqual(PorchStyle.systemFont(17).familyName, UIFont.systemFont(ofSize: 17).familyName)
+        XCTAssertEqual(PorchStyle.label("Rose").font.fontName, "DMSans-Regular")
+        XCTAssertEqual(PorchStyle.systemLabel("Rose").font.familyName, UIFont.systemFont(ofSize: 17).familyName)
+        // A configured button takes its title's font from its configuration, so it's checked as drawn.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        let brand = PorchStyle.button("Save"), system = PorchStyle.systemButton("Save")
+        let stack = UIStackView(arrangedSubviews: [brand, system]); stack.axis = .vertical
+        stack.frame = window.bounds
+        window.addSubview(stack); window.isHidden = false
+        window.layoutIfNeeded()
+        XCTAssertEqual(brand.titleLabel?.font.fontName, "DMSans-Medium")
+        XCTAssertEqual(brand.titleLabel?.font.pointSize, system.titleLabel?.font.pointSize)
+        XCTAssertEqual(system.titleLabel?.font.familyName, UIFont.systemFont(ofSize: 17).familyName)
+        let navigation = PorchStyle.navigation(UIViewController())
+        XCTAssertEqual((navigation.navigationBar.standardAppearance.titleTextAttributes[.font] as? UIFont)?.fontName, "Newsreader-Medium")
+        let wordmark = PorchWordmark()
+        XCTAssertEqual(wordmark.accessibilityLabel, "Porch")
+        XCTAssertGreaterThan(wordmark.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).width, 60)
+    }
+
 
     @MainActor func testPINKeyboardProvidesDigitsWithoutPhoneSymbols() {
         let field = UITextField()
@@ -1050,6 +1098,9 @@ final class CaregiverInputTests: XCTestCase {
         let all = Acknowledgement.bundled
         XCTAssertGreaterThan(all.count, 10)
         XCTAssertTrue(all.contains { $0.title.hasPrefix("LiveKit Swift SDK") })
+        for font in ["Bricolage Grotesque", "DM Sans", "Newsreader"] {
+            XCTAssertTrue(all.contains { $0.title == font && $0.text.contains("SIL OPEN FONT LICENSE") }, font)
+        }
         XCTAssertFalse(all.contains { $0.text.hasPrefix("Porch includes") })
         let listed = rows(in: licenses.view).filter { $0.accessibilityIdentifier == "licenses.row" }
         XCTAssertEqual(listed.map(\.accessibilityLabel), all.map(\.title))
@@ -1829,6 +1880,15 @@ final class CaregiverInputTests: XCTestCase {
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
 
+    /// `foreground` at `alpha` drawn over an opaque `background`, as a tinted tag sits on the page.
+    @MainActor private func blended(_ foreground: UIColor, alpha: CGFloat, over background: UIColor) -> UIColor {
+        var fr: CGFloat = 0, fg: CGFloat = 0, fb: CGFloat = 0, fa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        foreground.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
+        background.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return UIColor(red: fr * alpha + br * (1 - alpha), green: fg * alpha + bg * (1 - alpha), blue: fb * alpha + bb * (1 - alpha), alpha: 1)
+    }
+
     @MainActor func testTextsAreReadInTheirOwnLanguageOnlyWhenPorchCouldntTranslateThem() {
         let restore = localizedBedside(.cantonese); defer { restore() }
         func text(_ words: String, translated: Bool = false, source: String? = nil) -> ReceivedText {
@@ -2004,10 +2064,10 @@ final class CallScreenLayoutTests: XCTestCase {
                 UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
             }
             let photo = RecipientAppearance.photoView(image.jpegData(compressionQuality: 0.8))
-            let title = PorchStyle.label("David", size: 40, color: .white)
-            let status = PorchStyle.label("Calling David…", size: 17, color: .white)
-            let placeholder = PorchStyle.label("Voice call", size: 28, color: .white)
-            let end = PorchStyle.button("End call")
+            let title = PorchStyle.systemLabel("David", size: 40, color: .white)
+            let status = PorchStyle.systemLabel("Calling David…", size: 17, color: .white)
+            let placeholder = PorchStyle.systemLabel("Voice call", size: 28, color: .white)
+            let end = PorchStyle.systemButton("End call")
             CallScreenLayout.install(in: screen.view, video: video, placeholder: placeholder, title: title, status: status, photo: photo, buttons: [end])
             screen.view.frame = CGRect(origin: .zero, size: size); screen.view.layoutIfNeeded()
             let rect = photo.convert(photo.bounds, to: screen.view)
@@ -2028,9 +2088,9 @@ final class CallScreenLayoutTests: XCTestCase {
             let screen = UIViewController(), remote = VideoView(), preview = VideoView()
             remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
             preview.backgroundColor = UIColor(white: 0.35, alpha: 1)
-            let title = PorchStyle.label(String(String(repeating: "Family member ", count: 7).prefix(80)), size: 26)
-            let status = PorchStyle.label("Trying your family on Porch…\nTheir phone will ring if Porch isn't answered.", size: 17)
-            let hint = PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16)
+            let title = PorchStyle.systemLabel(String(String(repeating: "Family member ", count: 7).prefix(80)), size: 26)
+            let status = PorchStyle.systemLabel("Trying your family on Porch…\nTheir phone will ring if Porch isn't answered.", size: 17)
+            let hint = PorchStyle.systemLabel("Key 0: hang up · Key 9: video off / on", size: 16)
             for (label, pointSize) in [(title, CGFloat(26)), (status, CGFloat(17)), (hint, CGFloat(16))] {
                 // Keep the explicit accessibility metrics when this unmounted
                 // fixture inherits the test host's default content-size trait.
@@ -2084,13 +2144,13 @@ final class CallScreenLayoutTests: XCTestCase {
             let remote = VideoView(), preview = VideoView()
             remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
             preview.backgroundColor = UIColor(white: 0.35, alpha: 1)
-            let title = PorchStyle.label("Family", size: 26, color: .white)
-            let status = PorchStyle.label("Video call connected", size: 17, color: .white)
+            let title = PorchStyle.systemLabel("Family", size: 26, color: .white)
+            let status = PorchStyle.systemLabel("Video call connected", size: 17, color: .white)
             let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
             for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video", "phone.down.fill"]) {
                 CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
             }
-            let hint = PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16, color: .white)
+            let hint = PorchStyle.systemLabel("Key 0: hang up · Key 9: video off / on", size: 16, color: .white)
             CallScreenLayout.install(in: screen.view, video: remote, preview: hasPreview ? preview : nil,
                                      title: title, status: status, hint: hasPreview ? hint : nil, buttons: buttons)
             for size in [CGSize(width: 320, height: 568), CGSize(width: 393, height: 852),
@@ -2144,8 +2204,8 @@ final class CallScreenLayoutTests: XCTestCase {
         for (button, text) in zip(buttons, titles) {
             CallScreenLayout.configure(button, title: text, symbol: "phone", isEnd: button === buttons.last)
         }
-        CallScreenLayout.install(in: screen.view, video: VideoView(), title: PorchStyle.label("Mom", size: 26, color: .white),
-                                 status: PorchStyle.label("Video call connected", size: 17, color: .white), buttons: buttons)
+        CallScreenLayout.install(in: screen.view, video: VideoView(), title: PorchStyle.systemLabel("Mom", size: 26, color: .white),
+                                 status: PorchStyle.systemLabel("Video call connected", size: 17, color: .white), buttons: buttons)
         func rows() -> [[String]] {
             screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
             // A hidden or shown button regroups the rows on the next turn of the run loop.
@@ -2165,7 +2225,7 @@ final class CallScreenLayoutTests: XCTestCase {
             XCTAssertTrue(screen.view.bounds.contains(rect))
             // Each word fits on its line: no button is narrower than its longest word.
             let longest = (button.configuration?.title ?? "").split(separator: " ")
-                .map { (String($0) as NSString).size(withAttributes: [.font: PorchStyle.font(16, weight: .semibold)]).width }.max() ?? 0
+                .map { (String($0) as NSString).size(withAttributes: [.font: PorchStyle.systemFont(16, weight: .semibold)]).width }.max() ?? 0
             XCTAssertGreaterThanOrEqual(rect.width, longest + 16)
         }
         // Translate isn't offered, such as when the bedside's app can't show translation: no gap is left for it.
@@ -2214,15 +2274,15 @@ final class CallScreenLayoutTests: XCTestCase {
             UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
         }
         let photo = RecipientAppearance.photoView(image.jpegData(compressionQuality: 0.8))
-        let placeholder = PorchStyle.label("Waiting for video", size: 28, color: .white)
+        let placeholder = PorchStyle.systemLabel("Waiting for video", size: 28, color: .white)
         let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
         for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video.slash", "phone.down.fill"]) {
             CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
         }
         CallScreenLayout.install(in: screen.view, video: remote, preview: preview, placeholder: placeholder,
-                                 title: PorchStyle.label("David", size: 40, color: .white),
-                                 status: PorchStyle.label("Video call connected", size: 17, color: .white),
-                                 hint: PorchStyle.label("Key 0: hang up · Key 9: video off / on", size: 16, color: .white),
+                                 title: PorchStyle.systemLabel("David", size: 40, color: .white),
+                                 status: PorchStyle.systemLabel("Video call connected", size: 17, color: .white),
+                                 hint: PorchStyle.systemLabel("Key 0: hang up · Key 9: video off / on", size: 16, color: .white),
                                  photo: photo, buttons: buttons)
         let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
         // The same screen turns between phone and iPad sizes, so the self view must follow each change. A nearly
@@ -2277,14 +2337,14 @@ final class CallScreenLayoutTests: XCTestCase {
                 UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
             }
             let photo = RecipientAppearance.photoView(image.jpegData(compressionQuality: 0.8))
-            let placeholder = PorchStyle.label("Phone call\nCamera is off", size: 28, color: .white)
+            let placeholder = PorchStyle.systemLabel("Phone call\nCamera is off", size: 28, color: .white)
             let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
             for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video.slash", "phone.down.fill"]) {
                 CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
             }
             CallScreenLayout.install(in: screen.view, video: remote, preview: preview, placeholder: placeholder,
-                                     title: PorchStyle.label("David", size: 40, color: .white),
-                                     status: PorchStyle.label("Trying David's phone…", size: 17, color: .white),
+                                     title: PorchStyle.systemLabel("David", size: 40, color: .white),
+                                     status: PorchStyle.systemLabel("Trying David's phone…", size: 17, color: .white),
                                      photo: photo, buttons: buttons)
             let scroll = try XCTUnwrap(screen.view.subviews.first { $0.accessibilityIdentifier == "call.overlays" } as? UIScrollView)
             screen.view.frame = CGRect(origin: .zero, size: size)
@@ -2318,11 +2378,11 @@ final class CallScreenLayoutTests: XCTestCase {
         let photo = RecipientAppearance.photoView(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40)).image { context in
             UIColor.systemOrange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
         }.jpegData(compressionQuality: 0.8))
-        let placeholder = PorchStyle.label("Voice call", size: 28, color: .white)
+        let placeholder = PorchStyle.systemLabel("Voice call", size: 28, color: .white)
         CallScreenLayout.install(in: voice.view, video: VideoView(), placeholder: placeholder,
-                                 title: PorchStyle.label("David", size: 40, color: .white),
-                                 status: PorchStyle.label("Voice call connected", size: 17, color: .white),
-                                 photo: photo, buttons: [PorchStyle.button("End call")])
+                                 title: PorchStyle.systemLabel("David", size: 40, color: .white),
+                                 status: PorchStyle.systemLabel("Voice call connected", size: 17, color: .white),
+                                 photo: photo, buttons: [PorchStyle.systemButton("End call")])
         voice.view.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
         CallScreenLayout.releaseSelfView(in: voice.view)
         voice.view.layoutIfNeeded()
