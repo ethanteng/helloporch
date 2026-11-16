@@ -961,6 +961,9 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.ink, CallTranslationColors.on), 4.5)
         // "Played" is 15-point text on a faint green tag, which sits on the cream page. `go` there is 3.9:1.
         XCTAssertGreaterThanOrEqual(contrast(PorchStyle.played, blended(PorchStyle.go, alpha: 0.12, over: PorchStyle.page)), 4.5)
+        // "Porch calls" is 14-point text on a faint tomato wash over a card. Tomato there is 4.3:1.
+        let calls = PaddedLabel("Porch calls")
+        XCTAssertGreaterThanOrEqual(contrast(calls.textColor, blended(PorchStyle.accent, alpha: 0.12, over: PorchStyle.surface)), 4.5)
     }
 
     /// Family and caregiver screens use the website's fonts; Mom's own screens keep the system font.

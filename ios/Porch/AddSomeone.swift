@@ -837,7 +837,8 @@ final class PaddedLabel: UILabel {
         super.init(frame: .zero)
         self.text = text
         font = PorchStyle.font(14, weight: .semibold)
-        textColor = PorchStyle.accent
+        // Ink, not tomato: tomato on this faint tomato wash is 4.3:1 on a card, under 4.5:1 for 14-point text.
+        textColor = PorchStyle.ink
         backgroundColor = PorchStyle.accent.withAlphaComponent(0.12)
         layer.cornerRadius = 12; clipsToBounds = true
         setContentHuggingPriority(.required, for: .horizontal)
