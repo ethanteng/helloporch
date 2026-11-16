@@ -44,7 +44,8 @@ const messages = (u: UsageRow): Tally => ({ count: u.audioMessages.count + u.vid
 const activePartial = (u: UsageRow) => !!(u.callsReceived.partial || u.audioMessages.partial || u.audioMessages.peoplePartial || u.videoMessages.partial || u.texts.partial);
 /** How many, then from (or to) how many different people, such as "18 from 5 callers, 14 answered". */
 function tallied(tally: Tally, [word, one, many]: [string, string, string], extra?: (plus: string) => string) {
-  if (!tally.count) return <span className="muted">0</span>;
+  // A zero can be a minimum too, when the history is full and kept nothing from this range.
+  if (!tally.count) return total(tally);
   const plus = tally.partial ? "+" : "", peoplePlus = tally.partial || tally.peoplePartial ? "+" : "";
   return <><span className="num">{total(tally)}</span><span className="muted" title={peoplePlus ? full : undefined}>
     {word} {tally.people}{peoplePlus} {tally.people === 1 ? one : many}{extra ? `, ${extra(plus)}` : ""}</span></>;
@@ -151,7 +152,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
             </div>
             {listed.map(({ row, u }) => {
               const contacts = u.contacts.porchApp + u.contacts.phoneNumbers;
-              const any = columns.some(c => c.line(u).some(Boolean));
+              const any = columns.some(c => c.line(u).some(Boolean)), unsure = columns.some(c => c.tally(u).partial);
               return (
                 <details key={row.id} className="porch">
                   <summary className="cols">
@@ -190,7 +191,8 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                     {any ? (
                       <TrendChart labels={labels} description={`${row.bedsideName}: calls in, calls out, messages and texts ${points.seconds === 86400 ? "a day" : "a week"}, ${dates}`}
                         series={columns.map(c => ({ name: c.name, color: c.color, values: c.line(u) }))} />
-                    ) : <p className="quiet">No calls, messages or texts in this range.</p>}
+                    ) : <p className="quiet">{unsure ? "No calls, messages or texts found, but some of this range may be missing from Porch’s records."
+                      : "No calls, messages or texts in this range."}</p>}
                   </div>
                 </details>
               );
