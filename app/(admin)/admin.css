@@ -13,6 +13,13 @@
   --warn-bg: #fdf0dc;
   --error: #b42318;
   --tag-bg: #eaeeec;
+  --row: #f3f6f4;
+  --shadow: 0 14px 36px rgb(0 0 0 / 0.14);
+  /* Trend lines: calls in, calls out, messages, texts. */
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -30,6 +37,12 @@
     --warn-bg: #3a2a12;
     --error: #ff8a80;
     --tag-bg: #2a3230;
+    --row: #202826;
+    --shadow: 0 14px 36px rgb(0 0 0 / 0.5);
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
   }
 }
 
@@ -134,28 +147,114 @@ table.narrow td.actions .error { white-space: normal; min-width: 10rem; text-ali
 table.narrow td:first-child { overflow-wrap: anywhere; }
 @media (max-width: 640px) { table.narrow th, table.narrow td { padding: 10px; } }
 .sub { display: block; color: var(--muted); font-size: 0.9rem; }
-tfoot th, tfoot td { border-top: 1px solid var(--line); border-bottom: none; font-weight: 600; }
-tfoot th { font-size: inherit; color: inherit; }
 .note { color: var(--muted); font-size: 0.9rem; max-width: 80ch; margin-top: 12px; }
 
-/* The Porches page's time range: presets, or a custom pair of dates. */
-.range-picker { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 24px; margin-bottom: 12px; }
-.range-links { display: flex; flex-wrap: wrap; gap: 6px; }
-.range-links a {
-  color: var(--muted);
-  text-decoration: none;
-  padding: 5px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+/* The Porches page: a title row with the time range, then one row a Porch whose details open below it. */
+.titlerow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
+.titlerow h1 { margin: 0; }
+.hgroup { display: flex; align-items: center; gap: 2px; }
+.controls { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.seg { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.seg a, .seg summary { color: var(--muted); text-decoration: none; padding: 3px 10px; border-radius: 7px; font-size: 0.9rem; cursor: pointer; }
+.seg a:hover, .seg summary:hover { color: var(--ink); }
+.seg [aria-current="true"], .custom[open] summary { color: var(--ink); background: var(--tag-bg); font-weight: 600; }
+.custom summary { list-style: none; }
+.custom summary::-webkit-details-marker { display: none; }
+/* Under the whole row of controls, so it stays on screen when they wrap on a phone. */
+.custom-form {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
   background: var(--surface);
-  font-size: 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
-.range-links a:hover { color: var(--ink); }
-.range-links a[aria-current="true"] { color: var(--ink); background: var(--tag-bg); border-color: var(--tag-bg); font-weight: 600; }
-.custom-range { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
-.custom-range .field { width: 10.5rem; }
-.custom-range .field > span { font-size: 0.85rem; color: var(--muted); }
-.custom-range input { padding: 5px 10px; }
+.custom-form .field { width: 10.5rem; }
+.custom-form .field > span { font-size: 0.85rem; color: var(--muted); }
+.custom-form input { padding: 5px 10px; }
+
+/* A "?" and the note it opens. Without anchor positioning the note opens in the middle of the window. */
+.help { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: none; color: var(--muted); }
+.help > span { width: 21px; height: 21px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; line-height: 1; }
+.help:hover { color: var(--accent); }
+.pop { width: min(420px, calc(100vw - 32px)); padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); font-size: 0.9rem; line-height: 1.45; }
+.pop ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; }
+@supports (anchor-name: --a) {
+  #porches-help-button { anchor-name: --porches-help; }
+  #porches-help { position-anchor: --porches-help; }
+  #activity-help-button { anchor-name: --activity-help; }
+  #activity-help { position-anchor: --activity-help; }
+  .pop { inset: auto; margin: 4px 0 0; position-area: bottom span-right; position-try-fallbacks: flip-inline; }
+  .pop.end { position-area: bottom span-left; }
+}
+
+.status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.seen { display: inline-flex; align-items: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.chip { display: inline-block; padding: 0 7px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.8rem; font-weight: 600; line-height: 1.65; white-space: nowrap; }
+.name { font-weight: 600; }
+.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+.porch-list { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.porch-rows { min-width: 900px; }
+.cols {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.3fr) minmax(230px, 1.7fr) minmax(160px, 1.2fr) repeat(4, minmax(64px, 0.5fr)) 24px;
+  align-items: center;
+  column-gap: 12px;
+  padding: 0 16px;
+}
+.porch-head { font-size: 0.85rem; color: var(--muted); font-weight: 600; padding-block: 10px; border-bottom: 1px solid var(--line); }
+.porch > summary { list-style: none; cursor: pointer; min-height: 58px; padding-block: 10px; border-bottom: 1px solid var(--line); }
+.porch > summary::-webkit-details-marker { display: none; }
+.porch > summary:hover, .porch[open] > summary { background: var(--row); }
+.porch[open] > summary { border-bottom-color: transparent; }
+.porch > summary:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: -3px; }
+.chev { width: 18px; height: 18px; color: var(--muted); justify-self: end; transition: transform 0.15s; }
+.porch[open] .chev { transform: rotate(90deg); color: var(--ink); }
+.porch-total { font-weight: 600; padding-block: 14px; }
+/* Trends: each activity column is a line beside its total, so those columns widen. */
+.porch-list.trends .porch-rows { min-width: 1000px; }
+.porch-list.trends .cols { grid-template-columns: minmax(140px, 1.1fr) minmax(210px, 1.4fr) minmax(170px, 1.1fr) repeat(4, minmax(96px, 0.8fr)) 24px; }
+.porch-list.trends .n { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.spark { flex: none; overflow: visible; }
+.spark .base { stroke: var(--line); stroke-width: 1; }
+.spark .line { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spark .mark { fill: var(--c); stroke: var(--surface); stroke-width: 2; }
+.panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 16px 48px; padding: 4px 16px 20px; background: var(--row); border-bottom: 1px solid var(--line); }
+.panel h3 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.pairs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; margin: 0; }
+.pairs dt { color: var(--muted); }
+.pairs dd { margin: 0; }
+.pairs .num { font-weight: 600; margin-right: 8px; font-variant-numeric: tabular-nums; }
+.quiet { grid-column: 1 / -1; margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); }
+
+/* A Porch's trend lines. Points show their counts on hover. */
+.trend { grid-column: 1 / -1; margin: 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.trend svg { display: block; width: 100%; height: auto; overflow: visible; }
+.trend text { fill: var(--muted); font-size: 11px; }
+.trend .rule { stroke: var(--line); stroke-width: 1; }
+.trend .line { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend .hit { fill: transparent; }
+.trend .cross { stroke: var(--muted); stroke-width: 1; opacity: 0; }
+.trend .mark { fill: var(--c); stroke: var(--row); stroke-width: 2; opacity: 0; }
+.trend .point:hover .cross, .trend .point:hover .mark, .trend .only .mark { opacity: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 6px; padding: 0; list-style: none; font-size: 0.85rem; color: var(--muted); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c); }
+.s1 { --c: var(--s1); }
+.s2 { --c: var(--s2); }
+.s3 { --c: var(--s3); }
+.s4 { --c: var(--s4); }
 
 .tag {
   display: inline-block;

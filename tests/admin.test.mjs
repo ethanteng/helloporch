@@ -14,7 +14,7 @@ import { listPorches } from '../lib/admin/porches.ts';
 import { adminHeaders, adminRoute, isAdminHost } from '../lib/admin/routing.ts';
 import { AdminError } from '../lib/admin/session.ts';
 import { systemStatus } from '../lib/admin/system.ts';
-import { pacificMidnight, porchUsage, usageRange } from '../lib/admin/usage.ts';
+import { pacificMidnight, porchUsage, trendPoints, usageRange } from '../lib/admin/usage.ts';
 import { recordCall } from '../lib/family/call-log.ts';
 import { receivePhoneVoicemail } from '../lib/family/messages.ts';
 import { receivedLogKey } from '../lib/family/received-log.ts';
@@ -440,6 +440,17 @@ test('Activity ranges: presets, and custom Pacific dates that include their last
 class FakeMedia {
   async put() {} async remove() {} async stat() { return null; } async downloadURL() { return 'https://blob.test/x'; }
 }
+test('Trend lines have a point a day for up to a month, a week for up to six months, then 30 days', () => {
+  const day = 86400, now = 1_800_000_000;
+  const of = days => trendPoints({ from: now - days * day, to: now });
+  assert.deepEqual(of(7), { seconds: day, count: 7 });
+  assert.deepEqual(of(30), { seconds: day, count: 30 });
+  assert.deepEqual(of(31), { seconds: day, count: 31 });
+  assert.deepEqual(of(90), { seconds: 7 * day, count: 13 });
+  assert.deepEqual(of(365), { seconds: 30 * day, count: 13 });
+  assert.deepEqual(trendPoints({ from: now - 3600, to: now }), { seconds: day, count: 1 });
+});
+
 test('Activity counts contacts, what each Porch received and made, and who, without saying who', async () => {
   const f = await fixture();
   const { session } = await f.session();
@@ -496,13 +507,19 @@ test('Activity counts contacts, what each Porch received and made, and who, with
   const [row] = await porchUsage(session, f.store, week, f.now());
   assert.deepEqual(row, { id, contacts: { porchApp: 3, phoneNumbers: 3 }, activeContacts: 5,
     callsReceived: { count: 6, people: 3, answered: 2 }, audioMessages: { count: 5, people: 3, voicemails: 3 }, videoMessages: { count: 1, people: 1 },
-    texts: { count: 3, people: 2 }, callsMade: { count: 3, people: 2 } });
+    texts: { count: 3, people: 2 }, callsMade: { count: 3, people: 2 },
+    // A point a day from the week's start, and a last one for its final second. The voicemail from 5 days ago is in
+    // the third; the texts and the two phone voicemails left just now are in the last.
+    trend: { callsIn: [0, 0, 0, 0, 0, 1, 5, 0], callsMade: [0, 0, 0, 0, 0, 0, 3, 0], messages: [0, 0, 1, 0, 0, 0, 3, 2], texts: [0, 0, 0, 0, 0, 0, 0, 3] } });
   const shown = JSON.stringify(row);
   for (const secret of ['Private', keypad, other, allowed, stranger, withheld, ann, ben, dee, gone, 'secretHash']) assert.ok(!shown.includes(secret), secret);
 
   // Wider, the older call and video message count too. Before any of it, nothing does.
   const [month] = await porchUsage(session, f.store, { from: f.now() - 30 * day - 1, to: f.now() + 1 }, f.now());
   assert.deepEqual([month.callsReceived.count, month.videoMessages.count, month.activeContacts], [7, 2, 6]);
+  const added = values => values.reduce((a, b) => a + b, 0);
+  assert.deepEqual([month.trend.callsIn.length, added(month.trend.callsIn), added(month.trend.callsMade), added(month.trend.messages), added(month.trend.texts)],
+    [31, 7, 3, month.audioMessages.count + month.videoMessages.count, 3]);
   const [before] = await porchUsage(session, f.store, { from: start, to: start + day }, f.now());
   assert.deepEqual([before.callsReceived.count, before.audioMessages.count, before.texts.count, before.callsMade.count, before.activeContacts], [0, 0, 0, 0, 0]);
 
