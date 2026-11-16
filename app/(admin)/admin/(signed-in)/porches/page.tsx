@@ -182,7 +182,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                       <h3>{preset?.label ?? dates}</h3>
                       <dl className="pairs">
                         <dt>Contacts</dt><dd>{contacts ? <><span className="num">{contacts}</span><span className="muted">
-                          {u.contacts.porchApp} on Porch, {plural(u.contacts.phoneNumbers, "number", "numbers")} · {u.activeContacts}{activePartial(u) ? "+" : ""} active</span></> : <span className="muted">0</span>}</dd>
+                          {u.contacts.porchApp} on Porch, {plural(u.contacts.phoneNumbers, "number", "numbers")} · <span title={activePartial(u) ? full : undefined}>{u.activeContacts}{activePartial(u) ? "+" : ""} active</span></span></> : <span className="muted">0</span>}</dd>
                         <dt>Calls in</dt><dd>{tallied(u.callsReceived, ["from", "caller", "callers"], plus => `${u.callsReceived.answered}${plus} answered`)}</dd>
                         <dt>Calls out</dt><dd>{tallied(u.callsMade, ["to", "contact", "contacts"])}</dd>
                         <dt>Audio messages</dt><dd>{tallied(u.audioMessages, ["from", "sender", "senders"], u.audioMessages.voicemails ? plus => `${u.audioMessages.voicemails}${plus} phone ${u.audioMessages.voicemails === 1 ? "voicemail" : "voicemails"}` : undefined)}</dd>
