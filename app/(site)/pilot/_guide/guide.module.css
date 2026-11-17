@@ -379,7 +379,10 @@ a.kitTag:focus-visible {
   background: var(--honey);
 }
 
-/* A screenshot of a Porch screen, with a short caption under it. */
+/*
+ * A screenshot of a Porch screen, with a short caption under it. The app's cream is nearly the page's, so the screen
+ * sits in a dark device bezel on the step videos' dark green box (#1f3b33 bezel #1f1a17, as `render.swift` draws them).
+ */
 .shot {
   display: flex;
   flex-direction: column;
@@ -387,13 +390,20 @@ a.kitTag:focus-visible {
   margin: 8px 0;
 }
 
+.shotFrame {
+  --bezel: clamp(6px, 1.3vw, 10px);
+  padding: clamp(14px, 5%, 36px);
+  border-radius: 18px;
+  background: #1f3b33;
+  box-shadow: 0 18px 36px -28px oklch(0.3 0.05 50 / 0.5);
+}
+
 .shot img {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid oklch(0.85 0.03 70);
-  border-radius: 18px;
-  box-shadow: 0 18px 36px -28px oklch(0.3 0.05 50 / 0.5);
+  border: var(--bezel) solid #1f1a17;
+  border-radius: calc(var(--bezel) + clamp(8px, 1.6vw, 14px));
 }
 
 .shotPhone {
@@ -401,8 +411,12 @@ a.kitTag:focus-visible {
   width: min(300px, 70%);
 }
 
-.shotPhone img {
+.shotPhone .shotFrame {
   border-radius: 28px;
+}
+
+.shotPhone img {
+  border-radius: calc(var(--bezel) + 26px);
 }
 
 /* The links a family uses to get Porch: a card each, the QR code beside the text, or under it on a phone. */

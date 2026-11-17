@@ -205,14 +205,19 @@ export function Setting({ rows }: { rows: [label: string, value: ReactNode][] })
   );
 }
 
-/** A screenshot of a Porch screen: a tablet's fills the column, a phone's sits narrower in the middle. */
+/**
+ * A screenshot of a Porch screen, framed as the step videos show one: the screen in a dark bezel on dark green.
+ * A tablet's fills the column, a phone's sits narrower in the middle.
+ */
 export function Screenshot({ src, alt, width, height, device, caption }: {
   src: string; alt: string; width: number; height: number; device: "tablet" | "phone"; caption?: ReactNode;
 }) {
   return (
     <figure className={`${styles.shot} ${device === "phone" ? styles.shotPhone : styles.shotTablet}`}>
-      <Image src={src} alt={alt} width={width} height={height}
-        sizes={device === "phone" ? "(max-width: 700px) 70vw, 300px" : "(max-width: 800px) 100vw, 760px"} />
+      <div className={styles.shotFrame}>
+        <Image src={src} alt={alt} width={width} height={height}
+          sizes={device === "phone" ? "(max-width: 700px) 60vw, 260px" : "(max-width: 800px) 90vw, 680px"} />
+      </div>
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
   );
