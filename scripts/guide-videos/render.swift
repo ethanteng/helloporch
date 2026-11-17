@@ -1,20 +1,21 @@
-// Renders a captioned walkthrough video from app screenshots.
+// Renders a walkthrough video from app screenshots: the screens, with a ring where each tap goes, and no text, since
+// the guide's own steps sit beside each video.
 //   swift render.swift storyboard.json
-// The storyboard: { output, poster, layout: tablet|phone|pair, beats: [{ label, caption, main, side?, tap?: {on: main|side, x, y}, hold? }] }
-// Tap points are fractions of the screenshot (0…1 across and down).
+// The storyboard: { output, poster, layout: tablet|phone|pair, background?, beats: [{ caption, main, side?, tap?: {on: main|side, x, y}, hold? }] }
+// A beat's caption says what it shows and sets how long it holds; it isn't drawn. Tap points are fractions of the
+// screenshot (0…1 across and down).
 import AppKit
 import AVFoundation
-import CoreText
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
 struct Tap: Codable { var on: String?; var x: Double; var y: Double }
-struct Beat: Codable { var label: String?; var caption: String; var main: String; var side: String?; var tap: Tap?; var hold: Double? }
-/// background: the frame's color as "#RRGGBB"; dark: light captions for a dark background.
+struct Beat: Codable { var caption: String; var main: String; var side: String?; var tap: Tap?; var hold: Double? }
+/// background: the frame's color as "#RRGGBB".
 struct Board: Codable {
   var output: String; var poster: String?; var layout: String; var beats: [Beat]; var width: Int?; var height: Int?
-  var background: String?; var dark: Bool?
+  var background: String?
 }
 
 let boardURL = URL(fileURLWithPath: CommandLine.arguments[1])
@@ -27,10 +28,8 @@ let fade = 0.45
 func color(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
   CGColor(srgbRed: CGFloat((hex >> 16) & 0xff) / 255, green: CGFloat((hex >> 8) & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: a)
 }
-let dark = board.dark ?? false
 let bg = color(board.background.flatMap { UInt32($0.dropFirst(), radix: 16) } ?? 0xF9EFDA)
-let ink = dark ? color(0xFDFBF6) : color(0x2E1D15), tomato = color(0xE05D3D)
-let tomatoDeep = dark ? color(0xF29A7E) : color(0xC0401F)
+let tomato = color(0xE05D3D)
 let bezel = color(0x1F1A17)
 
 var cache: [String: CGImage] = [:]
@@ -49,33 +48,30 @@ func fit(_ img: CGImage, width: CGFloat? = nil, height: CGFloat? = nil) -> CGSiz
   if let w = width { return CGSize(width: w, height: w / ratio) }
   return CGSize(width: height! * ratio, height: height!)
 }
-func slots(for beat: Beat) -> (main: Slot, side: Slot?, caption: CGRect, align: CTTextAlignment) {
+// The screens sit in the middle of the frame. Tablets keep clear of the bottom 127 points (at 960 high), where video
+// players put their controls.
+func slots(for beat: Beat) -> (main: Slot, side: Slot?) {
   let m = image(beat.main)
+  let h = CGFloat(H) - 254
   switch board.layout {
   case "phone":
     let size = fit(m, height: CGFloat(H) - 96)
-    let rect = CGRect(x: 150, y: 48, width: size.width, height: size.height)
-    let left = rect.maxX + 90
-    return (Slot(rect: rect, radius: size.width * 0.12, bezel: 11), nil, CGRect(x: left, y: 0, width: CGFloat(W) - left - 90, height: CGFloat(H)), .left)
+    let rect = CGRect(x: (CGFloat(W) - size.width) / 2, y: 48, width: size.width, height: size.height)
+    return (Slot(rect: rect, radius: size.width * 0.12, bezel: 11), nil)
   case "pair":
-    // Caption on top, where no video player puts its controls; the screens below.
     let s = image(beat.side ?? beat.main)
     let gap: CGFloat = 56
-    let top: CGFloat = 214, h = CGFloat(H) - top - 40
     let tablet = fit(m, height: h), phone = fit(s, height: h)
     let scale = min(1, (CGFloat(W) - 80) / (tablet.width + gap + phone.width))
     let tw = tablet.width * scale, th = tablet.height * scale, pw = phone.width * scale, ph = phone.height * scale
-    let x0 = (CGFloat(W) - (tw + gap + pw)) / 2
+    let x0 = (CGFloat(W) - (tw + gap + pw)) / 2, top = (CGFloat(H) - ph) / 2
     return (Slot(rect: CGRect(x: x0, y: top + (ph - th) / 2, width: tw, height: th), radius: tw * 0.022, bezel: 12),
-            Slot(rect: CGRect(x: x0 + tw + gap, y: top, width: pw, height: ph), radius: pw * 0.12, bezel: 9),
-            CGRect(x: 60, y: 14, width: CGFloat(W) - 120, height: top - 34), .center)
-  default: // tablet: caption on top, where no video player puts its controls; the screen below.
-    let top: CGFloat = 214
+            Slot(rect: CGRect(x: x0 + tw + gap, y: top, width: pw, height: ph), radius: pw * 0.12, bezel: 9))
+  default: // tablet
     var size = fit(m, width: CGFloat(W) - 120)
-    if size.height > CGFloat(H) - top - 40 { size = fit(m, height: CGFloat(H) - top - 40) }
-    let rect = CGRect(x: (CGFloat(W) - size.width) / 2, y: top, width: size.width, height: size.height)
-    return (Slot(rect: rect, radius: size.width * 0.022, bezel: 14), nil,
-            CGRect(x: 60, y: 14, width: CGFloat(W) - 120, height: top - 34), .center)
+    if size.height > h { size = fit(m, height: h) }
+    let rect = CGRect(x: (CGFloat(W) - size.width) / 2, y: (CGFloat(H) - size.height) / 2, width: size.width, height: size.height)
+    return (Slot(rect: rect, radius: size.width * 0.022, bezel: 14), nil)
   }
 }
 
@@ -97,43 +93,6 @@ func drawDevice(_ ctx: CGContext, _ img: CGImage, _ slot: Slot) {
   ctx.interpolationQuality = .high
   ctx.draw(img, in: screen)
   ctx.restoreGState()
-}
-
-func paragraph(_ text: String, size: CGFloat, weight: NSFont.Weight, color: CGColor, align: CTTextAlignment, kern: CGFloat = 0, lineHeight: CGFloat) -> NSAttributedString {
-  let style = NSMutableParagraphStyle()
-  style.alignment = align == .center ? .center : .left
-  style.minimumLineHeight = lineHeight
-  style.maximumLineHeight = lineHeight
-  return NSAttributedString(string: text, attributes: [
-    .font: NSFont.systemFont(ofSize: size, weight: weight),
-    NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
-    .paragraphStyle: style,
-    .kern: kern,
-  ])
-}
-
-func textHeight(_ s: NSAttributedString, width: CGFloat) -> CGFloat {
-  let fs = CTFramesetterCreateWithAttributedString(s)
-  return CTFramesetterSuggestFrameSizeWithConstraints(fs, CFRange(location: 0, length: 0), nil, CGSize(width: width, height: 10000), nil).height
-}
-func drawText(_ ctx: CGContext, _ s: NSAttributedString, in r: CGRect) {
-  let fs = CTFramesetterCreateWithAttributedString(s)
-  let frame = CTFramesetterCreateFrame(fs, CFRange(location: 0, length: 0), CGPath(rect: cg(r), transform: nil), nil)
-  ctx.saveGState()
-  ctx.textMatrix = .identity
-  CTFrameDraw(frame, ctx)
-  ctx.restoreGState()
-}
-
-func drawCaption(_ ctx: CGContext, _ beat: Beat, _ area: CGRect, _ align: CTTextAlignment) {
-  let phone = board.layout == "phone"
-  let caption = paragraph(beat.caption, size: phone ? 46 : 42, weight: .semibold, color: ink, align: align, lineHeight: phone ? 58 : 52)
-  let label = beat.label.map { paragraph($0.uppercased(), size: phone ? 22 : 21, weight: .bold, color: tomatoDeep, align: align, kern: 1.8, lineHeight: 28) }
-  let ch = textHeight(caption, width: area.width) + 2
-  let lh = label.map { textHeight($0, width: area.width) + 10 } ?? 0
-  let top = area.minY + (area.height - ch - lh) / 2
-  if let label { drawText(ctx, label, in: CGRect(x: area.minX, y: top, width: area.width, height: lh)) }
-  drawText(ctx, caption, in: CGRect(x: area.minX, y: top + lh, width: area.width, height: ch + 4))
 }
 
 func ease(_ x: Double) -> Double { let t = min(max(x, 0), 1); return t * t * (3 - 2 * t) }
@@ -163,23 +122,20 @@ func drawTap(_ ctx: CGContext, at p: CGPoint, local t: Double, hold: Double) {
   ctx.restoreGState()
 }
 
+// Longer captions mean more is going on, so the beat holds longer.
 func holdTime(_ b: Beat) -> Double {
   if let h = b.hold { return h }
   let words = Double(b.caption.split(separator: " ").count)
   return max(2.4, 0.9 + words * 0.25) + (b.tap != nil ? 0.9 : 0) + fade
 }
 
-func drawScene(_ ctx: CGContext, _ i: Int, local t: Double, captionAlpha: CGFloat = 1, screensAlpha: CGFloat = 1) {
+func drawScene(_ ctx: CGContext, _ i: Int, local t: Double, screensAlpha: CGFloat = 1) {
   let beat = board.beats[i]
   let s = slots(for: beat)
   ctx.saveGState()
   ctx.setAlpha(screensAlpha)
   drawDevice(ctx, image(beat.main), s.main)
   if let side = s.side { drawDevice(ctx, image(beat.side ?? beat.main), side) }
-  ctx.restoreGState()
-  ctx.saveGState()
-  ctx.setAlpha(captionAlpha)
-  drawCaption(ctx, beat, s.caption, s.align)
   ctx.restoreGState()
   if let tap = beat.tap {
     let slot = tap.on == "side" ? s.side! : s.main
@@ -205,20 +161,11 @@ func render(_ ctx: CGContext, at time: Double) {
   let local = time - starts[i]
   let h = holds[i]
   if i + 1 < board.beats.count, local > h - fade {
+    // Crossfade the old screens into the new ones. When they're the same screens, the old tap ring stays until the cut.
     let a = CGFloat(ease((local - (h - fade)) / fade))
     let cur = board.beats[i], next = board.beats[i + 1]
-    let sameScreens = cur.main == next.main && cur.side == next.side
-    // Screens: crossfade the old into the new. Captions: the old one fades out, the new one fades in.
-    drawScene(ctx, i, local: local, captionAlpha: 1 - a, screensAlpha: 1)
-    if sameScreens {
-      drawScene(ctx, i + 1, local: 0, captionAlpha: a, screensAlpha: 0)
-    } else {
-      // Draw only the next screens on top with alpha, then its caption.
-      drawScene(ctx, i + 1, local: 0, captionAlpha: 0, screensAlpha: a)
-      ctx.saveGState(); ctx.setAlpha(a)
-      let s = slots(for: next); drawCaption(ctx, next, s.caption, s.align)
-      ctx.restoreGState()
-    }
+    drawScene(ctx, i, local: local)
+    if cur.main != next.main || cur.side != next.side { drawScene(ctx, i + 1, local: 0, screensAlpha: a) }
   } else {
     drawScene(ctx, i, local: local)
   }

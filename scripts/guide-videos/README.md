@@ -1,6 +1,6 @@
 # Guide videos
 
-The short videos in the pilot guides (`public/pilot/videos/`) are app screenshots with captions and tap rings, made
+The short videos in the pilot guides (`public/pilot/videos/`) are app screenshots with tap rings and no text, made
 from the real apps against `scripts/local-family-server.mjs` with a made-up household, "Rose".
 
 1. Capture the screens. iOS: the `PorchFamily` build on an iPad Air 11-inch and an iPhone 17 simulator, with
@@ -10,14 +10,16 @@ from the real apps against `scripts/local-family-server.mjs` with a made-up hous
    `usbHost` true in `BedsideSetupScreens.kt` and don't commit that. On the iPad simulator, choose Settings →
    Multitasking & Gestures → Full Screen Apps first, or every screenshot shows the app's window controls. Its
    hardware keyboard stands in for the phone adapter: typing 3 on Connect the phone shows "Porch heard 3".
-2. `python3 -I boards.py <shots> <out>` writes one storyboard per video: each beat is a screenshot, its caption and
-   where to show the tap, in the screenshot's own points or pixels.
+2. `python3 -I boards.py <shots> <out>` writes one storyboard per video: each beat is a screenshot, where to show
+   the tap, in the screenshot's own points or pixels, and a caption that says what the beat shows. The caption isn't
+   drawn; it sets how long the beat holds.
 3. `swiftc -O render.swift -o render && ./render <out>/<name>.json [sheet.jpg]` writes `<name>.mp4` and its poster
    `<name>.jpg` (1280×960, H.264, no sound). The optional contact sheet shows every beat with its tap ring.
 4. Copy the `.mp4` and `.jpg` files into `public/pilot/videos/`.
 
-Captions sit at the top of the frame, where video players don't put their controls. The frame is dark green
-(`background` and `dark` in each storyboard), so the videos stand apart from the cream page.
+The videos have no titles or captions: each sits beside the guide's own numbered steps. The screens are centered and
+kept clear of the bottom of the frame, where video players put their controls. The frame is dark green (`background`
+in each storyboard, and the guide's video box), so the videos stand apart from the cream page.
 
 ## Link QR codes
 

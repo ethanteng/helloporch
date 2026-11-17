@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Writes one storyboard per guide video. Tap points are in the screenshot's own units (iOS points or Android
-# pixels) and become fractions here. Run: python3 -I boards.py <screenshots dir> <output dir>
+# pixels) and become fractions here. Each beat's caption says what it shows and sets how long it holds; the videos
+# themselves have no text, since the guide's steps sit beside them. Run: python3 -I boards.py <screenshots dir> <output dir>
 import json, os, sys
 
 # The renderer reads image paths against the storyboard's own folder, so give it absolute ones.
@@ -10,52 +11,41 @@ os.makedirs(out, exist_ok=True)
 IPAD, IPHONE = (1180, 820), (402, 874)
 TABLET, PHONE = (2560, 1600), (1080, 2400)
 
-def beat(caption, main, tap=None, size=None, side=None, on="main", label=None):
+def beat(caption, main, tap=None, size=None, side=None, on="main"):
     b = {"caption": caption, "main": f"{shots}/{main}.png"}
     if side:
         b["side"] = f"{shots}/{side}.png"
-    if label:
-        b["label"] = label
     if tap:
         w, h = size
         b["tap"] = {"on": on, "x": round(tap[0] / w, 4), "y": round(tap[1] / h, 4)}
     return b
 
-def board(name, layout, label, beats):
-    for b in beats:
-        b.setdefault("label", label)
-    # Dark green, Porch's button color, so each video stands apart from the guide's cream page.
+def board(name, layout, beats):
+    # Dark green, as the guide's video box, so each video stands apart from the cream page.
     json.dump({"output": f"{name}.mp4", "poster": f"{name}.jpg", "layout": layout, "beats": beats,
-               "background": "#1F3B33", "dark": True},
+               "background": "#1F3B33"},
               open(f"{out}/{name}.json", "w"), indent=1, ensure_ascii=False)
 
 # iPad and iPhone ------------------------------------------------------------------------------------------------
 I = lambda caption, main, tap=None, **k: beat(caption, f"ios/{main}", tap, IPAD, **k)
 P = lambda caption, main, tap=None, **k: beat(caption, f"ios/{main}", tap, IPHONE, **k)
 
-board("ios-setup", "tablet", None, [
-    I("Install Porch with TestFlight. It appears on the iPad’s Home Screen.", "i00-home", (344, 233), label="Install Porch on the iPad"),
-    I("Tap your private setup link on the iPad. Porch opens and asks who it’s for.", "i01-who",
-      label="Open your setup link on the iPad"),
-    I("Enter the name family members use, then tap Continue.", "i02-who-typed", (590, 304),
-      label="Set up your loved one’s Porch"),
-    I("Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.", "i04-pin-typed", (590, 405),
-      label="Set up your loved one’s Porch"),
-    I("Tap Get number to get a phone number for Rose’s Porch.", "i05-number", (590, 244),
-      label="Set up your loved one’s Porch"),
-    I("When the number appears, tap Continue.", "i06-number-got", (590, 266), label="Set up your loved one’s Porch"),
-    I("Tap Continue to turn on the microphone and camera.", "i07-perms", (590, 244),
-      label="Set up your loved one’s Porch"),
-    I("Allow the microphone, so family can hear Rose.", "i08-perm-mic", (664, 500), label="Set up your loved one’s Porch"),
-    I("Allow the camera, so family can see Rose.", "i09-perm-cam", (664, 550), label="Set up your loved one’s Porch"),
-    I("Choose Corded phone.", "i10-how", (590, 215), label="Set up your loved one’s Porch"),
-    I("If the phone adapter hasn’t arrived yet, tap Do this later.", "i11-connect", (590, 481),
-      label="Set up your loved one’s Porch"),
+board("ios-setup", "tablet", [
+    I("Install Porch with TestFlight. It appears on the iPad’s Home Screen.", "i00-home", (344, 233)),
+    I("Tap your private setup link on the iPad. Porch opens and asks who it’s for.", "i01-who"),
+    I("Enter the name family members use, then tap Continue.", "i02-who-typed", (590, 304)),
+    I("Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.", "i04-pin-typed", (590, 405)),
+    I("Tap Get number to get a phone number for Rose’s Porch.", "i05-number", (590, 244)),
+    I("When the number appears, tap Continue.", "i06-number-got", (590, 266)),
+    I("Tap Continue to turn on the microphone and camera.", "i07-perms", (590, 244)),
+    I("Allow the microphone, so family can hear Rose.", "i08-perm-mic", (664, 500)),
+    I("Allow the camera, so family can see Rose.", "i09-perm-cam", (664, 550)),
+    I("Choose Corded phone.", "i10-how", (590, 215)),
 ])
 
 pair = lambda caption, main, side, tap=None, on="main": beat(
     caption, f"ios/{main}", tap, IPAD if on == "main" else IPHONE, side=f"ios/{side}", on=on)
-board("ios-your-phone", "pair", "Add your own phone", [
+board("ios-your-phone", "pair", [
     pair("If you have an iPhone, install TestFlight first.", "j01-add-phone", "k00-p-home"),
     pair("On the iPad, type your name, then tap Show QR code.", "j02-name", "k00-p-home", (590, 304)),
     pair("Open the Camera app on your phone and point it at the code. Tap the link that appears.", "j03-qr", "k00-p-home"),
@@ -66,7 +56,7 @@ board("ios-your-phone", "pair", "Add your own phone", [
     pair("You’re set: call Rose from Call. Your settings, and caregiver mode, are under You.", "j05-ready", "k04-p-home"),
 ])
 
-board("ios-keypad", "tablet", "Set up the phone’s number keys", [
+board("ios-keypad", "tablet", [
     I("When setup ends, tap Put people on the keypad.", "j05-ready", (590, 334)),
     I("Tap the key you want to set up, such as 1.", "m01-people", (513, 221)),
     I("Any key can call someone, answer and hang up, turn video off and on, or play messages.", "m02-who"),
@@ -78,7 +68,7 @@ board("ios-keypad", "tablet", "Set up the phone’s number keys", [
     I("Key 1 now calls David. Pressing 1 on the phone rings him.", "m06-saved"),
 ])
 
-board("ios-switch", "tablet", "When someone joins Porch later", [
+board("ios-switch", "tablet", [
     I("A key can start with someone’s regular phone number. Key 1 calls Sarah’s phone.", "s01-keypad-phone", (513, 221)),
     I("Her page shows Invite beside Porch app: she’s not on Porch yet.", "s02-page"),
     I("Once she joins, she shows under Family on Porch. Her key still calls her phone.", "s04-joined-family"),
@@ -88,7 +78,7 @@ board("ios-switch", "tablet", "When someone joins Porch later", [
     I("Key 1 shows Porch app instead of Phone.", "s08-keypad-porch"),
 ])
 
-board("ios-language", "tablet", "Change the language or voice", [
+board("ios-language", "tablet", [
     I("On the clock, tap the gear in the top right corner.", "g00-clock", (1130, 45)),
     I("Enter your PIN and tap Open caregiver mode.", "g02-gate-typed", (590, 304)),
     I("Open Display & voice.", "g03-caregiver", (160, 552)),
@@ -104,30 +94,23 @@ board("ios-language", "tablet", "Change the language or voice", [
 T = lambda caption, main, tap=None, **k: beat(caption, f"android/{main}", tap, TABLET, **k)
 F = lambda caption, main, tap=None, **k: beat(caption, f"android/{main}", tap, PHONE, **k)
 
-board("android-setup", "tablet", None, [
-    T("Install Porch from the Google Play test. It appears with the tablet’s apps.", "t-home", (2194, 1462),
-      label="Install Porch on the tablet"),
-    T("Tap your private setup link on the tablet. Porch opens and asks who it’s for.", "a01-who",
-      label="Open your setup link on the tablet"),
-    T("Enter the name family members use, then tap Continue.", "a02-who-typed", (1280, 525),
-      label="Set up your loved one’s Porch"),
-    T("Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.", "a04-pin-typed", (1280, 685),
-      label="Set up your loved one’s Porch"),
-    T("Tap Get number to get a phone number for Rose’s Porch.", "a05-number", (1280, 445),
-      label="Set up your loved one’s Porch"),
-    T("When the number appears, tap Continue.", "a06-number-got", (1280, 485), label="Set up your loved one’s Porch"),
-    T("Tap Continue to turn on the microphone, camera and notifications.", "a07-perms", (1280, 445),
-      label="Set up your loved one’s Porch"),
-    T("For the camera, choose While using the app.", "a08-perm-camera", (1280, 769), label="Set up your loved one’s Porch"),
-    T("Do the same for the microphone.", "a09-perm-mic", (1280, 769), label="Set up your loved one’s Porch"),
-    T("Allow notifications.", "a10-perm-notif", (1280, 829), label="Set up your loved one’s Porch"),
-    T("Choose Corded phone.", "a11-how", (1280, 391), label="Set up your loved one’s Porch"),
-    T("If you’re waiting for a part, tap Do this later.", "a12-connect", (1280, 942), label="Set up your loved one’s Porch"),
+board("android-setup", "tablet", [
+    T("Install Porch from the Google Play test. It appears with the tablet’s apps.", "t-home", (2194, 1462)),
+    T("Tap your private setup link on the tablet. Porch opens and asks who it’s for.", "a01-who"),
+    T("Enter the name family members use, then tap Continue.", "a02-who-typed", (1280, 525)),
+    T("Choose a six-digit caregiver PIN. Enter it twice and keep it somewhere safe.", "a04-pin-typed", (1280, 685)),
+    T("Tap Get number to get a phone number for Rose’s Porch.", "a05-number", (1280, 445)),
+    T("When the number appears, tap Continue.", "a06-number-got", (1280, 485)),
+    T("Tap Continue to turn on the microphone, camera and notifications.", "a07-perms", (1280, 445)),
+    T("For the camera, choose While using the app.", "a08-perm-camera", (1280, 769)),
+    T("Do the same for the microphone.", "a09-perm-mic", (1280, 769)),
+    T("Allow notifications.", "a10-perm-notif", (1280, 829)),
+    T("Choose Corded phone.", "a11-how", (1280, 391)),
 ])
 
 apair = lambda caption, main, side, tap=None, on="main": beat(
     caption, f"android/{main}", tap, TABLET if on == "main" else PHONE, side=f"android/{side}", on=on)
-board("android-your-phone", "pair", "Add your phone", [
+board("android-your-phone", "pair", [
     apair("Install Porch on your phone first, the same way you did on the tablet.", "b01-add-phone", "p-home"),
     apair("On the tablet, type your name, then tap Show QR code.", "b02-name", "p-home", (1280, 525)),
     apair("Open the Camera app on your phone and point it at the code. Tap the link that appears.", "b03-qr", "p-home"),
@@ -137,7 +120,7 @@ board("android-your-phone", "pair", "Add your phone", [
     apair("You’re set: call Rose from Call. Your settings, and caregiver mode, are under You.", "c01-clock", "b07-p-home"),
 ])
 
-board("android-keypad", "tablet", "Set up the phone’s number keys", [
+board("android-keypad", "tablet", [
     T("On the clock, tap the gear in the top right corner.", "c01-clock", (2480, 80)),
     T("Enter your PIN and tap Open caregiver mode.", "c03-gate-typed", (1280, 525)),
     T("People shows a keypad laid out like the phone’s. Tap the key you want to set up, such as 1.", "c04-caregiver",
@@ -151,7 +134,7 @@ board("android-keypad", "tablet", "Set up the phone’s number keys", [
     T("Key 1 now calls David. Pressing 1 on the phone rings him.", "c09-saved"),
 ])
 
-board("android-invite", "phone", "Invite family members", [
+board("android-invite", "phone", [
     F("In Porch on your phone, tap You.", "d00-p-call", (906, 2274)),
     F("Tap your loved one’s family, such as Rose.", "d01-p-you", (540, 514)),
     F("Tap Caregiver mode.", "d01b-p-family", (540, 718)),
@@ -165,7 +148,7 @@ board("android-invite", "phone", "Invite family members", [
     F("Each invitation works once and expires after 24 hours.", "d11-p-family-after"),
 ])
 
-board("android-switch", "tablet", "When someone joins Porch later", [
+board("android-switch", "tablet", [
     T("A key can start with someone’s regular phone number. Key 1 calls Sarah’s phone.", "s01-keypad-phone", (1160, 450)),
     T("Her page shows Invite beside Porch app: she’s not on Porch yet.", "s02-page"),
     T("Once she joins, she shows under Family on Porch. Her key still calls her phone.", "s03-joined-family"),
@@ -175,7 +158,7 @@ board("android-switch", "tablet", "When someone joins Porch later", [
     T("Key 1 shows Porch app instead of Phone.", "s07-keypad-porch"),
 ])
 
-board("android-language", "tablet", "Change the language or voice", [
+board("android-language", "tablet", [
     T("On the clock, tap the gear in the top right corner.", "c01-clock", (2480, 80)),
     T("Enter your PIN and tap Open caregiver mode.", "c03-gate-typed", (1280, 525)),
     T("Open Display & voice.", "c04-caregiver", (360, 1028)),
