@@ -859,6 +859,8 @@ final class MessageQueueViewController: CaregiverFormViewController {
 extension Notification.Name {
     /// A message notification was tapped: show the thread with the bedside.
     static let porchOpenReceivedMessages = Notification.Name("porch.messages.openReceived")
+    /// A tapped notice that every call drops in, or no longer does: the Call tab, for the family it names.
+    static let porchOpenCallTab = Notification.Name("porch.family.openCallTab")
 }
 
 /// Ordinary notifications for messages the bedside leaves when this phone misses its call, and the
@@ -925,10 +927,12 @@ extension Notification.Name {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
     }
-    /// Opens the thread with whoever left the message. Each family knows this phone by its own ID, which the
-    /// notification carries.
+    /// Opens the thread with whoever left the message, or for a notice that every call drops in, the Call tab. Each
+    /// family knows this phone by its own ID, which the notification carries.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let recipient = response.notification.request.content.userInfo["recipientID"] as? String
-        await MainActor.run { NotificationCenter.default.post(name: .porchOpenReceivedMessages, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
+        let info = response.notification.request.content.userInfo
+        let recipient = info["recipientID"] as? String
+        let name: Notification.Name = info["type"] as? String == "everyCall" ? .porchOpenCallTab : .porchOpenReceivedMessages
+        await MainActor.run { NotificationCenter.default.post(name: name, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
     }
 }

@@ -71,10 +71,12 @@ object NaturalVoice {
         val contacts = slots.contacts.filterNotNull()
         val texts = mutableListOf<String>()
         if (state.dropInEnabled) {
+            // While every call drops in, anyone in the family may.
+            val everyone = state.everyCall != null
             for (person in state.people.filter { it.role == PorchExperience.FAMILY }) {
                 val name = contacts.firstOrNull { it.familyMemberID == person.id }?.name ?: person.name
-                if (person.permissions.video) texts += Announcer.dropInMessage(app, name, video = true)
-                if (person.permissions.audio) texts += Announcer.dropInMessage(app, name, video = false)
+                if (everyone || person.permissions.video) texts += Announcer.dropInMessage(app, name, video = true)
+                if (everyone || person.permissions.audio) texts += Announcer.dropInMessage(app, name, video = false)
             }
             for (approval in state.phoneDropIns.orEmpty()) {
                 val name = contacts.firstOrNull { approval.number in it.phoneNumbers }?.name ?: approval.name

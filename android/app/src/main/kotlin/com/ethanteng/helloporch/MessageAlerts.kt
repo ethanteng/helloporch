@@ -20,7 +20,8 @@ import com.ethanteng.helloporch.core.PorchExperience
 
 /**
  * Notifications for messages the bedside leaves when this phone misses its call, as iOS's FamilyMessageAlerts shows
- * them. The server sends each as a Firebase notification on the `messages` channel, tagged with the family it's from
+ * them, and for caregivers when another caregiver turns Every call drop-in on or off (`type: "everyCall"`, on the
+ * `every-call` channel), which open the Call tab. The server sends each as a Firebase notification on the `messages` channel, tagged with the family it's from
  * (lib/family/push.ts), which Android shows itself while Porch isn't in front; while it is, Porch shows it the same way.
  * Tapping one opens that family's thread. A family's notification goes once its messages have been played. Main thread
  * only.
@@ -28,6 +29,8 @@ import com.ethanteng.helloporch.core.PorchExperience
 class MessageAlerts(private val app: PorchApplication) {
     /** A family's thread to open, by this phone's device ID in it, from a tapped notification. */
     var opening by mutableStateOf<String?>(null)
+    /** A family whose Call tab card to show, by this phone's device ID in it, from a tapped Every call notice. */
+    var openingCall by mutableStateOf<String?>(null)
     /** Each family's unplayed count when it last checked in, by device ID. */
     private val unplayed = mutableMapOf<String, Int>()
 
@@ -63,12 +66,39 @@ class MessageAlerts(private val app: PorchApplication) {
         }
     }
 
-    /** A tapped notification opened Porch: its family's thread opens, once that family is on this phone. Firebase's own
-     * notifications carry their data as extras on the launch, and Porch's carry the same. */
+    /** An Every call notice that arrived while Porch is running, shown as Firebase would have: one per family, the newest
+     * replacing the last. */
+    fun receivedEveryCall(title: String?, body: String?, data: Map<String, String>) {
+        val recipient = data["recipientID"] ?: return
+        if (app.device.experience != PorchExperience.FAMILY || app.device.families.none { it.deviceID == recipient }) return
+        val permitted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!permitted) return
+        val notification = NotificationCompat.Builder(app, EVERY_CALL_CHANNEL)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setContentTitle(title ?: "Every call drop-in changed")
+            .setContentText(body)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(open(app, recipient, "everyCall"))
+            .build()
+        try {
+            NotificationManagerCompat.from(app).notify("$EVERY_CALL_TAG_PREFIX$recipient", 0, notification)
+        } catch (_: SecurityException) {
+            // Notifications were turned off meanwhile.
+        }
+    }
+
+    /** A tapped notification opened Porch: its family's thread opens, or for an Every call notice its Call tab, once that
+     * family is on this phone. Firebase's own notifications carry their data as extras on the launch, and Porch's carry
+     * the same. */
     fun opened(intent: Intent?) {
-        if (intent?.getStringExtra("type") != "message") return
+        val type = intent?.getStringExtra("type")
+        if (type != "message" && type != "everyCall") return
         val recipient = intent.getStringExtra("recipientID") ?: return
-        if (app.device.experience == PorchExperience.FAMILY) opening = recipient
+        if (app.device.experience != PorchExperience.FAMILY) return
+        if (type == "message") opening = recipient else openingCall = recipient
     }
 
     /** With each check-in: a family's notification goes once its messages are played, when it removed this phone, or
@@ -121,6 +151,10 @@ class MessageAlerts(private val app: PorchApplication) {
         /** The channel the server names for message notifications. */
         const val CHANNEL = "messages"
 
+        /** The channel the server names for Every call notices. */
+        const val EVERY_CALL_CHANNEL = "every-call"
+        private const val EVERY_CALL_TAG_PREFIX = "porch-everycall-"
+
         /** The tag the server gives a family's message notifications, so its newest replaces the last. */
         private const val TAG_PREFIX = "porch-messages-"
         fun tag(recipientID: String) = "$TAG_PREFIX$recipientID"
@@ -130,15 +164,18 @@ class MessageAlerts(private val app: PorchApplication) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "When your loved one leaves you a message after a call you missed."
             })
+            manager.createNotificationChannel(NotificationChannel(EVERY_CALL_CHANNEL, "Drop-in changes", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "For caregivers: when someone turns Every call drop-in on or off."
+            })
         }
 
-        private fun open(context: Context, recipient: String): PendingIntent =
+        private fun open(context: Context, recipient: String, type: String = "message"): PendingIntent =
             // NEW_TASK: this intent is fired from a notification, not an activity. Without it, tapping the
             // notification after Porch has left its task throws and the thread never opens. singleTask still
             // delivers it to the running activity (onNewIntent) when Porch is already open.
-            PendingIntent.getActivity(context, recipient.hashCode(), Intent(context, MainActivity::class.java)
+            PendingIntent.getActivity(context, if (type == "message") recipient.hashCode() else "$type:$recipient".hashCode(), Intent(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .putExtra("type", "message").putExtra("recipientID", recipient),
+                .putExtra("type", type).putExtra("recipientID", recipient),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 }

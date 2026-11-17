@@ -597,8 +597,9 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
     }
 
     /// A row that opens more: its title, what it's set to now, and a chevron.
-    /// `valueIsAction` shows the value as what tapping does, such as Add, in the accent color.
-    func linkRow(_ title: String, value: String? = nil, symbol: String? = nil, valueIsAction: Bool = false, action: @escaping () -> Void) -> PorchListRow {
+    /// `valueIsAction` shows the value as what tapping does, such as Add, in the accent color; `valueColor` colors a
+    /// value that needs noticing, such as Every call in red.
+    func linkRow(_ title: String, value: String? = nil, symbol: String? = nil, valueIsAction: Bool = false, valueColor: UIColor? = nil, action: @escaping () -> Void) -> PorchListRow {
         var views: [UIView] = []
         if let symbol {
             let icon = UIImageView(image: UIImage(systemName: symbol)); icon.tintColor = PorchStyle.accent
@@ -609,7 +610,7 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
         }
         views.append(PorchStyle.label(title, size: 18, color: PorchStyle.ink))
         if let value {
-            let label = PorchStyle.label(value, size: 17, color: valueIsAction ? PorchStyle.accent : PorchStyle.secondary, weight: valueIsAction ? .semibold : .regular)
+            let label = PorchStyle.label(value, size: 17, color: valueColor ?? (valueIsAction ? PorchStyle.accent : PorchStyle.secondary), weight: valueIsAction || valueColor != nil ? .semibold : .regular)
             label.numberOfLines = 1
             label.setContentHuggingPriority(.required, for: .horizontal)
             label.setContentCompressionResistancePriority(.required, for: .horizontal)

@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callLogEntry, recordCallAfter } from "./call-log.ts";
-import { callRoom, config, deliveryUnavailable, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
+import { callRoom, config, deliveryUnavailable, everyCallOn, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { forgetRegistration, pushConfigured, sendVoIPPush, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
@@ -157,9 +157,10 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
     const ready = !!bedside?.available && bedside.seenAt > now - 30;
     if (!bedside || (!ready && !pushable(bedside.voip)) || (house.call && house.call.state !== "ended")) return false;
-    // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the
-    // master switch and a foreground bedside; otherwise the call rings normally.
-    const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
+    // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the master switch and a foreground
+    // bedside, and an approved number unless every call drops in; otherwise the call rings normally. A caller ID the
+    // carrier didn't verify can be faked, and a hidden one says nothing, so those always ring.
+    const dropIn = ready && verified && house.dropInEnabled && (everyCallOn(house) ? !!phone.callerNumber : !!phoneDropIn(house, phone.callerNumber));
     const expiresAt = createdAt + ringSeconds(house, dropIn ? "dropIn" : "call");
     if (expiresAt <= now) return false;
     replaced = house.call;

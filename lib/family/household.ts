@@ -59,6 +59,9 @@ export type OutboxEntry = { id: string; to: string; sentAt: number };
 export type TextEntry = { id: string; from: string; sentAt: number; pictures?: number; attachments?: number; held?: boolean; deliveredAt?: number };
 /** A caregiver-approved telephone number that may drop in with audio when its caller ID is carrier-verified. */
 export type PhoneDropIn = { number: string; name: string };
+/** Every call to the bedside drops in, approved or not, while this is set: the member who turned it on, and when. A
+ * caregiver turns it on with the PIN typed again; any caregiver turns it off. It is only kept while `dropInEnabled`. */
+export type EveryCall = { by: string; at: number };
 /** A caller ID that tried to ring the bedside while unknown callers were blocked, until a caregiver allows or clears it. */
 export type BlockedCaller = { number: string; firstCallAt: number; lastCallAt: number; calls: number };
 /** A number a caregiver allowed to ring the bedside although it isn't saved on the keypad. */
@@ -85,7 +88,8 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
  * first one, already has a number outside these records; the app never buys it another (see numbers.ts). */
 /** `createdAt`: when the bedside set it up; households from before it was kept have none. */
 export type Household = { id: string; name: string; createdAt?: number; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; texts?: TextEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
-  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number };
+  blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number;
+  everyCall?: EveryCall };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
@@ -209,12 +213,26 @@ export function phoneGuestIdentity(guest: PhoneGuest): string { return `phone-gu
 export function phoneDropIn(house: Household, number?: string): PhoneDropIn | undefined {
   return number ? house.phoneDropIns?.find(p => p.number === number) : undefined;
 }
-// Rechecked on answer and after every access change, for app and telephone drop-ins alike.
+/** Whether every call to the bedside drops in now, approved or not. */
+export function everyCallOn(house: Household): boolean { return house.dropInEnabled && !!house.everyCall; }
+/** Who turned every call on, as the apps show it, or nothing while it's off. At the bedside, `by` is the bedside's name. */
+export function publicEveryCall(house: Household) {
+  if (!everyCallOn(house)) return undefined;
+  const { by, at } = house.everyCall!;
+  const member = house.members.find(m => m.id === by);
+  return { by: member ? displayName(member) : "A caregiver", at, ...(member?.role === "bedside" ? { atBedside: true } : {}) };
+}
+/** Whether a family member may drop in on the bedside with this kind of call. */
+export function mayDropIn(house: Household, member: Member, mode: Mode): boolean {
+  return house.dropInEnabled && member.role === "family" && !member.revoked && (everyCallOn(house) || member.permissions[mode === "voice" ? "audio" : "video"]);
+}
+// Rechecked on answer and after every access change, for app and telephone drop-ins alike. A telephone drop-in also
+// needed a carrier-verified caller ID when it started (inbound.ts).
 export function dropInAllowed(house: Household, call: Call): boolean {
   if (!house.dropInEnabled) return false;
-  if (call.phone) return call.mode === "voice" && !!phoneDropIn(house, call.phone.callerNumber);
+  if (call.phone) return call.mode === "voice" && (everyCallOn(house) || !!phoneDropIn(house, call.phone.callerNumber));
   const caller = house.members.find(m => m.id === call.from);
-  return !!caller && !caller.revoked && caller.permissions[call.mode === "voice" ? "audio" : "video"];
+  return !!caller && mayDropIn(house, caller, call.mode);
 }
 /** Polls can arrive out of order, such as the one sent as Porch closes overtaking the last one sent while it was open.
  * An earlier poll from the same launch mustn't make the device look open again, so a numbered one only sets
@@ -244,5 +262,5 @@ export function noteAttendance(house: Household, member: Member, secondsAgo: unk
  * someone it already lets connect. Otherwise it rings as usual, by push if the bedside Porch is closed. */
 export function callKind(house: Household, caller: Member, target: Member, mode: Mode, requested: Call["kind"], bedsideReady: boolean): Call["kind"] {
   if (requested === "dropIn" || caller.role !== "family" || target.role !== "bedside" || !bedsideReady) return requested;
-  return house.dropInEnabled && caller.permissions[mode === "voice" ? "audio" : "video"] ? "dropIn" : "call";
+  return mayDropIn(house, caller, mode) ? "dropIn" : "call";
 }

@@ -201,10 +201,12 @@ import PorchCore
         /// A text's words, read with its ID: they can be longer than an announcement.
         var words: [(String, String)] = []
         if state.dropInEnabled {
+            // While every call drops in, anyone in the family can, either way.
+            let everyone = state.everyCall != nil
             for person in state.people where person.role == .family {
                 let name = contacts.first { $0.familyMemberID == person.id }?.name ?? person.name
-                if person.permissions.video { texts.append(PorchIncomingAudio.message(name: name, video: true, language: language)) }
-                if person.permissions.audio { texts.append(PorchIncomingAudio.message(name: name, video: false, language: language)) }
+                if person.permissions.video || everyone { texts.append(PorchIncomingAudio.message(name: name, video: true, language: language)) }
+                if person.permissions.audio || everyone { texts.append(PorchIncomingAudio.message(name: name, video: false, language: language)) }
             }
             for approval in state.phoneDropIns ?? [] {
                 let name = contacts.first { $0.nativeCall != nil && $0.phoneNumbers.contains(approval.number) }?.name ?? approval.name

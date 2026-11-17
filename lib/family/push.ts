@@ -1,4 +1,4 @@
-import { createPrivateKey, sign } from "node:crypto";
+import { createPrivateKey, randomUUID, sign } from "node:crypto";
 import { connect } from "node:http2";
 
 /** A device's push token. iPhones and iPads use APNs, in its sandbox or production environment. Android devices use
@@ -147,4 +147,20 @@ export async function sendAlertPush(device: VoIPRegistration, alert: MessageAler
   }
   return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: alert.messageID, expiration: now + 7 * 86400,
     payload: { aps: { alert: { title: alert.title, body: alert.body }, sound: "default", badge: alert.badge, "thread-id": `porch-messages-${alert.recipientID}` }, messageID: alert.messageID, recipientID: alert.recipientID } }, createSession);
+}
+
+/** A visible notice on a caregiver's phone that isn't a message: every call to the bedside was turned on or off. It
+ * carries no badge, and has its own thread. `recipientID` says which family it's about, as for messages. */
+export type CaregiverNotice = { type: "everyCall"; recipientID: string; title: string; body: string };
+export async function sendNoticePush(device: VoIPRegistration, notice: CaregiverNotice, createSession: typeof connect = connect, now = Math.floor(Date.now() / 1000), request: typeof fetch = fetch): Promise<PushResult> {
+  if (!pushConfigured(device)) return { delivered: false };
+  const thread = `porch-everycall-${notice.recipientID}`;
+  // Kept for a day: after that, the Call tab says whether it's still on.
+  if (device.platform === "android") {
+    // The newest notice replaces the last one for that family.
+    return sendFCM(device, { data: { type: notice.type, recipientID: notice.recipientID },
+      android: { priority: "HIGH", ttl: `${86400}s`, notification: { title: notice.title, body: notice.body, channel_id: "every-call", sound: "default", tag: thread } } }, request, now);
+  }
+  return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: randomUUID(), expiration: now + 86400,
+    payload: { aps: { alert: { title: notice.title, body: notice.body }, sound: "default", "thread-id": thread }, type: notice.type, recipientID: notice.recipientID } }, createSession);
 }

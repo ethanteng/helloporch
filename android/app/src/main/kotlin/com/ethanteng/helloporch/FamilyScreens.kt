@@ -87,6 +87,11 @@ import com.ethanteng.helloporch.core.RemoteCaregiverSession
 import com.ethanteng.helloporch.core.joinFamily
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.ButtonDefaults
+import com.ethanteng.helloporch.core.EveryCallDropIn
 
 /** Family mode's screens: joining a family from an invitation, then three tabs, as on iOS (FamilyTabs.swift): Call, with
  * a card for each family's bedside; Messages, with one thread for each; and You, with this phone's families, each with a
@@ -136,6 +141,20 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             thread = id
         }
         app.messageAlerts.opening = null
+    }
+    // A tapped Every call notice opens the Call tab, where that family's card shows it, with what else was open closed.
+    val noticed = app.messageAlerts.openingCall
+    LaunchedEffect(noticed, families) {
+        val id = noticed ?: return@LaunchedEffect
+        if (families.any { it.deviceID == id }) {
+            composing = null
+            about = false
+            if (caregiving != null) { RemoteCaregiverSession.shared.end(); caregiving = null }
+            joining = false
+            if (link != null) onLinkHandled()
+            tab = FamilyTab.CALL
+        }
+        app.messageAlerts.openingCall = null
     }
     val tabs = caregiverFamily == null && composeFamily == null && !(link != null || joining || families.isEmpty()) && !about
     SideEffect { onReady((tabs && pageFamily == null) || caregiverFamily != null) }
@@ -436,41 +455,68 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
         if (needed.isEmpty()) app.calls.call(call.person, call.mode, call.family, call.dropIn)
         else { request = call; permissions.launch(needed.toTypedArray()) }
     }
-    FormScreen("Porch", wordmark = true) {
-        RingWhenClosed(app)
-        val several = families.size > 1
-        for (family in families) {
-            val link = links.link(family)
-            val state = link?.state
-            val bedside = state?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }
-            val name = bedside?.name ?: state?.householdName ?: app.device.familyName(family) ?: "Family"
-            val familyName = if (several) app.device.familyName(family)?.takeIf { it != name } else null
-            val (status, present) = familyStatus(link)
-            Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), tonalElevation = 2.dp) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(name, size = 56.dp)
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(name, Modifier.semantics { heading() }, style = porchTitleStyle().copy(fontSize = 24.sp))
-                            familyName?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            Text(status, style = MaterialTheme.typography.bodyLarge, fontWeight = if (present) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (present) PorchBrand.go else MaterialTheme.colorScheme.onSurfaceVariant)
+    // Turning off Every call from a family's card, by device ID while it's on its way: a caregiver needs no PIN for it.
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    var turningOff by remember { mutableStateOf<String?>(null) }
+    val turnOff = { family: FamilyCredential ->
+        turningOff = family.deviceID
+        scope.launch {
+            try {
+                app.coordinator.update(app.service(family).send("turnOffEveryCall"))
+                snackbar.showSnackbar("Every call is off")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.calls.error = e.message ?: "Couldn't reach Porch. Check the connection and try again."
+            } finally {
+                turningOff = null
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        FormScreen("Porch", wordmark = true) {
+            RingWhenClosed(app)
+            val several = families.size > 1
+            for (family in families) {
+                val link = links.link(family)
+                val state = link?.state
+                val bedside = state?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }
+                val name = bedside?.name ?: state?.householdName ?: app.device.familyName(family) ?: "Family"
+                val familyName = if (several) app.device.familyName(family)?.takeIf { it != name } else null
+                val (status, present) = familyStatus(link)
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), tonalElevation = 2.dp) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // Caregivers see when every call drops in, and can turn it off here.
+                        val everyCall = state?.everyCall?.takeIf { state.me.caregiver == true && link?.accessRemoved != true }
+                        if (everyCall != null) EveryCallBanner(everyCall, bedsideDevice(state), busy = turningOff == family.deviceID) { turnOff(family) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(name, size = 56.dp)
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(name, Modifier.semantics { heading() }, style = porchTitleStyle().copy(fontSize = 24.sp))
+                                familyName?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                Text(status, style = MaterialTheme.typography.bodyLarge, fontWeight = if (present) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (present) PorchBrand.go else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
-                    }
-                    when {
-                        // A family that removed this phone can't reach it again. Taking it off leaves the others as they are.
-                        link?.accessRemoved == true -> FormPlainButton("Remove from this phone", onClick = { removing = family.deviceID },
-                            color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
-                        state != null && bedside != null -> {
-                            val enabled = !app.calls.opening && link.error == null && bedside.online && !state.busy
-                            val dropIns = listOf(NativeCall.Mode.VOICE to state.me.permissions.audio, NativeCall.Mode.VIDEO to state.me.permissions.video)
-                                .filter { state.dropInEnabled && it.second }.map { it.first }
-                            CallButtons(name, enabled, dropIns, onCall = { mode, dropIn -> calling(CallRequest(family, bedside, mode, dropIn)) })
+                        when {
+                            // A family that removed this phone can't reach it again. Taking it off leaves the others as they are.
+                            link?.accessRemoved == true -> FormPlainButton("Remove from this phone", onClick = { removing = family.deviceID },
+                                color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
+                            state != null && bedside != null -> {
+                                val enabled = !app.calls.opening && link.error == null && bedside.online && !state.busy
+                                // While every call drops in, anyone in the family can, with audio or video.
+                                val everyone = state.everyCall != null
+                                val dropIns = listOf(NativeCall.Mode.VOICE to state.me.permissions.audio, NativeCall.Mode.VIDEO to state.me.permissions.video)
+                                    .filter { state.dropInEnabled && (everyone || it.second) }.map { it.first }
+                                CallButtons(name, enabled, dropIns, onCall = { mode, dropIn -> calling(CallRequest(family, bedside, mode, dropIn)) })
+                            }
                         }
                     }
                 }
             }
         }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
     families.firstOrNull { it.deviceID == removing }?.let { family ->
         // As on iOS (confirmRemoval): only a new invitation brings the family back.
@@ -482,6 +528,25 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
                 Text("Remove", color = MaterialTheme.colorScheme.error)
             } },
             dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } })
+    }
+}
+
+/** Every call drops in: a faint red strip at the top of the bedside's card, with who turned it on and when, and Turn off. */
+@Composable
+private fun EveryCallBanner(everyCall: EveryCallDropIn, bedside: String, busy: Boolean, onTurnOff: () -> Unit) {
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = EveryCallColors.tint) {
+        Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(R.drawable.ic_warning), contentDescription = null, Modifier.size(24.dp), tint = PorchBrand.danger)
+            Column(Modifier.weight(1f)) {
+                Text("Every call drops in", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = EveryCallColors.ink)
+                Text(everyCallSince(everyCall, bedside), style = MaterialTheme.typography.bodyMedium, color = EveryCallColors.meta)
+            }
+            OutlinedButton(onClick = onTurnOff, enabled = !busy, border = BorderStroke(1.5.dp, PorchBrand.danger),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = PorchBrand.paper, contentColor = EveryCallColors.ink)) {
+                Text("Turn off", fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 

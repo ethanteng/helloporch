@@ -10,6 +10,7 @@ import com.google.firebase.messaging.RemoteMessage
  * high-priority message with `type: "call"`, `callID`, `recipientID`, `callerName`, `mode` and `expiresAt`. There's no
  * push that cancels one; the ringing notices by checking in. A message the bedside left is a notification with
  * `type: "message"`, which Firebase shows itself unless Porch is running, when it comes here to show (MessageAlerts).
+ * A caregiver's notice that Every call drop-in was turned on or off is one too, with `type: "everyCall"`.
  * Firebase calls this off the main thread.
  */
 class PorchMessagingService : FirebaseMessagingService() {
@@ -27,6 +28,12 @@ class PorchMessagingService : FirebaseMessagingService() {
             val title = message.notification?.title
             val body = message.notification?.body
             main.post { app.messageAlerts.received(title, body, data) }
+            return
+        }
+        if (data["type"] == "everyCall") {
+            val title = message.notification?.title
+            val body = message.notification?.body
+            main.post { app.messageAlerts.receivedEveryCall(title, body, data) }
             return
         }
         if (data["type"] != "call") return
