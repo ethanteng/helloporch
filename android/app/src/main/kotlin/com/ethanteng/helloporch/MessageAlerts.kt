@@ -29,7 +29,7 @@ import com.ethanteng.helloporch.core.PorchExperience
 class MessageAlerts(private val app: PorchApplication) {
     /** A family's thread to open, by this phone's device ID in it, from a tapped notification. */
     var opening by mutableStateOf<String?>(null)
-    /** A family whose Call tab card to show, by this phone's device ID in it, from a tapped Every call notice. */
+    /** A family to make current on the Call tab, by this phone's device ID in it, from a tapped Every call or call notice. */
     var openingCall by mutableStateOf<String?>(null)
     /** Each family's unplayed count when it last checked in, by device ID. */
     private val unplayed = mutableMapOf<String, Int>()
@@ -90,9 +90,9 @@ class MessageAlerts(private val app: PorchApplication) {
         }
     }
 
-    /** A tapped notification opened Porch: its family's thread opens, or for an Every call notice its Call tab, once that
-     * family is on this phone. Firebase's own notifications carry their data as extras on the launch, and Porch's carry
-     * the same. */
+    /** A tapped notification opened Porch: its family's thread opens, or for an Every call or call notice the Call tab
+     * with that family as the current one, once that family is on this phone. Firebase's own notifications carry their
+     * data as extras on the launch, and Porch's carry the same. */
     fun opened(intent: Intent?) {
         val type = intent?.getStringExtra("type")
         if (type != "message" && type != "everyCall") return
