@@ -237,7 +237,9 @@ export function mayDropIn(house: Household, member: Member, mode: Mode): boolean
 // needed a carrier-verified caller ID when it started (inbound.ts).
 export function dropInAllowed(house: Household, call: Call): boolean {
   if (!house.dropInEnabled) return false;
-  if (call.phone) return call.mode === "voice" && (everyCallOn(house) || !!phoneDropIn(house, call.phone.callerNumber));
+  // Every call lets in only a phone call that came in meanwhile with a verified caller ID, as inbound.ts decided.
+  if (call.phone) return call.mode === "voice" && (!!phoneDropIn(house, call.phone.callerNumber)
+    || (everyCallOn(house) && call.everyCall?.verified === true && !!call.phone.callerNumber));
   const caller = house.members.find(m => m.id === call.from);
   return !!caller && mayDropIn(house, caller, call.mode);
 }

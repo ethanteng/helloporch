@@ -276,3 +276,18 @@ test('turning every call off ends an unknown number’s drop-in', async () => {
   assert.equal(f.house(bedside).call.state, 'ended');
   assert.ok(f.ended.includes(event.room.name));
 });
+
+test('turning every call on leaves an approved number’s drop-in going, and calls don’t carry how they came in', async () => {
+  const f = fixture(), bedside = await f.setup();
+  await f.json('setPhoneDropIn', { number: '+14155550200', name: 'David', enabled: true }, bedside.credential, legacy);
+  await f.json('setDropInMode', { mode: 'approved' }, bedside.credential, legacy);
+  await f.json('poll', { available: true }, bedside.credential);
+  await f.webhook(f.phoneCall('+14155550200', verified));
+  assert.equal(f.house(bedside).call.kind, 'dropIn');
+  await f.json('setDropInMode', { mode: 'everyCall' }, bedside.credential, '123456');
+  assert.equal(f.house(bedside).call.state, 'pending');
+  await f.json('endCall', { callID: f.house(bedside).call.id }, bedside.credential);
+  await f.webhook(f.phoneCall('+14155550300', verified));
+  assert.ok(f.house(bedside).call.everyCall);
+  assert.equal((await f.json('poll', { available: true }, bedside.credential)).state.call.everyCall, undefined);
+});

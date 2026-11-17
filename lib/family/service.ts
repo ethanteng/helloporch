@@ -80,7 +80,8 @@ const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setDro
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
   // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
-  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, peerName: _peerName, ...result } = call;
+  // `everyCall` is the server's own note of how a phone call came in; caregivers see it as `bedsideCall`.
+  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, peerName: _peerName, everyCall: _everyCall, ...result } = call;
   const phoneGuest = publicPhoneGuest(call, me), porchGuest = publicPorchGuest(house, call);
   const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
   return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(porchGuest ? { porchGuest } : {}),

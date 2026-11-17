@@ -382,7 +382,8 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Drop-in</strong> works only for people a caregiver approves, unless a caregiver enters the
-                caregiver PIN to let every call drop in. Either can be turned off at any time.
+                caregiver PIN to let every call drop in: family on Porch, and phone callers whose number their carrier
+                verified. Either can be turned off at any time.
               </li>
               <li>
                 <strong>Messages, voicemail and text messages to the Porch number</strong> can be turned off together by
@@ -422,8 +423,8 @@ export default function PrivacyPage() {
               Porch is often set up by a caregiver for a parent or loved one who doesn’t manage technology
               themselves. If you set up Porch for someone, please make sure you’re entitled to make these choices for
               them, and explain Porch to them in a way they can understand, including that people they approve can
-              drop in (or anyone who calls, while a caregiver lets every call drop in), and that anyone with the Porch
-              number can text it. A text from a number they haven’t allowed
+              drop in (or, while a caregiver lets every call drop in, family and phone callers with a verified number),
+              and that anyone with the Porch number can text it. A text from a number they haven’t allowed
               waits for a caregiver. Others are shown and read on the tablet.
               When you add other people’s phone numbers or photos, please add only what they’d be comfortable
               with.
