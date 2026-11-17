@@ -278,7 +278,8 @@ final class CaregiverInputTests: XCTestCase {
             try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
             let family = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "tom-device.tom-secret", role: .family)
             try PorchDevice.save(family)
-            coordinator.start()
+            // Not `start`: it would ask for notification and microphone permission, which stops later tests.
+            coordinator.installForTesting([family])
             @MainActor func show(caregiver: Bool) throws {
                 let state: [String: Any] = ["householdID": "reyes", "householdName": "Rose", "dropInEnabled": true,
                     "me": ["id": "tom-device", "name": "Tom Reyes", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": caregiver],
@@ -314,7 +315,8 @@ final class CaregiverInputTests: XCTestCase {
             try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
             let family = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "tom-device.tom-secret", role: .family)
             try PorchDevice.save(family)
-            coordinator.start()
+            // Not `start`: it would ask for notification and microphone permission, which stops later tests.
+            coordinator.installForTesting([family])
             @MainActor func show(caregiver: Bool, everyCall: Bool, call: [String: Any]) throws {
                 var state: [String: Any] = ["householdID": "reyes", "householdName": "Rose", "dropInEnabled": true,
                     "me": ["id": "tom-device", "name": "Tom Reyes", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": caregiver],

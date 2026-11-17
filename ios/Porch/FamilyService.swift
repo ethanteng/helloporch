@@ -392,6 +392,15 @@ struct FamilyCallSession {
             }
         }
     }
+    #if DEBUG
+    /// Tests: these families' links, as `start` makes them, without checking in, asking for notification or microphone
+    /// permission, or registering for push. On a fresh simulator those prompts would make Porch inactive for later tests.
+    func installForTesting(_ credentials: [FamilyCredential]) {
+        pause()
+        currentID = credentials.first?.deviceID
+        links = credentials.map(Link.init)
+    }
+    #endif
     func pause() {
         isActive = false; generation = UUID()
         // An in-flight keypad report belongs to the session that started it. A failed report's wait is kept:
