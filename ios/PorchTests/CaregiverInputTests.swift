@@ -1936,11 +1936,22 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(MessagePlayerViewController.pictureNote(2), "May kasama itong 2 litrato na hindi pa maipakita ng Porch.")
     }
 
-    func testCaregiverPhonesSayWhatNeedsTheirReview() {
-        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 1, texts: 0), "1 phone voicemail needs your review")
-        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 0, texts: 1), "1 text needs your review")
-        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 0, texts: 2), "2 texts need your review")
-        XCTAssertEqual(FamilyHomeViewController.reviewTitle(voicemails: 1, texts: 2), "3 messages need your review")
+    func testMessagesTabSaysWhatsWaiting() {
+        XCTAssertEqual(MessagesWaitingText.new(1, from: "Rose"), "1 new message from Rose")
+        XCTAssertEqual(MessagesWaitingText.new(3, from: "Rose"), "3 new messages from Rose")
+        XCTAssertNil(MessagesWaitingText.new(0, from: "Rose"))
+        XCTAssertEqual(MessagesWaitingText.waiting(2), "2 of yours not played yet")
+        XCTAssertNil(MessagesWaitingText.waiting(0))
+        let now = Date().timeIntervalSince1970
+        XCTAssertNil(MessagesWaitingText.played(now, waiting: 1), "only once none of yours are waiting")
+        XCTAssertNil(MessagesWaitingText.played(nil, waiting: 0))
+        XCTAssertEqual(MessagesWaitingText.played(now, waiting: 0), "Played your message today at \(MessageText.time(now))")
+        XCTAssertEqual(MessagesWaitingText.needsOK(voicemails: 1, texts: 0)?.title, "1 needs your OK")
+        XCTAssertEqual(MessagesWaitingText.needsOK(voicemails: 1, texts: 0)?.detail, "1 voicemail")
+        XCTAssertEqual(MessagesWaitingText.needsOK(voicemails: 1, texts: 1)?.title, "2 need your OK")
+        XCTAssertEqual(MessagesWaitingText.needsOK(voicemails: 1, texts: 1)?.detail, "1 voicemail, 1 text")
+        XCTAssertEqual(MessagesWaitingText.needsOK(voicemails: 0, texts: 2)?.detail, "2 texts")
+        XCTAssertNil(MessagesWaitingText.needsOK(voicemails: 0, texts: 0))
     }
 }
 

@@ -9,7 +9,7 @@ import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideDevice, be
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
-import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, type MessageRecord } from "./messages.ts";
+import { discardMedia, handleMessageAction, heldCount, maintainMessages, messageActions, publicInbox, removeMessagesFrom, removeMessagesTo, unheardCount, waitingCount, type MessageRecord } from "./messages.ts";
 import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, retryPorchNumber, type NumberServices, type NumberSettings } from "./numbers.ts";
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, needsReaping, phoneGuestActions, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
@@ -140,6 +140,8 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
     ...(me.role === "family" && me.caregiver ? { heldMessages: heldCount(house, now), heldTexts: heldTextCount(house, now) } : {}),
     // Messages the bedside left for this family member when they missed its call.
     ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
+    // This family member's own messages the bedside hasn't played yet, and when it last played one.
+    ...(me.role === "family" ? { waitingMessages: waitingCount(house, me.id, now), ...(me.messagePlayedAt !== undefined ? { messagePlayedAt: me.messagePlayedAt } : {}) } : {}),
     // When someone was last noticed at the bedside iPad, so family can tell whether a call now is likely to be answered.
     ...(me.role === "family" && attendanceShared(house) && bedside?.attendedAt !== undefined ? { bedsideAttendedAt: bedside.attendedAt } : {}),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.

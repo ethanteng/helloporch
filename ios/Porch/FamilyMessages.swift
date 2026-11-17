@@ -356,7 +356,7 @@ struct MessageStatus {
         switch tone {
         case .new: colors = (.white, PorchStyle.accent)
         case .played: colors = (PorchStyle.played, PorchStyle.go.withAlphaComponent(0.12))
-        case .waiting: colors = (UIColor(red: 0.52, green: 0.32, blue: 0, alpha: 1), UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26))
+        case .waiting: colors = (PorchStyle.waiting, UIColor(red: 0.98, green: 0.74, blue: 0.24, alpha: 0.26))
         case .ended: colors = (PorchStyle.secondary, PorchStyle.border.withAlphaComponent(0.45))
         case .failed: colors = (UIColor(red: 0.68, green: 0.13, blue: 0.1, alpha: 1), UIColor.systemRed.withAlphaComponent(0.12))
         }
@@ -679,10 +679,12 @@ final class MessageThreadViewController: CaregiverFormViewController {
 }
 
 /// Caregiver review of the waiting queue, on the bedside iPad or from an approved phone: messages, and texts to the
-/// Porch number with their words.
+/// Porch number with their words. With `needsOK`, only what's held for a caregiver, opened from a phone's Messages tab.
 final class MessageQueueViewController: CaregiverFormViewController {
     var onChange: ((FamilyAdminState) -> Void)?
     private let remote: FamilyCredential?
+    /// Opened straight from the Messages tab: this page holds the phone's caregiver session, so leaving it ends that.
+    private let needsOK: Bool
     private var messages: [FamilyMessage]
     private var texts: [FamilyText]
     /// Each waiting text's words, which only the PIN-checked review fetches.
@@ -693,17 +695,31 @@ final class MessageQueueViewController: CaregiverFormViewController {
     private let list = UIStackView()
     private var busy = false
     private var posterTask: Task<Void, Never>?
-    init(remote: FamilyCredential?, messages: [FamilyMessage], texts: [FamilyText] = []) {
-        self.remote = remote; self.messages = messages; self.texts = texts; super.init(nibName: nil, bundle: nil)
+    init(remote: FamilyCredential?, messages: [FamilyMessage], texts: [FamilyText] = [], needsOK: Bool = false) {
+        self.remote = remote; self.messages = messages; self.texts = texts; self.needsOK = needsOK && remote != nil
+        super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(remote:messages:texts:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(remote:messages:texts:needsOK:)") }
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Waiting messages"
-        list.axis = .vertical; list.spacing = 20
+        super.viewDidLoad(); title = needsOK ? "Needs your OK" : "Waiting messages"
+        list.axis = .vertical; list.spacing = needsOK ? 16 : 20
         form.addArrangedSubview(list)
         hideKeyboardControl()
+        if needsOK {
+            NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: UIApplication.willEnterForegroundNotification, object: nil)
+        }
         render()
         loadWords()
+    }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    /// As in caregiver mode: withdrawn approval, a removed phone or the idle timeout locks right away.
+    @objc private func familyChanged() {
+        guard needsOK, let remote else { return }
+        let link = FamilyCoordinator.shared.link(for: remote)
+        guard link?.accessRemoved == true || link?.state?.me.caregiver == false || !RemoteCaregiverSession.shared.isActive else { return }
+        RemoteCaregiverSession.shared.end()
+        navigationController?.popToRootViewController(animated: true)
     }
     private func loadWords() {
         guard !texts.isEmpty else { return }
@@ -722,13 +738,19 @@ final class MessageQueueViewController: CaregiverFormViewController {
         }
     }
     static func senderName(_ text: FamilyText) -> String { text.from.hasPrefix("+") ? PhoneNumberNormalization.display(text.from) : text.from }
-    override func viewWillDisappear(_ animated: Bool) { super.viewWillDisappear(animated); if isMovingFromParent { posterTask?.cancel() } }
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        guard isMovingFromParent else { return }
+        posterTask?.cancel()
+        if needsOK { RemoteCaregiverSession.shared.end() }
+    }
     static func senderName(_ message: FamilyMessage) -> String {
         guard message.fromPhone else { return message.fromName }
         return message.callerNumber.map { PhoneNumberNormalization.display($0) } ?? "an unknown caller"
     }
     private func render() {
         list.arrangedSubviews.forEach { list.removeArrangedSubview($0); $0.removeFromSuperview() }
+        if needsOK { renderNeedsOK(); return }
         guard !messages.isEmpty || !texts.isEmpty else { list.addArrangedSubview(PorchStyle.label("No messages are waiting.")); return }
         var missing: [(String, MessagePosterView)] = []
         // Held texts first, then held phone voicemail: they're what needs a decision.
@@ -745,7 +767,7 @@ final class MessageQueueViewController: CaregiverFormViewController {
             preview.addAction(UIAction { [weak self] _ in Task { await self?.preview(message) } }, for: .touchUpInside)
             views.append(preview)
             if message.held == true {
-                let release = PorchStyle.button("Let it play on Porch", symbol: "checkmark.circle.fill")
+                let release = PorchStyle.button("Approve", symbol: "checkmark.circle.fill")
                 release.addAction(UIAction { [weak self] _ in Task { await self?.change("releaseMessage", message) } }, for: .touchUpInside)
                 views.append(release)
             }
@@ -765,6 +787,22 @@ final class MessageQueueViewController: CaregiverFormViewController {
     }
     /// A text with its words, and what the bedside shows when it translated them.
     private func section(for text: FamilyText) -> UIView {
+        var views = textViews(text)
+        // Not until the words are here: otherwise Approve OKs a text the caregiver hasn't read.
+        if text.held, words[text.id] != nil {
+            let release = PorchStyle.button("Approve", symbol: "checkmark.circle.fill")
+            release.addAction(UIAction { [weak self] _ in Task { await self?.changeText("releaseText", text) } }, for: .touchUpInside)
+            views.append(release)
+        }
+        let remove = PorchStyle.button("Remove", symbol: "trash", filled: false)
+        remove.configuration?.baseForegroundColor = .systemRed
+        remove.addAction(UIAction { [weak self] _ in self?.confirmRemove(text) }, for: .touchUpInside)
+        views.append(remove)
+        let state = text.held ? "Waiting for your OK: number isn't saved on the keypad" : text.delivered ? "Ready on the iPad" : "Not on the iPad yet"
+        return section("Text from \(Self.senderName(text))", detail: "Sent \(MessageText.when(text.sentAt)) · \(state)", views: views)
+    }
+    /// A text's words as the bedside will show them, or why they aren't here.
+    private func textViews(_ text: FamilyText) -> [UIView] {
         var views: [UIView] = []
         if let words = words[text.id] {
             if let body = words.body, !body.isEmpty { views.append(PorchStyle.label("“\(body)”", size: 18, color: PorchStyle.ink)) }
@@ -779,18 +817,85 @@ final class MessageQueueViewController: CaregiverFormViewController {
         } else { views.append(PorchStyle.label("Loading the text…", size: 15)) }
         if let pictures = text.pictures, pictures > 0 { views.append(PorchStyle.label(pictures == 1 ? "It came with a picture, which Porch doesn't show yet." : "It came with \(pictures) pictures, which Porch doesn't show yet.", size: 15)) }
         if let others = text.attachments, others > 0 { views.append(PorchStyle.label(others == 1 ? "It came with an attachment, such as a contact card or voice clip, which Porch doesn't show yet." : "It came with \(others) attachments, such as contact cards or voice clips, which Porch doesn't show yet.", size: 15)) }
-        // Not until the words are here: otherwise Let it show approves a text the caregiver hasn't read.
-        if text.held, words[text.id] != nil {
-            let release = PorchStyle.button("Let it show on Porch", symbol: "checkmark.circle.fill")
-            release.addAction(UIAction { [weak self] _ in Task { await self?.changeText("releaseText", text) } }, for: .touchUpInside)
-            views.append(release)
+        return views
+    }
+    /// Only what's held for a caregiver, each with Approve and Remove side by side; the rest of the queue is a row below.
+    private func renderNeedsOK() {
+        let heldTexts = texts.filter(\.held).sorted { $0.sentAt < $1.sentAt }
+        let heldMessages = messages.filter { $0.held == true }.sorted { $0.sentAt < $1.sentAt }
+        if heldTexts.isEmpty && heldMessages.isEmpty { list.addArrangedSubview(PorchStyle.label("Nothing needs your OK.")) }
+        for text in heldTexts {
+            var views = textViews(text)
+            let remove = removeButton { [weak self] in self?.confirmRemove(text) }
+            // Not until the words are here: otherwise Approve OKs a text the caregiver hasn't read.
+            if words[text.id] != nil {
+                views.append(pair(approveButton { [weak self] in Task { await self?.changeText("releaseText", text) } }, remove))
+            } else { views.append(remove) }
+            list.addArrangedSubview(okCard(symbol: "text.bubble", title: "Text", detail: "\(Self.senderName(text)) · \(MessageText.when(text.sentAt))",
+                                           why: "Not on the keypad", views: views))
         }
-        let remove = PorchStyle.button("Remove", symbol: "trash", filled: false)
-        remove.configuration?.baseForegroundColor = .systemRed
-        remove.addAction(UIAction { [weak self] _ in self?.confirmRemove(text) }, for: .touchUpInside)
-        views.append(remove)
-        let state = text.held ? "Waiting for your OK: number isn't saved on the keypad" : text.delivered ? "Ready on the iPad" : "Not on the iPad yet"
-        return section("Text from \(Self.senderName(text))", detail: "Sent \(MessageText.when(text.sentAt)) · \(state)", views: views)
+        for message in heldMessages {
+            let listen = PorchStyle.button("Listen", symbol: "play.fill", filled: false)
+            listen.addAction(UIAction { [weak self] _ in Task { await self?.preview(message) } }, for: .touchUpInside)
+            let approve = approveButton { [weak self] in Task { await self?.change("releaseMessage", message) } }
+            let remove = removeButton { [weak self] in self?.confirmRemove(message) }
+            let why = message.callerNumber == nil ? nil : message.callerVerified == true ? "Not on the keypad" : "Number couldn't be checked"
+            let sender = message.callerNumber.map { PhoneNumberNormalization.display($0) } ?? "Hidden number"
+            list.addArrangedSubview(okCard(symbol: "recordingtape", title: "Phone voicemail · \(MessageText.length(message.durationSeconds))",
+                                           detail: "\(sender) · \(MessageText.when(message.sentAt))", why: why, views: [listen, pair(approve, remove)]))
+        }
+        let held = heldTexts.count + heldMessages.count, all = messages.count + texts.count
+        guard all > held else { return }
+        let porch = remote.flatMap { bedsideName($0) }.map { "\($0)’s Porch" } ?? "Porch"
+        list.addArrangedSubview(group(rows: [linkRow("Everything waiting on \(porch)", value: "\(all)") { [weak self] in
+            guard let self else { return }
+            let queue = MessageQueueViewController(remote: self.remote, messages: self.messages, texts: self.texts)
+            queue.onChange = { [weak self] admin in
+                guard let self else { return }
+                self.messages = admin.messages ?? []; self.texts = admin.texts ?? []; self.render(); self.onChange?(admin)
+            }
+            self.navigationController?.pushViewController(queue, animated: true)
+        }]))
+    }
+    private func okCard(symbol: String, title: String, detail: String, why: String?, views: [UIView]) -> UIView {
+        let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)))
+        icon.tintColor = PorchStyle.ink; icon.contentMode = .center
+        let circle = UIView(); circle.backgroundColor = PorchStyle.honey; circle.layer.cornerRadius = 20
+        circle.addSubview(icon); icon.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([circle.widthAnchor.constraint(equalToConstant: 40), circle.heightAnchor.constraint(equalToConstant: 40),
+                                     icon.centerXAnchor.constraint(equalTo: circle.centerXAnchor), icon.centerYAnchor.constraint(equalTo: circle.centerYAnchor)])
+        let words = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 17, color: PorchStyle.ink, weight: .semibold), PorchStyle.label(detail, size: 15)])
+        words.axis = .vertical; words.spacing = 2
+        let heading = UIStackView(arrangedSubviews: [circle, words]); heading.spacing = 12; heading.alignment = .center
+        let stack = UIStackView(arrangedSubviews: [heading] + (why.map { [PorchStyle.label($0, size: 15, color: PorchStyle.waiting, weight: .semibold)] } ?? []) + views)
+        stack.axis = .vertical; stack.spacing = 12
+        let card = UIView(); card.backgroundColor = PorchStyle.surface
+        card.layer.cornerRadius = 20; card.layer.cornerCurve = .continuous
+        card.addSubview(stack); stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16), stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16), stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
+        ])
+        return card
+    }
+    private func approveButton(_ action: @escaping () -> Void) -> UIButton {
+        let button = PorchStyle.button("Approve", symbol: "checkmark")
+        button.accessibilityIdentifier = "queue.approve"
+        button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        return button
+    }
+    private func removeButton(_ action: @escaping () -> Void) -> UIButton {
+        let button = PorchStyle.button("Remove", symbol: "trash", filled: false)
+        button.configuration?.baseForegroundColor = .systemRed
+        button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        return button
+    }
+    /// Two buttons side by side, as wide as each other; with large text, one over the other.
+    private func pair(_ first: UIButton, _ second: UIButton) -> UIStackView {
+        let stack = UIStackView(arrangedSubviews: [first, second])
+        stack.spacing = 10; stack.distribution = .fillEqually
+        stack.axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
+        return stack
     }
     private func changeText(_ action: String, _ text: FamilyText) async {
         guard !busy else { return }

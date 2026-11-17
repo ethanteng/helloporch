@@ -205,11 +205,6 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         return row
     }
     /// What's waiting for this caregiver's OK: phone voicemail, texts, or both.
-    static func reviewTitle(voicemails: Int, texts: Int) -> String {
-        if texts == 0 { return voicemails == 1 ? "1 phone voicemail needs your review" : "\(voicemails) phone voicemails need your review" }
-        if voicemails == 0 { return texts == 1 ? "1 text needs your review" : "\(texts) texts need your review" }
-        return "\(voicemails + texts) messages need your review"
-    }
     private func confirmRemoval(of family: FamilyCredential, named name: String?) {
         let alert = UIAlertController(title: "Remove \(name ?? "this family") from this phone?", message: "They've already removed this phone. To join again, you'll need a new invitation.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -593,20 +588,25 @@ final class PhoneDropInViewController: CaregiverFormViewController, CNContactPic
     }
 }
 
-/// Opens caregiver mode on an approved family phone with the household's caregiver PIN.
+/// Opens caregiver mode on an approved family phone with the household's caregiver PIN, or straight to what needs
+/// a caregiver's OK.
 final class RemoteCaregiverPINViewController: CaregiverFormViewController {
+    enum Opens { case caregiverMode, needsOK }
     /// The family whose PIN this screen checks. Opening another family's page while it sits on its tab must not switch that.
     private let family: FamilyCredential?
+    private let opens: Opens
     private let pin = UITextField()
-    private let submit = PorchStyle.button("Open caregiver mode", symbol: "lock.fill")
+    private let submit: UIButton
     private var task: Task<Void, Never>?
-    init(family: FamilyCredential? = nil) {
+    init(family: FamilyCredential? = nil, opens: Opens = .caregiverMode) {
         self.family = family ?? PorchDevice.credential(for: .family)
+        self.opens = opens
+        submit = PorchStyle.button(opens == .needsOK ? "Unlock" : "Open caregiver mode", symbol: "lock.fill")
         super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) { fatalError("Use init(family:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(family:opens:)") }
     override func viewDidLoad() {
-        super.viewDidLoad(); title = "Caregiver mode"
+        super.viewDidLoad(); title = opens == .needsOK ? "Needs your OK" : "Caregiver mode"
         pin.isSecureTextEntry = true; pin.keyboardType = .numberPad
         pin.accessibilityIdentifier = "caregiver.pin"
         form.addArrangedSubview(section("Caregiver PIN", detail: "The PIN set on the bedside iPad.", views: [field(pin, title: "Six-digit PIN", placeholder: "Enter six digits"), submit]))
@@ -628,9 +628,11 @@ final class RemoteCaregiverPINViewController: CaregiverFormViewController {
                 FamilyCoordinator.shared.update(response)
                 RemoteCaregiverSession.shared.begin(pin: value)
                 self.pin.text = nil
-                let admin = FamilyAdminViewController(remote: credential, state: response.admin)
+                let next: UIViewController = self.opens == .needsOK
+                    ? MessageQueueViewController(remote: credential, messages: response.admin?.messages ?? [], texts: response.admin?.texts ?? [], needsOK: true)
+                    : FamilyAdminViewController(remote: credential, state: response.admin)
                 guard let navigation = self.navigationController else { return }
-                navigation.setViewControllers(Array(navigation.viewControllers.dropLast()) + [admin], animated: true)
+                navigation.setViewControllers(Array(navigation.viewControllers.dropLast()) + [next], animated: true)
             } catch { if !Task.isCancelled { showPorchError(error, on: self) } }
         }
     }

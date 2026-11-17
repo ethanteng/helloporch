@@ -56,6 +56,8 @@ internal object PorchBrand {
     /** "Played" on its faint green tag. `go` itself is 3.9:1 over the cream page there, short of 4.5:1 for the label,
      * so the words are this darker shade of the same green. iOS's PorchStyle.played matches. */
     val played = Color(0xFF255F42)
+    /** "Not played yet": a message still waiting, as on its amber tag. iOS's PorchStyle.waiting matches. */
+    val waiting = Color(0xFF855200)
     /** End call and Decline: the site's --help. */
     val danger = Color(0xFFC13D34)
     /** The wordmark's brown, --brown-ink, and the logo's tomato. */

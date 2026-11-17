@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  * family screen, with why caregiver mode ended when there's something to say.
  */
 @Composable
-fun RemoteCaregiverMode(app: PorchApplication, family: FamilyCredential, links: FamilyLinks, onClose: (String?) -> Unit) {
+fun RemoteCaregiverMode(app: PorchApplication, family: FamilyCredential, links: FamilyLinks, needsOK: Boolean = false, onClose: (String?) -> Unit) {
     val scope = rememberCoroutineScope()
     val close by rememberUpdatedState(onClose)
     // A call taking over the screen closes caregiver mode, so its PIN is forgotten too. Turning the phone doesn't.
@@ -48,7 +48,7 @@ fun RemoteCaregiverMode(app: PorchApplication, family: FamilyCredential, links: 
     }
     val open = admin
     if (open == null) {
-        CaregiverPINScreen(app, family, links, onCancel = { close(null) }, onUnlocked = { admin = opened(it) })
+        CaregiverPINScreen(app, family, links, needsOK, onCancel = { close(null) }, onUnlocked = { admin = opened(it) })
         return
     }
     // Each check-in can show approval withdrawn or the phone removed, which locks it at once, as on iOS.
@@ -58,12 +58,18 @@ fun RemoteCaregiverMode(app: PorchApplication, family: FamilyCredential, links: 
     // Ten idle minutes, or Porch having left the screen.
     LaunchedEffect(open) { while (true) { if (!RemoteCaregiverSession.shared.isActive) open.lock(); delay(5_000) } }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (!RemoteCaregiverSession.shared.isActive) open.lock() }
+    // From a Messages card: straight to what needs an OK, and back to Messages from there, as on iOS.
+    if (needsOK) {
+        NeedsYourOKScreen(open, links, onDone = { open.lock() })
+        PorchErrorDialog(open.error) { open.error = null }
+        return
+    }
     CaregiverModeContent(app, open, links, "Done", onClose = { open.lock() })
 }
 
 /** The caregiver PIN, set on the bedside. A wrong one, or too many, is refused by the server with the reason. */
 @Composable
-private fun CaregiverPINScreen(app: PorchApplication, family: FamilyCredential, links: FamilyLinks, onCancel: () -> Unit,
+private fun CaregiverPINScreen(app: PorchApplication, family: FamilyCredential, links: FamilyLinks, needsOK: Boolean, onCancel: () -> Unit,
     onUnlocked: (FamilyAdminState?) -> Unit) {
     BackHandler(onBack = onCancel)
     val scope = rememberCoroutineScope()
@@ -71,11 +77,11 @@ private fun CaregiverPINScreen(app: PorchApplication, family: FamilyCredential, 
     var pin by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    FormScreen("Caregiver mode", navigation = { TextButton(onClick = onCancel) { Text("Cancel") } }) {
+    FormScreen(if (needsOK) "Needs your OK" else "Caregiver mode", navigation = { TextButton(onClick = onCancel) { Text("Cancel") } }) {
         FormSection("Caregiver PIN", "The PIN set on the bedside ${bedsideDevice(links.state(family))}.") {
             FormField(pin, { pin = it.filter(Char::isDigit).take(6) }, "Six-digit PIN", "Enter six digits",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation())
-            FormButton(if (busy) "Checking…" else "Open caregiver mode", enabled = !busy, onClick = {
+            FormButton(if (busy) "Checking…" else if (needsOK) "Unlock" else "Open caregiver mode", enabled = !busy, onClick = {
                 if (!Regex("^[0-9]{6}$").matches(pin)) { error = "Enter six digits."; return@FormButton }
                 val typed = pin
                 // Porch leaving the screen while the PIN is checked means asking for it again, not opening behind it.

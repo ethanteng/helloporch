@@ -284,6 +284,10 @@ data class FamilySnapshot(
     val ringSeconds: Int? = null,
     /** Family devices: messages the bedside left for this device that haven't been played. */
     val newMessages: Int? = null,
+    /** Family devices: this device's own messages still waiting on the bedside to be played. Older servers don't send it. */
+    val waitingMessages: Int? = null,
+    /** Family devices: when the bedside last played one of this device's messages, in server time. Not sent before it has. */
+    val messagePlayedAt: Long? = null,
     /** Bedside only: natural announcement voices. Older servers, and ones without a speech service, don't send them. */
     val speech: NaturalVoices? = null,
     /** Bedside only: the bedside language as the server last heard it; phone voicemail greets callers in it. Older servers don't send it. */

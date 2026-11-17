@@ -64,6 +64,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import com.ethanteng.helloporch.core.MessagesWaiting
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -99,6 +108,8 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     var joining by rememberSaveable { mutableStateOf(false) }
     // The family caregiver mode is open for, by device ID, and why it last ended on its own, such as a changed PIN.
     var caregiving by rememberSaveable { mutableStateOf<String?>(null) }
+    // Opened from a Messages card for what needs a caregiver's OK, rather than caregiver mode's own pages.
+    var reviewing by rememberSaveable { mutableStateOf(false) }
     var caregiverNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var about by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(FamilyTab.CALL) }
@@ -158,7 +169,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             dismissButton = { TextButton(onClick = { app.calls.messageOffer = null }) { Text("Not now") } })
     }
     if (caregiverFamily != null) {
-        RemoteCaregiverMode(app, caregiverFamily, links, onClose = { reason -> caregiving = null; caregiverNotice = reason })
+        RemoteCaregiverMode(app, caregiverFamily, links, needsOK = reviewing, onClose = { reason -> caregiving = null; reviewing = false; caregiverNotice = reason })
         return
     }
     if (composeFamily != null) {
@@ -172,9 +183,10 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
         AboutScreen(navigation = { TextButton(onClick = { about = false }) { Text("Back") } })
         return
     }
-    val openCaregiver = { family: FamilyCredential ->
+    val openCaregiver = { family: FamilyCredential, needsOK: Boolean ->
         // Every visit starts with the PIN.
         RemoteCaregiverSession.shared.end()
+        reviewing = needsOK
         caregiving = family.deviceID
     }
     if (!tabs) {
@@ -196,7 +208,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
             FamilyTab.MESSAGES -> if (threadFamily != null) {
                 MessageThreadScreen(app, threadFamily, links, onBack = { thread = null },
                     onRecord = { name -> composing = Composing(threadFamily.deviceID, name, "message", startAudio = false) })
-            } else MessagesTab(app, links, families, onThread = { thread = it.deviceID }, onCaregiver = openCaregiver)
+            } else MessagesTab(app, links, families, onThread = { thread = it.deviceID }, onReview = { openCaregiver(it, true) })
             FamilyTab.YOU -> if (pageFamily != null) {
                 val back = { pageScreen = FamilyPageScreen.PAGE }
                 when (pageScreen) {
@@ -204,7 +216,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
                     FamilyPageScreen.NAME -> FamilyNameScreen(app, pageFamily, links, onDone = { back(); changes++ })
                     FamilyPageScreen.NUMBER -> PorchNumberScreen(app, pageFamily, links, onBack = back)
                     FamilyPageScreen.PAGE -> FamilyPage(app, pageFamily, links, onBack = { page = null }, onOpen = { pageScreen = it },
-                        onCaregiver = { openCaregiver(pageFamily) }, onGone = { page = null; changes++ })
+                        onCaregiver = { openCaregiver(pageFamily, false) }, onGone = { page = null; changes++ })
                 }
             } else YouTab(app, links, families, onFamily = { page = it.deviceID; pageScreen = FamilyPageScreen.PAGE },
                 onJoinAnother = { joining = true }, onAbout = { about = true })
@@ -348,13 +360,6 @@ private data class Composing(val deviceID: String, val recipient: String, val ki
 private val composingSaver = listSaver<Composing?, String>(
     save = { it?.let { c -> listOf(c.deviceID, c.recipient, c.kind, c.startAudio.toString()) } ?: emptyList() },
     restore = { if (it.size == 4) Composing(it[0], it[1], it[2], it[3].toBoolean()) else null })
-
-/** What's waiting for a caregiver's OK: phone voicemail, texts, or both, as iOS says it. */
-private fun reviewTitle(voicemails: Int, texts: Int): String = when {
-    texts == 0 -> if (voicemails == 1) "1 phone voicemail needs your review" else "$voicemails phone voicemails need your review"
-    voicemails == 0 -> if (texts == 1) "1 text needs your review" else "$texts texts need your review"
-    else -> "${voicemails + texts} messages need your review"
-}
 
 /** How a bedside is, or why it can't be reached, centered as on iOS. */
 @Composable
@@ -524,10 +529,11 @@ private fun CallButton(text: String, @DrawableRes icon: Int, label: String, enab
     else OutlinedButton(onClick, described, enabled = enabled, contentPadding = padding, content = content)
 }
 
-/** The Messages tab: what's waiting for a caregiver's OK, then one thread for each family's bedside, as on iOS. */
+/** The Messages tab: a card for each family's bedside with what's waiting there, and for caregivers what needs their OK,
+ * as on iOS. */
 @Composable
 private fun MessagesTab(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onThread: (FamilyCredential) -> Unit,
-    onCaregiver: (FamilyCredential) -> Unit) {
+    onReview: (FamilyCredential) -> Unit) {
     FormScreen("Messages") {
         val several = families.size > 1
         val shown = families.filter { links.link(it)?.accessRemoved != true && links.state(it) != null }
@@ -541,37 +547,77 @@ private fun MessagesTab(app: PorchApplication, links: FamilyLinks, families: Lis
             })
             return@FormScreen
         }
-        // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
         for (family in shown) {
             val state = links.state(family) ?: continue
-            val held = state.heldMessages ?: 0
-            val texts = state.heldTexts ?: 0
-            if (state.me.caregiver == true && held + texts > 0) {
-                FormButton(reviewTitle(held, texts) + if (several) "\n${familyTitle(app, links, family)}" else "", onClick = { onCaregiver(family) },
-                    icon = R.drawable.ic_review)
-            }
-        }
-        CaregiverGroup {
-            shown.forEachIndexed { index, family ->
-                val state = links.state(family)
-                val name = state?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }?.name ?: familyTitle(app, links, family)
-                val familyName = if (several) familyTitle(app, links, family).takeIf { it != name } else null
-                val unheard = state?.newMessages ?: 0
-                val new = when { unheard == 1 -> "1 new message"; unheard > 1 -> "$unheard new messages"; else -> null }
-                if (index > 0) HorizontalDivider()
-                CaregiverRow(onClick = { onThread(family) }, label = "Messages with " + listOfNotNull(name, familyName, new).joinToString(", ")) {
-                    Avatar(name, size = 44.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        listOfNotNull(familyName, new).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
-                            Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = if (new != null) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (new != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            val name = state.people.firstOrNull { it.role == PorchExperience.BEDSIDE }?.name ?: familyTitle(app, links, family)
+            val familyName = if (several) familyTitle(app, links, family).takeIf { it != name } else null
+            val waiting = state.waitingMessages ?: 0
+            val statuses = listOfNotNull(
+                MessagesWaiting.new(state.newMessages ?: 0, name)?.let { WaitingLine(it, WaitingKind.NEW) },
+                MessagesWaiting.waiting(waiting)?.let { WaitingLine(it, WaitingKind.WAITING) },
+                MessagesWaiting.played(state.messagePlayedAt?.let { MessageText.played(it) }, waiting)?.let { WaitingLine(it, WaitingKind.PLAYED) })
+            // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
+            val ok = if (state.me.caregiver == true) MessagesWaiting.needsOK(state.heldMessages ?: 0, state.heldTexts ?: 0) else null
+            Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    CaregiverRow(onClick = { onThread(family) }, label = "Messages with " + (listOfNotNull(name, familyName) + statuses.map { it.text }).joinToString(", ")) {
+                        Avatar(name, size = 48.dp)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column {
+                                Text(name, style = porchTitleStyle().copy(fontSize = 24.sp))
+                                familyName?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                            for (line in statuses) WaitingStatus(line)
                         }
+                        Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ok?.let { (title, detail) -> NeedsOKBar(title, detail, onClick = { onReview(family) }) }
                 }
             }
         }
+    }
+}
+
+private enum class WaitingKind { NEW, WAITING, PLAYED }
+private data class WaitingLine(val text: String, val kind: WaitingKind)
+
+/** One line of what's waiting on a person's card: new in tomato, not played yet in amber, played in green. */
+@Composable
+private fun WaitingStatus(line: WaitingLine) {
+    val color = when (line.kind) {
+        WaitingKind.NEW -> PorchBrand.accent
+        WaitingKind.WAITING -> PorchBrand.waiting
+        WaitingKind.PLAYED -> PorchBrand.played
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+            when (line.kind) {
+                WaitingKind.NEW -> Box(Modifier.size(9.dp).clip(CircleShape).background(color))
+                WaitingKind.WAITING -> Icon(painterResource(R.drawable.ic_schedule), contentDescription = null, Modifier.size(17.dp), tint = color)
+                WaitingKind.PLAYED -> Icon(painterResource(R.drawable.ic_check), contentDescription = null, Modifier.size(17.dp), tint = color)
+            }
+        }
+        Text(line.text, style = MaterialTheme.typography.bodyMedium, color = color,
+            fontWeight = if (line.kind == WaitingKind.NEW) FontWeight.SemiBold else FontWeight.Normal)
+    }
+}
+
+/** The honey bar at the foot of a card: how many need a caregiver's OK, opening them after the PIN. */
+@Composable
+private fun NeedsOKBar(title: String, detail: String, onClick: () -> Unit) {
+    Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(PorchBrand.honey)
+        .clickable(onClick = onClick)
+        .clearAndSetSemantics { contentDescription = "$title, $detail"; role = Role.Button; onClick { onClick(); true } }
+        .heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(34.dp).clip(CircleShape).background(PorchBrand.ink), contentAlignment = Alignment.Center) {
+            Icon(painterResource(R.drawable.ic_priority_high), contentDescription = null, Modifier.size(18.dp), tint = PorchBrand.honey)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PorchBrand.ink)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = PorchBrand.ink)
+        }
+        Text("›", fontSize = 22.sp, color = PorchBrand.ink)
     }
 }
 

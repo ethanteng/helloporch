@@ -43,6 +43,9 @@ export function publicInbox(house: Household, now: number) {
 }
 /** Phone voicemails waiting for a caregiver; approved caregivers see the count on their phones. */
 export const heldCount = (house: Household, now: number) => (house.inbox ?? []).filter(entry => entry.held && live(entry, now)).length;
+/** This family member's messages still waiting on the bedside to be played. */
+export const waitingCount = (house: Household, memberID: string, now: number) =>
+  (house.inbox ?? []).filter(entry => entry.from === memberID && live(entry, now)).length;
 /** Messages the bedside left for this family member that they haven't played yet. */
 export const unheardCount = (house: Household, memberID: string, now: number) =>
   (house.outbox ?? []).filter(entry => entry.to === memberID && entry.sentAt + messageLimits.keepMediaSeconds > now).length;
@@ -420,6 +423,9 @@ export async function handleMessageAction(action: string, { store, media, now, h
     await mutate(store, house.id, current => {
       current.inbox = (current.inbox ?? []).filter(e => e.id !== id);
       current.purgeAt = Math.min(current.purgeAt ?? purgeAt, purgeAt);
+      // So the sender's Messages tab can say when the bedside last played one of theirs.
+      const sender = current.members.find(m => m.id === entry.from);
+      if (sender) sender.messagePlayedAt = now;
     });
     return { ok: true };
   }

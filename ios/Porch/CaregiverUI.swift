@@ -28,6 +28,8 @@ enum PorchStyle {
     /// "Played" on its faint green tag. `go` itself is 3.9:1 over the cream page there, short of 4.5:1 for that
     /// 15-point label, so the words are this darker shade of the same green. Android's PorchBrand.played matches.
     static let played = rgb(0x255F42)
+    /// "Not played yet": a message still waiting, as on its amber tag. Android's PorchBrand.waiting matches.
+    static let waiting = rgb(0x855200)
     /// End call and Decline: the site's --help.
     static let danger = rgb(0xC13D34)
     /// The bedside at night and the call screens: warm darks, each as bright as the green-tinted one it replaced, so the
