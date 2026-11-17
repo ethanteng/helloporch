@@ -163,16 +163,21 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
         }
         app.messageAlerts.opening = null
     }
-    // A tapped Every call notice opens the Call tab, where that family's card shows it, with what else was open closed.
+    // A tapped Every call or call notice opens the Call tab, where that family's card shows it, as iOS opens it
+    // (FamilyTabs.openCallTab): that family becomes the current one, and what else was open closes, another family's
+    // thread or page included.
     val noticed = app.messageAlerts.openingCall
     LaunchedEffect(noticed, families) {
         val id = noticed ?: return@LaunchedEffect
-        if (families.any { it.deviceID == id }) {
+        families.firstOrNull { it.deviceID == id }?.let { family ->
             composing = null
             about = false
             if (caregiving != null) { RemoteCaregiverSession.shared.end(); caregiving = null }
             joining = false
             if (link != null) onLinkHandled()
+            app.coordinator.select(family)
+            if (thread != id) thread = null
+            if (page != id) { page = null; pageScreen = FamilyPageScreen.PAGE }
             tab = FamilyTab.CALL
         }
         app.messageAlerts.openingCall = null
