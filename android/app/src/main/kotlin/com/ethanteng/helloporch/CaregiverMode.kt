@@ -187,9 +187,10 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
 
     /**
      * Makes `action` with the caregiver PIN (or `pin`, such as the current one when changing it) and takes the household
-     * it returns. Throws with the reason it didn't go through. On a family phone, a refused PIN or approval locks.
+     * it returns. Throws with the reason it didn't go through. On a family phone, a refused PIN or approval locks, except
+     * with `typed`: a `pin` the caregiver just typed again, such as to let every call drop in, where a typo only says so.
      */
-    suspend fun request(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null): FamilyResponse = requests.withLock {
+    suspend fun request(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null, typed: Boolean = false): FamilyResponse = requests.withLock {
         val credential = credential ?: throw FamilyServiceException("Go back to the clock and open caregiver mode to finish setup.", 409)
         val code = pin ?: pin() ?: throw FamilyServiceException("Caregiver mode has ended. Open it again with the PIN.", 401)
         try {
@@ -199,18 +200,19 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
                 else noteQueueChange(action, values)
             }
         } catch (e: FamilyServiceException) {
-            // A changed PIN, withdrawn approval or too many wrong PINs ends a phone's caregiver mode.
-            if (e.status in listOf(401, 403, 429)) lock(e.message)
+            // A changed PIN, withdrawn approval or too many wrong PINs ends a phone's caregiver mode. A PIN typed again
+            // that's wrong doesn't: the next change with the session's PIN finds out if approval was withdrawn.
+            if (e.status in listOf(401, 403, 429) && !(typed && e.status == 403)) lock(e.message)
             throw e
         }
     }
 
     /** Makes `action` with the caregiver PIN, and says whether it went through. The reason it didn't is shown. */
-    suspend fun send(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null): Boolean {
+    suspend fun send(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null, typed: Boolean = false): Boolean {
         if (busy || credential == null) return false
         busy = true
         return try {
-            request(action, values, pin)
+            request(action, values, pin, typed)
             true
         } catch (e: CancellationException) {
             throw e
@@ -246,7 +248,8 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     /** The household as caregiver mode sees it: who's in the family and how the household is set. */
     fun state(links: FamilyLinks): FamilyAdminState? = if (remote != null) remoteState else links.state?.let {
         FamilyAdminState(it.householdName, it.dropInEnabled, it.people.filter { person -> person.role == PorchExperience.FAMILY },
-            it.messagesEnabled, waitingMessages(it.messages), waitingTexts(it.texts), it.phoneDropIns, it.invitations, it.callScreening, it.shareAttendance)
+            it.messagesEnabled, waitingMessages(it.messages), waitingTexts(it.texts), it.phoneDropIns, it.invitations, it.callScreening, it.shareAttendance,
+            everyCall = it.everyCall)
     }
 
     /** `releaseMessage` and `removeMessage` (and the text actions) don't send a new snapshot. Remember the one id the
@@ -302,9 +305,9 @@ class CaregiverAdmin(private val app: PorchApplication, private val scope: Corou
     }
 
     /** Makes `action` with the caregiver PIN, then calls `done` with whether it went through. */
-    fun perform(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null, done: (Boolean) -> Unit = {}) {
+    fun perform(action: String, values: Map<String, JsonElement> = emptyMap(), pin: String? = null, typed: Boolean = false, done: (Boolean) -> Unit = {}) {
         if (busy || credential == null) { done(false); return }
-        scope.launch { done(send(action, values, pin)) }
+        scope.launch { done(send(action, values, pin, typed)) }
     }
 }
 
@@ -410,14 +413,19 @@ private fun CaregiverList(app: PorchApplication, admin: CaregiverAdmin, links: F
                 if (index > 0) HorizontalDivider()
                 val value = when (page) {
                     CaregiverPage.CAREGIVERS -> state?.people?.count { it.caregiver == true }?.takeIf { it > 0 }?.toString()
-                    // As iOS's list shows it, so a household with drop-ins paused can tell without opening the page.
-                    CaregiverPage.DROP_IN -> state?.let { if (it.dropInEnabled) "On" else "Off" }
+                    // As iOS's list shows it, so a household with drop-ins paused, or open to every call, can tell without
+                    // opening the page.
+                    CaregiverPage.DROP_IN -> state?.let { DropInMode.of(it).summary }
                     CaregiverPage.MESSAGES -> state?.let { messagesSummary(it.messages.orEmpty(), it.texts.orEmpty(), it.messagesEnabled) }
                     else -> null
                 }
                 CaregiverRow(onClick = { onPage(page) }, selected = page == selected) {
                     Text(page.title(admin.onBedside), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    value?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    val everyCall = page == CaregiverPage.DROP_IN && state?.let(DropInMode::of) == DropInMode.EVERY_CALL
+                    value?.let {
+                        Text(it, color = if (everyCall) PorchBrand.danger else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (everyCall) FontWeight.SemiBold else null)
+                    }
                     Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

@@ -228,6 +228,7 @@ final class PersonViewController: CaregiverFormViewController {
         let number = dropInNumber(subject, admin)
         guard subject.member != nil || number != nil else { return nil }
         if admin.current?.dropInEnabled == false { return "Paused" }
+        if admin.current?.everyCall != nil { return "Every call" }
         let phone = number.flatMap { number in admin.current?.phoneDropIns?.contains { $0.number == number } == true ? "Phone" : nil }
         let parts = [subject.member?.dropInModes, phone].compactMap { $0 }
         return parts.isEmpty ? "Off" : parts.joined(separator: " · ")
@@ -485,8 +486,9 @@ final class PersonViewController: CaregiverFormViewController {
         guard let admin else { return nil }
         let subject = resolve(admin)
         guard subject.exists else { return nil }
-        let paused = admin.current?.dropInEnabled == false
-        var views: [UIView] = [PorchStyle.label(paused ? "Drop-ins are paused for everyone." : "Connects without \(admin.lovedOne) answering.", size: 16)]
+        let choice = admin.current?.dropInChoice
+        let intro = choice == .off ? "Drop-ins are paused for everyone." : choice == .everyCall ? "Every call drops in for now." : "Connects without \(admin.lovedOne) answering."
+        var views: [UIView] = [PorchStyle.label(intro, size: 16)]
         // Porch app calls and phone calls are approved apart, so each gets its own card.
         if let person = subject.member {
             let audio = UISwitch(); audio.isOn = person.permissions.audio

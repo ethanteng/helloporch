@@ -979,6 +979,8 @@ final class MessageQueueViewController: CaregiverFormViewController {
 extension Notification.Name {
     /// A message notification was tapped: show the thread with the bedside.
     static let porchOpenReceivedMessages = Notification.Name("porch.messages.openReceived")
+    /// A tapped notice that every call drops in, or no longer does: the Call tab, for the family it names.
+    static let porchOpenCallTab = Notification.Name("porch.family.openCallTab")
 }
 
 /// Ordinary notifications for messages the bedside leaves when this phone misses its call, and the
@@ -989,9 +991,16 @@ extension Notification.Name {
     /// The token each family last accepted for this phone, by pairing; empty for none.
     private var registered: [String: String] = [:]
     private var task: Task<Void, Never>?
+    /// A phone call to the bedside while every call drops in, with End call and Turn off Every call. Both work from the
+    /// notification without opening Porch, and need no PIN.
+    static let callNotice = UNNotificationCategory(identifier: "PORCH_CALL_NOTICE", actions: [
+        UNNotificationAction(identifier: "endCall", title: "End call", options: [.destructive]),
+        UNNotificationAction(identifier: "turnOffEveryCall", title: "Turn off Every call", options: []),
+    ], intentIdentifiers: [], options: [])
 
     func start() {
         UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().setNotificationCategories([Self.callNotice])
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
     }
 
@@ -1045,10 +1054,53 @@ extension Notification.Name {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
     }
-    /// Opens the thread with whoever left the message. Each family knows this phone by its own ID, which the
-    /// notification carries.
+    /// Opens the thread with whoever left the message or, for a notice about every call dropping in or a call it let
+    /// through, the Call tab. A call notice's End call and Turn off Every call are sent as they are, without opening
+    /// Porch. Each family knows this phone by its own ID, which the notification carries.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let recipient = response.notification.request.content.userInfo["recipientID"] as? String
-        await MainActor.run { NotificationCenter.default.post(name: .porchOpenReceivedMessages, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
+        let info = response.notification.request.content.userInfo
+        let recipient = info["recipientID"] as? String
+        if let action = Self.serverAction(response.actionIdentifier) {
+            await Self.send(action, callID: info["callID"] as? String, recipientID: recipient, content: response.notification.request.content)
+            return
+        }
+        let name: Notification.Name = ["everyCall", "callNotice"].contains(info["type"] as? String) ? .porchOpenCallTab : .porchOpenReceivedMessages
+        await MainActor.run { NotificationCenter.default.post(name: name, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
+    }
+    /// The server action behind a call notice's button, or nil for a plain tap.
+    nonisolated static func serverAction(_ identifier: String) -> String? {
+        switch identifier {
+        case "endCall": return "endBedsideCall"
+        case "turnOffEveryCall": return "turnOffEveryCall"
+        default: return nil
+        }
+    }
+    /// Sends a call notice's action as this phone's member of the family it came from. Ending a call needs its ID.
+    /// The system removes the notice when the button is tapped, so a request that doesn't go through is shown again,
+    /// with the reason, and the same buttons.
+    nonisolated static func send(_ action: String, callID: String?, recipientID: String?, content: UNNotificationContent) async {
+        guard action != "endBedsideCall" || callID != nil,
+              let family = await MainActor.run(body: { PorchDevice.family(memberID: recipientID) }) else { return }
+        let values: [String: Any] = callID.map { ["callID": $0] } ?? [:]
+        do {
+            let response = try await FamilyService(family).send(action, action == "endBedsideCall" ? values : [:])
+            await MainActor.run { FamilyCoordinator.shared.update(response) }
+        } catch {
+            let message = (error as? FamilyServiceError)?.message ?? "Couldn't reach Porch. Try again."
+            let notice = retryNotice(from: content, message: message)
+            let identifier = "porch-call-\(callID ?? recipientID ?? "notice")"
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identifier, content: notice, trigger: nil))
+        }
+    }
+    /// The same call notice, after its button didn't go through, so End call and Turn off Every call can be tried again.
+    nonisolated static func retryNotice(from content: UNNotificationContent, message: String) -> UNMutableNotificationContent {
+        let notice = UNMutableNotificationContent()
+        notice.title = content.title
+        notice.body = message
+        notice.sound = .default
+        notice.categoryIdentifier = "PORCH_CALL_NOTICE"
+        notice.threadIdentifier = content.threadIdentifier
+        notice.userInfo = content.userInfo
+        return notice
     }
 }

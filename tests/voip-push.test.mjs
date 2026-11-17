@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { createServer, connect } from 'node:http2';
 import { test } from 'node:test';
-import { apnsAuthorization, apnsConfigured, fcmAssertion, fcmConfigured, forgetRegistration, pushConfigured, sameRegistration, sendAlertPush, sendVoIPPush } from '../lib/family/push.ts';
+import { apnsAuthorization, apnsConfigured, fcmAssertion, fcmConfigured, forgetRegistration, pushConfigured, sameRegistration, sendAlertPush, sendNoticePush, sendVoIPPush } from '../lib/family/push.ts';
 
 test('APNs provider JWT uses ES256/P1363 and refreshes before one hour without exposing the key',()=>{
  const keys=['APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'];
@@ -88,6 +88,36 @@ test('message alerts are ordinary notifications for the app, kept by APNs for a 
   assert.equal(headers['apns-expiration'],String(1800000000+7*86400)); assert.equal(headers['apns-id'],alert.messageID);
   // A phone in several families opens the right family's thread, and groups each family's messages apart.
   assert.deepEqual(body,{aps:{alert:{title:alert.title,body:alert.body},sound:'default',badge:2,'thread-id':`porch-messages-${alert.recipientID}`},messageID:alert.messageID,recipientID:alert.recipientID});
+ } finally {
+  server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
+  keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);
+ }
+});
+
+test('every-call notices are plain notifications without a badge, in their own thread, kept for a day',async()=>{
+ const keys=['APNS_KEY_ID','APNS_TEAM_ID','APNS_PRIVATE_KEY','APNS_BUNDLE_ID'];
+ const previous=keys.map(key=>process.env[key]);
+ const {privateKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const server=createServer(),received=[];
+ server.on('stream',(stream,headers)=>{
+  let body=''; stream.on('data',chunk=>body+=chunk);
+  stream.on('end',()=>{ received.push({headers,body:JSON.parse(body)}); stream.respond({':status':200}); stream.end(); });
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try {
+  Object.assign(process.env,{APNS_KEY_ID:'test',APNS_TEAM_ID:'team',APNS_PRIVATE_KEY:privateKey.export({type:'pkcs8',format:'pem'}).toString(),APNS_BUNDLE_ID:'com.example.porch'});
+  const session=()=>connect(`http://127.0.0.1:${server.address().port}`);
+  const notice={type:'everyCall',recipientID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',title:'Every call drops in on Mom',body:'Tom turned it on.'};
+  assert.equal((await sendNoticePush({token:'cd'.repeat(32),environment:'sandbox'},notice,session,1800000000)).delivered,true);
+  const {headers,body}=received[0];
+  assert.equal(headers['apns-push-type'],'alert'); assert.equal(headers['apns-expiration'],String(1800000000+86400));
+  assert.match(headers['apns-id'],/^[a-f0-9-]{36}$/);
+  assert.deepEqual(body,{aps:{alert:{title:notice.title,body:notice.body},sound:'default','thread-id':`porch-everycall-${notice.recipientID}`},type:'everyCall',recipientID:notice.recipientID});
+  // A call's notice carries the call to end, and End call and Turn off as its category's actions, for an hour.
+  const call={type:'callNotice',recipientID:notice.recipientID,callID:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',title:'Dropping in on Mom',body:'(510) 555-0162 · Unknown number'};
+  assert.equal((await sendNoticePush({token:'cd'.repeat(32),environment:'sandbox'},call,session,1800000000)).delivered,true);
+  assert.equal(received[1].headers['apns-expiration'],String(1800000000+3600));
+  assert.deepEqual(received[1].body,{aps:{alert:{title:call.title,body:call.body},sound:'default','thread-id':`porch-everycall-${call.recipientID}`,category:'PORCH_CALL_NOTICE'},type:'callNotice',recipientID:call.recipientID,callID:call.callID});
  } finally {
   server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
   keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);
@@ -186,6 +216,20 @@ test('Android message alerts are notifications on the messages channel, one per 
  assert.deepEqual(JSON.parse(google.sends()[0].options.body),{message:{token:android.token,
   data:{type:'message',messageID:alert.messageID,recipientID:alert.recipientID,badge:'2'},
   android:{priority:'HIGH',ttl:'604800s',notification:{title:alert.title,body:alert.body,channel_id:'messages',sound:'default',tag:`porch-messages-${alert.recipientID}`,notification_count:2}}}});
+}));
+
+test('Android every-call notices use their own channel, the newest replacing the last for that family',()=>withFCM(async()=>{
+ const google=fakeGoogle();
+ const notice={type:'everyCall',recipientID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',title:'Every call is off for Mom',body:'Linda turned it off.'};
+ assert.equal((await sendNoticePush(android,notice,undefined,1800000000,google.request)).delivered,true);
+ assert.deepEqual(JSON.parse(google.sends()[0].options.body),{message:{token:android.token,
+  data:{type:'everyCall',recipientID:notice.recipientID},
+  android:{priority:'HIGH',ttl:'86400s',notification:{title:notice.title,body:notice.body,channel_id:'every-call',sound:'default',tag:`porch-everycall-${notice.recipientID}`}}}});
+ // A call's notice is data only, so Porch shows it itself with End call and Turn off.
+ const call={type:'callNotice',recipientID:notice.recipientID,callID:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',title:'Calling Mom',body:'(650) 555-0144 · Not verified'};
+ assert.equal((await sendNoticePush(android,call,undefined,1800000000,google.request)).delivered,true);
+ assert.deepEqual(JSON.parse(google.sends()[1].options.body),{message:{token:android.token,
+  data:{type:'callNotice',recipientID:call.recipientID,callID:call.callID,title:call.title,body:call.body},android:{priority:'HIGH',ttl:'3600s'}}});
 }));
 
 test('each platform pushes only when its own sender is set up',()=>withFCM(async()=>{

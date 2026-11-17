@@ -93,10 +93,15 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     var myID: String? { credential?.credential.split(separator: ".").first.map { String($0) } }
     var current: FamilyAdminState? {
         if remote != nil { return remoteState }
-        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people.filter { $0.role == .family }, messagesEnabled: $0.messagesEnabled, messages: $0.messages, texts: $0.texts, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations, callScreening: $0.callScreening, shareAttendance: $0.shareAttendance) }
+        return FamilyCoordinator.shared.state.map { FamilyAdminState(householdName: $0.householdName, dropInEnabled: $0.dropInEnabled, people: $0.people.filter { $0.role == .family }, messagesEnabled: $0.messagesEnabled, messages: $0.messages, texts: $0.texts, phoneDropIns: $0.phoneDropIns, invitations: $0.invitations, callScreening: $0.callScreening, shareAttendance: $0.shareAttendance, everyCall: $0.everyCall) }
     }
     /// The bedside's name for headings, such as Calls to Mom.
     var lovedOne: String { current?.householdName ?? "your loved one" }
+    /// What the bedside is: iPad, or tablet for an Android one.
+    var bedsideDevice: String {
+        guard remote != nil else { return UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
+        return snapshot?.people.first { $0.role == .bedside }?.platform == "android" ? "tablet" : "iPad"
+    }
     init(remote: FamilyCredential? = nil, state: FamilyAdminState? = nil, slots: CallSlots? = nil) {
         self.remote = remote; remoteState = state
         self.slots = remote == nil ? slots ?? (try? CallSlots.load()) : nil
@@ -202,7 +207,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         household.accessibilityIdentifier = "caregiver.household"
         list.addArrangedSubview(group(rows: [household] + (numberRow().map { [$0] } ?? [])))
         let rows = CaregiverPage.pages(onBedside: onBedside).map { page -> UIView in
-            let row = linkRow(page.title(onBedside: onBedside), value: value(for: page, state), symbol: page.symbol) { [weak self] in self?.open(page) }
+            let row = linkRow(page.title(onBedside: onBedside), value: value(for: page, state), symbol: page.symbol,
+                              valueColor: page == .dropIn && state?.dropInChoice == .everyCall ? PorchStyle.danger : nil) { [weak self] in self?.open(page) }
             row.accessibilityIdentifier = "caregiver.page.\(page.rawValue)"
             row.isCurrent = isBeside && page == currentPage
             return row
@@ -262,7 +268,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         guard let state else { return nil }
         switch page {
         case .people: return state.people.isEmpty ? nil : "\(state.people.count)"
-        case .dropIn: return state.dropInEnabled ? "On" : "Off"
+        case .dropIn:
+            switch state.dropInChoice { case .off: return "Off"; case .approved: return "On"; case .everyCall: return "Every call" }
         case .messages:
             let texts = state.texts ?? [], waiting = (state.messages ?? []).count + texts.count
             let held = (state.messages ?? []).filter { $0.held == true }.count + texts.filter(\.held).count
@@ -358,18 +365,21 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         guard let active = RemoteCaregiverSession.shared.activePIN else { lock(nil); return nil }
         return active
     }
-    @discardableResult func perform(_ action: String, _ values: [String: Any] = [:]) async -> Bool {
-        guard !busy, let credential, let pin = caregiverPIN() else { return false }
+    /// Makes a change with the caregiver PIN. `typedPIN` is one the caregiver just entered again, such as to let every
+    /// call drop in; it's sent instead of the one caregiver mode keeps, and a wrong one is only shown, not locked out.
+    /// Too many tries still ends a phone's session, as it does anywhere else.
+    @discardableResult func perform(_ action: String, _ values: [String: Any] = [:], typedPIN: String? = nil) async -> Bool {
+        guard !busy, let credential, let kept = caregiverPIN() else { return false }
         busy = true; defer { busy = false }
         do {
-            let response = try await FamilyService(credential).send(action, values, pin: pin)
+            let response = try await FamilyService(credential).send(action, values, pin: typedPIN ?? kept)
             FamilyCoordinator.shared.update(response)
             if let admin = response.admin { remoteState = admin }
             refresh()
             return true
         } catch {
-            // A changed PIN, withdrawn approval or lockout ends a phone's caregiver session.
-            if remote != nil, let failure = error as? FamilyServiceError, [401, 403, 429].contains(failure.status) { lock(error); return false }
+            // A changed PIN, withdrawn approval or lockout ends a phone's caregiver session. A PIN just typed wrong doesn't.
+            if remote != nil, let failure = error as? FamilyServiceError, (typedPIN == nil ? [401, 403, 429] : [401, 429]).contains(failure.status) { lock(error); return false }
             refresh(); showError(error)
             return false
         }
@@ -674,32 +684,28 @@ final class KeypadTile: UIControl {
     override var isHighlighted: Bool { didSet { alpha = isHighlighted ? 0.6 : 1 } }
 }
 
-/// Who can drop in, by Porch app and by phone, under the switch that pauses them all.
+/// Who can drop in: no one, the people and numbers caregivers approve, or every call. Every call asks for the PIN again.
 final class DropInSettingsViewController: CaregiverPageViewController {
     override func viewDidLoad() { super.viewDidLoad(); title = "Drop-in" }
     override func build(_ admin: FamilyAdminViewController, _ state: FamilyAdminState?) {
-        content.addArrangedSubview(introduction("Drop-ins connect on their own after a short announcement."))
-        let enabled = state?.dropInEnabled == true
-        let master = UISwitch(); master.isOn = enabled
-        master.accessibilityIdentifier = "dropIn.enabled"
-        master.addAction(UIAction { [weak admin, weak master] _ in
-            guard let admin, let master else { return }
-            Task {
-                if master.isOn && admin.onBedside {
-                    guard await admin.requestMedia(video: state?.people.contains(where: { $0.permissions.video }) == true) else { master.isOn = false; return }
-                }
-                await admin.perform("setDropIn", ["enabled": master.isOn])
+        let choice = state?.dropInChoice
+        let people = state?.people ?? []
+        // Every call lets anyone drop in with video, so the iPad needs its camera too.
+        let video = choice == .everyCall || people.contains { $0.permissions.video }
+        var rows: [UIView] = DropInChoice.allCases.map { option in
+            choiceRow(option, chosen: option == choice, state: state, enabled: state != nil) { [weak self, weak admin] in
+                guard let self, let admin, option != admin.current?.dropInChoice else { return }
+                self.choose(option, admin)
             }
-        }, for: .valueChanged)
-        var rows = [toggleRow("Allow drop-ins", detail: enabled ? nil : "Paused. Approvals are kept.", master)]
+        }
         // A drop-in answers on this iPad, so it needs the microphone and, for video, the camera.
-        let video = state?.people.contains { $0.permissions.video } == true
-        if admin.onBedside, enabled, AVCaptureDevice.authorizationStatus(for: .audio) == .denied || (video && AVCaptureDevice.authorizationStatus(for: .video) == .denied) {
+        if admin.onBedside, choice != .off, AVCaptureDevice.authorizationStatus(for: .audio) == .denied || (video && AVCaptureDevice.authorizationStatus(for: .video) == .denied) {
             rows.append(listRow([PorchStyle.label("Allow the microphone\(video ? " and camera" : "") in Settings → Porch, or drop-ins can't connect.", size: 16, color: .systemRed)]))
         }
-        content.addArrangedSubview(group(rows: rows))
-        let ink = enabled ? PorchStyle.ink : PorchStyle.secondary
-        let people = state?.people ?? []
+        let choices = group("Who can drop in?", rows: rows)
+        choices.accessibilityIdentifier = "dropIn.choices"
+        content.addArrangedSubview(choices)
+        let ink = choice == .approved ? PorchStyle.ink : PorchStyle.secondary
         var can: [UIView] = people.filter { $0.permissions.audio || $0.permissions.video }.map { person in
             let modes = person.dropInModes ?? ""
             return PorchListRow([FamilyAdminViewController.avatar(person.name, photo: FamilyPhotos.shared.data(for: person.photoID), size: 36),
@@ -727,7 +733,8 @@ final class DropInSettingsViewController: CaregiverPageViewController {
             guard let self, let admin else { return }
             self.push(admin.phoneDropInScreen())
         })
-        content.addArrangedSubview(group("Can drop in", rows: can))
+        // While every call drops in, these approvals wait for it to be turned off.
+        content.addArrangedSubview(group(choice == .everyCall ? "Saved approvals" : "Can drop in", rows: can))
         let cannot = people.filter { !$0.permissions.audio && !$0.permissions.video }.map { person -> UIView in
             let off = FamilyAdminViewController.singleLine(PorchStyle.label("Off", size: 17))
             return PorchListRow([FamilyAdminViewController.avatar(person.name, photo: FamilyPhotos.shared.data(for: person.photoID), size: 36),
@@ -738,6 +745,135 @@ final class DropInSettingsViewController: CaregiverPageViewController {
             }
         }
         if !cannot.isEmpty { content.addArrangedSubview(group("Can't drop in", rows: cannot)) }
+    }
+    /// One answer: its name, a word on it, and a checkmark on the one in force. Every call, when chosen, is red.
+    private func choiceRow(_ option: DropInChoice, chosen: Bool, state: FamilyAdminState?, enabled: Bool, action: @escaping () -> Void) -> UIView {
+        let red = option == .everyCall && chosen
+        let title: String, detail: UIView
+        switch option {
+        case .off: title = "No one"; detail = PorchStyle.label("Paused", size: 15)
+        case .approved: title = "People you approve"; detail = PorchStyle.label("Listed below", size: 15)
+        case .everyCall:
+            title = "Every call"
+            if chosen, let on = state?.everyCall, let admin {
+                detail = PorchStyle.label("On · \(on.who(bedsideDevice: admin.bedsideDevice)), \(Self.time(on.at))", size: 15, color: Self.darkRed)
+            } else {
+                let lock = UIImageView(image: UIImage(systemName: "lock.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)))
+                lock.tintColor = PorchStyle.secondary
+                lock.setContentHuggingPriority(.required, for: .horizontal)
+                let line = UIStackView(arrangedSubviews: [lock, PorchStyle.label("Needs the PIN", size: 15)])
+                line.spacing = 5; line.alignment = .center
+                detail = line
+            }
+        }
+        let text = UIStackView(arrangedSubviews: [PorchStyle.label(title, size: 18, color: red ? Self.darkRed : PorchStyle.ink, weight: red ? .bold : .regular), detail])
+        text.axis = .vertical; text.spacing = 2; text.alignment = .leading
+        let check = UIImageView(image: chosen ? UIImage(systemName: "checkmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .bold)) : nil)
+        check.tintColor = red ? PorchStyle.danger : PorchStyle.accent
+        check.contentMode = .center
+        check.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        let accessibilityDetail = option == .everyCall && !chosen ? "Needs the PIN" : (detail as? UILabel)?.text ?? ""
+        let row = PorchListRow([text, check], label: "\(title), \(accessibilityDetail)", chevron: false, action: action)
+        row.accessibilityIdentifier = "dropIn.choice.\(option.rawValue)"
+        row.isEnabled = enabled
+        if chosen { row.accessibilityTraits.insert(.selected) }
+        guard red else { return row }
+        // The row's own color is for being pressed, so the red sits behind it.
+        let tint = UIView(); tint.backgroundColor = Self.redTint
+        row.translatesAutoresizingMaskIntoConstraints = false
+        tint.addSubview(row)
+        NSLayoutConstraint.activate([row.leadingAnchor.constraint(equalTo: tint.leadingAnchor), row.trailingAnchor.constraint(equalTo: tint.trailingAnchor),
+                                     row.topAnchor.constraint(equalTo: tint.topAnchor), row.bottomAnchor.constraint(equalTo: tint.bottomAnchor)])
+        return tint
+    }
+    private func choose(_ option: DropInChoice, _ admin: FamilyAdminViewController) {
+        let state = admin.current
+        Task { [weak self] in
+            switch option {
+            case .off: await admin.perform("setDropInMode", ["mode": "off"])
+            case .approved:
+                // Turning drop-ins back on answers on this iPad, as the switch did.
+                if admin.onBedside, state?.dropInChoice == .off {
+                    guard await admin.requestMedia(video: state?.people.contains { $0.permissions.video } == true) else { return }
+                }
+                await admin.perform("setDropInMode", ["mode": "approved"])
+            case .everyCall:
+                if admin.onBedside { guard await admin.requestMedia(video: true) else { return } }
+                self?.confirmEveryCall(admin, unknownNumbers: state?.callScreening?.enabled != true)
+            }
+        }
+    }
+    /// The warning first; Continue opens the PIN page.
+    private func confirmEveryCall(_ admin: FamilyAdminViewController, unknownNumbers: Bool) {
+        let alert = UIAlertController(title: "Let every call drop in?",
+                                      message: "Anyone who calls will connect without \(admin.lovedOne) answering\(unknownNumbers ? ", unknown numbers too" : "").",
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Continue", style: .destructive) { [weak self, weak admin] _ in
+            guard let self, let admin else { return }
+            self.push(EveryCallPINViewController(admin: admin, unknownNumbers: unknownNumbers))
+        })
+        present(alert, animated: true)
+    }
+    static let redTint = UIColor(red: 0xFB / 255, green: 0xE3 / 255, blue: 0xDD / 255, alpha: 1)
+    static let darkRed = UIColor(red: 0x8E / 255, green: 0x2A / 255, blue: 0x22 / 255, alpha: 1)
+    /// When it was turned on, by this device's clock, such as 3:12 PM.
+    static func time(_ serverTime: TimeInterval) -> String {
+        let date = Date(timeIntervalSince1970: serverTime)
+        return Calendar.current.isDateInToday(date) ? date.formatted(date: .omitted, time: .shortened) : date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+    }
+}
+
+/// Every call needs the caregiver PIN typed again, even inside caregiver mode.
+final class EveryCallPINViewController: CaregiverFormViewController {
+    private weak var admin: FamilyAdminViewController?
+    private let unknownNumbers: Bool
+    private let pin = UITextField()
+    private let turnOn = PorchStyle.button("Turn on")
+    init(admin: FamilyAdminViewController, unknownNumbers: Bool) {
+        self.admin = admin; self.unknownNumbers = unknownNumbers
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(admin:unknownNumbers:)") }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Every call"
+        hideKeyboardControl()
+        let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle.fill"))
+        icon.tintColor = PorchStyle.danger
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        let warning = PorchStyle.label("Every call will drop in\(unknownNumbers ? ", unknown numbers too" : "").", size: 16, color: DropInSettingsViewController.darkRed, weight: .semibold)
+        let line = UIStackView(arrangedSubviews: [icon, warning])
+        line.spacing = 12; line.alignment = .center
+        line.isLayoutMarginsRelativeArrangement = true
+        line.directionalLayoutMargins = .init(top: 14, leading: 16, bottom: 14, trailing: 16)
+        line.backgroundColor = DropInSettingsViewController.redTint
+        line.layer.cornerRadius = 20
+        line.layer.borderWidth = 1.5
+        line.layer.borderColor = UIColor(red: 0xE7 / 255, green: 0xA8 / 255, blue: 0x9B / 255, alpha: 1).cgColor
+        line.isAccessibilityElement = true; line.accessibilityLabel = warning.text
+        pin.isSecureTextEntry = true; pin.keyboardType = .numberPad
+        pin.accessibilityIdentifier = "everyCall.pin"
+        turnOn.configuration?.baseBackgroundColor = PorchStyle.danger
+        turnOn.accessibilityIdentifier = "everyCall.turnOn"
+        turnOn.addTarget(self, action: #selector(save), for: .touchUpInside)
+        let stack = UIStackView(arrangedSubviews: [line, field(pin, title: "Caregiver PIN", placeholder: "Six digits"), turnOn])
+        stack.axis = .vertical; stack.spacing = 24
+        form.addArrangedSubview(stack)
+    }
+    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); pin.becomeFirstResponder() }
+    @objc private func save() {
+        guard let admin else { return }
+        let value = pin.text ?? ""
+        guard value.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else {
+            showPorchError(FamilyServiceError(message: "Enter six digits.", status: 400), on: self); return
+        }
+        turnOn.isEnabled = false; view.endEditing(true)
+        Task { [weak self] in
+            let saved = await admin.perform("setDropInMode", ["mode": "everyCall"], typedPIN: value)
+            guard let self else { return }
+            self.turnOn.isEnabled = true
+            if saved { self.pin.text = nil; self.navigationController?.popViewController(animated: true) }
+        }
     }
 }
 

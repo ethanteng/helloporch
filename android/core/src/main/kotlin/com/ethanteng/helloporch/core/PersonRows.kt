@@ -17,11 +17,14 @@ object PersonRows {
     }
 
     /**
-     * The Drop-in row: `Paused` while drop-ins are paused for everyone, otherwise what's on, such as `Audio and video ·
-     * Phone`, or `Off`. `app` is a family member's Porch app approval, and `phone` whether their key's number is approved.
+     * The Drop-in row: `Paused` while drop-ins are paused for everyone, `Every call` while every call drops in, otherwise
+     * what's on, such as `Audio and video · Phone`, or `Off`. `app` is a family member's Porch app approval, and `phone`
+     * whether their key's number is approved.
      */
-    fun dropIn(paused: Boolean, app: DropInPermissions?, phone: Boolean): String {
+    fun dropIn(paused: Boolean, app: DropInPermissions?, phone: Boolean, everyCall: Boolean = false): String {
         if (paused) return "Paused"
+        // Every call drops in for now, whatever this person's own approval says.
+        if (everyCall) return "Every call"
         val porch = app?.let {
             when {
                 it.audio && it.video -> "Audio and video"

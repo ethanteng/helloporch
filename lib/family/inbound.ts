@@ -2,7 +2,8 @@ import { createHmac, randomUUID } from "node:crypto";
 import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookEvent } from "livekit-server-sdk";
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callLogEntry, recordCallAfter } from "./call-log.ts";
-import { callRoom, config, deliveryUnavailable, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
+import { callRoom, config, deliveryUnavailable, everyCallOn, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
+import { noticeCall, type NoticeDependencies } from "./notices.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { forgetRegistration, pushConfigured, sendVoIPPush, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
@@ -28,7 +29,7 @@ const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const sipParticipantKind = 3;
 export type InboundRoute = { householdID: string; bedsideID: string; trunkID: string };
 type Session = { householdID: string; callID: string; phone: InboundPhone };
-export type InboundDependencies = {
+export type InboundDependencies = NoticeDependencies & {
   sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult>;
   store?: FamilyStore;
   now?: () => number;
@@ -157,15 +158,18 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     const bedside = house.members.find(m => m.id === route.bedsideID && m.role === "bedside" && !m.revoked);
     const ready = !!bedside?.available && bedside.seenAt > now - 30;
     if (!bedside || (!ready && !pushable(bedside.voip)) || (house.call && house.call.state !== "ended")) return false;
-    // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the
-    // master switch and a foreground bedside; otherwise the call rings normally.
-    const dropIn = ready && verified && house.dropInEnabled && !!phoneDropIn(house, phone.callerNumber);
+    // Caller ID alone never grants drop-in. Like app drop-ins, it also needs the master switch and a foreground
+    // bedside, and an approved number unless every call drops in; otherwise the call rings normally. A caller ID the
+    // carrier didn't verify can be faked, and a hidden one says nothing, so those always ring.
+    const dropIn = ready && verified && house.dropInEnabled && (everyCallOn(house) ? !!phone.callerNumber : !!phoneDropIn(house, phone.callerNumber));
     const expiresAt = createdAt + ringSeconds(house, dropIn ? "dropIn" : "call");
     if (expiresAt <= now) return false;
     replaced = house.call;
     const approved = phoneDropIn(house, phone.callerNumber)?.name;
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
-      state: "pending", createdAt, expiresAt, phone: session.phone, ...(approved ? { peerName: approved } : {}) };
+      state: "pending", createdAt, expiresAt, phone: session.phone, ...(approved ? { peerName: approved } : {}),
+      // Caregivers hear about every call that comes in while every call drops in, whether it drops in or rings.
+      ...(everyCallOn(house) ? { everyCall: { verified } } : {}) };
     return true;
   });
   const entry = replaced && callLogEntry(house, replaced);
@@ -175,6 +179,11 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     return;
   }
   const call = house.call!, bedside = house.members.find(m => m.id === call.to)!;
+  // Every caregiver's phone hears about it once, so they can end it. Retries and copies share one claim, as below.
+  if (call.everyCall && await store.create(`inbound-notice:${room.sid}`, "1", 86400)) {
+    const notify = () => noticeCall(store, house, call, dependencies).catch(() => undefined);
+    if (dependencies.afterResponse) dependencies.afterResponse(notify); else await notify();
+  }
   // Webhook retries and simultaneous copies share one delivery claim. No VoIP
   // push is used for drop-ins, cancellation, accepted calls, or an ended session.
   if (call.kind !== "call" || call.state !== "pending" || !pushable(bedside.voip) ||

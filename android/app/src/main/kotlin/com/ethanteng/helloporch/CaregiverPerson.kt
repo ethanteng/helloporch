@@ -363,7 +363,8 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
                 }
                 if (member != null || dropInNumber != null) {
                     HorizontalDivider()
-                    DetailRow(R.drawable.ic_phone_in_talk, "Drop-in", PersonRows.dropIn(state?.dropInEnabled == false, member?.permissions, phoneApproved)) {
+                    DetailRow(R.drawable.ic_phone_in_talk, "Drop-in", PersonRows.dropIn(state?.dropInEnabled == false, member?.permissions, phoneApproved,
+                        everyCall = state?.everyCall != null)) {
                         screen = PersonScreen.DROP_IN
                     }
                 }
@@ -569,7 +570,11 @@ internal fun PersonDropInScreen(app: PorchApplication, admin: CaregiverAdmin, li
 private fun DropInScreen(admin: CaregiverAdmin, state: FamilyAdminState?, title: String, lovedOne: String, person: FamilyPerson?, number: String?,
     phoneApproved: Boolean, onBack: () -> Unit, onApp: (FamilyPerson, Boolean, Boolean) -> Unit, onPhone: (Boolean) -> Unit) {
     FormScreen(title, navigation = { BackButton(onBack) }) {
-        Text(if (state?.dropInEnabled == false) "Drop-ins are paused for everyone." else "Connects without $lovedOne answering.",
+        Text(when {
+            state?.dropInEnabled == false -> "Drop-ins are paused for everyone."
+            state?.everyCall != null -> "Every call drops in for now. These are kept for later."
+            else -> "Connects without $lovedOne answering."
+        },
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (person != null) CaregiverGroup("Porch app") {
             ToggleRow("Audio", person.permissions.audio, { onApp(person, it, person.permissions.video) }, enabled = !admin.busy, label = "Audio drop-in")

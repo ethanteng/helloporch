@@ -30,6 +30,9 @@ final class FamilyHomeViewController: CaregiverFormViewController {
     /// Under each name: on a call, not ready, or whether someone is at the bedside. That changes by the minute, so it's
     /// updated in place rather than rebuilding the cards. One for each family, by this phone's ID there.
     private var statusLines: [String: UILabel] = [:]
+    /// What each family's live call strip says under its caller, updated every second while a call is on.
+    private var liveCallLines: [String: (label: UILabel, call: BedsideCall)] = [:]
+    private var ticker: Timer?
     private var starting = false
     /// One family's card as it's drawn. Its status line is left out: that's updated in place.
     private struct Card: Equatable {
@@ -41,8 +44,13 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         /// It has checked in and has a bedside to call.
         let connected: Bool
         let callable: Bool
-        /// Drop-ins this phone may start: drop-in is on and approved for it.
+        /// Drop-ins this phone may start: drop-in is on, and approved for it or every call drops in.
         let dropIns: [NativeCall.Mode]
+        /// For caregivers while every call drops in: who turned it on, and when, such as "Tom, 3:12 PM".
+        let everyCall: String?
+        /// For caregivers: a phone call that started while every call drops in, while it rings or is on. Its time is
+        /// updated in place.
+        let liveCall: BedsideCall?
     }
     private struct Presentation: Equatable {
         let cards: [Card]
@@ -105,11 +113,15 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             let bedside = state?.people.first { $0.role == .bedside }
             let name = bedside?.name ?? state?.householdName ?? PorchDevice.familyName(credential) ?? "Family"
             let family = several ? PorchDevice.familyName(credential).flatMap { $0 == name ? nil : $0 } : nil
-            let dropIns = state.map { state in
-                [(NativeCall.Mode.voice, state.me.permissions.audio), (.video, state.me.permissions.video)].filter { state.dropInEnabled && $0.1 }.map(\.0)
-            } ?? []
+            let dropIns = state.map { state in NativeCall.Mode.allCases.filter(state.canDropIn) } ?? []
+            let everyCall = state.flatMap { state in
+                state.me.caregiver == true ? state.everyCall.map { on in
+                    "\(on.who(bedsideDevice: bedside?.platform == "android" ? "tablet" : "iPad")), \(DropInSettingsViewController.time(on.at))"
+                } : nil
+            }
             return Card(id: credential.deviceID, name: name, family: family, removed: link?.accessRemoved == true, connected: state != nil && bedside != nil,
-                        callable: link?.error == nil && bedside?.online == true && state?.busy == false, dropIns: dropIns)
+                        callable: link?.error == nil && bedside?.online == true && state?.busy == false, dropIns: dropIns, everyCall: everyCall,
+                        liveCall: state?.me.caregiver == true ? state?.bedsideCall : nil)
         }, starting: starting, ringing: SystemIncomingCalls.shared.hasCall, largeText: traitCollection.preferredContentSizeCategory.isAccessibilityCategory)
         for credential in credentials {
             let (text, present) = Self.status(of: coordinator.link(for: credential)), label = statusLine(for: credential)
@@ -123,10 +135,12 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .denied ? "Allow microphone access in \(device) Settings → Porch to answer calls." : nil
         status.text = credentials.isEmpty ? "Ask the caregiver to invite you." : microphone ?? push
         status.isHidden = status.text == nil
-        guard next != displayed else { return }
+        guard next != displayed else { updateCallTimes(); return }
         displayed = next
         cards.arrangedSubviews.forEach { cards.removeArrangedSubview($0); $0.removeFromSuperview() }
         statusLines = statusLines.filter { id, _ in credentials.contains { $0.deviceID == id } }
+        liveCallLines = [:]
+        defer { updateCallTimes(); syncTicker() }
         guard !credentials.isEmpty else {
             let join = PorchStyle.button("Join a family", symbol: "person.badge.plus")
             join.addAction(UIAction { [weak self] _ in self?.showPairing() }, for: .touchUpInside)
@@ -143,6 +157,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let header = UIStackView(arrangedSubviews: [FamilyAdminViewController.avatar(card.name, size: 56), text])
         header.spacing = 14; header.alignment = .center
         var views: [UIView] = [header]
+        if !card.removed, let call = card.liveCall { views.insert(liveCallStrip(call, credential: credential), at: 0) }
+        if let everyCall = card.everyCall, !card.removed { views.insert(everyCallBanner(everyCall, credential: credential), at: 0) }
         if card.removed {
             // A family that removed this phone can't reach it again. Taking it off leaves the others as they are.
             let remove = PorchStyle.button("Remove from this phone", symbol: "minus.circle", filled: false)
@@ -203,6 +219,142 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         // Very large text doesn't fit three across.
         if presentation.largeText { row.axis = .vertical }
         return row
+    }
+    /// For caregivers while every call drops in: who turned it on, and a Turn off that needs no PIN.
+    private func everyCallBanner(_ who: String, credential: FamilyCredential) -> UIView {
+        let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle.fill"))
+        icon.tintColor = PorchStyle.danger
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        let title = PorchStyle.label("Every call drops in", size: 16, color: DropInSettingsViewController.darkRed, weight: .bold)
+        let detail = PorchStyle.label(who, size: 14, color: UIColor(red: 0x6B / 255, green: 0x3A / 255, blue: 0x2E / 255, alpha: 1))
+        let text = UIStackView(arrangedSubviews: [title, detail])
+        text.axis = .vertical; text.spacing = 1
+        text.isAccessibilityElement = true; text.accessibilityLabel = "Every call drops in. \(who)"
+        let off = PorchStyle.button("Turn off", filled: false)
+        off.configuration?.baseForegroundColor = UIColor(red: 0xB0 / 255, green: 0x3A / 255, blue: 0x2E / 255, alpha: 1)
+        off.configuration?.background.backgroundColor = PorchStyle.surface
+        off.configuration?.background.strokeColor = PorchStyle.danger
+        off.configuration?.background.strokeWidth = 1.5
+        off.configuration?.cornerStyle = .fixed
+        off.configuration?.background.cornerRadius = 10
+        off.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 12)
+        off.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(15, weight: .bold); return attributes
+        }
+        off.setContentHuggingPriority(.required, for: .horizontal)
+        off.setContentCompressionResistancePriority(.required, for: .horizontal)
+        off.accessibilityLabel = "Turn off every call"
+        off.accessibilityIdentifier = "family.everyCall.turnOff"
+        off.addAction(UIAction { [weak self, weak off] _ in
+            off?.isEnabled = false
+            Task { [weak self] in
+                do {
+                    FamilyCoordinator.shared.update(try await FamilyService(credential).send("turnOffEveryCall"))
+                    self?.showToast("Every call is off")
+                } catch {
+                    off?.isEnabled = true
+                    if let self { showPorchError(error, on: self) }
+                }
+            }
+        }, for: .touchUpInside)
+        let banner = UIStackView(arrangedSubviews: [icon, text, off])
+        banner.spacing = 10; banner.alignment = .center
+        banner.isLayoutMarginsRelativeArrangement = true
+        banner.directionalLayoutMargins = .init(top: 8, leading: 12, bottom: 8, trailing: 8)
+        banner.backgroundColor = DropInSettingsViewController.redTint
+        banner.layer.cornerRadius = 14
+        banner.accessibilityIdentifier = "family.everyCall"
+        return banner
+    }
+    /// A phone call on the bedside that started while every call drops in: who, what it's doing, and End call, which
+    /// needs no PIN.
+    private func liveCallStrip(_ call: BedsideCall, credential: FamilyCredential) -> UIView {
+        let dot = UIView()
+        dot.backgroundColor = PorchStyle.go
+        dot.layer.cornerRadius = 5
+        NSLayoutConstraint.activate([dot.widthAnchor.constraint(equalToConstant: 10), dot.heightAnchor.constraint(equalToConstant: 10)])
+        let title = PorchStyle.label(call.title, size: 16, color: PorchStyle.ink, weight: .bold)
+        title.numberOfLines = 1; title.lineBreakMode = .byTruncatingTail
+        let meta = PorchStyle.label("", size: 14, color: PorchStyle.secondary)
+        meta.numberOfLines = 1
+        meta.accessibilityIdentifier = "family.liveCall.status"
+        liveCallLines[credential.deviceID] = (meta, call)
+        let text = UIStackView(arrangedSubviews: [title, meta])
+        text.axis = .vertical; text.spacing = 1
+        let end = PorchStyle.button("End call")
+        end.configuration?.baseBackgroundColor = PorchStyle.danger
+        end.configuration?.cornerStyle = .fixed
+        end.configuration?.background.cornerRadius = 10
+        end.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 12)
+        end.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = PorchStyle.centeredTextAttributes(attributes); attributes.font = PorchStyle.font(15, weight: .bold); return attributes
+        }
+        end.setContentHuggingPriority(.required, for: .horizontal)
+        end.setContentCompressionResistancePriority(.required, for: .horizontal)
+        end.accessibilityLabel = "End the call with \(call.title)"
+        end.accessibilityIdentifier = "family.liveCall.end"
+        end.addAction(UIAction { [weak self, weak end] _ in
+            end?.isEnabled = false
+            Task { [weak self] in
+                do {
+                    FamilyCoordinator.shared.update(try await FamilyService(credential).send("endBedsideCall", ["callID": call.id]))
+                    self?.showToast("Call ended")
+                } catch {
+                    end?.isEnabled = true
+                    if let self { showPorchError(error, on: self) }
+                }
+            }
+        }, for: .touchUpInside)
+        let strip = UIStackView(arrangedSubviews: [dot, text, end])
+        strip.spacing = 10; strip.alignment = .center
+        strip.isLayoutMarginsRelativeArrangement = true
+        strip.directionalLayoutMargins = .init(top: 8, leading: 12, bottom: 8, trailing: 8)
+        strip.backgroundColor = PorchStyle.surface
+        strip.layer.cornerRadius = 14
+        strip.layer.borderWidth = 1.5
+        strip.layer.borderColor = PorchStyle.border.cgColor
+        strip.accessibilityIdentifier = "family.liveCall"
+        return strip
+    }
+    /// How long each connected call has been on, by the server's clock as of its family's last check-in.
+    private func updateCallTimes() {
+        for (id, line) in liveCallLines {
+            let link = PorchDevice.families.first { $0.deviceID == id }.flatMap { FamilyCoordinator.shared.link(for: $0) }
+            let text = line.call.status(serverNow: link?.serverNow() ?? Date().timeIntervalSince1970)
+            if line.label.text != text { line.label.text = text }
+        }
+    }
+    /// Ticks once a second while a connected call is shown, and only then.
+    private func syncTicker() {
+        let needed = view.window != nil && liveCallLines.values.contains { $0.call.isConnected }
+        if !needed { ticker?.invalidate(); ticker = nil; return }
+        guard ticker == nil else { return }
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in Task { @MainActor [weak self] in self?.updateCallTimes() } }
+        RunLoop.main.add(timer, forMode: .common)
+        ticker = timer
+    }
+    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); updateCallTimes(); syncTicker() }
+    override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ticker?.invalidate(); ticker = nil }
+    /// A short note at the bottom that fades on its own, such as after turning something off.
+    private func showToast(_ text: String) {
+        let label = PorchStyle.label(text, size: 15, color: .white, weight: .semibold)
+        label.textAlignment = .center
+        let toast = UIView()
+        toast.backgroundColor = PorchStyle.ink
+        toast.layer.cornerRadius = 22
+        toast.isUserInteractionEnabled = false
+        for item in [toast, label] { item.translatesAutoresizingMaskIntoConstraints = false }
+        toast.addSubview(label)
+        view.addSubview(toast)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: toast.leadingAnchor, constant: 20), label.trailingAnchor.constraint(equalTo: toast.trailingAnchor, constant: -20),
+            label.topAnchor.constraint(equalTo: toast.topAnchor, constant: 12), label.bottomAnchor.constraint(equalTo: toast.bottomAnchor, constant: -12),
+            toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toast.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 16),
+            toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+        ])
+        UIAccessibility.post(notification: .announcement, argument: text)
+        UIView.animate(withDuration: 0.3, delay: 2.2, options: []) { toast.alpha = 0 } completion: { _ in toast.removeFromSuperview() }
     }
     /// What's waiting for this caregiver's OK: phone voicemail, texts, or both.
     private func confirmRemoval(of family: FamilyCredential, named name: String?) {

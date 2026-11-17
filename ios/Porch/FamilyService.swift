@@ -317,7 +317,11 @@ struct FamilyCallSession {
     /// one for each family it joined, and checks in with all of them so any of them can reach it.
     final class Link {
         let credential: FamilyCredential
-        fileprivate(set) var state: FamilySnapshot?
+        fileprivate(set) var state: FamilySnapshot? { didSet { if state != nil { receivedAt = Date() } } }
+        /// When `state` arrived, so a time in it can be read against this device's clock.
+        private(set) var receivedAt = Date()
+        /// The server's clock now, from the last check-in's `serverTime`, such as for how long a call has been on.
+        func serverNow(_ date: Date = Date()) -> TimeInterval? { state.map { $0.serverTime + date.timeIntervalSince(receivedAt) } }
         fileprivate(set) var error: String?
         /// The server no longer recognizes this device (a caregiver removed it, or it left).
         fileprivate(set) var accessRemoved = false
@@ -388,6 +392,15 @@ struct FamilyCallSession {
             }
         }
     }
+    #if DEBUG
+    /// Tests: these families' links, as `start` makes them, without checking in, asking for notification or microphone
+    /// permission, or registering for push. On a fresh simulator those prompts would make Porch inactive for later tests.
+    func installForTesting(_ credentials: [FamilyCredential]) {
+        pause()
+        currentID = credentials.first?.deviceID
+        links = credentials.map(Link.init)
+    }
+    #endif
     func pause() {
         isActive = false; generation = UUID()
         // An in-flight keypad report belongs to the session that started it. A failed report's wait is kept:

@@ -118,6 +118,37 @@ data class FamilyPhoneGuest(
     val identity: String get() = "phone-guest-$id"
 }
 
+/**
+ * Every call drops in: while it's on, anyone who calls the bedside connects without an answer, whatever their own
+ * approvals. `by` is who turned it on, by name; with `atBedside` it was turned on at the bedside and `by` is the
+ * bedside's name. Servers send it only while it's on; older servers never do.
+ */
+@Serializable
+data class EveryCallDropIn(val by: String, val at: Long, val atBedside: Boolean? = null) {
+    /** Who turned it on, as a short label: "Tom", or "Rose's tablet" at the bedside. */
+    fun turnedOnBy(bedsideDevice: String): String =
+        if (atBedside == true) "${by}’s $bedsideDevice" else by.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: by
+}
+
+/**
+ * Family caregivers: a phone call to the Porch number that started while Every call was on, while it rings or is
+ * connected, so the Call tab can show it and end it (`endBedsideCall`). `title` is the caller as Porch names it: an
+ * approved number's name, the number, or "Hidden number". `kind` is "dropIn" or "call", `state` "pending" or "accepted",
+ * and `acceptedAt` (server time) comes once it's answered. Older servers don't send it.
+ */
+@Serializable
+data class BedsideCall(val id: String, val title: String, val kind: String, val state: String, val acceptedAt: Long? = null) {
+    /** What the Call tab says under the caller: "Dropping in", "Ringing", or "On a call · 2:14" at `now` in server time. */
+    fun status(now: Long): String {
+        if (state != "accepted") return if (kind == "dropIn") "Dropping in" else "Ringing"
+        val since = acceptedAt ?: return "On a call"
+        val seconds = (now - since).coerceAtLeast(0)
+        val clock = if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
+            else "%d:%02d".format(seconds / 60, seconds % 60)
+        return "On a call · $clock"
+    }
+}
+
 /** A telephone number the caregiver approved for audio drop-in by calling the household's number. */
 @Serializable
 data class PhoneDropInApproval(val number: String, val name: String)
@@ -309,6 +340,10 @@ data class FamilySnapshot(
     val porchNumber: String? = null,
     /** The bedside and caregivers: a Porch number that's still being set up. Gone once `porchNumber` is there. */
     val phoneSetup: PorchNumberSetup? = null,
+    /** Every call drops in, while it's on. Older servers don't send it. */
+    val everyCall: EveryCallDropIn? = null,
+    /** Family caregivers: the bedside's phone call that started while Every call was on. Older servers don't send it. */
+    val bedsideCall: BedsideCall? = null,
 ) {
     /** The language to report after a caregiver saves `language`, or null when the server already has it or can't keep it. */
     fun languageToReport(language: BedsideLanguage): BedsideLanguage? {
@@ -366,6 +401,8 @@ data class FamilyAdminState(
     val callScreening: CallScreening? = null,
     /** Family see when someone is at the bedside. Older servers don't send it. */
     val shareAttendance: Boolean? = null,
+    /** Every call drops in, while it's on. Older servers don't send it. */
+    val everyCall: EveryCallDropIn? = null,
 )
 
 /**

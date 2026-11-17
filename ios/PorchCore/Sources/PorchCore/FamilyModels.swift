@@ -5,6 +5,55 @@ public struct DropInPermissions: Codable, Equatable {
     public var audio: Bool
     public var video: Bool
 }
+/// A caregiver let every call drop in, whatever each caller's own approval: who did, and when, in server time.
+public struct EveryCallDropIn: Codable, Equatable {
+    /// Their name, or the bedside's when it was turned on there.
+    public let by: String
+    public let at: TimeInterval
+    /// Turned on at the bedside rather than on a caregiver's phone.
+    public let atBedside: Bool?
+    public init(by: String, at: TimeInterval, atBedside: Bool? = nil) { self.by = by; self.at = at; self.atBedside = atBedside }
+    /// Who turned it on, as Porch names them beside it: a family member's first name, or the bedside, such as Rose’s iPad.
+    public func who(bedsideDevice: String) -> String {
+        atBedside == true ? "\(by)’s \(bedsideDevice)" : by.split(separator: " ").first.map(String.init) ?? by
+    }
+}
+/// A phone call to the Porch number that started while every call drops in, as caregivers see it while it rings or is
+/// connected, so they can end it.
+public struct BedsideCall: Codable, Equatable {
+    public let id: String
+    /// The caller's name for an approved number, else the formatted number, else "Hidden number".
+    public let title: String
+    /// "dropIn" or "call".
+    public let kind: String
+    /// "pending" or "accepted".
+    public let state: String
+    /// Once answered, in server time.
+    public let acceptedAt: TimeInterval?
+    public init(id: String, title: String, kind: String, state: String, acceptedAt: TimeInterval? = nil) {
+        self.id = id; self.title = title; self.kind = kind; self.state = state; self.acceptedAt = acceptedAt
+    }
+    public var isConnected: Bool { state == "accepted" }
+    /// What it's doing: Dropping in, Ringing, or On a call · 2:14 by the server's clock.
+    public func status(serverNow: TimeInterval) -> String {
+        guard isConnected else { return kind == "dropIn" ? "Dropping in" : "Ringing" }
+        guard let acceptedAt else { return "On a call" }
+        return "On a call · \(Self.duration(serverNow - acceptedAt))"
+    }
+    /// 0:07, 2:14, 1:02:03.
+    public static func duration(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded(.down)))
+        let hours = total / 3600, minutes = total % 3600 / 60, rest = total % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, rest) : String(format: "%d:%02d", minutes, rest)
+    }
+}
+/// Who can drop in: no one, the people and numbers a caregiver approved, or every call.
+public enum DropInChoice: String, CaseIterable {
+    case off, approved, everyCall
+    public init(dropInEnabled: Bool, everyCall: EveryCallDropIn?) {
+        self = !dropInEnabled ? .off : everyCall != nil ? .everyCall : .approved
+    }
+}
 /// A family member's name and photo, as they chose them or as a caregiver chose them for them.
 public struct FamilyProfile: Codable, Equatable {
     public let name: String?
@@ -268,6 +317,11 @@ public struct FamilySnapshot: Codable, Equatable {
     public let speech: NaturalVoices?
     /// Bedside only: the bedside language as the server last heard it; phone voicemail greets callers in it. Older servers don't send it.
     public let bedsideLanguage: String?
+    /// Everyone: set while every call drops in. Older servers don't send it.
+    public let everyCall: EveryCallDropIn?
+    /// Family caregivers: a phone call that started while every call drops in, while it rings or is connected. Older
+    /// servers don't send it.
+    public let bedsideCall: BedsideCall?
     /// Bedside only: who can ring by phone. Older servers don't send it.
     public let callScreening: CallScreening?
     /// Bedside only: family see when someone is at the iPad, unless a caregiver turned it off. The iPad reports it only
@@ -286,6 +340,10 @@ public struct FamilySnapshot: Codable, Equatable {
     /// The bedside and caregivers: a Porch number that's still being set up. Gone once `porchNumber` is there.
     public let phoneSetup: PorchNumberSetup?
 
+    /// Whether this family member can drop in with `mode`: drop-ins are on, and every call drops in or they're approved.
+    public func canDropIn(_ mode: NativeCall.Mode) -> Bool {
+        dropInEnabled && (everyCall != nil || (mode == .voice ? me.permissions.audio : me.permissions.video))
+    }
     /// The language to report after a caregiver saves `language`, or nil when the server already has it or can't keep it.
     public func languageToReport(_ language: BedsideLanguage) -> BedsideLanguage? {
         guard let bedsideLanguage, bedsideLanguage != language.rawValue else { return nil }
@@ -335,11 +393,14 @@ public struct FamilyAdminState: Codable, Equatable {
     public let callScreening: CallScreening?
     /// Family see when someone is at the bedside iPad. Older servers don't send it.
     public let shareAttendance: Bool?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, texts: [FamilyText]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil) {
+    /// Set while every call drops in. Older servers don't send it.
+    public let everyCall: EveryCallDropIn?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, texts: [FamilyText]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil, everyCall: EveryCallDropIn? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
         self.messagesEnabled = messagesEnabled; self.messages = messages; self.texts = texts; self.phoneDropIns = phoneDropIns; self.invitations = invitations
-        self.callScreening = callScreening; self.shareAttendance = shareAttendance
+        self.callScreening = callScreening; self.shareAttendance = shareAttendance; self.everyCall = everyCall
     }
+    public var dropInChoice: DropInChoice { DropInChoice(dropInEnabled: dropInEnabled, everyCall: everyCall) }
 }
 /// One call to or from the bedside, as caregivers see it in Call history (`callHistory`).
 /// `direction` is the bedside's: "incoming" rang the bedside and "outgoing" was placed from it. `via` is "porch", or

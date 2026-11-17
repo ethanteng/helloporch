@@ -4,6 +4,7 @@ import GameController
 import AVFoundation
 import Security
 import SafariServices
+import UserNotifications
 import CoreImage
 import PorchCore
 @testable import Porch
@@ -261,6 +262,105 @@ final class CaregiverInputTests: XCTestCase {
             XCTAssertNil(PorchDevice.credential(for: .family), "the old single-family copy doesn't come back")
             XCTAssertNil(PorchDevice.familyName(lee))
         }
+    }
+
+    /// While every call drops in, a caregiver's Call tab says so on the bedside's card, with Turn off. Everyone may
+    /// drop in meanwhile; only caregivers see the banner.
+    @MainActor func testCaregiversSeeEveryCallOnTheirCallTab() throws {
+        let coordinator = FamilyCoordinator.shared, wasActive = coordinator.isActive
+        defer { coordinator.start(); if !wasActive { coordinator.pause() } }
+        try preservingPairings {
+            let defaults = UserDefaults.standard, experience = defaults.object(forKey: "porch.experience")
+            defer { coordinator.pause(); defaults.set(experience, forKey: "porch.experience") }
+            defaults.set("family", forKey: "porch.experience")
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!,
+                           kSecAttrAccount as String: "porch.family.families"] as CFDictionary)
+            try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
+            let family = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "tom-device.tom-secret", role: .family)
+            try PorchDevice.save(family)
+            // Not `start`: it would ask for notification and microphone permission, which stops later tests.
+            coordinator.installForTesting([family])
+            @MainActor func show(caregiver: Bool) throws {
+                let state: [String: Any] = ["householdID": "reyes", "householdName": "Rose", "dropInEnabled": true,
+                    "me": ["id": "tom-device", "name": "Tom Reyes", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": caregiver],
+                    "people": [["id": "rose", "name": "Rose", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true]],
+                    "busy": false, "serverTime": 1, "everyCall": ["by": "Linda Reyes", "at": Date().timeIntervalSince1970]]
+                coordinator.update(try JSONDecoder().decode(FamilyResponse.self, from: JSONSerialization.data(withJSONObject: ["state": state])))
+            }
+            try show(caregiver: true)
+            let home = FamilyHomeViewController(); home.loadViewIfNeeded()
+            let banner = try XCTUnwrap(descendants(home.view).first { $0.accessibilityIdentifier == "family.everyCall" })
+            XCTAssertTrue(labels(in: banner).compactMap(\.text).contains("Every call drops in"))
+            XCTAssertTrue(labels(in: banner).compactMap(\.text).contains { $0.hasPrefix("Linda, ") }, "who turned it on, by first name")
+            XCTAssertEqual(buttons(in: banner).first { $0.accessibilityIdentifier == "family.everyCall.turnOff" }?.configuration?.title, "Turn off")
+            XCTAssertEqual(buttons(in: home.view).first { $0.accessibilityIdentifier == "family.dropIn" }?.accessibilityLabel, "Drop in on Rose",
+                           "Every call lets this phone drop in either way, though it isn't approved itself")
+            try show(caregiver: false)
+            XCTAssertFalse(descendants(home.view).contains { $0.accessibilityIdentifier == "family.everyCall" }, "Only caregivers can turn it off")
+            XCTAssertNotNil(buttons(in: home.view).first { $0.accessibilityIdentifier == "family.dropIn" })
+        }
+    }
+
+    /// A phone call that came in while every call drops in shows on a caregiver's Call tab, ringing or with how long
+    /// it's been on, and End call; it stays there after Every call is turned off, until the call ends.
+    @MainActor func testCaregiversSeeAPhoneCallOnTheBedsideAndCanEndIt() throws {
+        let coordinator = FamilyCoordinator.shared, wasActive = coordinator.isActive
+        defer { coordinator.start(); if !wasActive { coordinator.pause() } }
+        try preservingPairings {
+            let defaults = UserDefaults.standard, experience = defaults.object(forKey: "porch.experience")
+            defer { coordinator.pause(); defaults.set(experience, forKey: "porch.experience") }
+            defaults.set("family", forKey: "porch.experience")
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!,
+                           kSecAttrAccount as String: "porch.family.families"] as CFDictionary)
+            try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
+            let family = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "tom-device.tom-secret", role: .family)
+            try PorchDevice.save(family)
+            // Not `start`: it would ask for notification and microphone permission, which stops later tests.
+            coordinator.installForTesting([family])
+            @MainActor func show(caregiver: Bool, everyCall: Bool, call: [String: Any]) throws {
+                var state: [String: Any] = ["householdID": "reyes", "householdName": "Rose", "dropInEnabled": true,
+                    "me": ["id": "tom-device", "name": "Tom Reyes", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": caregiver],
+                    "people": [["id": "rose", "name": "Rose", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true]],
+                    "busy": true, "serverTime": 1_800_000_200, "bedsideCall": call]
+                if everyCall { state["everyCall"] = ["by": "Linda Reyes", "at": 1_800_000_000] }
+                coordinator.update(try JSONDecoder().decode(FamilyResponse.self, from: JSONSerialization.data(withJSONObject: ["state": state])))
+            }
+            try show(caregiver: true, everyCall: false, call: ["id": "call-1", "title": "(510) 555-0162", "kind": "dropIn", "state": "accepted", "acceptedAt": 1_800_000_066])
+            let home = FamilyHomeViewController(); home.loadViewIfNeeded()
+            let strip = try XCTUnwrap(descendants(home.view).first { $0.accessibilityIdentifier == "family.liveCall" }, "It stays after Every call is off")
+            XCTAssertTrue(labels(in: strip).compactMap(\.text).contains("(510) 555-0162"))
+            XCTAssertEqual(labels(in: strip).first { $0.accessibilityIdentifier == "family.liveCall.status" }?.text, "On a call · 2:14", "by the server's clock")
+            XCTAssertEqual(buttons(in: strip).first { $0.accessibilityIdentifier == "family.liveCall.end" }?.configuration?.title, "End call")
+            XCTAssertFalse(descendants(home.view).contains { $0.accessibilityIdentifier == "family.everyCall" })
+            // Ringing, under the Every call banner.
+            try show(caregiver: true, everyCall: true, call: ["id": "call-2", "title": "Hidden number", "kind": "call", "state": "pending"])
+            let card = try XCTUnwrap(descendants(home.view).first { $0.accessibilityIdentifier == "family.card" } as? UIStackView)
+            XCTAssertEqual(card.arrangedSubviews.prefix(2).map(\.accessibilityIdentifier), ["family.everyCall", "family.liveCall"])
+            XCTAssertEqual(labels(in: card).first { $0.accessibilityIdentifier == "family.liveCall.status" }?.text, "Ringing")
+            try show(caregiver: true, everyCall: true, call: ["id": "call-3", "title": "Carmen", "kind": "dropIn", "state": "pending"])
+            XCTAssertEqual(labels(in: home.view).first { $0.accessibilityIdentifier == "family.liveCall.status" }?.text, "Dropping in")
+            try show(caregiver: false, everyCall: true, call: ["id": "call-3", "title": "Carmen", "kind": "dropIn", "state": "pending"])
+            XCTAssertFalse(descendants(home.view).contains { $0.accessibilityIdentifier == "family.liveCall" }, "Only caregivers can end it")
+        }
+        // The notice's buttons work without opening Porch: End call, and turning Every call off.
+        XCTAssertEqual(FamilyMessageAlerts.callNotice.identifier, "PORCH_CALL_NOTICE")
+        XCTAssertEqual(FamilyMessageAlerts.callNotice.actions.map(\.identifier), ["endCall", "turnOffEveryCall"])
+        XCTAssertEqual(FamilyMessageAlerts.callNotice.actions.map(\.title), ["End call", "Turn off Every call"])
+        XCTAssertEqual(FamilyMessageAlerts.callNotice.actions.map { $0.options.contains(.foreground) }, [false, false])
+        XCTAssertTrue(FamilyMessageAlerts.callNotice.actions[0].options.contains(.destructive))
+        XCTAssertEqual(["endCall", "turnOffEveryCall", UNNotificationDefaultActionIdentifier].map(FamilyMessageAlerts.serverAction), ["endBedsideCall", "turnOffEveryCall", nil])
+        let original = UNMutableNotificationContent()
+        original.title = "Dropping in on Rose"
+        original.body = "(510) 555-0162 · Unknown number"
+        original.threadIdentifier = "porch-everycall-device"
+        original.userInfo = ["type": "callNotice", "recipientID": "device-1", "callID": "call-1"]
+        let retry = FamilyMessageAlerts.retryNotice(from: original, message: "Couldn't reach Porch. Try again.")
+        XCTAssertEqual(retry.title, original.title)
+        XCTAssertEqual(retry.body, "Couldn't reach Porch. Try again.")
+        XCTAssertEqual(retry.categoryIdentifier, FamilyMessageAlerts.callNotice.identifier)
+        XCTAssertEqual(retry.threadIdentifier, original.threadIdentifier)
+        XCTAssertEqual(retry.userInfo["callID"] as? String, "call-1")
+        XCTAssertEqual(retry.userInfo["recipientID"] as? String, "device-1")
     }
 
     /// Both bedsides are "Mom" until this phone names one: the family joined later shows as "Mom 2" meanwhile.
@@ -1286,6 +1386,57 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(rows(in: dropIn.view).contains { $0.accessibilityLabel == "Mia, Porch app, Audio and video" }, "Approved family members are listed beside approved numbers")
         XCTAssertTrue(buttons(in: dropIn.view).compactMap { $0.configuration?.title }.contains("Add a phone number"))
         XCTAssertEqual(buttons(in: dropIn.view).filter { $0.accessibilityLabel == "Remove phone drop-in for David" }.count, 1)
+    }
+
+    @MainActor func testDropInPageAsksWhoAndEveryCallNeedsThePINAgain() throws {
+        func state(_ extra: [String: Any]) throws -> FamilyAdminState {
+            var object: [String: Any] = ["householdName": "Pat", "dropInEnabled": true, "people": [
+                ["id": "mia", "name": "Mia", "role": "family", "permissions": ["audio": true, "video": false], "online": true, "caregiver": false]]]
+            object.merge(extra) { $1 }
+            return try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: object))
+        }
+        let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+        let admin = FamilyAdminViewController(remote: remote, state: try state([:])); admin.loadViewIfNeeded()
+        let dropIn = DropInSettingsViewController(admin: admin)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UINavigationController(rootViewController: dropIn); window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        func choice(_ id: String) -> PorchListRow? { rows(in: dropIn.view).first { $0.accessibilityIdentifier == "dropIn.choice.\(id)" } }
+        XCTAssertEqual(["off", "approved", "everyCall"].compactMap { choice($0)?.accessibilityLabel },
+                       ["No one, Paused", "People you approve, Listed below", "Every call, Needs the PIN"])
+        XCTAssertEqual(["off", "approved", "everyCall"].map { choice($0)?.accessibilityTraits.contains(.selected) }, [false, true, false])
+        XCTAssertTrue(labels(in: dropIn.view).compactMap(\.text).contains("Can drop in"))
+        XCTAssertFalse(labels(in: dropIn.view).compactMap(\.text).contains("Drop-ins connect on their own after a short announcement."), "The answers say it")
+        // Every call warns first; the PIN is typed again on a page of its own.
+        try XCTUnwrap(choice("everyCall")).sendActions(for: .touchUpInside)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let alert = try XCTUnwrap(dropIn.presentedViewController as? UIAlertController)
+        XCTAssertEqual(alert.title, "Let every call drop in?")
+        XCTAssertEqual(alert.message, "Anyone who calls will connect without Pat answering, unknown numbers too.")
+        XCTAssertEqual(alert.actions.map(\.title), ["Cancel", "Continue"])
+        XCTAssertEqual(alert.actions.last?.style, .destructive)
+        alert.dismiss(animated: false)
+        let pin = EveryCallPINViewController(admin: admin, unknownNumbers: false); pin.loadViewIfNeeded()
+        XCTAssertEqual(pin.title, "Every call")
+        XCTAssertTrue(labels(in: pin.view).compactMap(\.text).contains("Every call will drop in."), "Unknown numbers are named only while they can ring")
+        XCTAssertTrue(descendants(pin.view).contains { $0.accessibilityIdentifier == "everyCall.pin" && ($0 as? UITextField)?.isSecureTextEntry == true })
+        XCTAssertEqual(buttons(in: pin.view).first { $0.accessibilityIdentifier == "everyCall.turnOn" }?.configuration?.title, "Turn on")
+        // On: the answer is red with who and when, approvals wait, and the caregiver menu says so.
+        let on = FamilyAdminViewController(remote: remote, state: try state(["everyCall": ["by": "Tom Reyes", "at": Date().timeIntervalSince1970]]))
+        on.loadViewIfNeeded()
+        let onPage = DropInSettingsViewController(admin: on); onPage.loadViewIfNeeded()
+        let everyCall = try XCTUnwrap(rows(in: onPage.view).first { $0.accessibilityIdentifier == "dropIn.choice.everyCall" })
+        XCTAssertTrue(everyCall.accessibilityLabel?.hasPrefix("Every call, On · Tom, ") == true, everyCall.accessibilityLabel ?? "")
+        XCTAssertTrue(everyCall.accessibilityTraits.contains(.selected))
+        XCTAssertTrue(labels(in: onPage.view).compactMap(\.text).contains("Saved approvals"))
+        XCTAssertTrue(rows(in: on.view).contains { $0.accessibilityLabel == "Drop-in, Every call" })
+        let mia = PersonViewController(admin: on, memberID: "mia"); mia.loadViewIfNeeded()
+        XCTAssertEqual(rows(in: mia.view).first { $0.accessibilityIdentifier == "person.row.dropIn" }?.accessibilityLabel, "Drop-in, Every call")
+        // No one: paused.
+        let off = FamilyAdminViewController(remote: remote, state: try state(["dropInEnabled": false])); off.loadViewIfNeeded()
+        XCTAssertTrue(rows(in: off.view).contains { $0.accessibilityLabel == "Drop-in, Off" })
     }
 
     @MainActor func testCaregiverModeBlocksUnknownCallersAndListsBlockedNumbersSeparately() throws {

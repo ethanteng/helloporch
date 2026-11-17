@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 14, 2026";
+const updated = "November 17, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -37,8 +37,8 @@ const providers: [name: string, role: string, receives: string][] = [
   ["Twilio", "Phone service for a household’s Porch number, for calling a regular phone, for adding a phone number to a call, and for receiving text messages sent to that number.", "Phone numbers, call audio as it happens, voicemail recordings, and the text messages sent to the Porch number. We delete Twilio’s copy of each voicemail recording once we’ve saved it."],
   ["Vercel", "Hosts the website and our server, and keeps messages, photos, announcement audio and readings of text messages in private storage.", "Everything our server handles, including request logs with IP addresses."],
   ["Upstash", "Database for household details, settings, the list of waiting messages, and the words of text messages sent to a Porch number.", "The household details described above, including those text messages."],
-  ["Apple", "Delivers call and message notifications to iPhones and iPads through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
-  ["Google Firebase", "Delivers call and message notifications to Android phones and tablets through Firebase Cloud Messaging.", "Notification tokens, the caller’s name and call type for an incoming call, and a message sender’s name and length."],
+  ["Apple", "Delivers call and message notifications to iPhones and iPads through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, a message sender’s name and length, and, for caregivers while every call drops in, who turned it on or off and each phone caller’s number."],
+  ["Google Firebase", "Delivers call and message notifications to Android phones and tablets through Firebase Cloud Messaging.", "Notification tokens, the caller’s name and call type for an incoming call, a message sender’s name and length, and, for caregivers while every call drops in, who turned it on or off and each phone caller’s number."],
   ["Google ML Kit", "Notices a face in view on an Android tablet, while noticing someone in front of the tablet is on, unless a caregiver turns it off. The noticing happens on the tablet.", "Details about the device and the app, identifiers, and how well the feature performed and any errors, which Google uses for diagnostics and usage analytics. Never an image or anything the camera sees."],
   ["ElevenLabs", "Turns short announcements and text messages sent to a Porch number into natural speech, when a household uses a natural voice. Speaks live call translation aloud.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation. For a call, the translated sentence."],
   ["Anthropic", "Translates a text message into the language set on the tablet, when the message isn’t already in that language. During a call with translation on, translates what was just said into the listener’s language.", "The words of that text. On a call, what was just said and the few sentences before it, which can include names someone said, but not phone numbers or who is on the call."],
@@ -381,7 +381,9 @@ export default function PrivacyPage() {
                 deletes the last time we kept, and the tablet stops sending it.
               </li>
               <li>
-                <strong>Drop-in</strong> works only for people a caregiver approves, and can be turned off at any time.
+                <strong>Drop-in</strong> works only for people a caregiver approves, unless a caregiver enters the
+                caregiver PIN to let every call drop in: family on Porch, and phone callers whose number their carrier
+                verified. Either can be turned off at any time.
               </li>
               <li>
                 <strong>Messages, voicemail and text messages to the Porch number</strong> can be turned off together by
@@ -421,7 +423,8 @@ export default function PrivacyPage() {
               Porch is often set up by a caregiver for a parent or loved one who doesn’t manage technology
               themselves. If you set up Porch for someone, please make sure you’re entitled to make these choices for
               them, and explain Porch to them in a way they can understand, including that people they approve can
-              drop in, and that anyone with the Porch number can text it. A text from a number they haven’t allowed
+              drop in (or, while a caregiver lets every call drop in, family and phone callers with a verified number),
+              and that anyone with the Porch number can text it. A text from a number they haven’t allowed
               waits for a caregiver. Others are shown and read on the tablet.
               When you add other people’s phone numbers or photos, please add only what they’d be comfortable
               with.

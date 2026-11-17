@@ -43,6 +43,7 @@ final class FamilyTabBarController: UITabBarController {
         chosen = PorchDevice.currentFamily?.deviceID
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(openReceivedMessages(_:)), name: .porchOpenReceivedMessages, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(openCallTab(_:)), name: .porchOpenCallTab, object: nil)
         updateBadge()
     }
     /// The family chosen last, which a family's thread, caregiver mode and name and photo are for.
@@ -104,6 +105,13 @@ final class FamilyTabBarController: UITabBarController {
         if navigation.presentedViewController != nil { navigation.dismiss(animated: false) }
         navigation.popToRootViewController(animated: false)
         navigation.pushViewController(MessageThreadViewController(family: chosen), animated: true)
+    }
+    /// A notice that every call drops in, or no longer does, opens the Call tab, where that family's card says so.
+    /// A call on screen stays up: the tab is chosen underneath it.
+    @objc private func openCallTab(_ notification: Notification) {
+        if let family = PorchDevice.family(memberID: notification.userInfo?["recipientID"] as? String) { FamilyCoordinator.shared.select(family) }
+        selectedIndex = Self.callTab
+        (selectedViewController as? UINavigationController)?.popToRootViewController(animated: false)
     }
     /// A message notification says which family it's from: each family knows this phone by its own ID.
     @objc private func openReceivedMessages(_ notification: Notification) {
