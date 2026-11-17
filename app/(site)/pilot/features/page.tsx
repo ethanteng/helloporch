@@ -479,13 +479,12 @@ const parts: GuidePart[] = [
             Texts from other numbers wait for a caregiver to review.
           </li>
           <li>
-            When something needs approval, a caregiver’s phone shows a notice such as{" "}
-            <UI>1 phone voicemail needs your review</UI> or <UI>1 text needs your review</UI>.
+            When something needs approval, a caregiver’s phone shows{" "}
+            <UI>1 needs your OK</UI> on that person’s card in Messages. Tap it and enter the PIN.
           </li>
           <li>
-            Open <Path steps={["Messages", "Waiting messages"]} /> to review them. For voicemail,
-            tap <UI>Listen first</UI>. Then choose <UI>Let it play on Porch</UI>,{" "}
-            <UI>Let it show on Porch</UI> or <UI>Remove</UI>, as appropriate.
+            For voicemail, tap <UI>Listen</UI>. Then choose <UI>Approve</UI> or <UI>Remove</UI>. On the
+            tablet, review them in <Path steps={["Messages", "Waiting messages"]} />.
           </li>
           <li>Unread texts are removed after a week.</li>
         </ul>

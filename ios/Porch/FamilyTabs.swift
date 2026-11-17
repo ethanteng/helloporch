@@ -134,10 +134,33 @@ final class FamilyTabBarController: UITabBarController {
     return state?.people.first { $0.role == .bedside }?.name ?? state?.householdName
 }
 
-/// The Messages tab: what's waiting for a caregiver's OK, then one thread for each family's bedside.
+/// The words on a person's card on the Messages tab.
+enum MessagesWaitingText {
+    /// Messages the bedside left for this phone that haven't been played.
+    static func new(_ count: Int, from name: String) -> String? {
+        count == 0 ? nil : count == 1 ? "1 new message from \(name)" : "\(count) new messages from \(name)"
+    }
+    /// This phone's own messages still waiting on the bedside.
+    static func waiting(_ count: Int) -> String? { count == 0 ? nil : "\(count) of yours not played yet" }
+    /// When none are waiting: when the bedside last played one of this phone's messages.
+    static func played(_ time: TimeInterval?, waiting: Int) -> String? {
+        guard waiting == 0, let time else { return nil }
+        return "Played your message \(MessageText.played(time))"
+    }
+    /// Phone voicemail and texts from numbers that aren't on the keypad, waiting for a caregiver.
+    static func needsOK(voicemails: Int, texts: Int) -> (title: String, detail: String)? {
+        let total = voicemails + texts
+        guard total > 0 else { return nil }
+        let parts = [voicemails == 0 ? nil : voicemails == 1 ? "1 voicemail" : "\(voicemails) voicemails",
+                     texts == 0 ? nil : texts == 1 ? "1 text" : "\(texts) texts"].compactMap { $0 }
+        return ("\(total) need\(total == 1 ? "s" : "") your OK", parts.joined(separator: ", "))
+    }
+}
+
+/// The Messages tab: a card for each family's bedside with what's waiting there, and for caregivers what needs their OK.
 final class FamilyInboxViewController: CaregiverFormViewController {
     private let content = UIStackView()
-    private struct Row: Equatable { let id: String; let name: String; let family: String?; let unheard: Int; let review: Int; let held: Int; let heldTexts: Int }
+    private struct Row: Equatable { let id: String; let name: String; let family: String?; let unheard: Int; let waiting: Int; let playedAt: TimeInterval?; let held: Int; let heldTexts: Int }
     /// The rows, or with none to show, what the page says instead.
     private struct Shown: Equatable { let rows: [Row]; let empty: String? }
     private var shown: Shown?
@@ -158,9 +181,11 @@ final class FamilyInboxViewController: CaregiverFormViewController {
         let rows = families.compactMap { credential -> Row? in
             guard let state = coordinator.state(for: credential) else { return nil }
             let name = bedsideName(credential) ?? familyTitle(credential)
-            let held = state.me.caregiver == true ? state.heldMessages ?? 0 : 0, texts = state.me.caregiver == true ? state.heldTexts ?? 0 : 0
+            let caregiver = state.me.caregiver == true
             let family = several ? familyTitle(credential) : nil
-            return Row(id: credential.deviceID, name: name, family: family == name ? nil : family, unheard: state.newMessages ?? 0, review: held + texts, held: held, heldTexts: texts)
+            return Row(id: credential.deviceID, name: name, family: family == name ? nil : family, unheard: state.newMessages ?? 0,
+                       waiting: state.waitingMessages ?? 0, playedAt: state.messagePlayedAt,
+                       held: caregiver ? state.heldMessages ?? 0 : 0, heldTexts: caregiver ? state.heldTexts ?? 0 : 0)
         }
         // Families that removed this phone aren't listed. When that's all of them, say so rather than Connecting.
         let all = PorchDevice.families
@@ -176,44 +201,81 @@ final class FamilyInboxViewController: CaregiverFormViewController {
             label.textAlignment = .center
             content.addArrangedSubview(label); return
         }
-        // Phone voicemail and texts from numbers that aren't on the keypad wait for a caregiver.
-        for row in rows where row.review > 0 {
+        for row in rows {
             guard let credential = families.first(where: { $0.deviceID == row.id }) else { continue }
-            let review = PorchStyle.button(FamilyHomeViewController.reviewTitle(voicemails: row.held, texts: row.heldTexts), symbol: "exclamationmark.bubble.fill")
-            if several { review.configuration?.subtitle = row.family ?? row.name }
-            review.accessibilityIdentifier = "family.heldVoicemail"
-            review.addAction(UIAction { [weak self] _ in FamilyCoordinator.shared.select(credential); self?.openCaregiverMode(for: credential) }, for: .touchUpInside)
-            content.addArrangedSubview(review)
+            content.addArrangedSubview(card(row, credential))
         }
-        content.addArrangedSubview(group(rows: rows.compactMap { row in
-            guard let credential = families.first(where: { $0.deviceID == row.id }) else { return nil }
-            let name = PorchStyle.label(row.name, size: 18, color: PorchStyle.ink, weight: .semibold)
-            var lines: [UIView] = [name]
-            let new = row.unheard == 1 ? "1 new message" : row.unheard > 1 ? "\(row.unheard) new messages" : nil
-            if let detail = [row.family, new].compactMap({ $0 }).joined(separator: " · ").nilIfEmpty {
-                lines.append(PorchStyle.label(detail, size: 15, color: new == nil ? PorchStyle.secondary : PorchStyle.accent, weight: new == nil ? .regular : .semibold))
-            }
-            let text = UIStackView(arrangedSubviews: lines); text.axis = .vertical; text.spacing = 2
-            let label = [row.name, row.family, new].compactMap { $0 }.joined(separator: ", ")
-            let thread = PorchListRow([FamilyAdminViewController.avatar(row.name, size: 44), text], label: "Messages with \(label)") { [weak self] in
-                (self?.tabBarController as? FamilyTabBarController)?.openMessages(for: credential)
-            }
-            thread.accessibilityIdentifier = row.unheard > 0 ? "family.newMessages" : "family.messages"
-            return thread
-        }))
     }
-    /// Caregiver mode for one family. Every visit starts with the PIN.
-    private func openCaregiverMode(for credential: FamilyCredential) {
+    /// One family's bedside: its name, what's waiting in the thread, and for caregivers a bar for what needs their OK.
+    private func card(_ row: Row, _ credential: FamilyCredential) -> UIView {
+        let name = PorchStyle.label(row.name, color: PorchStyle.ink)
+        name.font = PorchStyle.titleFont(24)
+        let heading = UIStackView(arrangedSubviews: [name] + (row.family.map { [PorchStyle.label($0, size: 15)] } ?? []))
+        heading.axis = .vertical; heading.spacing = 2
+        let statuses: [(String, UIView)] = [
+            MessagesWaitingText.new(row.unheard, from: row.name).map { ($0, Self.statusLine($0, symbol: "circle.fill", size: 8, color: PorchStyle.accent, weight: .semibold)) },
+            MessagesWaitingText.waiting(row.waiting).map { ($0, Self.statusLine($0, symbol: "clock", size: 15, color: PorchStyle.waiting)) },
+            MessagesWaitingText.played(row.playedAt, waiting: row.waiting).map { ($0, Self.statusLine($0, symbol: "checkmark.circle", size: 15, color: PorchStyle.played)) }
+        ].compactMap { $0 }
+        let text = UIStackView(arrangedSubviews: [heading] + statuses.map(\.1))
+        text.axis = .vertical; text.spacing = 6
+        if !statuses.isEmpty { text.setCustomSpacing(10, after: heading) }
+        let label = ([row.name, row.family] + statuses.map(\.0)).compactMap { $0 }.joined(separator: ", ")
+        let thread = PorchListRow([FamilyAdminViewController.avatar(row.name, size: 48), text], label: "Messages with \(label)") { [weak self] in
+            (self?.tabBarController as? FamilyTabBarController)?.openMessages(for: credential)
+        }
+        thread.accessibilityIdentifier = row.unheard > 0 ? "family.newMessages" : "family.messages"
+        let card = UIStackView(arrangedSubviews: [thread])
+        card.axis = .vertical
+        card.backgroundColor = PorchStyle.surface
+        card.layer.cornerRadius = 20; card.layer.cornerCurve = .continuous
+        card.clipsToBounds = true
+        if let ok = MessagesWaitingText.needsOK(voicemails: row.held, texts: row.heldTexts) {
+            card.addArrangedSubview(okBar(ok) { [weak self] in FamilyCoordinator.shared.select(credential); self?.openReview(for: credential) })
+        }
+        return card
+    }
+    private static func statusLine(_ text: String, symbol: String, size: CGFloat, color: UIColor, weight: UIFont.Weight = .regular) -> UIView {
+        let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: .semibold)))
+        icon.tintColor = color; icon.contentMode = .center
+        icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        let line = UIStackView(arrangedSubviews: [icon, PorchStyle.label(text, size: 15, color: color, weight: weight)])
+        line.spacing = 8; line.alignment = .center
+        return line
+    }
+    /// The honey bar at the foot of a card: how many need a caregiver's OK, opening them after the PIN.
+    private func okBar(_ ok: (title: String, detail: String), action: @escaping () -> Void) -> UIView {
+        let mark = UIImageView(image: UIImage(systemName: "exclamationmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .heavy)))
+        mark.tintColor = PorchStyle.honey; mark.contentMode = .center
+        let badge = UIView(); badge.backgroundColor = PorchStyle.ink; badge.layer.cornerRadius = 17
+        badge.addSubview(mark); mark.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([badge.widthAnchor.constraint(equalToConstant: 34), badge.heightAnchor.constraint(equalToConstant: 34),
+                                     mark.centerXAnchor.constraint(equalTo: badge.centerXAnchor), mark.centerYAnchor.constraint(equalTo: badge.centerYAnchor)])
+        let words = UIStackView(arrangedSubviews: [PorchStyle.label(ok.title, size: 17, color: PorchStyle.ink, weight: .bold), PorchStyle.label(ok.detail, size: 15, color: PorchStyle.ink)])
+        words.axis = .vertical; words.spacing = 1
+        let row = PorchListRow([badge, words], label: "\(ok.title), \(ok.detail)", action: action)
+        row.accessibilityIdentifier = "family.needsOK"
+        let bar = UIView(); bar.backgroundColor = PorchStyle.honey
+        bar.layer.cornerRadius = 14; bar.layer.cornerCurve = .continuous; bar.clipsToBounds = true
+        bar.addSubview(row); row.translatesAutoresizingMaskIntoConstraints = false
+        let inset = UIView(); inset.addSubview(bar); bar.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: bar.leadingAnchor), row.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+            row.topAnchor.constraint(equalTo: bar.topAnchor), row.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+            bar.leadingAnchor.constraint(equalTo: inset.leadingAnchor, constant: 12), bar.trailingAnchor.constraint(equalTo: inset.trailingAnchor, constant: -12),
+            bar.topAnchor.constraint(equalTo: inset.topAnchor), bar.bottomAnchor.constraint(equalTo: inset.bottomAnchor, constant: -12)
+        ])
+        return inset
+    }
+    /// What needs a caregiver's OK for one family. Every visit starts with the PIN.
+    private func openReview(for credential: FamilyCredential) {
         guard FamilyCoordinator.shared.state(for: credential)?.me.caregiver == true else {
             let alert = UIAlertController(title: "Caregiver mode isn't on for you", message: "Ask the caregiver to turn it on for you.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true); return
         }
-        navigationController?.pushViewController(RemoteCaregiverPINViewController(family: credential), animated: true)
+        navigationController?.pushViewController(RemoteCaregiverPINViewController(family: credential, opens: .needsOK), animated: true)
     }
-}
-
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 /// The You tab: this phone's families, each with its own page, joining another, and this phone's own settings.

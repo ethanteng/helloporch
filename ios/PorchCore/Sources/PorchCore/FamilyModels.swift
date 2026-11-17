@@ -260,6 +260,10 @@ public struct FamilySnapshot: Codable, Equatable {
     public let ringSeconds: Int?
     /// Family devices: messages the bedside left for this device that haven't been played.
     public let newMessages: Int?
+    /// Family devices: this device's own messages still waiting on the bedside to be played. Older servers don't send it.
+    public let waitingMessages: Int?
+    /// Family devices: when the bedside last played one of this device's messages, in server time. Not sent before it has.
+    public let messagePlayedAt: TimeInterval?
     /// Bedside only: natural announcement voices. Older servers, and ones without a speech service, don't send them.
     public let speech: NaturalVoices?
     /// Bedside only: the bedside language as the server last heard it; phone voicemail greets callers in it. Older servers don't send it.

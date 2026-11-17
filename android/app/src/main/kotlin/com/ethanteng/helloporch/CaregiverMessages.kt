@@ -6,6 +6,21 @@ import android.icu.text.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +50,7 @@ import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyMessage
 import com.ethanteng.helloporch.core.FamilyText
 import com.ethanteng.helloporch.core.MessageAutoplay
+import com.ethanteng.helloporch.core.PorchExperience
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
@@ -160,8 +176,19 @@ private fun needsOK(held: Int) = if (held == 1) "1 needs" else "$held need"
  * the PIN-checked review can read, and a held one can be let through only once they're shown.
  */
 @Composable
-private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onDone: () -> Unit) {
-    BackHandler(onBack = onDone)
+private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onDone: () -> Unit) = WaitingMessagesScreen(admin, links, needsOK = false, onDone)
+
+/** Only what's held for a caregiver, opened from a Messages card on a family phone, as iOS's MessageQueueViewController
+ * with `needsOK`: each with Approve and Remove side by side, and the rest of the queue a row below. */
+@Composable
+fun NeedsYourOKScreen(admin: CaregiverAdmin, links: FamilyLinks, onDone: () -> Unit) = WaitingMessagesScreen(admin, links, needsOK = true, onDone)
+
+@Composable
+private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, needsOK: Boolean, onDone: () -> Unit) {
+    // From Needs your OK, everything waiting opens over it and Back returns there.
+    var all by rememberSaveable { mutableStateOf(false) }
+    val back = { if (needsOK && all) all = false else onDone() }
+    BackHandler(onBack = back)
     val state = admin.state(links)
     val messages = state?.messages.orEmpty()
     val texts = state?.texts.orEmpty()
@@ -204,7 +231,47 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
             }
         }
     }
-    FormScreen("Waiting messages", navigation = { TextButton(onClick = onDone) { Text("Back") } }) {
+    FormScreen(if (needsOK && !all) "Needs your OK" else "Waiting messages", navigation = { TextButton(onClick = back) { Text("Back") } }) {
+        if (needsOK && !all) {
+            val heldTexts = texts.filter { it.held }.sortedBy { it.sentAt }
+            val heldMessages = messages.filter { it.held == true }.sortedBy { it.sentAt }
+            if (heldTexts.isEmpty() && heldMessages.isEmpty()) Text("Nothing needs your OK.", style = MaterialTheme.typography.bodyLarge)
+            for (text in heldTexts) {
+                OKCard(R.drawable.ic_forum, "Text", "${senderName(text.from)} · ${whenSent(text.sentAt)}", "Not on the keypad") {
+                    TextWords(text, words[text.id], text.id in answered, wordsFailed)
+                    // Not until the words are here: otherwise Approve OKs a text the caregiver hasn't read.
+                    ApproveRemove(enabled = !admin.busy, onApprove = if (words[text.id] != null) ({
+                        admin.perform("releaseText", mapOf("textID" to JsonPrimitive(text.id)))
+                    }) else null, onRemove = { removing = text })
+                }
+            }
+            for (message in heldMessages) {
+                val why = when {
+                    message.callerNumber == null -> null
+                    message.callerVerified == true -> "Not on the keypad"
+                    else -> "Number couldn't be checked"
+                }
+                val length = "%d:%02d".format(Locale.US, message.durationSeconds / 60, message.durationSeconds % 60)
+                OKCard(R.drawable.ic_waveform, "Phone voicemail · $length", "${message.callerNumber?.let(::displayNumber) ?: "Hidden number"} · ${whenSent(message.sentAt)}", why) {
+                    FormButton("Listen", { listen(message) }, filled = false, icon = R.drawable.ic_play_arrow)
+                    ApproveRemove(enabled = !admin.busy, onApprove = {
+                        admin.perform("releaseMessage", mapOf("messageID" to JsonPrimitive(message.id)))
+                    }, onRemove = { removing = message })
+                }
+            }
+            val total = messages.size + texts.size
+            if (total > heldTexts.size + heldMessages.size) {
+                val porch = admin.snapshot(links)?.people?.firstOrNull { it.role == PorchExperience.BEDSIDE }?.name?.let { "$it’s Porch" } ?: "Porch"
+                CaregiverGroup {
+                    CaregiverRow(onClick = { all = true }, label = "Everything waiting on $porch, $total") {
+                        Text("Everything waiting on $porch", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Text("$total", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("›", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            return@FormScreen
+        }
         if (messages.isEmpty() && texts.isEmpty()) Text("No messages are waiting.", style = MaterialTheme.typography.bodyLarge)
         // Held texts first, then held phone voicemail: they're what needs a decision.
         for (text in texts.filter { it.held }.sortedBy { it.sentAt }) {
@@ -215,7 +282,7 @@ private fun WaitingMessagesScreen(admin: CaregiverAdmin, links: FamilyLinks, onD
                 ActionRow(if (message.held == true) "Listen first" else "Preview") { listen(message) }
                 if (message.held == true) {
                     HorizontalDivider()
-                    ActionRow("Let it play on Porch", enabled = !admin.busy) {
+                    ActionRow("Approve", enabled = !admin.busy) {
                         admin.perform("releaseMessage", mapOf("messageID" to JsonPrimitive(message.id)))
                     }
                 }
@@ -247,6 +314,22 @@ private fun TextSection(admin: CaregiverAdmin, text: FamilyText, bedside: String
     val state = if (text.held) "Waiting for your OK: number isn't saved on the keypad" else if (text.delivered) "Ready on the $bedside" else "Not on the $bedside yet"
     CaregiverGroup("Text from ${senderName(text.from)}", "Sent ${whenSent(text.sentAt)} · $state") {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextWords(text, loaded, answered, failed)
+        }
+        // Not until the words are here: otherwise Approve OKs a text the caregiver hasn't read.
+        if (text.held && loaded != null) {
+            HorizontalDivider()
+            ActionRow("Approve", enabled = !admin.busy) { admin.perform("releaseText", mapOf("textID" to JsonPrimitive(text.id))) }
+        }
+        HorizontalDivider()
+        RemoveRow(enabled = !admin.busy, onClick = onRemove)
+    }
+}
+
+/** A text's words as the bedside will show them, or why they aren't here. */
+@Composable
+private fun TextWords(text: FamilyText, loaded: FamilyText?, answered: Boolean, failed: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
                 loaded != null -> {
                     loaded.body?.takeIf { it.isNotEmpty() }?.let { Text("“$it”", style = MaterialTheme.typography.bodyLarge) }
@@ -267,14 +350,38 @@ private fun TextSection(admin: CaregiverAdmin, text: FamilyText, bedside: String
             if (others > 0) Text(if (others == 1) "It came with an attachment, such as a contact card or voice clip, which Porch doesn't show yet."
                 else "It came with $others attachments, such as contact cards or voice clips, which Porch doesn't show yet.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** One item that needs a caregiver's OK: what it is, from whom and when, why it's held, and what to do with it. */
+@Composable
+private fun OKCard(@DrawableRes icon: Int, title: String, detail: String, why: String?, content: @Composable ColumnScope.() -> Unit) {
+    Surface(shape = RoundedCornerShape(16.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(40.dp).clip(CircleShape).background(PorchBrand.honey), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(icon), contentDescription = null, Modifier.size(22.dp), tint = PorchBrand.ink)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            why?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = PorchBrand.waiting) }
+            content()
         }
-        // Not until the words are here: otherwise Let it show approves a text the caregiver hasn't read.
-        if (text.held && loaded != null) {
-            HorizontalDivider()
-            ActionRow("Let it show on Porch", enabled = !admin.busy) { admin.perform("releaseText", mapOf("textID" to JsonPrimitive(text.id))) }
+    }
+}
+
+/** Approve and Remove side by side, as wide as each other. Without `onApprove`, Remove alone. */
+@Composable
+private fun ApproveRemove(enabled: Boolean, onApprove: (() -> Unit)?, onRemove: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (onApprove != null) FormButton("Approve", onApprove, Modifier.weight(1f), enabled = enabled, icon = R.drawable.ic_check)
+        OutlinedButton(onClick = onRemove, modifier = Modifier.weight(1f).heightIn(min = 50.dp), enabled = enabled) {
+            Text("Remove", style = MaterialTheme.typography.titleMedium,
+                color = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        HorizontalDivider()
-        RemoveRow(enabled = !admin.busy, onClick = onRemove)
     }
 }
 

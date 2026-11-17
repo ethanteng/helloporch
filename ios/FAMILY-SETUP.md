@@ -65,7 +65,7 @@ Each family phone has one **Messages with Mom** thread, oldest at the top like a
 
 In **Messages**, caregivers (on the iPad, or from an approved phone with the PIN) can turn messages off, and preview or remove any waiting message. Removing a family member's access also removes their unplayed messages.
 
-People calling the Porch phone number from a regular phone can leave voicemail too (setup: [incoming phone calls](INBOUND-PHONE-CALLS.md#voicemail)). If the caller's number is saved on a bedside keypad contact and the phone company verified the caller ID, it plays like any other message, announced with that contact's name. Caller ID can be faked, so unverified calls always wait for a caregiver. Otherwise it waits for a caregiver: approved caregivers see "phone voicemail needs your review" on their Porch screen, and **Let it play on Porch** or **Remove** in the waiting list.
+People calling the Porch phone number from a regular phone can leave voicemail too (setup: [incoming phone calls](INBOUND-PHONE-CALLS.md#voicemail)). If the caller's number is saved on a bedside keypad contact and the phone company verified the caller ID, it plays like any other message, announced with that contact's name. Caller ID can be faked, so unverified calls always wait for a caregiver. Otherwise it waits for a caregiver: approved caregivers see "1 needs your OK" on that person's card in Messages, which opens **Approve** or **Remove** after the PIN.
 
 ### Messages from the bedside
 

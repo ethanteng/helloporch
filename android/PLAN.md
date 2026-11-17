@@ -455,7 +455,7 @@ Calls can be tried locally with LiveKit's server in dev mode; see [android/READM
     - Call and Video;
     - Drop in, which asks audio or video when both are approved.
   - Drop-in buttons show only when drop-in is on and the person has permission, and work only when the bedside is online and not busy.
-  - Messages: N texts or voicemails need your review (`heldMessages` + `heldTexts`), then one thread per family with its new messages.
+  - Messages: one card per family's bedside with its new messages, this phone's messages not played yet (`waitingMessages`), or when the last was played (`messagePlayedAt`). Caregivers also get a "N need your OK" bar (`heldMessages` + `heldTexts`) that opens Needs your OK after the PIN.
   - You: the families, each with its own page (name and photo, family name, caregiver mode, Porch number, Leave), Join another family, and this phone's settings.
 - **Outgoing call.**
   1. `startCall`.

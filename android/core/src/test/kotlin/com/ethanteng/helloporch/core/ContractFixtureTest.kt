@@ -24,6 +24,7 @@ class ContractFixtureTest {
         assertEquals(listOf(bedside.serverTime, bedside.serverTime), bedside.people.map { it.joinedAt })
         val family = snapshot("family-poll")
         assertEquals(true, family.me.caregiver); assertNull(family.call)
+        assertEquals(0, family.waitingMessages); assertNull(family.messagePlayedAt)
         val ringing = snapshot("family-incoming-call")
         assertEquals("pending", ringing.call?.state); assertEquals("Mom", ringing.call?.callerName)
         // An answered call has no time limit: Number.MAX_SAFE_INTEGER, more than 32 bits.

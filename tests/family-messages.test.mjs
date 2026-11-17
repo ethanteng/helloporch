@@ -51,6 +51,34 @@ async function fixture() {
   return { store, media, send, json, bedside, ethan, sam, sendMessage, queue, sent, leaveMessage, received, unheard, alerts, alertResult, advance: s => now += s };
 }
 
+test('each family member sees how many of their messages are still waiting, and when one was last played',async()=>{
+  const f=await fixture();
+  const state = async who => (await f.json('poll',{available:true},who.credential)).state;
+  assert.equal((await state(f.ethan)).waitingMessages,0);
+  assert.equal((await state(f.ethan)).messagePlayedAt,undefined);
+  const first=await f.sendMessage(f.ethan), second=await f.sendMessage(f.ethan);
+  await f.sendMessage(f.sam);
+  assert.equal((await state(f.ethan)).waitingMessages,2);
+  assert.equal((await state(f.sam)).waitingMessages,1);
+  f.advance(60);
+  await f.json('messagePlayed',{messageID:first.id},f.bedside.credential);
+  const after=await state(f.ethan);
+  assert.equal(after.waitingMessages,1);
+  assert.equal(after.messagePlayedAt,1_800_000_060);
+  assert.equal((await state(f.sam)).messagePlayedAt,undefined,'only the sender learns it was played');
+  await f.json('unsendMessage',{messageID:second.id},f.ethan.credential);
+  assert.equal((await state(f.ethan)).waitingMessages,0);
+  // An unsend that lands while the bedside is reporting a play: the record has ended, the bedside's row is still there.
+  const third=await f.sendMessage(f.ethan);
+  const key=`messages:${f.bedside.state.householdID}:${f.ethan.state.me.id}`, doc=JSON.parse(f.store.values.get(key));
+  doc.records.find(r=>r.id===third.id).state='unsent';
+  f.store.values.set(key,JSON.stringify(doc));
+  f.advance(60);
+  await f.json('messagePlayed',{messageID:third.id},f.bedside.credential);
+  assert.equal((await state(f.ethan)).messagePlayedAt,1_800_000_060,'an unsent message was never played');
+  assert.equal((await f.json('poll',{available:true},f.bedside.credential)).state.waitingMessages,undefined,'the bedside has its own queue');
+});
+
 test('a family message is uploaded, queued, delivered and played, then kept as a record',async()=>{
   const f=await fixture();
   const created=await f.json('createMessage',{mode:'video',kind:'message',contentType:'video/quicktime',sizeBytes:5_000_000,durationSeconds:61.4},f.ethan.credential);
