@@ -79,21 +79,24 @@ jobs:
           # A Porch that has never been set up opens on its welcome screen, whatever the preview flags ask for.
           xcrun simctl spawn "$device_id" defaults write com.ethanteng.helloporch porch.experience bedside
           mkdir -p ios/build/screenshots
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-day.png --preview-dynamic --preview-hour 10
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-dawn.png --preview-dynamic --preview-hour 6
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-sunset.png --preview-dynamic --preview-hour 17
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-night.png --preview-dynamic --preview-hour 22
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver-calls.png --preview-six --preview-caregiver --preview-caregiver-page calls
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver-person.png --preview-six --preview-caregiver --preview-caregiver-key 1
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people-chinese.png --preview-six --preview-people --preview-chinese --family-silent
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock-chinese.png --preview-chinese --family-silent
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-chinese.png --preview-dynamic --preview-chinese --preview-hour 10 --family-silent
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-touch-keyboard
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-system-keyboard --preview-hardware-keyboard
+          # Capture every screen before failing, so one run shows each screen that didn't pass.
+          failed=0
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-day.png --preview-dynamic --preview-hour 10 || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-dawn.png --preview-dynamic --preview-hour 6 || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-sunset.png --preview-dynamic --preview-hour 17 || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-night.png --preview-dynamic --preview-hour 22 || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver.png --preview-six --preview-caregiver || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver-calls.png --preview-six --preview-caregiver --preview-caregiver-page calls || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/caregiver-person.png --preview-six --preview-caregiver --preview-caregiver-key 1 || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/pin-setup.png --preview-pin-setup || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people.png --preview-six --preview-people || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/people-chinese.png --preview-six --preview-people --preview-chinese --family-silent || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock-chinese.png --preview-chinese --family-silent || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-chinese.png --preview-dynamic --preview-chinese --preview-hour 10 --family-silent || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-touch-keyboard || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-system-keyboard --preview-hardware-keyboard || failed=1
+          exit "$failed"
       - name: Save the iPad screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -145,8 +148,11 @@ jobs:
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
           xcrun simctl spawn "$device_id" defaults write com.ethanteng.helloporch porch.experience family
           mkdir -p ios/build/screenshots
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png
-          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-settings-iphone.png --preview-profile
+          # Capture every screen before failing, so one run shows each screen that didn't pass.
+          failed=0
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png || failed=1
+          bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-settings-iphone.png --preview-profile || failed=1
+          exit "$failed"
       - name: Save the iPhone screenshots
         if: always()
         uses: actions/upload-artifact@v4
