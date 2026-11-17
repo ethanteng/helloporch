@@ -713,13 +713,28 @@ final class MessageQueueViewController: CaregiverFormViewController {
         loadWords()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
-    /// As in caregiver mode: withdrawn approval, a removed phone or the idle timeout locks right away.
+    private var locked = false
+    /// As in caregiver mode: withdrawn approval or a removed phone locks right away and says why; the idle timeout
+    /// locks quietly.
     @objc private func familyChanged() {
-        guard needsOK, let remote else { return }
+        guard needsOK, !locked, let remote else { return }
         let link = FamilyCoordinator.shared.link(for: remote)
-        guard link?.accessRemoved == true || link?.state?.me.caregiver == false || !RemoteCaregiverSession.shared.isActive else { return }
+        let withdrawn = link?.accessRemoved == true || link?.state?.me.caregiver == false
+        guard withdrawn || !RemoteCaregiverSession.shared.isActive else { return }
+        locked = true
         RemoteCaregiverSession.shared.end()
-        navigationController?.popToRootViewController(animated: true)
+        guard let navigation = navigationController, let home = navigation.viewControllers.first else { return }
+        CATransaction.begin()
+        CATransaction.setCompletionBlock {
+            if withdrawn { showPorchError(FamilyServiceError(message: "Caregiver mode is no longer available on this phone.", status: 403), on: home) }
+        }
+        navigation.popToRootViewController(animated: true)
+        CATransaction.commit()
+    }
+    /// Approve and Remove sit side by side, or one over the other with large text.
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        if needsOK, previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory { render() }
     }
     private func loadWords() {
         guard !texts.isEmpty else { return }

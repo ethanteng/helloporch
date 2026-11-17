@@ -415,17 +415,19 @@ export async function handleMessageAction(action: string, { store, media, now, h
   }
   if (action === "messagePlayed") {
     const purgeAt = now + messageLimits.keepMediaSeconds;
-    await updateSent(store, house.id, entry.from, records => {
+    // Not when an unsend or a caregiver's Remove got there first: that record ended without being played.
+    const played = await updateSent(store, house.id, entry.from, records => {
       const r = records.find(r => r.id === id);
       if (r?.state === "queued") { r.state = "played"; r.playedAt = now; r.deliveredAt ??= now; }
+      return r?.state === "played";
     });
     await schedulePurge(store, house.id, [entry.pathname], purgeAt);
     await mutate(store, house.id, current => {
+      // So the sender's Messages tab can say when the bedside last played one of theirs.
+      const sender = played && current.inbox?.some(e => e.id === id) ? current.members.find(m => m.id === entry.from) : undefined;
+      if (sender) sender.messagePlayedAt = now;
       current.inbox = (current.inbox ?? []).filter(e => e.id !== id);
       current.purgeAt = Math.min(current.purgeAt ?? purgeAt, purgeAt);
-      // So the sender's Messages tab can say when the bedside last played one of theirs.
-      const sender = current.members.find(m => m.id === entry.from);
-      if (sender) sender.messagePlayedAt = now;
     });
     return { ok: true };
   }

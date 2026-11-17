@@ -68,6 +68,14 @@ test('each family member sees how many of their messages are still waiting, and 
   assert.equal((await state(f.sam)).messagePlayedAt,undefined,'only the sender learns it was played');
   await f.json('unsendMessage',{messageID:second.id},f.ethan.credential);
   assert.equal((await state(f.ethan)).waitingMessages,0);
+  // An unsend that lands while the bedside is reporting a play: the record has ended, the bedside's row is still there.
+  const third=await f.sendMessage(f.ethan);
+  const key=`messages:${f.bedside.state.householdID}:${f.ethan.state.me.id}`, doc=JSON.parse(f.store.values.get(key));
+  doc.records.find(r=>r.id===third.id).state='unsent';
+  f.store.values.set(key,JSON.stringify(doc));
+  f.advance(60);
+  await f.json('messagePlayed',{messageID:third.id},f.bedside.credential);
+  assert.equal((await state(f.ethan)).messagePlayedAt,1_800_000_060,'an unsent message was never played');
   assert.equal((await f.json('poll',{available:true},f.bedside.credential)).state.waitingMessages,undefined,'the bedside has its own queue');
 });
 
