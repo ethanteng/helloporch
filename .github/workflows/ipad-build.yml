@@ -76,6 +76,8 @@ jobs:
         run: |
           device_id="$PORCH_SIMULATOR_ID"
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
+          # A Porch that has never been set up opens on its welcome screen, whatever the preview flags ask for.
+          xcrun simctl spawn "$device_id" defaults write com.ethanteng.helloporch porch.experience bedside
           mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/clock.png
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/dynamic-day.png --preview-dynamic --preview-hour 10
@@ -93,6 +95,7 @@ jobs:
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-touch-keyboard
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/native-keyboard.png --preview-six --preview-caregiver --preview-caregiver-key 1 --preview-system-keyboard --preview-hardware-keyboard
       - name: Save the iPad screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Porch-iPad-screenshots
@@ -140,10 +143,12 @@ jobs:
         run: |
           device_id="$PORCH_SIMULATOR_ID"
           xcrun simctl install "$device_id" ios/build/simulator/Build/Products/Debug-iphonesimulator/Porch.app
+          xcrun simctl spawn "$device_id" defaults write com.ethanteng.helloporch porch.experience family
           mkdir -p ios/build/screenshots
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-iphone.png
           bash ios/scripts/capture-preview.sh "$device_id" ios/build/screenshots/family-settings-iphone.png --preview-profile
       - name: Save the iPhone screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Porch-iPhone-screenshot
