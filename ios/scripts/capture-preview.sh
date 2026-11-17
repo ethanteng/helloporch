@@ -3,8 +3,6 @@ set -euo pipefail
 device_id="$1"
 output="$2"
 shift 2
-scene_check="default"
-if [[ " $* " == *" --preview-dynamic "* ]]; then scene_check="dynamic"; fi
 # Interpreting the Swift checker costs seconds per screenshot; compile it once.
 checker="ios/build/check-preview"
 if [[ ! -x "$checker" || ios/scripts/check-preview.swift -nt "$checker" ]]; then
@@ -13,11 +11,7 @@ if [[ ! -x "$checker" || ios/scripts/check-preview.swift -nt "$checker" ]]; then
   mv "$checker.$$" "$checker"
 fi
 check_preview() {
-  if [[ "$scene_check" == "dynamic" ]]; then
-    "$checker" "$output" --dynamic
-  else
-    "$checker" "$output"
-  fi
+  "$checker" "$output"
 }
 # Poll every 2 s for about 10 s per launch instead of sleeping 10 s. Keep the
 # screenshot only when two polls in a row pass, so a mid-launch frame is not kept.
