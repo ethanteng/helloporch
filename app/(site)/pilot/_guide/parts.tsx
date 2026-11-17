@@ -219,8 +219,8 @@ export function Screenshot({ src, alt, width, height, device, caption }: {
 }
 
 /**
- * A short video of a few steps in Porch, from public/pilot/videos/<name>.mp4 with its poster <name>.jpg. Its captions
- * are part of the picture, so it has no sound and needs no caption track. It loads only when played.
+ * A short video of a few steps in Porch, from public/pilot/videos/<name>.mp4 with its poster <name>.jpg. It shows only
+ * the screens and taps, with no words or sound, so it needs no caption track. It loads only when played.
  */
 export function StepVideo({ name, label, caption }: { name: string; label: string; caption?: ReactNode }) {
   const src = `/pilot/videos/${name}.mp4`;
