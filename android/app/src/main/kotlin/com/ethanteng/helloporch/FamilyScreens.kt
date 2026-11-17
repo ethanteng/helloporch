@@ -92,6 +92,16 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ButtonDefaults
 import com.ethanteng.helloporch.core.EveryCallDropIn
+import com.ethanteng.helloporch.core.BedsideCall
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Color
 
 /** Family mode's screens: joining a family from an invitation, then three tabs, as on iOS (FamilyTabs.swift): Call, with
  * a card for each family's bedside; Messages, with one thread for each; and You, with this phone's families, each with a
@@ -455,22 +465,23 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
         if (needed.isEmpty()) app.calls.call(call.person, call.mode, call.family, call.dropIn)
         else { request = call; permissions.launch(needed.toTypedArray()) }
     }
-    // Turning off Every call from a family's card, by device ID while it's on its way: a caregiver needs no PIN for it.
+    // A caregiver's change from a family's card, which needs no PIN: turning off Every call, or ending the bedside's phone
+    // call. `working` says which, as "<device ID>:<action>", while it's on its way.
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var turningOff by remember { mutableStateOf<String?>(null) }
-    val turnOff = { family: FamilyCredential ->
-        turningOff = family.deviceID
+    var working by remember { mutableStateOf<String?>(null) }
+    val act = { family: FamilyCredential, action: String, values: Map<String, JsonElement>, done: String ->
+        working = "${family.deviceID}:$action"
         scope.launch {
             try {
-                app.coordinator.update(app.service(family).send("turnOffEveryCall"))
-                snackbar.showSnackbar("Every call is off")
+                app.coordinator.update(app.service(family).send(action, values))
+                snackbar.showSnackbar(done)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 app.calls.error = e.message ?: "Couldn't reach Porch. Check the connection and try again."
             } finally {
-                turningOff = null
+                working = null
             }
         }
     }
@@ -487,9 +498,17 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
                 val (status, present) = familyStatus(link)
                 Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), tonalElevation = 2.dp) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        // Caregivers see when every call drops in, and can turn it off here.
-                        val everyCall = state?.everyCall?.takeIf { state.me.caregiver == true && link?.accessRemoved != true }
-                        if (everyCall != null) EveryCallBanner(everyCall, bedsideDevice(state), busy = turningOff == family.deviceID) { turnOff(family) }
+                        // Caregivers see when every call drops in, and can turn it off here. A phone call that started while it
+                        // was on shows under it, even once it's off, and can be ended here.
+                        val caregiver = state?.me?.caregiver == true && link.accessRemoved != true
+                        val everyCall = state?.everyCall?.takeIf { caregiver }
+                        if (everyCall != null) EveryCallBanner(everyCall, bedsideDevice(state), busy = working == "${family.deviceID}:turnOffEveryCall") {
+                            act(family, "turnOffEveryCall", emptyMap(), "Every call is off")
+                        }
+                        val call = state?.bedsideCall?.takeIf { caregiver }
+                        if (state != null && call != null) BedsideCallStrip(call, state.serverTime, busy = working == "${family.deviceID}:endBedsideCall") {
+                            act(family, "endBedsideCall", mapOf("callID" to JsonPrimitive(call.id)), "Call ended")
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(name, size = 56.dp)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -545,6 +564,36 @@ private fun EveryCallBanner(everyCall: EveryCallDropIn, bedside: String, busy: B
             OutlinedButton(onClick = onTurnOff, enabled = !busy, border = BorderStroke(1.5.dp, PorchBrand.danger),
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = PorchBrand.paper, contentColor = EveryCallColors.ink)) {
                 Text("Turn off", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** A phone call to the bedside that started while every call drops in: a green dot, who's calling, whether it's dropping in,
+ * ringing or for how long it's been on, and End call. The time counts in the server's clock, as of the latest check-in. */
+@Composable
+private fun BedsideCallStrip(call: BedsideCall, serverTime: Long, busy: Boolean, onEnd: () -> Unit) {
+    val skew = remember(serverTime) { serverTime - System.currentTimeMillis() / 1000 }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis() / 1000 + skew) }
+    LaunchedEffect(call.state, skew) {
+        while (true) {
+            now = System.currentTimeMillis() / 1000 + skew
+            // Only an answered call's time moves.
+            if (call.state != "accepted") break
+            delay(1000)
+        }
+    }
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = PorchBrand.paper, border = BorderStroke(1.5.dp, PorchBrand.border)) {
+        Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(PorchBrand.go))
+            Column(Modifier.weight(1f)) {
+                Text(call.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(call.status(now), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Button(onClick = onEnd, Modifier.semantics { contentDescription = "End call with ${call.title}" }, enabled = !busy,
+                colors = ButtonDefaults.buttonColors(containerColor = PorchBrand.danger, contentColor = Color.White)) {
+                Text("End call", fontWeight = FontWeight.Bold)
             }
         }
     }

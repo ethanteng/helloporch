@@ -183,3 +183,96 @@ test('while every call is on, a phone call drops in when the carrier verified it
     assert.equal(call.mode, 'voice');
   }
 });
+
+test('every caregiver hears about each phone call while every call is on, with its number', async () => {
+  const cases = [
+    { caller: '+14155550200', attributes: verified, title: 'Dropping in on Mom', body: '(415) 555-0200 · Unknown number' },
+    { caller: '+14155550200', attributes: {}, title: 'Calling Mom', body: '(415) 555-0200 · Not verified' },
+    { caller: '+14155550300', attributes: verified, title: 'Dropping in on Mom', body: '(415) 555-0300 · On Mom’s keypad' },
+    { caller: '+14155550400', attributes: verified, title: 'Dropping in on Mom', body: 'David · (415) 555-0400' },
+    // An approved name is never given to a caller ID that wasn't verified.
+    { caller: '+14155550400', attributes: {}, title: 'Calling Mom', body: '(415) 555-0400 · Not verified' },
+    { caller: 'anonymous', attributes: verified, title: 'Calling Mom', body: 'Hidden number' },
+    { caller: '+447700900123', attributes: verified, title: 'Dropping in on Mom', body: '+447700900123 · Unknown number' },
+  ];
+  for (const { caller, attributes, title, body } of cases) {
+    const f = fixture(), bedside = await f.setup();
+    const tom = await f.join(bedside, 'Tom', { caregiver: true }), linda = await f.join(bedside, 'Linda', { caregiver: true });
+    const lee = await f.join(bedside, 'Lee');
+    await f.alerts(tom, 1); await f.alerts(linda, 2); await f.alerts(lee, 3);
+    await f.json('setKeypadNumbers', { numbers: ['+14155550300'] }, bedside.credential, legacy);
+    await f.json('setPhoneDropIn', { number: '+14155550400', name: 'David', enabled: true }, bedside.credential, legacy);
+    await f.json('setDropInMode', { mode: 'everyCall' }, tom.credential, '123456');
+    await f.json('poll', { available: true }, bedside.credential);
+    f.notices.length = 0;
+    const event = f.phoneCall(caller, attributes);
+    await f.webhook(event);
+    // A retried webhook doesn't tell anyone twice.
+    await f.webhook(event);
+    const call = f.house(bedside).call;
+    // Whoever turned it on hears too; family who aren't caregivers don't.
+    assert.deepEqual(f.notices.map(n => n.recipientID).sort(), [tom.state.me.id, linda.state.me.id].sort(), caller);
+    for (const notice of f.notices) assert.deepEqual({ type: notice.type, callID: notice.callID, title: notice.title, body: notice.body },
+      { type: 'callNotice', callID: call.id, title, body }, JSON.stringify({ caller, attributes }));
+  }
+});
+
+test('no call notices while every call is off', async () => {
+  const f = fixture(), bedside = await f.setup(), tom = await f.join(bedside, 'Tom', { caregiver: true });
+  await f.alerts(tom, 1);
+  await f.webhook(f.phoneCall('+14155550200', verified));
+  assert.equal(f.notices.length, 0);
+  assert.equal((await f.json('poll', { available: true }, tom.credential)).state.bedsideCall, undefined);
+});
+
+test('caregivers see the call live and end it without the PIN', async () => {
+  const f = fixture(), bedside = await f.setup();
+  const tom = await f.join(bedside, 'Tom', { caregiver: true }), lee = await f.join(bedside, 'Lee');
+  await f.json('setPhoneDropIn', { number: '+14155550200', name: 'David', enabled: true }, bedside.credential, legacy);
+  await f.json('setDropInMode', { mode: 'everyCall' }, bedside.credential, '123456');
+  await f.json('poll', { available: true }, bedside.credential);
+  const event = f.phoneCall('+14155550200', verified);
+  await f.webhook(event);
+  const id = f.house(bedside).call.id;
+  assert.deepEqual((await f.json('poll', { available: true }, tom.credential)).state.bedsideCall, { id, title: 'David', kind: 'dropIn', state: 'pending' });
+  assert.equal((await f.json('poll', { available: true }, lee.credential)).state.bedsideCall, undefined);
+  await f.json('poll', { available: true }, bedside.credential);
+  f.advance(5);
+  await f.json('acceptCall', { callID: id, available: true }, bedside.credential);
+  assert.deepEqual((await f.json('poll', { available: true }, tom.credential)).state.bedsideCall, { id, title: 'David', kind: 'dropIn', state: 'accepted', acceptedAt: f.now() });
+  // An approved number's call goes on after every call is turned off, and stays on the Call tab to be ended.
+  await f.json('turnOffEveryCall', {}, tom.credential);
+  assert.equal(f.house(bedside).call.state, 'accepted');
+  assert.equal((await f.send('endBedsideCall', { callID: id }, lee.credential)).status, 403);
+  assert.equal((await f.send('endBedsideCall', { callID: id }, bedside.credential)).status, 403);
+  await f.json('endBedsideCall', { callID: randomUUID() }, tom.credential);
+  assert.equal(f.house(bedside).call.state, 'accepted');
+  const ended = await f.json('endBedsideCall', { callID: id }, tom.credential);
+  assert.equal(ended.state.bedsideCall, undefined);
+  assert.equal(f.house(bedside).call.state, 'ended');
+  assert.ok(f.ended.includes(event.room.name));
+  // From the notice after it's over: nothing to do.
+  await f.json('endBedsideCall', { callID: id }, tom.credential);
+});
+
+test('a phone call that came in before every call was turned on can’t be ended from a caregiver’s phone', async () => {
+  const f = fixture(), bedside = await f.setup(), tom = await f.join(bedside, 'Tom', { caregiver: true });
+  await f.webhook(f.phoneCall('+14155550200', verified));
+  const id = f.house(bedside).call.id;
+  await f.json('setDropInMode', { mode: 'everyCall' }, bedside.credential, '123456');
+  assert.equal((await f.json('poll', { available: true }, tom.credential)).state.bedsideCall, undefined);
+  await f.json('endBedsideCall', { callID: id }, tom.credential);
+  assert.equal(f.house(bedside).call.state, 'pending');
+});
+
+test('turning every call off ends an unknown number’s drop-in', async () => {
+  const f = fixture(), bedside = await f.setup(), tom = await f.join(bedside, 'Tom', { caregiver: true });
+  await f.json('setDropInMode', { mode: 'everyCall' }, bedside.credential, '123456');
+  await f.json('poll', { available: true }, bedside.credential);
+  const event = f.phoneCall('+14155550200', verified);
+  await f.webhook(event);
+  assert.equal((await f.json('poll', { available: true }, tom.credential)).state.bedsideCall.title, '(415) 555-0200');
+  await f.json('turnOffEveryCall', {}, tom.credential);
+  assert.equal(f.house(bedside).call.state, 'ended');
+  assert.ok(f.ended.includes(event.room.name));
+});

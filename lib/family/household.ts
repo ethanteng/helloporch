@@ -30,11 +30,13 @@ export type Invite = { id: string; secretHash: string; name: string; permissions
  * a ring that runs out does not, so call history can tell declined from missed (see call-log.ts).
  * `peerName`: what Porch called the person on the other end from the bedside when the call started, their name or an
  * approved phone number's, so a later rename or removal doesn't change the call in history.
- * `expiresAt`: when a call still ringing stops ringing. An answered call has no time limit: it's `noCallLimit`. */
+ * `expiresAt`: when a call still ringing stops ringing. An answered call has no time limit: it's `noCallLimit`.
+ * `everyCall`: a phone call that came in while every call dropped in, which caregivers are told about and can end;
+ * `verified` says whether the carrier verified its caller ID. */
 export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
   guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string; peerName?: string;
   /** Live translation on this call (translation.ts). Every call starts without it. */
-  translation?: CallTranslation };
+  translation?: CallTranslation; everyCall?: { verified: boolean } };
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
  * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
 export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;
@@ -212,6 +214,11 @@ export function activePhoneGuest(call?: Call): PhoneGuest | undefined { return c
 export function phoneGuestIdentity(guest: PhoneGuest): string { return `phone-guest-${guest.id}`; }
 export function phoneDropIn(house: Household, number?: string): PhoneDropIn | undefined {
   return number ? house.phoneDropIns?.find(p => p.number === number) : undefined;
+}
+/** A phone number as people write it: (510) 555-0162 for the US and Canada, otherwise as dialed with +. */
+export function displayPhone(number: string): string {
+  const us = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(number);
+  return us ? `(${us[1]}) ${us[2]}-${us[3]}` : number;
 }
 /** Whether every call to the bedside drops in now, approved or not. */
 export function everyCallOn(house: Household): boolean { return house.dropInEnabled && !!house.everyCall; }

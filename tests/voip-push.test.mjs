@@ -113,6 +113,11 @@ test('every-call notices are plain notifications without a badge, in their own t
   assert.equal(headers['apns-push-type'],'alert'); assert.equal(headers['apns-expiration'],String(1800000000+86400));
   assert.match(headers['apns-id'],/^[a-f0-9-]{36}$/);
   assert.deepEqual(body,{aps:{alert:{title:notice.title,body:notice.body},sound:'default','thread-id':`porch-everycall-${notice.recipientID}`},type:'everyCall',recipientID:notice.recipientID});
+  // A call's notice carries the call to end, and End call and Turn off as its category's actions, for an hour.
+  const call={type:'callNotice',recipientID:notice.recipientID,callID:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',title:'Dropping in on Mom',body:'(510) 555-0162 · Unknown number'};
+  assert.equal((await sendNoticePush({token:'cd'.repeat(32),environment:'sandbox'},call,session,1800000000)).delivered,true);
+  assert.equal(received[1].headers['apns-expiration'],String(1800000000+3600));
+  assert.deepEqual(received[1].body,{aps:{alert:{title:call.title,body:call.body},sound:'default','thread-id':`porch-everycall-${call.recipientID}`,category:'PORCH_CALL_NOTICE'},type:'callNotice',recipientID:call.recipientID,callID:call.callID});
  } finally {
   server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
   keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);
@@ -220,6 +225,11 @@ test('Android every-call notices use their own channel, the newest replacing the
  assert.deepEqual(JSON.parse(google.sends()[0].options.body),{message:{token:android.token,
   data:{type:'everyCall',recipientID:notice.recipientID},
   android:{priority:'HIGH',ttl:'86400s',notification:{title:notice.title,body:notice.body,channel_id:'every-call',sound:'default',tag:`porch-everycall-${notice.recipientID}`}}}});
+ // A call's notice is data only, so Porch shows it itself with End call and Turn off.
+ const call={type:'callNotice',recipientID:notice.recipientID,callID:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',title:'Calling Mom',body:'(650) 555-0144 · Not verified'};
+ assert.equal((await sendNoticePush(android,call,undefined,1800000000,google.request)).delivered,true);
+ assert.deepEqual(JSON.parse(google.sends()[1].options.body),{message:{token:android.token,
+  data:{type:'callNotice',recipientID:call.recipientID,callID:call.callID,title:call.title,body:call.body},android:{priority:'HIGH',ttl:'3600s'}}});
 }));
 
 test('each platform pushes only when its own sender is set up',()=>withFCM(async()=>{

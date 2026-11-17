@@ -48,6 +48,22 @@ final class EveryCallTests: XCTestCase {
         XCTAssertEqual(EveryCallDropIn(by: "Tom Reyes", at: 0).who(bedsideDevice: "tablet"), "Tom")
     }
 
+    func testCaregiversSeeThePhoneCallOnTheBedsideAndHowLongItsBeenOn() throws {
+        var state = try XCTUnwrap(try fixture("family-poll")["state"] as? [String: Any])
+        XCTAssertNil(try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: state)).bedsideCall, "Older servers don't send it")
+        state["bedsideCall"] = ["id": "call-1", "title": "(510) 555-0162", "kind": "dropIn", "state": "accepted", "acceptedAt": 1_800_000_000]
+        let call = try XCTUnwrap(try JSONDecoder().decode(FamilySnapshot.self, from: JSONSerialization.data(withJSONObject: state)).bedsideCall)
+        XCTAssertEqual(call, BedsideCall(id: "call-1", title: "(510) 555-0162", kind: "dropIn", state: "accepted", acceptedAt: 1_800_000_000))
+        XCTAssertTrue(call.isConnected)
+        XCTAssertEqual(call.status(serverNow: 1_800_000_134.9), "On a call · 2:14")
+        XCTAssertEqual(call.status(serverNow: 1_799_999_990), "On a call · 0:00", "A clock a little behind never counts backwards")
+        XCTAssertEqual(BedsideCall(id: "c", title: "Carmen", kind: "dropIn", state: "pending").status(serverNow: 0), "Dropping in")
+        XCTAssertEqual(BedsideCall(id: "c", title: "Hidden number", kind: "call", state: "pending").status(serverNow: 0), "Ringing")
+        XCTAssertEqual(BedsideCall(id: "c", title: "x", kind: "call", state: "accepted").status(serverNow: 0), "On a call")
+        XCTAssertEqual(BedsideCall.duration(7), "0:07")
+        XCTAssertEqual(BedsideCall.duration(3723), "1:02:03")
+    }
+
     func testChoiceFollowsTheSwitchAndEveryCall() {
         let on = EveryCallDropIn(by: "Tom", at: 0)
         XCTAssertEqual(DropInChoice(dropInEnabled: false, everyCall: nil), .off)

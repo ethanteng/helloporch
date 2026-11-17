@@ -3,6 +3,7 @@ import { RoomServiceClient, WebhookReceiver, type ParticipantInfo, type WebhookE
 import { callJSON, type CallServer } from "../calls/server.ts";
 import { callLogEntry, recordCallAfter } from "./call-log.ts";
 import { callRoom, config, deliveryUnavailable, everyCallOn, expire, finishCall, mutate, phoneDropIn, ringLimits, ringSeconds, type Call, type Household, type InboundPhone } from "./household.ts";
+import { noticeCall, type NoticeDependencies } from "./notices.ts";
 import { blockCall, callerAllowed } from "./screening.ts";
 import { familyStore, type FamilyStore } from "./store.ts";
 import { forgetRegistration, pushConfigured, sendVoIPPush, type VoIPRegistration, type IncomingCallPush, type PushResult } from "./push.ts";
@@ -28,7 +29,7 @@ const numberPattern = /^\+[1-9][0-9]{6,14}$/;
 const sipParticipantKind = 3;
 export type InboundRoute = { householdID: string; bedsideID: string; trunkID: string };
 type Session = { householdID: string; callID: string; phone: InboundPhone };
-export type InboundDependencies = {
+export type InboundDependencies = NoticeDependencies & {
   sendPush?: (device: VoIPRegistration, call: IncomingCallPush) => Promise<PushResult>;
   store?: FamilyStore;
   now?: () => number;
@@ -166,7 +167,9 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     replaced = house.call;
     const approved = phoneDropIn(house, phone.callerNumber)?.name;
     house.call = { id: session.callID, from: `sip:${phone.participantSID}`, to: bedside.id, mode: "voice", kind: dropIn ? "dropIn" : "call",
-      state: "pending", createdAt, expiresAt, phone: session.phone, ...(approved ? { peerName: approved } : {}) };
+      state: "pending", createdAt, expiresAt, phone: session.phone, ...(approved ? { peerName: approved } : {}),
+      // Caregivers hear about every call that comes in while every call drops in, whether it drops in or rings.
+      ...(everyCallOn(house) ? { everyCall: { verified } } : {}) };
     return true;
   });
   const entry = replaced && callLogEntry(house, replaced);
@@ -176,6 +179,11 @@ async function joined(event: WebhookEvent, store: FamilyStore, now: number, depe
     return;
   }
   const call = house.call!, bedside = house.members.find(m => m.id === call.to)!;
+  // Every caregiver's phone hears about it once, so they can end it. Retries and copies share one claim, as below.
+  if (call.everyCall && await store.create(`inbound-notice:${room.sid}`, "1", 86400)) {
+    const notify = () => noticeCall(store, house, call, dependencies).catch(() => undefined);
+    if (dependencies.afterResponse) dependencies.afterResponse(notify); else await notify();
+  }
   // Webhook retries and simultaneous copies share one delivery claim. No VoIP
   // push is used for drop-ins, cancellation, accepted calls, or an ended session.
   if (call.kind !== "call" || call.state !== "pending" || !pushable(bedside.voip) ||

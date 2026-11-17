@@ -34,3 +34,23 @@ class EveryCallDropInTest {
         assertEquals("Paused", PersonRows.dropIn(paused = true, app = null, phone = false, everyCall = true))
     }
 }
+
+class BedsideCallTest {
+    /** Caregivers' snapshots carry the bedside's phone call while it rings or is connected; older servers never do. */
+    @Test fun theSnapshotCarriesTheBedsideCallOnlyWhileThereIsOne() {
+        val ringing = snapshot(extra = mapOf("bedsideCall" to mapOf("id" to "c1", "title" to "(510) 555-0162", "kind" to "dropIn", "state" to "pending")))
+        assertEquals(BedsideCall("c1", "(510) 555-0162", "dropIn", "pending"), ringing.bedsideCall)
+        val answered = snapshot(extra = mapOf("bedsideCall" to mapOf("id" to "c2", "title" to "Carmen", "kind" to "call", "state" to "accepted", "acceptedAt" to 1800000123)))
+        assertEquals(1800000123L, answered.bedsideCall?.acceptedAt)
+        assertNull(snapshot().bedsideCall)
+    }
+
+    @Test fun saysWhetherItsDroppingInRingingOrHowLongItsBeenOn() {
+        assertEquals("Dropping in", BedsideCall("c", "Hidden number", "dropIn", "pending").status(100))
+        assertEquals("Ringing", BedsideCall("c", "Hidden number", "call", "pending").status(100))
+        assertEquals("On a call · 2:14", BedsideCall("c", "Carmen", "dropIn", "accepted", acceptedAt = 1000).status(1134))
+        assertEquals("On a call · 0:00", BedsideCall("c", "Carmen", "call", "accepted", acceptedAt = 1000).status(990), "a clock behind the server's")
+        assertEquals("On a call · 1:02:05", BedsideCall("c", "Carmen", "call", "accepted", acceptedAt = 0).status(3725))
+        assertEquals("On a call", BedsideCall("c", "Carmen", "call", "accepted").status(100), "answered without a time yet")
+    }
+}

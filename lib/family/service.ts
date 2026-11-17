@@ -14,7 +14,8 @@ import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, re
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, needsReaping, phoneGuestActions, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
-import { forgetRegistration, pushConfigured, sendAlertPush, sendNoticePush, sendVoIPPush, type CaregiverNotice, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
+import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
+import { callTitle, noticeEveryCall } from "./notices.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
@@ -22,7 +23,7 @@ import type { Translate } from "./translate.ts";
 import { handleTranslationAction, translationActions, translationFeature, translationOffered, translationServices, type TranslationServices } from "./translation.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>;
-  sendNotice?: (device: VoIPRegistration, notice: CaregiverNotice) => Promise<PushResult>; synthesize?: Synthesize; translate?: Translate;
+  synthesize?: Synthesize; translate?: Translate;
   phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
   translationServices?: (configuration: CallServer) => TranslationServices };
 
@@ -126,6 +127,9 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
   const phoneSetup = me.role === "bedside" || me.caregiver ? publicPhoneSetup(house) : undefined;
   // Every call drops in: everyone's calls do, so every app knows, and caregivers' phones show who turned it on.
   const everyCall = publicEveryCall(house);
+  // A phone call that came in meanwhile, which caregivers' phones show live and can end.
+  const bedsideCall = me.role === "family" && me.caregiver && call?.everyCall && call.phone && call.state !== "ended"
+    ? { id: call.id, title: callTitle(house, call), kind: call.kind, state: call.state, ...(call.acceptedAt !== undefined ? { acceptedAt: call.acceptedAt } : {}) } : undefined;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, ...(everyCall ? { everyCall } : {}), messagesEnabled: house.messagesEnabled !== false,
     // Family phones ring the bedside this long before offering voicemail.
     ringSeconds: ringSeconds(house),
@@ -146,6 +150,7 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
     ...(me.role === "family" ? { newMessages: unheardCount(house, me.id, now) } : {}), me: publicMember(me),
     // When someone was last noticed at the bedside iPad, so family can tell whether a call now is likely to be answered.
     ...(me.role === "family" && attendanceShared(house) && bedside?.attendedAt !== undefined ? { bedsideAttendedAt: bedside.attendedAt } : {}),
+    ...(bedsideCall ? { bedsideCall } : {}),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
     // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only.
@@ -159,25 +164,6 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
       : call && [call.from, call.to].includes(me.id) && call.left?.[me.id] === undefined ? { ...publicCall(call, me, house), source: call.phone ? "phone" : "porch", callerName: callerName(call),
       ...(call.phone?.callerNumber ? { callerNumber: call.phone.callerNumber } : {}) } : null,
     busy: !!call && call.state !== "ended", serverTime: now };
-}
-// Tells the other caregivers' phones that every call to the bedside was turned on or off, and by whom. The person who
-// changed it already knows, and the bedside shows it in caregiver mode.
-async function noticeEveryCall(store: FamilyStore, house: Household, by: Member, on: boolean, dependencies: FamilyDependencies) {
-  const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
-  const name = bedside ? displayName(bedside) : house.name;
-  const title = on ? `Every call drops in on ${name}` : `Every call is off for ${name}`;
-  const body = by.role === "bedside" ? `Turned ${on ? "on" : "off"} at ${name}’s ${bedsideDevice(house)}.` : `${displayName(by)} turned it ${on ? "on" : "off"}.`;
-  const recipients = house.members.filter(m => m.role === "family" && !m.revoked && m.caregiver && m.id !== by.id && m.alerts);
-  await Promise.all(recipients.map(async recipient => {
-    const registration = recipient.alerts!;
-    let result: PushResult;
-    try { result = await (dependencies.sendNotice ?? sendNoticePush)(registration, { type: "everyCall", recipientID: recipient.id, title, body }); }
-    catch { return; }
-    if (result.invalidToken) await mutate(store, house.id, current => {
-      const member = current.members.find(m => m.id === recipient.id);
-      if (member) forgetRegistration(member, registration);
-    });
-  }));
 }
 // Tells a family member that the bedside left them a message, with their unplayed count as the badge.
 async function alertRecipient(store: FamilyStore, householdID: string, recipientID: string, message: MessageRecord, now: number, dependencies: FamilyDependencies) {
@@ -529,6 +515,17 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(me.role === "bedside", "Only the bedside can change its language.", 403);
         requireValue(isBedsideLanguage(input.language), "Choose a bedside language.");
         house.bedsideLanguage = input.language;
+        return undefined;
+      }
+      if (action === "endBedsideCall") {
+        // A caregiver ends a phone call that came in while every call dropped in, from its notice or their Call tab, without
+        // the PIN: it only takes access away. A call that's already over, or another one, is left alone.
+        requireValue(me.role === "family" && me.caregiver, "Only an approved caregiver can end this call.", 403);
+        requireValue(typeof input.callID === "string", "Choose the call to end.");
+        const call = house.call;
+        if (call?.id === input.callID && call.phone && call.everyCall && call.state !== "ended") {
+          finishCall(call, "A caregiver ended the call.", now); cleanupRoom = callRoom(call);
+        }
         return undefined;
       }
       if (action === "turnOffEveryCall") {

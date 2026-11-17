@@ -169,7 +169,8 @@ class MessageAlerts(private val app: PorchApplication) {
             })
         }
 
-        private fun open(context: Context, recipient: String, type: String = "message"): PendingIntent =
+        /** Opens Porch at a family's thread, or with `type` "everyCall" at its Call tab card (`opened`). */
+        internal fun open(context: Context, recipient: String, type: String = "message"): PendingIntent =
             // NEW_TASK: this intent is fired from a notification, not an activity. Without it, tapping the
             // notification after Porch has left its task throws and the thread never opens. singleTask still
             // delivers it to the running activity (onNewIntent) when Porch is already open.

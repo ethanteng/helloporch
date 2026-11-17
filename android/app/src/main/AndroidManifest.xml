@@ -97,6 +97,8 @@
             android:foregroundServiceType="phoneCall|microphone" />
         <!-- Decline and Hang up on Porch's call notifications. -->
         <receiver android:name=".CallActionReceiver" android:exported="false" />
+        <!-- End call and Turn off Every call on a caregiver's call notice (CallNotices). -->
+        <receiver android:name=".CallNoticeReceiver" android:exported="false" />
         <!-- Call pushes from Firebase, and message notifications, which Firebase shows itself while Porch isn't in front:
              with Porch's icon, on the messages channel unless the server names another (MessageAlerts). -->
         <meta-data

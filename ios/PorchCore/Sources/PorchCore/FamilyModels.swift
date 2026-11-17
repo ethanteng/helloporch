@@ -18,6 +18,35 @@ public struct EveryCallDropIn: Codable, Equatable {
         atBedside == true ? "\(by)’s \(bedsideDevice)" : by.split(separator: " ").first.map(String.init) ?? by
     }
 }
+/// A phone call to the Porch number that started while every call drops in, as caregivers see it while it rings or is
+/// connected, so they can end it.
+public struct BedsideCall: Codable, Equatable {
+    public let id: String
+    /// The caller's name for an approved number, else the formatted number, else "Hidden number".
+    public let title: String
+    /// "dropIn" or "call".
+    public let kind: String
+    /// "pending" or "accepted".
+    public let state: String
+    /// Once answered, in server time.
+    public let acceptedAt: TimeInterval?
+    public init(id: String, title: String, kind: String, state: String, acceptedAt: TimeInterval? = nil) {
+        self.id = id; self.title = title; self.kind = kind; self.state = state; self.acceptedAt = acceptedAt
+    }
+    public var isConnected: Bool { state == "accepted" }
+    /// What it's doing: Dropping in, Ringing, or On a call · 2:14 by the server's clock.
+    public func status(serverNow: TimeInterval) -> String {
+        guard isConnected else { return kind == "dropIn" ? "Dropping in" : "Ringing" }
+        guard let acceptedAt else { return "On a call" }
+        return "On a call · \(Self.duration(serverNow - acceptedAt))"
+    }
+    /// 0:07, 2:14, 1:02:03.
+    public static func duration(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded(.down)))
+        let hours = total / 3600, minutes = total % 3600 / 60, rest = total % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, rest) : String(format: "%d:%02d", minutes, rest)
+    }
+}
 /// Who can drop in: no one, the people and numbers a caregiver approved, or every call.
 public enum DropInChoice: String, CaseIterable {
     case off, approved, everyCall
@@ -286,6 +315,9 @@ public struct FamilySnapshot: Codable, Equatable {
     public let bedsideLanguage: String?
     /// Everyone: set while every call drops in. Older servers don't send it.
     public let everyCall: EveryCallDropIn?
+    /// Family caregivers: a phone call that started while every call drops in, while it rings or is connected. Older
+    /// servers don't send it.
+    public let bedsideCall: BedsideCall?
     /// Bedside only: who can ring by phone. Older servers don't send it.
     public let callScreening: CallScreening?
     /// Bedside only: family see when someone is at the iPad, unless a caregiver turned it off. The iPad reports it only
