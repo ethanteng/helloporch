@@ -347,6 +347,18 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(FamilyMessageAlerts.callNotice.actions.map { $0.options.contains(.foreground) }, [false, false])
         XCTAssertTrue(FamilyMessageAlerts.callNotice.actions[0].options.contains(.destructive))
         XCTAssertEqual(["endCall", "turnOffEveryCall", UNNotificationDefaultActionIdentifier].map(FamilyMessageAlerts.serverAction), ["endBedsideCall", "turnOffEveryCall", nil])
+        let original = UNMutableNotificationContent()
+        original.title = "Dropping in on Rose"
+        original.body = "(510) 555-0162 · Unknown number"
+        original.threadIdentifier = "porch-everycall-device"
+        original.userInfo = ["type": "callNotice", "recipientID": "device-1", "callID": "call-1"]
+        let retry = FamilyMessageAlerts.retryNotice(from: original, message: "Couldn't reach Porch. Try again.")
+        XCTAssertEqual(retry.title, original.title)
+        XCTAssertEqual(retry.body, "Couldn't reach Porch. Try again.")
+        XCTAssertEqual(retry.categoryIdentifier, FamilyMessageAlerts.callNotice.identifier)
+        XCTAssertEqual(retry.threadIdentifier, original.threadIdentifier)
+        XCTAssertEqual(retry.userInfo["callID"] as? String, "call-1")
+        XCTAssertEqual(retry.userInfo["recipientID"] as? String, "device-1")
     }
 
     /// Both bedsides are "Mom" until this phone names one: the family joined later shows as "Mom 2" meanwhile.

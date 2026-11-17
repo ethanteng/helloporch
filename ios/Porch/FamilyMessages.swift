@@ -941,7 +941,7 @@ extension Notification.Name {
         let info = response.notification.request.content.userInfo
         let recipient = info["recipientID"] as? String
         if let action = Self.serverAction(response.actionIdentifier) {
-            await Self.send(action, callID: info["callID"] as? String, recipientID: recipient)
+            await Self.send(action, callID: info["callID"] as? String, recipientID: recipient, content: response.notification.request.content)
             return
         }
         let name: Notification.Name = ["everyCall", "callNotice"].contains(info["type"] as? String) ? .porchOpenCallTab : .porchOpenReceivedMessages
@@ -956,11 +956,31 @@ extension Notification.Name {
         }
     }
     /// Sends a call notice's action as this phone's member of the family it came from. Ending a call needs its ID.
-    nonisolated static func send(_ action: String, callID: String?, recipientID: String?) async {
+    /// The system removes the notice when the button is tapped, so a request that doesn't go through is shown again,
+    /// with the reason, and the same buttons.
+    nonisolated static func send(_ action: String, callID: String?, recipientID: String?, content: UNNotificationContent) async {
         guard action != "endBedsideCall" || callID != nil,
               let family = await MainActor.run(body: { PorchDevice.family(memberID: recipientID) }) else { return }
         let values: [String: Any] = callID.map { ["callID": $0] } ?? [:]
-        guard let response = try? await FamilyService(family).send(action, action == "endBedsideCall" ? values : [:]) else { return }
-        await MainActor.run { FamilyCoordinator.shared.update(response) }
+        do {
+            let response = try await FamilyService(family).send(action, action == "endBedsideCall" ? values : [:])
+            await MainActor.run { FamilyCoordinator.shared.update(response) }
+        } catch {
+            let message = (error as? FamilyServiceError)?.message ?? "Couldn't reach Porch. Try again."
+            let notice = retryNotice(from: content, message: message)
+            let identifier = "porch-call-\(callID ?? recipientID ?? "notice")"
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identifier, content: notice, trigger: nil))
+        }
+    }
+    /// The same call notice, after its button didn't go through, so End call and Turn off Every call can be tried again.
+    nonisolated static func retryNotice(from content: UNNotificationContent, message: String) -> UNMutableNotificationContent {
+        let notice = UNMutableNotificationContent()
+        notice.title = content.title
+        notice.body = message
+        notice.sound = .default
+        notice.categoryIdentifier = "PORCH_CALL_NOTICE"
+        notice.threadIdentifier = content.threadIdentifier
+        notice.userInfo = content.userInfo
+        return notice
     }
 }
