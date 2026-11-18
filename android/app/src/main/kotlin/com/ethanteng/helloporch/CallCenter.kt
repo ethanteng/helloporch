@@ -71,8 +71,9 @@ class CallCenter(private val app: PorchApplication) {
     /** Already ringing for this call, or on it. A push for it must not be ended as a missed call. */
     fun owns(callID: String) = incoming?.call?.id?.equals(callID, ignoreCase = true) == true || active?.owns(callID) == true
 
-    /** A call in progress on a family phone, which goes on while Porch isn't in front (decision 8 in android/PLAN.md). */
-    val continuing: Boolean get() = active?.role == PorchExperience.FAMILY
+    /** A call in progress, on a family phone or the bedside, which goes on while Porch isn't in front (decision 8 in
+     * android/PLAN.md). */
+    val continuing: Boolean get() = active != null
 
     /** Porch opened from a call's notification. It shows over the lock screen until the call rings here or is up, or
      * for 10 seconds if it ended meanwhile. */
@@ -87,15 +88,16 @@ class CallCenter(private val app: PorchApplication) {
 
     /**
      * What Porch's call service shows, which keeps Porch running for a call while it isn't in front: a call in
-     * progress on a family phone, a call ringing through a notification, or Porch's own incoming screen on a family
-     * phone, quietly, so it can go on ringing through a notification without the service starting from the background.
+     * progress, a call ringing through a notification, or Porch's own incoming screen on a family phone, quietly, so it
+     * can go on ringing through a notification without the service starting from the background. A call's service
+     * starts while Porch is in front, as it opens, since Android won't start one that records from the background.
      */
     fun updateService() {
         val call = active
         val ringing = incoming
         val system = app.systemCalls.notification
         when {
-            call != null && call.role == PorchExperience.FAMILY -> {
+            call != null -> {
                 NotificationManagerCompat.from(app).cancel(CallNotifications.INCOMING)
                 // Android 11 and later need the microphone named for it to keep recording with the phone locked.
                 CallService.show(app, CallNotifications.ONGOING, CallNotifications.ongoing(app, call.name), serviceTypes(withMicrophone = true))
@@ -280,6 +282,8 @@ class CallCenter(private val app: PorchApplication) {
                 if (contact?.phoneNumber != null && (e as? FamilyServiceException)?.code == "offline" && app.onScreen && active == null) {
                     val call = PorchCall(app, null, name, photo, announcement, contact, phoneOnly = true, onClosed = ::closed)
                     active = call
+                    // Still in front: the call's service starts now, so the call goes on if the bedside leaves Porch.
+                    updateService()
                     call.start()
                     return@launch
                 }
@@ -311,13 +315,14 @@ class CallCenter(private val app: PorchApplication) {
     }
 
     /**
-     * Porch left the screen. A family phone's ringing goes on through a notification, and its call in progress goes on
-     * with the camera off (decision 8 in android/PLAN.md). The bedside's calls end, as on iOS.
+     * Porch left the screen. A family phone's ringing goes on through a notification, and a call in progress goes on
+     * with the camera off, on a family phone or the bedside, as on iOS (decision 8 in android/PLAN.md).
      */
     fun leftScreen() {
         incoming?.leftScreen()
-        active?.let { if (continuing) it.leftForeground() else it.endCall() }
-        // A family call still being placed goes on with the phone locked, as one already up does. The bedside's ends.
+        active?.leftForeground()
+        // A family call still being placed goes on with the phone locked, as one already up does: its service started
+        // when it was placed. The bedside's call service starts once the call opens (show), so one still starting ends.
         if (!opening || app.device.experience != PorchExperience.FAMILY) cancelPendingCall()
         // A push announced a call Porch's screen hadn't shown yet.
         app.systemCalls.leftScreen()

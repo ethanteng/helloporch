@@ -22,9 +22,10 @@ final class PorchContainerViewController: UIViewController {
     deinit { NotificationCenter.default.removeObserver(self) }
     /// A family phone's own call screen is open, such as for a call it started to one of its families. CallKit doesn't
     /// know about that call, so another family's waits. The bedside, in one household, takes calls as before.
-    private var onFamilyPhoneCall: Bool {
-        guard PorchDevice.experience == .family else { return false }
-        return [presentedViewController, content?.presentedViewController].compactMap { $0 }
+    private var onFamilyPhoneCall: Bool { PorchDevice.experience == .family && onCallScreen }
+    /// Porch's own call screen is open, for a call it placed or a drop-in, which may go on while Porch isn't in front.
+    private var onCallScreen: Bool {
+        [presentedViewController, content?.presentedViewController].compactMap { $0 }
             .contains { sequence(first: $0, next: { $0.presentedViewController }).contains { $0 is NativeCallViewController } }
     }
     private var readyForIncoming: Bool {
@@ -96,7 +97,12 @@ final class PorchContainerViewController: UIViewController {
         }
         clock.stopPresenceCamera(then: done)
     }
-    func pause() { (content as? CallViewController)?.pause(); FamilyCoordinator.shared.pause() }
+    func pause() {
+        (content as? CallViewController)?.pause()
+        // A call goes on while Porch isn't in front, and the server ends a call whose device stops checking in. So Porch
+        // keeps checking in until the call screen closes (NativeCallViewController.finish), as Android does.
+        if !onCallScreen { FamilyCoordinator.shared.pause() }
+    }
     @objc private func familyChanged() {
         let coordinator = FamilyCoordinator.shared
         // A family phone rings for whichever of its families is calling. Only the bedside takes drop-ins.
