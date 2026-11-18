@@ -179,8 +179,13 @@ class PorchCall(
         )
     }
 
-    /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
+    /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. A bedside call that
+     * already failed closes, as iOS does, instead of keeping the ongoing-call notification. */
     fun leftForeground() {
+        if (failed && role == PorchExperience.BEDSIDE) {
+            endCall()
+            return
+        }
         // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
         if (!video || !room.localParticipant.isCameraEnabled || ending) return
         cameraWhenBack = true
