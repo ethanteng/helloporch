@@ -301,6 +301,56 @@ final class CaregiverInputTests: XCTestCase {
         }
     }
 
+    /// The Every call notice once narrowed the whole Call tab: UIKit capped its text at half the row, and the form gave way.
+    /// The cards keep the screen's width, and the call buttons' titles fit on one line, icons above them where needed.
+    @MainActor func testCallTabKeepsItsWidthWithEveryCallAndItsButtonTitlesFit() throws {
+        let coordinator = FamilyCoordinator.shared, wasActive = coordinator.isActive
+        defer { coordinator.start(); if !wasActive { coordinator.pause() } }
+        try preservingPairings {
+            let defaults = UserDefaults.standard, experience = defaults.object(forKey: "porch.experience")
+            defer { coordinator.pause(); defaults.set(experience, forKey: "porch.experience") }
+            defaults.set("family", forKey: "porch.experience")
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!,
+                           kSecAttrAccount as String: "porch.family.families"] as CFDictionary)
+            try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
+            let origin = URL(string: "https://example.invalid")!
+            let reyes = FamilyCredential(origin: origin, credential: "tom-device.tom-secret", role: .family)
+            let lee = FamilyCredential(origin: origin, credential: "lee-device.lee-secret", role: .family)
+            try PorchDevice.save(reyes); try PorchDevice.save(lee)
+            // Not `start`: it would ask for notification and microphone permission, which stops later tests.
+            coordinator.installForTesting([reyes, lee])
+            func state(_ id: String, bedside: String, online: Bool, everyCall: Bool) -> [String: Any] {
+                var state: [String: Any] = ["householdID": id, "householdName": bedside, "dropInEnabled": true,
+                    "me": ["id": "\(id == "reyes" ? "tom" : "lee")-device", "name": "Tom Reyes", "role": "family",
+                           "permissions": ["audio": false, "video": false], "online": true, "caregiver": true],
+                    "people": [["id": "\(id)-bedside", "name": bedside, "role": "bedside", "permissions": ["audio": false, "video": false], "online": online]],
+                    "busy": false, "serverTime": Date().timeIntervalSince1970]
+                if everyCall { state["everyCall"] = ["by": "Linda Reyes", "at": Date().timeIntervalSince1970] }
+                return state
+            }
+            for family in [state("reyes", bedside: "Rose", online: true, everyCall: true), state("lee", bedside: "Bella Vista", online: false, everyCall: false)] {
+                coordinator.update(try JSONDecoder().decode(FamilyResponse.self, from: JSONSerialization.data(withJSONObject: ["state": family])))
+            }
+            for width in [375.0, 440.0] {
+                let home = FamilyHomeViewController()
+                let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+                window.rootViewController = PorchStyle.navigation(home)
+                window.makeKeyAndVisible()
+                defer { window.isHidden = true }
+                window.layoutIfNeeded()
+                XCTAssertNotNil(descendants(home.view).first { $0.accessibilityIdentifier == "family.everyCall" })
+                XCTAssertEqual(home.form.frame.width, width - 48, "the notice doesn't narrow the cards at \(width) points")
+                let calls = buttons(in: home.view).filter { ["family.call", "family.videoCall", "family.dropIn"].contains($0.accessibilityIdentifier ?? "") }
+                XCTAssertEqual(calls.count, 5, "Rose's Call, Video and Drop in, and Bella Vista's Call and Video")
+                for button in calls {
+                    let title = try XCTUnwrap(button.titleLabel)
+                    XCTAssertLessThan(title.frame.height, title.font.lineHeight * 1.5, "\(button.configuration?.title ?? "") fits on one line at \(width) points")
+                }
+                XCTAssertEqual(Set(calls.compactMap { $0.configuration?.imagePlacement.rawValue }).count, 1, "both cards' buttons look alike")
+            }
+        }
+    }
+
     /// A phone call that came in while every call drops in shows on a caregiver's Call tab, ringing or with how long
     /// it's been on, and End call; it stays there after Every call is turned off, until the call ends.
     @MainActor func testCaregiversSeeAPhoneCallOnTheBedsideAndCanEndIt() throws {

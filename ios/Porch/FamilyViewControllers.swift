@@ -57,6 +57,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let starting: Bool
         let ringing: Bool
         let largeText: Bool
+        /// The cards' width, which decides how their call buttons fit.
+        let width: CGFloat
     }
     private var displayed: Presentation?
     override func viewDidLoad() {
@@ -75,6 +77,11 @@ final class FamilyHomeViewController: CaregiverFormViewController {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory { refresh() }
+    }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // The first cards are drawn before layout, for the screen's width; rotating or a split view changes it too.
+        if let displayed, abs(form.bounds.width.rounded() - displayed.width) >= 1 { refresh() }
     }
     @objc private func refreshPushStatus() { displayed = nil; refresh() }
     /// Joining from the Call tab, before this phone is in any family.
@@ -122,7 +129,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             return Card(id: credential.deviceID, name: name, family: family, removed: link?.accessRemoved == true, connected: state != nil && bedside != nil,
                         callable: link?.error == nil && bedside?.online == true && state?.busy == false, dropIns: dropIns, everyCall: everyCall,
                         liveCall: state?.me.caregiver == true ? state?.bedsideCall : nil)
-        }, starting: starting, ringing: SystemIncomingCalls.shared.hasCall, largeText: traitCollection.preferredContentSizeCategory.isAccessibilityCategory)
+        }, starting: starting, ringing: SystemIncomingCalls.shared.hasCall, largeText: traitCollection.preferredContentSizeCategory.isAccessibilityCategory,
+           width: (form.bounds.width > 0 ? form.bounds.width : min(view.bounds.width - 48, 760)).rounded())
         for credential in credentials {
             let (text, present) = Self.status(of: coordinator.link(for: credential)), label = statusLine(for: credential)
             label.text = text
@@ -216,8 +224,17 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         }
         let row = UIStackView(arrangedSubviews: buttons)
         row.spacing = 8; row.distribution = .fillEqually
-        // Very large text doesn't fit three across.
-        if presentation.largeText { row.axis = .vertical }
+        // Each button gets an equal share of the card. Where a title and its icon don't fit side by side, as on most
+        // iPhones with three buttons, the icons go above the titles; where even that doesn't fit, and with very large text,
+        // the buttons stack. Every card follows the one with the most buttons, so they look alike.
+        let columns = CGFloat(presentation.cards.filter { $0.connected && !$0.removed }.map { $0.dropIns.isEmpty ? 2 : 3 }.max() ?? buttons.count)
+        let share = (presentation.width - 32 - row.spacing * (columns - 1)) / columns
+        let fits = { buttons.allSatisfy { $0.intrinsicContentSize.width <= share } }
+        if !presentation.largeText, !fits() {
+            for button in buttons { button.configuration?.imagePlacement = .top; button.configuration?.imagePadding = 4 }
+            if !fits() { for button in buttons { button.configuration?.imagePlacement = .leading; button.configuration?.imagePadding = 6 } }
+        }
+        if presentation.largeText || !fits() { row.axis = .vertical }
         return row
     }
     /// For caregivers while every call drops in: who turned it on, and a Turn off that needs no PIN.
@@ -243,6 +260,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         }
         off.setContentHuggingPriority(.required, for: .horizontal)
         off.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // One line: with two wrapping texts in the row, UIKit would cap the notice's text at half the row.
+        off.configuration?.titleLineBreakMode = .byTruncatingTail
         off.accessibilityLabel = "Turn off every call"
         off.accessibilityIdentifier = "family.everyCall.turnOff"
         off.addAction(UIAction { [weak self, weak off] _ in

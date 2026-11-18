@@ -79,6 +79,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -90,6 +93,7 @@ import com.ethanteng.helloporch.core.FamilyInvitation
 import com.ethanteng.helloporch.core.FamilyLinks
 import com.ethanteng.helloporch.core.FamilyNames
 import com.ethanteng.helloporch.core.FamilyPerson
+import com.ethanteng.helloporch.core.FamilySnapshot
 import com.ethanteng.helloporch.core.NativeCall
 import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.RemoteCaregiverSession
@@ -499,6 +503,9 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
         FormScreen("Porch", wordmark = true) {
             RingWhenClosed(app)
             val several = families.size > 1
+            // Every card's call buttons follow the card with the most, so they look alike.
+            val columns = families.filter { links.link(it)?.accessRemoved != true }.mapNotNull { links.state(it) }
+                .filter { state -> state.people.any { it.role == PorchExperience.BEDSIDE } }.maxOfOrNull { if (dropIns(it).isEmpty()) 2 else 3 } ?: 2
             for (family in families) {
                 val link = links.link(family)
                 val state = link?.state
@@ -534,11 +541,7 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
                                 color = MaterialTheme.colorScheme.error, icon = R.drawable.ic_remove_circle)
                             state != null && bedside != null -> {
                                 val enabled = !app.calls.opening && link.error == null && bedside.online && !state.busy
-                                // While every call drops in, anyone in the family can, with audio or video.
-                                val everyone = state.everyCall != null
-                                val dropIns = listOf(NativeCall.Mode.VOICE to state.me.permissions.audio, NativeCall.Mode.VIDEO to state.me.permissions.video)
-                                    .filter { state.dropInEnabled && (everyone || it.second) }.map { it.first }
-                                CallButtons(name, enabled, dropIns, onCall = { mode, dropIn -> calling(CallRequest(family, bedside, mode, dropIn)) })
+                                CallButtons(name, enabled, dropIns(state), columns, onCall = { mode, dropIn -> calling(CallRequest(family, bedside, mode, dropIn)) })
                             }
                         }
                     }
@@ -609,38 +612,62 @@ private fun BedsideCallStrip(call: BedsideCall, serverTime: Long, busy: Boolean,
     }
 }
 
+/** Drop-ins this phone may start: drop-in is on, and approved for it, or every call drops in, when anyone in the family can,
+ * with audio or video. */
+private fun dropIns(state: FamilySnapshot): List<NativeCall.Mode> =
+    listOf(NativeCall.Mode.VOICE to state.me.permissions.audio, NativeCall.Mode.VIDEO to state.me.permissions.video)
+        .filter { state.dropInEnabled && (state.everyCall != null || it.second) }.map { it.first }
+
 /** Call, Video and, when it's approved for this phone, Drop in, side by side as on iOS. Approved for both, Drop in asks
- * which. Very large text stacks them, since three don't fit across. */
+ * which. Each gets an equal share of the card, `columns` of them across. Where a title and its icon don't fit side by side,
+ * as on a narrow phone, the icons go above the titles; where even that doesn't fit, and with very large text, they stack. */
 @Composable
-private fun CallButtons(name: String, enabled: Boolean, dropIns: List<NativeCall.Mode>, onCall: (NativeCall.Mode, Boolean) -> Unit) {
+private fun CallButtons(name: String, enabled: Boolean, dropIns: List<NativeCall.Mode>, columns: Int, onCall: (NativeCall.Mode, Boolean) -> Unit) {
     var choosing by remember { mutableStateOf(false) }
-    val buttons: @Composable (Modifier) -> Unit = { each ->
-        CallButton("Call", R.drawable.ic_call, "Call $name", enabled, filled = true, each) { onCall(NativeCall.Mode.VOICE, false) }
-        CallButton("Video", R.drawable.ic_videocam, "Video call $name", enabled, filled = true, each) { onCall(NativeCall.Mode.VIDEO, false) }
-        dropIns.firstOrNull()?.let { only ->
-            Box(each) {
-                val label = when { dropIns.size > 1 -> "Drop in on $name"; only == NativeCall.Mode.VIDEO -> "Drop in on $name with video"; else -> "Drop in on $name with audio" }
-                CallButton("Drop in", R.drawable.ic_waveform, label, enabled, filled = false, Modifier.fillMaxWidth()) {
-                    if (dropIns.size > 1) choosing = true else onCall(only, true)
-                }
-                DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
-                    DropdownMenuItem(text = { Text("Drop in with audio") }, leadingIcon = { Icon(painterResource(R.drawable.ic_waveform), null) },
-                        onClick = { choosing = false; onCall(NativeCall.Mode.VOICE, true) })
-                    DropdownMenuItem(text = { Text("Drop in with video") }, leadingIcon = { Icon(painterResource(R.drawable.ic_videocam), null) },
-                        onClick = { choosing = false; onCall(NativeCall.Mode.VIDEO, true) })
+    val measurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.titleMedium
+    val density = LocalDensity.current
+    val title = with(density) { listOf("Call", "Video", "Drop in").maxOf { measurer.measure(it, style).size.width }.toDp() }
+    BoxWithConstraints {
+        val share = (maxWidth - 8.dp * (columns - 1)) / columns
+        // Each button has 8 dp of padding on either side; beside its title, the 18 dp icon is 6 dp away.
+        val beside = 16.dp + 18.dp + 6.dp + title <= share
+        val stacked = density.fontScale > 1.5f || 16.dp + max(18.dp, title) > share
+        val iconAbove = !beside && !stacked
+        val buttons: @Composable (Modifier) -> Unit = { each ->
+            CallButton("Call", R.drawable.ic_call, "Call $name", enabled, filled = true, iconAbove, each) { onCall(NativeCall.Mode.VOICE, false) }
+            CallButton("Video", R.drawable.ic_videocam, "Video call $name", enabled, filled = true, iconAbove, each) { onCall(NativeCall.Mode.VIDEO, false) }
+            dropIns.firstOrNull()?.let { only ->
+                Box(each) {
+                    val label = when { dropIns.size > 1 -> "Drop in on $name"; only == NativeCall.Mode.VIDEO -> "Drop in on $name with video"; else -> "Drop in on $name with audio" }
+                    CallButton("Drop in", R.drawable.ic_waveform, label, enabled, filled = false, iconAbove, Modifier.fillMaxWidth()) {
+                        if (dropIns.size > 1) choosing = true else onCall(only, true)
+                    }
+                    DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
+                        DropdownMenuItem(text = { Text("Drop in with audio") }, leadingIcon = { Icon(painterResource(R.drawable.ic_waveform), null) },
+                            onClick = { choosing = false; onCall(NativeCall.Mode.VOICE, true) })
+                        DropdownMenuItem(text = { Text("Drop in with video") }, leadingIcon = { Icon(painterResource(R.drawable.ic_videocam), null) },
+                            onClick = { choosing = false; onCall(NativeCall.Mode.VIDEO, true) })
+                    }
                 }
             }
         }
+        if (stacked) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { buttons(Modifier.fillMaxWidth()) }
+        else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { buttons(Modifier.weight(1f)) }
     }
-    if (LocalDensity.current.fontScale > 1.5f) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { buttons(Modifier.fillMaxWidth()) }
-    else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { buttons(Modifier.weight(1f)) }
 }
 
 @Composable
-private fun CallButton(text: String, @DrawableRes icon: Int, label: String, enabled: Boolean, filled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun CallButton(text: String, @DrawableRes icon: Int, label: String, enabled: Boolean, filled: Boolean, iconAbove: Boolean, modifier: Modifier,
+    onClick: () -> Unit) {
     val content: @Composable RowScope.() -> Unit = {
-        Icon(painterResource(icon), contentDescription = null, Modifier.size(18.dp))
-        Text(text, Modifier.padding(start = 6.dp), style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        if (iconAbove) Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(painterResource(icon), contentDescription = null, Modifier.size(18.dp))
+            Text(text, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        } else {
+            Icon(painterResource(icon), contentDescription = null, Modifier.size(18.dp))
+            Text(text, Modifier.padding(start = 6.dp), style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        }
     }
     val described = modifier.heightIn(min = 50.dp).semantics { contentDescription = label }
     val padding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
