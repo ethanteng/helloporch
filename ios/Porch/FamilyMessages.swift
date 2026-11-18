@@ -1051,21 +1051,36 @@ extension Notification.Name {
         else { UIApplication.shared.applicationIconBadgeNumber = count }
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+    // Both use the completion handler, called on the main thread. Their async forms return on a background thread, and
+    // UIKit then updates the app's snapshot there and aborts: every tapped notice crashed Porch when it wasn't open.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Self.onMain { completionHandler([.banner, .list, .sound]) }
+    }
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+        Self.respond(to: response.actionIdentifier, content: response.notification.request.content, completion: completionHandler)
     }
     /// Opens the thread with whoever left the message or, for a notice about every call dropping in or a call it let
     /// through, the Call tab. A call notice's End call and Turn off Every call are sent as they are, without opening
-    /// Porch. Each family knows this phone by its own ID, which the notification carries.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let info = response.notification.request.content.userInfo
-        let recipient = info["recipientID"] as? String
-        if let action = Self.serverAction(response.actionIdentifier) {
-            await Self.send(action, callID: info["callID"] as? String, recipientID: recipient, content: response.notification.request.content)
-            return
-        }
+    /// Porch. Each family knows this phone by its own ID, which the notification carries. `completion` runs on the main
+    /// thread once that's done.
+    nonisolated static func respond(to actionIdentifier: String, content: UNNotificationContent, completion: @escaping () -> Void) {
+        let info = content.userInfo
+        let recipient = info["recipientID"] as? String, callID = info["callID"] as? String
+        let action = serverAction(actionIdentifier)
         let name: Notification.Name = ["everyCall", "callNotice"].contains(info["type"] as? String) ? .porchOpenCallTab : .porchOpenReceivedMessages
-        await MainActor.run { NotificationCenter.default.post(name: name, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
+        Task {
+            if let action { await send(action, callID: callID, recipientID: recipient, content: content) }
+            await MainActor.run {
+                if action == nil { NotificationCenter.default.post(name: name, object: nil, userInfo: recipient.map { ["recipientID": $0] }) }
+                completion()
+            }
+        }
+    }
+    /// Runs `body` on the main thread: now when called there, as the system does, otherwise as soon as it can.
+    nonisolated private static func onMain(_ body: @escaping () -> Void) {
+        if Thread.isMainThread { body() } else { DispatchQueue.main.async(execute: body) }
     }
     /// The server action behind a call notice's button, or nil for a plain tap.
     nonisolated static func serverAction(_ identifier: String) -> String? {

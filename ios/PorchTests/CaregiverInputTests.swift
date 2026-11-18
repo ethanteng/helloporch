@@ -413,6 +413,28 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(retry.userInfo["recipientID"] as? String, "device-1")
     }
 
+    /// A tapped notice opens its tab, for the family it names, and tells the system it's done on the main thread. UIKit
+    /// updates the app's snapshot then, and aborts anywhere else: the async delegate methods Porch used returned on a
+    /// background thread, so every notice tapped while Porch wasn't open crashed it.
+    func testTappedNoticesOpenTheirTabAndFinishOnTheMainThread() {
+        let notices: [(type: String?, opens: Notification.Name)] = [
+            ("everyCall", .porchOpenCallTab), ("callNotice", .porchOpenCallTab), (nil, .porchOpenReceivedMessages),
+        ]
+        for notice in notices {
+            let content = UNMutableNotificationContent()
+            content.userInfo = ["recipientID": "device-1"].merging(notice.type.map { ["type": $0] } ?? [:]) { $1 }
+            let opened = expectation(forNotification: notice.opens, object: nil) { $0.userInfo?["recipientID"] as? String == "device-1" }
+            let finished = expectation(description: "finished")
+            DispatchQueue.global().async {
+                FamilyMessageAlerts.respond(to: UNNotificationDefaultActionIdentifier, content: content) {
+                    XCTAssertTrue(Thread.isMainThread, "\(notice.type ?? "message")")
+                    finished.fulfill()
+                }
+            }
+            wait(for: [opened, finished], timeout: 5, enforceOrder: true)
+        }
+    }
+
     /// Both bedsides are "Mom" until this phone names one: the family joined later shows as "Mom 2" meanwhile.
     @MainActor func testTwoFamiliesCalledMomAreNumberedUntilOneIsNamed() throws {
         try preservingPairings {
