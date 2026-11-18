@@ -429,10 +429,20 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var isPhoneCall = false
     private var isSwitchingToPhone = false
     private var cleanupBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var switchBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// The camera Porch turned off when it left the foreground, which comes back on when Porch does.
+    private var cameraWhenBack = false
+    /// Turns the camera off and on as Porch leaves and comes back, in order, so a quick round trip can't leave it off.
+    private var foregroundCameraTask: Task<Void, Never>?
+    /// The approval to ring this person's phone, read as the call opens. The caregiver code and saved approvals are
+    /// readable only while the device is unlocked, and the call can switch to their phone after it locks.
+    private var phoneApproval: Task<String?, Never>?
     private(set) var isEnding = false
     private var hasFailed = false
     private var hasConnectedPeer = false
-    private var mediaReady = false
+    private var mediaReady = false { didSet { if mediaReady { soundStarted = true } } }
+    /// The call's sound has been up, so it can go on in the background, including while it switches to a phone.
+    private var soundStarted = false
     private let ringback = PorchRingback()
     private let connectionCue = PorchTonePlayer()
     private var connectionCuePlayed = false
@@ -602,8 +612,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             return // Static preview: never request media access or connect a call.
         }
         #endif
-        // This first version intentionally ends when leaving the foreground.
-        NotificationCenter.default.addObserver(self, selector: #selector(endCall), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        // A call goes on when Porch leaves the foreground or the device locks, as a phone call does, with the camera off
+        // until Porch is back. One whose sound hasn't started yet still ends (`leftForeground`).
+        NotificationCenter.default.addObserver(self, selector: #selector(leftForeground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(returnedToForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
         BedsideText.applyAccessibilityLanguage(to: view)
         if inactivity.timeout != nil {
@@ -614,6 +626,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                     self.checkInactivity()
                 }
             }
+        }
+        if let phoneNumber = contact.phoneNumber, !NativeCallSettings.caregiverCode.isEmpty {
+            let server = server
+            phoneApproval = Task { try? await NativeCallSettings.authorizePhone(phoneNumber, server: server) }
         }
         connectionTask = Task { if beginWithPhoneFallback { await switchToPhone() } else { await connect() } }
     }
@@ -890,6 +906,51 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         endedByCaller = true; finish()
     }
 
+    /// Porch left the foreground, behind another app or with the device locked. A call whose sound is up goes on, kept
+    /// running by the audio background mode, and its camera turns off until Porch is back, which iOS would do anyway.
+    /// One still connecting ends, as every call did before: iOS doesn't let Porch start the microphone from the
+    /// background. One that failed closes.
+    @objc func leftForeground() {
+        guard !isEnding else { return }
+        guard !hasFailed, soundStarted else { endCall(); return }
+        guard call.mode == .video, !isPhoneCall, room.localParticipant.isCameraEnabled() else { return }
+        cameraWhenBack = true
+        changeCameraForForeground(on: false)
+    }
+
+    /// Porch is back: the camera it turned off comes back on. One turned off during the call stays off.
+    @objc func returnedToForeground() {
+        guard cameraWhenBack else { return }
+        cameraWhenBack = false
+        guard !isEnding, !hasFailed, mediaReady, call.mode == .video, !isPhoneCall else { return }
+        changeCameraForForeground(on: true)
+    }
+
+    private func changeCameraForForeground(on: Bool) {
+        let previous = foregroundCameraTask, room = room
+        foregroundCameraTask = Task { [weak self] in
+            await previous?.value
+            guard let self, !self.isEnding, room === self.room else { return }
+            // Porch left again before the camera came back: it comes back next time instead.
+            if on && UIApplication.shared.applicationState == .background { self.cameraWhenBack = true; return }
+            _ = try? await room.localParticipant.setCamera(enabled: on)
+            // Opening the camera takes a moment. Porch can leave in that moment, after the check above, and
+            // `leftForeground` then sees the camera still off and does not ask again.
+            if on, !self.isEnding, room === self.room, UIApplication.shared.applicationState == .background {
+                self.cameraWhenBack = true
+                _ = try? await room.localParticipant.setCamera(enabled: false)
+            }
+            guard !self.isEnding, room === self.room else { return }
+            self.cameraButton.configuration?.title = BedsideText.string(room.localParticipant.isCameraEnabled() ? "Camera off" : "Camera on")
+            self.refresh()
+        }
+    }
+
+    #if DEBUG
+    /// Tests: a call whose sound is up, without connecting one.
+    func markMediaReadyForTesting() { mediaReady = true }
+    #endif
+
     func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
@@ -909,8 +970,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         endButton.isEnabled = false
         // The message screen comes next, so don't say the call is returning to the clock.
         statusLabel.text = unanswered != nil ? BedsideText.string("%@ didn't answer.", contact.name) : BedsideText.string(message ?? "Ending call…")
-        if isPhoneCall || familySession?.call.source == "phone" || fallbackTask != nil {
-            cleanupBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "End Porch phone call") { [weak self] in
+        // Disconnecting stops the call's sound, which is what keeps Porch running in the background. Telling the server
+        // and any phone that the call is over comes after, so it asks for the time.
+        if cleanupBackgroundTask == .invalid {
+            cleanupBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "End Porch call") { [weak self] in
                 self?.endCleanupBackgroundTask()
             }
         }
@@ -952,6 +1015,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             if message != nil { try? await Task.sleep(nanoseconds: 1_500_000_000) }
             closeCallScreen(animated: true) {
                 Cell2JackKeypad.shared.record(["kind": "callScreenClosed"])
+                // The call kept Porch checking in while Porch wasn't in front (PorchContainerViewController.pause).
+                // Now it stops, as it does whenever Porch leaves.
+                if UIApplication.shared.applicationState != .active { FamilyCoordinator.shared.pause() }
                 // Read on the main queue, same as a receiver hang-up, after the disconnect wait.
                 if self.skipUnansweredHandoff { self.skipUnansweredHandoff = false; return }
                 unanswered?()
@@ -963,6 +1029,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         guard cleanupBackgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(cleanupBackgroundTask)
         cleanupBackgroundTask = .invalid
+    }
+
+    private func endSwitchBackgroundTask() {
+        guard switchBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(switchBackgroundTask)
+        switchBackgroundTask = .invalid
     }
 
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
@@ -1134,6 +1206,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
         }
         guard !Task.isCancelled, !isEnding else { return }
+        // With Porch in the background, the call's sound keeps it running, and it stops between the two rooms.
+        if switchBackgroundTask == .invalid {
+            switchBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Switch Porch call to phone") { [weak self] in
+                self?.endSwitchBackgroundTask()
+            }
+        }
+        defer { endSwitchBackgroundTask() }
         let microphoneEnabled = !mediaReady || room.localParticipant.isMicrophoneEnabled()
         isSwitchingToPhone = true
         ringback.stop()
@@ -1164,7 +1243,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         do {
             try Task.checkCancellation()
             var details: [String: Any] = ["phoneNumber": phoneNumber, "name": contact.name, "localRingback": true]
-            if !NativeCallSettings.caregiverCode.isEmpty {
+            // The approval read as the call opened, or, if that failed, a new one, which says why it can't.
+            if let approval = await phoneApproval?.value {
+                details["contactAuthorization"] = approval
+            } else if !NativeCallSettings.caregiverCode.isEmpty {
                 details["contactAuthorization"] = try await NativeCallSettings.authorizePhone(phoneNumber, server: server)
             }
             try Task.checkCancellation()

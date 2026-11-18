@@ -91,7 +91,7 @@ final class PorchScene: UIResponder, UIWindowSceneDelegate {
 }
 
 /// Keeps the screen on for the bedside clock, and on any device while a call screen is open, the way FaceTime does.
-/// Otherwise a family phone dims and locks mid-call, and leaving the foreground hangs up a call it placed.
+/// Otherwise a family phone dims and locks mid-call, which a call survives, but its camera turns off until Porch is back.
 /// Voice calls also turn on the proximity sensor, so an iPhone's screen goes dark against an ear instead of
 /// taking taps from a cheek. iPads have no sensor.
 @MainActor enum ScreenAwake {

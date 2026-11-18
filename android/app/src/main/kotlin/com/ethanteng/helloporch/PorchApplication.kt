@@ -140,7 +140,7 @@ class PorchApplication : Application() {
         CallNotifications.createChannels(this)
         MessageAlerts.createChannel(this)
         // Porch checks in while it's open and tells each family when it closes. Push rings it for calls while it's
-        // closed. A call in progress on a family phone keeps it checking in, so the call goes on with the phone locked.
+        // closed. A call in progress keeps it checking in, so the call goes on with the phone locked or Porch behind another app.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) { onScreen = true; coordinator.start(); calls.cameOnScreen(); push.register() }
             override fun onStop(owner: LifecycleOwner) {

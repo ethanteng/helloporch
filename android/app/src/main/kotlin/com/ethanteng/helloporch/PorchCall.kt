@@ -31,8 +31,10 @@ import io.livekit.android.room.track.VideoTrack
 import io.livekit.android.util.flow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -129,6 +131,9 @@ class PorchCall(
     private var phoneControlToken: String? = null
     /** Porch turned the camera off when it left the screen, and turns it back on when it's back. */
     private var cameraWhenBack = false
+    /** Turns the camera off and on as Porch leaves and comes back, in order, so a quick round trip can't publish it
+     * while Porch is away or leave it off once Porch is back. */
+    private var foregroundCamera: Job? = null
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
@@ -140,6 +145,9 @@ class PorchCall(
     private var waitJob: Job? = null
     private var controlJob: Job? = null
     private var permissionAnswer: CompletableDeferred<Boolean>? = null
+    /** The approval to ring this person's phone, read as the call opens. The caregiver PIN and saved approvals are
+     * readable only while the tablet is unlocked, and the call can switch to their phone after it locks. */
+    private var phoneApproval: Deferred<String?>? = null
     /** Hanging up after a stretch of silence, on the bedside unless a caregiver turned it off (on by default; 15 seconds
      * to 30 minutes). A family phone leaves it to the bedside. */
     private val inactivity = CallInactivityTimer(CallPreferences.silenceTimeout(role, app.settings), clock = SystemClock::elapsedRealtime)
@@ -154,6 +162,9 @@ class PorchCall(
         }
         announcement?.let(ringback::hold)
         if (!accepted) ringback.start()
+        phoneNumber?.takeIf { app.caregiverPIN.isNotEmpty() }?.let { number ->
+            phoneApproval = scope.async { try { PhoneApprovals.authorize(app, number) } catch (e: CancellationException) { throw e } catch (_: Exception) { null } }
+        }
         connectionJob = scope.launch { if (phoneOnly) switchToPhone() else connect() }
     }
 
@@ -168,19 +179,51 @@ class PorchCall(
         )
     }
 
-    /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. */
+    /** Porch left the screen and the call goes on: the camera turns off until it's back, as on iOS. A bedside call that
+     * already failed closes, as iOS does, instead of keeping the ongoing-call notification. */
     fun leftForeground() {
+        if (failed && role == PorchExperience.BEDSIDE) {
+            endCall()
+            return
+        }
         // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
         if (!video || !room.localParticipant.isCameraEnabled || ending) return
         cameraWhenBack = true
-        scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
+        changeCameraForForeground(false)
     }
 
-    /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
+    /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off.
+     * A call that failed, or moved to a phone while Porch was away, stays off, as on iOS. */
     fun returnedToForeground() {
         if (!cameraWhenBack || ending) return
         cameraWhenBack = false
-        scope.launch { runCatching { room.localParticipant.setCameraEnabled(true) } }
+        if (failed || !mediaReady || !video || onPhone) return
+        changeCameraForForeground(true)
+    }
+
+    /** [on] is applied after any camera change already in flight. A turn-on that finishes after Porch has left is
+     * undone, and remembered, so the picture isn't published while Porch is away. */
+    private fun changeCameraForForeground(on: Boolean): Job {
+        val previous = foregroundCamera
+        val target = room
+        val job = scope.launch {
+            previous?.join()
+            if (ending || target !== room) return@launch
+            // Porch left again before the camera came back: it comes back next time instead.
+            if (on && !app.onScreen) {
+                cameraWhenBack = true
+                return@launch
+            }
+            runCatching { target.localParticipant.setCameraEnabled(on) }
+            // Opening the camera takes a moment. Porch can leave in that moment, after the check above, and
+            // [leftForeground] then sees the camera still off and does not ask again.
+            if (on && !ending && target === room && !app.onScreen) {
+                cameraWhenBack = true
+                runCatching { target.localParticipant.setCameraEnabled(false) }
+            }
+        }
+        foregroundCamera = job
+        return job
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
@@ -255,7 +298,7 @@ class PorchCall(
             if (video && CallPreferences.startVideoWithCamera(role, app.settings)) {
                 // LiveKit opens the camera itself, through Camera2, so the bedside's presence camera lets go of it first.
                 app.releaseCamera()
-                if (app.onScreen) room.localParticipant.setCameraEnabled(true) else cameraWhenBack = true
+                if (app.onScreen) changeCameraForForeground(true).join() else cameraWhenBack = true
             }
             mediaReady = true
             controlsEnabled = true
@@ -556,8 +599,9 @@ class PorchCall(
         onPhone = true
         updateKeypadHint()
         try {
-            // A caregiver approved this number when they saved it. Without a PIN, the server's own list decides.
-            val approval = if (app.caregiverPIN.isNotEmpty()) PhoneApprovals.authorize(app, number) else null
+            // A caregiver approved this number when they saved it. Without a PIN, the server's own list decides. The
+            // approval read as the call opened, or, if that failed, a new one, which says why it can't.
+            val approval = phoneApproval?.await() ?: if (app.caregiverPIN.isNotEmpty()) PhoneApprovals.authorize(app, number) else null
             val prepared = PhoneCalling.prepare(app, number, name, approval)
             phoneControlToken = prepared.controlToken
             announcement?.finished()

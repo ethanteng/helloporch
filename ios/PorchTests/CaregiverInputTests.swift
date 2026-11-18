@@ -2207,6 +2207,32 @@ final class CaregiverInputTests: XCTestCase {
     func stop() {}
 }
 
+/// A call goes on when Porch leaves the foreground once its sound is up. One still connecting ends: iOS doesn't let
+/// Porch start the microphone from the background.
+final class BackgroundCallTests: XCTestCase {
+    @MainActor private func fixture() throws -> NativeCallViewController {
+        let call = try NativeCall(room: "background-test", mode: .voice)
+        let contact = try CallContact(name: "Family", nativeCall: call, phoneNumber: "+14155550123")
+        let server = try NativeCallServer(url: "https://example.com", accessCode: "test-credential-no-network")
+        // Do not load the view: no network, permissions, audio or telephone call.
+        return try NativeCallViewController.phoneFallback(contact, server: server)
+    }
+
+    @MainActor func testACallStillConnectingEndsWhenPorchLeaves() throws {
+        let screen = try fixture()
+        screen.leftForeground()
+        XCTAssertTrue(screen.isEnding)
+    }
+
+    @MainActor func testACallWithItsSoundUpGoesOnWhenPorchLeavesAndComesBack() throws {
+        let screen = try fixture()
+        screen.markMediaReadyForTesting()
+        screen.leftForeground()
+        XCTAssertFalse(screen.isEnding, "Leaving Porch must not hang up a call that's under way")
+        screen.returnedToForeground()
+        XCTAssertFalse(screen.isEnding)
+    }
+}
 
 /// Exercise the pinned SDK's real teardown: identity/attributes disappear as
 /// soon as the delegate returns, before a queued main-actor callback can run.
