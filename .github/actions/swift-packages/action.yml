@@ -1,7 +1,7 @@
 name: Swift packages
 description: >-
   Restores Porch's Swift packages, including LiveKit's prebuilt frameworks, from the Actions cache, fetches whatever is
-  missing with retries, and saves them for later runs. Builds then pass
+  missing with retries unless the cache matched exactly, and saves them for later runs. Builds then pass
   `-clonedSourcePackagesDirPath ios/build/packages -disableAutomaticPackageResolution`, so this is the only step that
   downloads packages.
 
@@ -28,11 +28,19 @@ runs:
         path: ios/build/packages
         key: ${{ steps.key.outputs.key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
+    # An exact hit was saved only after a fetch succeeded for this Package.resolved and Xcode, and builds read it as is.
+    # Checking it again spent over two minutes on a busy runner. If an exact hit is ever bad, delete it with
+    # `gh cache delete <key>` and the next run fetches and saves it again.
     - name: Fetch missing Swift packages
       id: fetch
       shell: bash
+      env:
+        EXACT_HIT: ${{ steps.restore.outputs.cache-hit }}
       run: |
-        if xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
+        if [[ "$EXACT_HIT" == true ]]; then
+          echo "Swift packages for this Package.resolved came from the cache."
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        elif xcodebuild -resolvePackageDependencies -project ios/Porch.xcodeproj -scheme Porch \
           -clonedSourcePackagesDirPath ios/build/packages; then
           echo "ok=true" >> "$GITHUB_OUTPUT"
         else
@@ -40,8 +48,7 @@ runs:
           echo "ok=false" >> "$GITHUB_OUTPUT"
         fi
     # Exact key only. A prefix match would replace a partial download with an older tree.
-    # Skip this lookup when the first restore was already an exact hit: the retries below then re-download,
-    # which is what a bad cache needs. This lookup is for a miss that a parallel job has since filled.
+    # This lookup is for a miss that a parallel job has since filled.
     - name: Restore Swift packages a parallel job saved
       id: restore_again
       if: steps.fetch.outputs.ok != 'true' && steps.restore.outputs.cache-hit != 'true'

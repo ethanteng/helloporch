@@ -63,6 +63,8 @@ final class CallViewController: UIViewController {
     private var appliedDisplayStyle: Int?
     #if DEBUG
     private var previewShown = false
+    /// Preview people live only in memory, so a family update must not swap them for the saved list.
+    private var previewSlots: CallSlots?
     #endif
 
     override var canBecomeFirstResponder: Bool { presentedViewController == nil }
@@ -96,6 +98,7 @@ final class CallViewController: UIViewController {
                 }
                 try? slots.setContact(CallContact(name: name, nativeCall: NativeCall(room: "preview-person-\(index + 1)", mode: .video), familyMemberID: String(format: "00000000-0000-4000-8000-%012d", index + 1), buttonColorHex: photo == nil ? nil : colors[index], photoData: photo), for: index + 1)
             }
+            previewSlots = slots
         }
         #endif
         sceneView.translatesAutoresizingMaskIntoConstraints = false
@@ -605,6 +608,10 @@ final class CallViewController: UIViewController {
     }
     @objc private func restyleDisplay() { appliedDisplayStyle = nil; updateClock() }
     @objc private func reloadSlots() {
+        #if DEBUG
+        // Without a family, every return to the app posts a family update before or after a preview screen opens.
+        if let previewSlots { slots = previewSlots; return }
+        #endif
         do { slots = try CallSlots.load() } catch { displayStatus(error.localizedDescription) }
     }
     private func refreshCallButton() { callButton.isEnabled = !opening }
