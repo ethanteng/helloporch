@@ -192,10 +192,12 @@ class PorchCall(
         changeCameraForForeground(false)
     }
 
-    /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
+    /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off.
+     * A call that failed, or moved to a phone while Porch was away, stays off, as on iOS. */
     fun returnedToForeground() {
         if (!cameraWhenBack || ending) return
         cameraWhenBack = false
+        if (failed || !mediaReady || !video || onPhone) return
         changeCameraForForeground(true)
     }
 
