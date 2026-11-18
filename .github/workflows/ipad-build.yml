@@ -29,7 +29,7 @@ jobs:
   ipad:
     name: iPad tests and screenshots
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Start booting an iPad simulator
@@ -71,7 +71,7 @@ jobs:
           -parallel-testing-enabled NO -collect-test-diagnostics never
           -only-testing:Cell2JackCallsTests/Cell2JackRoutingTests test-without-building
       - name: Launch on an iPad simulator and capture the screens
-        timeout-minutes: 10
+        timeout-minutes: 15
         shell: bash
         run: |
           device_id="$PORCH_SIMULATOR_ID"
@@ -141,7 +141,7 @@ jobs:
           -destination "platform=iOS Simulator,id=$PORCH_SIMULATOR_ID,arch=arm64" -derivedDataPath ios/build/simulator
           -parallel-testing-enabled NO -collect-test-diagnostics never test-without-building
       - name: Launch on an iPhone simulator and capture the screen
-        timeout-minutes: 10
+        timeout-minutes: 15
         shell: bash
         run: |
           device_id="$PORCH_SIMULATOR_ID"

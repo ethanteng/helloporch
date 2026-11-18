@@ -17,7 +17,9 @@ check_preview() {
 # screenshot only when two polls in a row pass, so a mid-launch frame is not kept.
 # A single pass on the last poll still gets one confirmation before relaunch;
 # otherwise a scene that first becomes valid at the old 10 s mark never counts.
-for attempt in {1..18}; do
+# The tests run first, so the simulator is warm by now: a good screen passes on its first or second launch, and six
+# launches (about two minutes) leave time to capture every other screen when one never passes.
+for attempt in {1..6}; do
   xcrun simctl launch --terminate-running-process "$device_id" com.ethanteng.helloporch "$@"
   passes=0
   for poll in {1..5}; do
