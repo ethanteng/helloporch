@@ -37,12 +37,15 @@ for row in 1...40 {
         // The night clock's digits.
         if (7...31).contains(row), (0.80...0.95).contains(r), r - b > 0.04, r - b < 0.16, g < r, g > b { clockWarmLight += 1 }
         if r > 0.5 && g > 0.55 && b > 0.5 && max(r, g, b) - min(r, g, b) > 0.015 { lightSky += 1 }
-        if max(r, g, b) < 0.2 { dark += 1 }
+        // The night sky. At dusk and before dawn it's lighter, and the plain clock shows whatever hour CI runs at: below
+        // 0.2, with 1,000 needed, 6 PM scored 925 and 5 AM 980, and failed. Now they score about 1,080 of 800.
+        if max(r, g, b) < 0.26 { dark += 1 }
         // The clock's green hills along the bottom.
         if row > 30 && g > r + 0.03 && g > b { hills += 1 }
     }
 }
 let page = cream > 400
 let people = warmDark > 600 && lightText > 8
-let clock = hills > 60 && ((lightSky > 1000 && clockInk > 30) || (dark > 1000 && clockWarmLight > 30))
+// The hills and the digits' colors tell the clock from other screens; the sky only tells day from night.
+let clock = hills > 60 && ((lightSky > 1000 && clockInk > 30) || (dark > 800 && clockWarmLight > 30))
 exit(page || people || clock ? 0 : 1)
