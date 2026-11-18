@@ -934,7 +934,13 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             // Porch left again before the camera came back: it comes back next time instead.
             if on && UIApplication.shared.applicationState == .background { self.cameraWhenBack = true; return }
             _ = try? await room.localParticipant.setCamera(enabled: on)
-            guard !self.isEnding else { return }
+            // Opening the camera takes a moment. Porch can leave in that moment, after the check above, and
+            // `leftForeground` then sees the camera still off and does not ask again.
+            if on, !self.isEnding, room === self.room, UIApplication.shared.applicationState == .background {
+                self.cameraWhenBack = true
+                _ = try? await room.localParticipant.setCamera(enabled: false)
+            }
+            guard !self.isEnding, room === self.room else { return }
             self.cameraButton.configuration?.title = BedsideText.string(room.localParticipant.isCameraEnabled() ? "Camera off" : "Camera on")
             self.refresh()
         }

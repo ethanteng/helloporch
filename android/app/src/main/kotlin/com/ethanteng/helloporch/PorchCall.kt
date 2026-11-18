@@ -131,6 +131,9 @@ class PorchCall(
     private var phoneControlToken: String? = null
     /** Porch turned the camera off when it left the screen, and turns it back on when it's back. */
     private var cameraWhenBack = false
+    /** Turns the camera off and on as Porch leaves and comes back, in order, so a quick round trip can't publish it
+     * while Porch is away or leave it off once Porch is back. */
+    private var foregroundCamera: Job? = null
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
@@ -181,14 +184,39 @@ class PorchCall(
         // LiveKit's own state: [cameraOn] follows it a moment later, so a camera turned on just now still counts.
         if (!video || !room.localParticipant.isCameraEnabled || ending) return
         cameraWhenBack = true
-        scope.launch { runCatching { room.localParticipant.setCameraEnabled(false) } }
+        changeCameraForForeground(false)
     }
 
     /** Porch is back on screen: the camera it turned off comes back on. One turned off during the call stays off. */
     fun returnedToForeground() {
         if (!cameraWhenBack || ending) return
         cameraWhenBack = false
-        scope.launch { runCatching { room.localParticipant.setCameraEnabled(true) } }
+        changeCameraForForeground(true)
+    }
+
+    /** [on] is applied after any camera change already in flight. A turn-on that finishes after Porch has left is
+     * undone, and remembered, so the picture isn't published while Porch is away. */
+    private fun changeCameraForForeground(on: Boolean): Job {
+        val previous = foregroundCamera
+        val target = room
+        val job = scope.launch {
+            previous?.join()
+            if (ending || target !== room) return@launch
+            // Porch left again before the camera came back: it comes back next time instead.
+            if (on && !app.onScreen) {
+                cameraWhenBack = true
+                return@launch
+            }
+            runCatching { target.localParticipant.setCameraEnabled(on) }
+            // Opening the camera takes a moment. Porch can leave in that moment, after the check above, and
+            // [leftForeground] then sees the camera still off and does not ask again.
+            if (on && !ending && target === room && !app.onScreen) {
+                cameraWhenBack = true
+                runCatching { target.localParticipant.setCameraEnabled(false) }
+            }
+        }
+        foregroundCamera = job
+        return job
     }
 
     fun toggleMicrophone() = changeMedia(camera = false)
@@ -263,7 +291,7 @@ class PorchCall(
             if (video && CallPreferences.startVideoWithCamera(role, app.settings)) {
                 // LiveKit opens the camera itself, through Camera2, so the bedside's presence camera lets go of it first.
                 app.releaseCamera()
-                if (app.onScreen) room.localParticipant.setCameraEnabled(true) else cameraWhenBack = true
+                if (app.onScreen) changeCameraForForeground(true).join() else cameraWhenBack = true
             }
             mediaReady = true
             controlsEnabled = true
