@@ -31,8 +31,10 @@ import io.livekit.android.room.track.VideoTrack
 import io.livekit.android.util.flow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -140,6 +142,9 @@ class PorchCall(
     private var waitJob: Job? = null
     private var controlJob: Job? = null
     private var permissionAnswer: CompletableDeferred<Boolean>? = null
+    /** The approval to ring this person's phone, read as the call opens. The caregiver PIN and saved approvals are
+     * readable only while the tablet is unlocked, and the call can switch to their phone after it locks. */
+    private var phoneApproval: Deferred<String?>? = null
     /** Hanging up after a stretch of silence, on the bedside unless a caregiver turned it off (on by default; 15 seconds
      * to 30 minutes). A family phone leaves it to the bedside. */
     private val inactivity = CallInactivityTimer(CallPreferences.silenceTimeout(role, app.settings), clock = SystemClock::elapsedRealtime)
@@ -154,6 +159,9 @@ class PorchCall(
         }
         announcement?.let(ringback::hold)
         if (!accepted) ringback.start()
+        phoneNumber?.takeIf { app.caregiverPIN.isNotEmpty() }?.let { number ->
+            phoneApproval = scope.async { try { PhoneApprovals.authorize(app, number) } catch (e: CancellationException) { throw e } catch (_: Exception) { null } }
+        }
         connectionJob = scope.launch { if (phoneOnly) switchToPhone() else connect() }
     }
 
@@ -556,8 +564,9 @@ class PorchCall(
         onPhone = true
         updateKeypadHint()
         try {
-            // A caregiver approved this number when they saved it. Without a PIN, the server's own list decides.
-            val approval = if (app.caregiverPIN.isNotEmpty()) PhoneApprovals.authorize(app, number) else null
+            // A caregiver approved this number when they saved it. Without a PIN, the server's own list decides. The
+            // approval read as the call opened, or, if that failed, a new one, which says why it can't.
+            val approval = phoneApproval?.await() ?: if (app.caregiverPIN.isNotEmpty()) PhoneApprovals.authorize(app, number) else null
             val prepared = PhoneCalling.prepare(app, number, name, approval)
             phoneControlToken = prepared.controlToken
             announcement?.finished()

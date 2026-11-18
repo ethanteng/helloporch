@@ -434,6 +434,9 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private var cameraWhenBack = false
     /// Turns the camera off and on as Porch leaves and comes back, in order, so a quick round trip can't leave it off.
     private var foregroundCameraTask: Task<Void, Never>?
+    /// The approval to ring this person's phone, read as the call opens. The caregiver code and saved approvals are
+    /// readable only while the device is unlocked, and the call can switch to their phone after it locks.
+    private var phoneApproval: Task<String?, Never>?
     private(set) var isEnding = false
     private var hasFailed = false
     private var hasConnectedPeer = false
@@ -623,6 +626,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
                     self.checkInactivity()
                 }
             }
+        }
+        if let phoneNumber = contact.phoneNumber, !NativeCallSettings.caregiverCode.isEmpty {
+            let server = server
+            phoneApproval = Task { try? await NativeCallSettings.authorizePhone(phoneNumber, server: server) }
         }
         connectionTask = Task { if beginWithPhoneFallback { await switchToPhone() } else { await connect() } }
     }
@@ -1230,7 +1237,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         do {
             try Task.checkCancellation()
             var details: [String: Any] = ["phoneNumber": phoneNumber, "name": contact.name, "localRingback": true]
-            if !NativeCallSettings.caregiverCode.isEmpty {
+            // The approval read as the call opened, or, if that failed, a new one, which says why it can't.
+            if let approval = await phoneApproval?.value {
+                details["contactAuthorization"] = approval
+            } else if !NativeCallSettings.caregiverCode.isEmpty {
                 details["contactAuthorization"] = try await NativeCallSettings.authorizePhone(phoneNumber, server: server)
             }
             try Task.checkCancellation()
