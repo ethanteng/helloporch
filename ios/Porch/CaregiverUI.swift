@@ -480,8 +480,10 @@ class CaregiverFormViewController: UIViewController, UITextFieldDelegate {
             form.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -32),
             form.widthAnchor.constraint(lessThanOrEqualToConstant: 760)
         ])
+        // Below only the 760-point cap: anything weaker lets the form shrink to suit its content. A stack view holding two
+        // pieces of wrapping text caps each at half its width at priority 950, which once narrowed the whole Call tab.
         let width = form.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
-        width.priority = .defaultHigh; width.isActive = true
+        width.priority = .required - 1; width.isActive = true
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardConnected), name: .GCKeyboardDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDisconnected), name: .GCKeyboardDidDisconnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(scrollToField), name: UIResponder.keyboardDidShowNotification, object: nil)
