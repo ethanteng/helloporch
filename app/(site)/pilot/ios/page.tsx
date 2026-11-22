@@ -235,6 +235,31 @@ const parts: GuidePart[] = [
             </li>
           </ul>
         </Tip>
+        <h3>The receiver</h3>
+        <p>
+          Porch doesn’t need the receiver, since your loved one hears and talks through the iPad. They answer and hang
+          up by pressing a key, which you choose in <a href="#keypad">Set up the phone’s number keys</a>.
+        </p>
+        <ul>
+          <li>
+            <strong>If the receiver confuses them,</strong> wait until you’ve tested the phone. Then unplug the coiled
+            cord and put the cord and receiver away. With the cradle empty, the keys work without lifting anything.
+          </li>
+          <li>
+            <strong>If they’d rather pick it up,</strong> leave the receiver on the phone but unplug its coiled cord and
+            put the cord away. Otherwise they’ll hear the Cell2Jack say the phone isn’t connected each time they lift
+            the receiver. Then check that <UI>Hang up when the receiver is put back</UI> is on, so putting the receiver
+            down ends the call. It’s on by default, in caregiver mode under <UI>This iPad</UI>.
+          </li>
+        </ul>
+        <Screenshot
+          src="/pilot/screens/ipad-receiver-hang-up.png"
+          width={1600}
+          height={1112}
+          device="tablet"
+          alt="This iPad in caregiver mode. Under Connect the physical phone, Hang up when the receiver is put back is turned on."
+          caption={<>The <UI>Hang up when the receiver is put back</UI> switch, under <UI>This iPad</UI>.</>}
+        />
         <p>
           If you skipped this step, your loved one can use the touchscreen. To connect the phone later, open
           caregiver mode, tap <UI>This iPad</UI>, then <UI>Connect the phone</UI>.
