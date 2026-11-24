@@ -18,7 +18,7 @@ import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type M
 import { callTitle, noticeEveryCall } from "./notices.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
-import { cleanUpVoices, dropVoice, elevenLabsVoices, handleVoiceAction, maintainVoices, voiceActions, type VoiceService } from "./voices.ts";
+import { dropVoice, elevenLabsVoices, handleVoiceAction, maintainVoices, voiceActions, voicesDue, type VoiceService } from "./voices.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
 import type { Translate } from "./translate.ts";
 import { handleTranslationAction, translationActions, translationFeature, translationOffered, translationServices, type TranslationServices } from "./translation.ts";
@@ -206,6 +206,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     let mediaStore = dependencies.media;
     const media = () => mediaStore ??= blobMediaStore();
     const voiceService = () => dependencies.voices ?? elevenLabsVoices();
+    // Deleting voices from ElevenLabs can be slow, so it runs after the answer where it can, and never fails a request.
+    // Devices wait only seconds for an answer, a bedside poll included; the bedside's next poll retries a failure.
+    const cleanUpVoicesLater = async (house: Household) => {
+      const task = async () => { try { await maintainVoices(store, media, house, now, voiceService); } catch { /* the next poll */ } };
+      if (dependencies.afterResponse) dependencies.afterResponse(task); else await task();
+    };
     const action = input.action;
     // Tests that fake the sender can push to any registered device.
     const pushable = (device?: VoIPRegistration): device is VoIPRegistration => dependencies.sendPush ? !!device : pushConfigured(device);
@@ -374,7 +380,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const raw = await store.get(`house:${auth.householdID}`);
       requireValue(raw, "This household was not found.", 404);
       const house: Household = JSON.parse(raw);
-      const result = await handleVoiceAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, voices: dependencies.voices });
+      const result = await handleVoiceAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, voices: dependencies.voices, afterResponse: dependencies.afterResponse });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), admin: adminState(current, now, pushable) });
     }
@@ -770,7 +776,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       // No one else can play the bedside's messages for this device.
       try { await removeMessagesTo(store, media, house, auth.deviceID, now); } catch { /* purged after 90 days */ }
       try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
-      if (house.retiredVoices?.length) { try { await cleanUpVoices(store, media, house, voiceService()); } catch { /* the bedside's poll retries */ } }
+      if (house.retiredVoices?.length) await cleanUpVoicesLater(house);
       return callJSON({ left: true });
     }
     const me = memberFor(house, auth);
@@ -816,12 +822,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     // Message housekeeping never fails the request it rides on; the next poll retries it.
     if (action === "revoke" && typeof input.memberID === "string") { try { await removeMessagesFrom(store, media, house, input.memberID, now); } catch { /* retried by caregivers */ } }
     try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
-    if ((action === "revoke" || action === "setCaregiver") && house.retiredVoices?.length) { try { await cleanUpVoices(store, media, house, voiceService()); } catch { /* the bedside's poll retries */ } }
+    if ((action === "revoke" || action === "setCaregiver") && house.retiredVoices?.length) await cleanUpVoicesLater(house);
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
       try { await maintainTexts(store, media, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
-      try { await maintainVoices(store, media, house, now, voiceService); } catch { /* next poll */ }
+      if (voicesDue(house, now)) await cleanUpVoicesLater(house);
       // A number that couldn't be set up yet. Twilio and LiveKit can take longer than the iPad waits for a poll, so
       // the try runs after this one is answered, and a later poll shows the number.
       if (porchNumberDue(house, now)) {

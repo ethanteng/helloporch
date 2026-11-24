@@ -19,7 +19,9 @@ export type VoiceService = {
   /** Deletes a voice. A voice that is already gone counts as deleted. */
   remove(voiceID: string): Promise<void>;
 };
-export type VoiceContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; me: Member; input: Record<string, unknown>; voices?: VoiceService };
+/** `afterResponse` runs ElevenLabs deletions after the answer is sent, where the server can. */
+export type VoiceContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; me: Member; input: Record<string, unknown>; voices?: VoiceService;
+  afterResponse?: (task: () => Promise<unknown>) => void };
 
 // ElevenLabs allows the whole account a few dozen new voices a month, so one family can make only a few a day.
 export const voiceLimits = { recordingBytes: 5_000_000, minSeconds: 20, maxSeconds: 180, uploadSeconds: 1800, downloadSeconds: 300, madePerDay: 3 };
@@ -75,6 +77,10 @@ export async function cleanUpVoices(store: FamilyStore, media: () => MediaStore,
     if (left.length) latest.retiredVoices = left; else delete latest.retiredVoices;
   });
 }
+/** Whether `maintainVoices` has anything to do. */
+export function voicesDue(house: Household, now: number) {
+  return !!house.retiredVoices?.length || house.members.some(m => m.pendingVoice && m.pendingVoice.expiresAt <= now);
+}
 /** Recordings that were never made into a voice, and voices still to delete. Runs on bedside polls. */
 export async function maintainVoices(store: FamilyStore, media: () => MediaStore, house: Household, now: number, voices: () => VoiceService) {
   if (house.members.some(m => m.pendingVoice && m.pendingVoice.expiresAt <= now)) {
@@ -87,10 +93,15 @@ export async function maintainVoices(store: FamilyStore, media: () => MediaStore
   if (house.retiredVoices?.length) await cleanUpVoices(store, media, house, voices());
 }
 
-export async function handleVoiceAction(action: string, { store, media, now, house, me, input, voices }: VoiceContext): Promise<object> {
+export async function handleVoiceAction(action: string, { store, media, now, house, me, input, voices, afterResponse }: VoiceContext): Promise<object> {
   // Caregiver actions, PIN-checked before this point. Each person records only their own voice, on their own phone.
   requireValue(me.role === "family" && me.caregiver, "Only a caregiver can record their voice.", 403);
   const service = () => voices ?? elevenLabsVoices();
+  // ElevenLabs can be slow, so deleting a voice doesn't hold up the answer. A failure is retried on the bedside's poll.
+  const cleanUp = async (latest: Household) => {
+    const task = async () => { try { await cleanUpVoices(store, media, latest, service()); } catch { /* the bedside's poll retries */ } };
+    if (afterResponse) afterResponse(task); else await task();
+  };
   const caregiver = (latest: Household) => {
     const member = latest.members.find(m => m.id === me.id && m.role === "family" && m.caregiver && !m.revoked);
     requireValue(member, "Only a caregiver can record their voice.", 403);
@@ -98,7 +109,7 @@ export async function handleVoiceAction(action: string, { store, media, now, hou
   };
   if (action === "removeVoice") {
     const { house: latest } = await mutate(store, house.id, latest => { retireVoice(latest, caregiver(latest)); });
-    await cleanUpVoices(store, media, latest, service());
+    await cleanUp(latest);
     return {};
   }
   if (action === "voiceUpload") {
@@ -160,7 +171,7 @@ export async function handleVoiceAction(action: string, { store, media, now, hou
     latest.speechVoices = { ...latest.speechVoices, [bedsideLanguage(latest)]: voiceID };
     return true;
   });
-  await cleanUpVoices(store, media, latest, service());
+  await cleanUp(latest);
   requireValue(kept, "Only a caregiver can record their voice.", 403);
   return { voiceID };
 }

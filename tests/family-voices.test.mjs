@@ -37,11 +37,11 @@ afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefin
 const hope = 'OYTbf65OHHFELVut7v2H', jon = 'MFZUKuGQUsGJPQjTS4wC', sukYee = '7rrBp44bogxpbQBDkenR';
 const pin = '123456';
 
-async function fixture() {
+async function fixture({ later } = {}) {
   const store = new MemoryStore(), media = new FakeMedia(), voices = new FakeVoices(), spoken = [];
   let now = 1_800_000_000;
   const synthesize = async (voiceID, code, text) => { spoken.push({ voiceID, code, text }); return new Uint8Array([1, 2, 3]); };
-  const send = (action, values={}, credential, code) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(code?{'X-Porch-Setup-Code':code}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{},synthesize,voices});
+  const send = (action, values={}, credential, code) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(code?{'X-Porch-Setup-Code':code}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{},synthesize,voices,...(later?{afterResponse:task=>later.push(task)}:{})});
   const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
   const failure = async (...args) => { const response=await send(...args); return { status: response.status, error: (await response.json()).error }; };
   const bedside = await json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
@@ -234,4 +234,23 @@ test('a family makes at most three voices a day, failed ones included', async ()
   assert.equal(f.voices.made.length, 2);
   f.advance(86400);
   assert.equal((await f.record(f.tom.credential)).response.status, 200);
+});
+
+test('deleting a voice from ElevenLabs never holds up an answer, the bedside’s polls included', async () => {
+  const later = [];
+  const f = await fixture({ later });
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  // ElevenLabs hangs: the answers still come back, and the deletions wait until after them.
+  let release; const hung = new Promise(resolve => { release = resolve; });
+  const remove = f.voices.remove.bind(f.voices);
+  f.voices.remove = async id => { await hung; return remove(id); };
+  await f.json('revoke',{memberID:f.linda.state.me.id},f.bedside.credential,pin);
+  await f.bedsideSpeech();
+  assert.ok(later.length >= 2, 'the revoke and the poll each left a cleanup for after the answer');
+  assert.deepEqual(f.house().retiredVoices, [lindas]);
+  release();
+  await Promise.all(later.splice(0).map(task => task()));
+  // Both may delete it: deleting a voice that's gone counts as deleted.
+  assert.deepEqual([...new Set(f.voices.removed)], [lindas]);
+  assert.equal(f.house().retiredVoices, undefined);
 });
