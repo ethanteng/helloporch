@@ -338,8 +338,7 @@ object CallNotifications {
     /** A call going on while Porch isn't in front, with Hang up. Tapping it opens Porch's call screen. */
     fun ongoing(context: Context, name: String): Notification {
         val person = Person.Builder().setName(name).setImportant(true).build()
-        val hangUp = PendingIntent.getBroadcast(context, 3, Intent(context, CallActionReceiver::class.java).setAction(ACTION_HANG_UP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val hangUp = hangUp(context)
         return NotificationCompat.Builder(context, ONGOING_CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(name)
@@ -350,6 +349,10 @@ object CallNotifications {
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUp))
             .build()
     }
+
+    /** Hangs up the call in progress, from its notification or its picture-in-picture window. */
+    fun hangUp(context: Context): PendingIntent = PendingIntent.getBroadcast(context, 3,
+        Intent(context, CallActionReceiver::class.java).setAction(ACTION_HANG_UP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
     /** A silent note for a call that won't ring here, taken away at once. */
     fun passing(context: Context): Notification = NotificationCompat.Builder(context, ONGOING_CHANNEL)
