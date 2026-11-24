@@ -1,4 +1,4 @@
-import { BlobNotFoundError, del, head, issueSignedToken, parseStoreIdFromDelegationToken, presignUrl, put } from "@vercel/blob";
+import { BlobNotFoundError, del, head, issueSignedToken, list, parseStoreIdFromDelegationToken, presignUrl, put } from "@vercel/blob";
 import { FamilyError } from "./household.ts";
 
 // Message audio/video lives in a private Vercel Blob store. Devices never hold a store
@@ -9,6 +9,8 @@ export interface MediaStore {
   downloadURL(pathname: string, validUntil: number): Promise<string>;
   stat(pathname: string): Promise<{ size: number; contentType: string } | null>;
   remove(pathnames: string[]): Promise<void>;
+  /** Deletes everything under a folder, such as a family voice's announcements. */
+  removeFolder(prefix: string): Promise<void>;
   /** Server-side upload, for recordings the server fetches itself (phone voicemail). */
   put(pathname: string, body: Uint8Array, contentType: string): Promise<void>;
 }
@@ -38,6 +40,14 @@ export function blobMediaStore(): MediaStore {
       catch (error) { if (error instanceof BlobNotFoundError) return null; throw error; }
     },
     async remove(pathnames) { if (pathnames.length) await del(pathnames, { token }); },
+    async removeFolder(prefix) {
+      let cursor: string | undefined;
+      do {
+        const page = await list({ prefix, token, cursor, limit: 1000 });
+        if (page.blobs.length) await del(page.blobs.map(blob => blob.url), { token });
+        cursor = page.hasMore ? page.cursor : undefined;
+      } while (cursor);
+    },
     async put(pathname, body, contentType) {
       await put(pathname, Buffer.from(body), { token, access: "private", contentType, addRandomSuffix: false, allowOverwrite: true });
     },

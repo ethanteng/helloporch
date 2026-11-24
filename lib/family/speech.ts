@@ -4,11 +4,13 @@ import type { MediaStore } from "./media.ts";
 import { discardMedia } from "./messages.ts";
 import type { FamilyStore } from "./store.ts";
 import { keepTextClip, readableText, textKept } from "./texts.ts";
+import { familyVoiceFolder, familyVoices, isFamilyVoice } from "./voices.ts";
 
 // Natural announcement voices. Each bedside language offers a few ElevenLabs voices the family listened to
 // (scripts/voice-samples.mjs); a caregiver picks one per language, or keeps the iPad's built-in voice.
 // The server reads the bedside's sentences, and phone voicemail's greetings, aloud and keeps each clip in the
 // private media store, so a sentence is paid for once. The bedside uses its built-in voice whenever a clip isn't ready.
+// Caregivers can also record their own voice (voices.ts), which is offered in every language after the listed ones.
 export type SpeechVoice = { id: string; name: string; detail: string };
 /** Keyed by the bedside's language codes; `code` is ElevenLabs' language. Each language's first voice is its default. */
 export const speechCatalog: Record<string, { code: string; voices: SpeechVoice[] }> = {
@@ -54,7 +56,8 @@ export const speechModel = "eleven_v4";
 // Announcements are a sentence or two. The daily allowance covers a new household's first clips
 // several times over, while keeping one device from spending the whole plan.
 export const speechLimits = { textCharacters: 300, dailyCharacters: 4000, audioBytes: 2_000_000, downloadSeconds: 3600 };
-export const speechActions = new Set(["speech", "setSpeechVoice"]);
+// `previewSpeech`: a caregiver's phone hears a voice before choosing it, as the bedside's settings do with `speech`.
+export const speechActions = new Set(["speech", "setSpeechVoice", "previewSpeech"]);
 // The bedside plays clips at full quality; a phone line carries 8 kHz, so phone voicemail greetings are small.
 export const speechFormats = { bedside: "mp3_44100_128", phone: "mp3_22050_32" } as const;
 export type SpeechFormat = keyof typeof speechFormats;
@@ -63,17 +66,24 @@ export type ClipContext = { store: FamilyStore; media: () => MediaStore; now: nu
 export type SpeechContext = ClipContext & { me: Member; input: Record<string, unknown> };
 
 export function speechConfigured() { return !!process.env.ELEVENLABS_API_KEY; }
-/** The household's voice for a language: unset is the default, null is the iPad's built-in voice. */
-export function speechVoice(house: Household, language: string): string | null {
+/** The household's voice for a language: unset is the default, null is the iPad's built-in voice.
+ * Phone callers never hear a family voice (`family` false): the language's default greets them instead. */
+export function speechVoice(house: Household, language: string, family = true): string | null {
   const choice = house.speechVoices?.[language];
   if (choice === null) return null;
   const { voices } = speechCatalog[language];
+  if (family && isFamilyVoice(house, choice)) return choice as string;
   return voices.find(v => v.id === choice)?.id ?? voices[0].id;
 }
-/** What the bedside's voice settings offer, per language. */
+/** A voice that can be chosen for a language: a listed one, or a caregiver's own. */
+function offered(house: Household, language: string, voiceID: unknown): voiceID is string {
+  return typeof voiceID === "string" && (speechCatalog[language].voices.some(v => v.id === voiceID) || isFamilyVoice(house, voiceID));
+}
+/** What the voice settings offer, per language: the listed voices, then caregivers' own, which say whose they are. */
 export function publicSpeech(house: Household) {
+  const family = familyVoices(house);
   return { languages: Object.fromEntries(Object.entries(speechCatalog).map(([language, { voices }]) =>
-    [language, { selected: speechVoice(house, language), defaultVoice: voices[0].id, voices }])) };
+    [language, { selected: speechVoice(house, language), defaultVoice: voices[0].id, voices: [...voices, ...family] }])) };
 }
 
 async function elevenLabs(voiceID: string, languageCode: string, text: string, outputFormat: string): Promise<Uint8Array> {
@@ -96,22 +106,25 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   if (action === "setSpeechVoice") {
     // A caregiver action, PIN-checked before this point.
     const voiceID = input.voiceID;
-    requireValue(voiceID === null || (typeof voiceID === "string" && speechCatalog[language].voices.some(v => v.id === voiceID)), "Choose one of the listed voices.");
+    requireValue(voiceID === null || offered(house, language, voiceID), "Choose one of the listed voices.");
     await mutate(store, house.id, latest => {
       requireValue(latest.members.some(m => m.id === me.id && !m.revoked && isCaregiver(m)), "Only an approved caregiver can change access.", 403);
+      requireValue(voiceID === null || offered(latest, language, voiceID), "Choose one of the listed voices.");
       latest.speechVoices = { ...latest.speechVoices, [language]: voiceID };
     });
     return {};
   }
-  requireValue(me.role === "bedside", "Only the bedside speaks announcements.", 403);
+  // A caregiver action on a phone, PIN-checked before this point; the bedside previews with `speech`.
+  if (action === "previewSpeech") requireValue(me.role === "family" && me.caregiver, "Only a caregiver can preview voices.", 403);
+  else requireValue(me.role === "bedside", "Only the bedside speaks announcements.", 403);
   requireValue(synthesize || speechConfigured(), "Natural voices aren't set up on this server.", 503);
   const text = typeof input.text === "string" ? input.text.trim() : "";
   // A text message's words, which can be longer than an announcement, up to their own limit.
-  const textID = text.length > 0 && await readableText(store, house, input.textID, language as BedsideLanguage, text, now) ? input.textID as string : undefined;
+  const textID = action === "speech" && text.length > 0 && await readableText(store, house, input.textID, language as BedsideLanguage, text, now) ? input.textID as string : undefined;
   requireValue(text.length > 0 && (text.length <= speechLimits.textCharacters || textID), `Announcements can have up to ${speechLimits.textCharacters} characters.`);
   // Settings preview a listed voice before it's saved; otherwise it's the household's choice.
   const requested = input.voiceID;
-  requireValue(requested === undefined || (typeof requested === "string" && speechCatalog[language].voices.some(v => v.id === requested)), "Choose one of the listed voices.");
+  requireValue(requested === undefined || offered(house, language, requested), "Choose one of the listed voices.");
   const voiceID = requested ?? speechVoice(house, language);
   requireValue(voiceID, `This language uses the ${bedsideDevice(house)}'s built-in voice.`, 409);
   if (!textID) return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
@@ -135,9 +148,10 @@ export function clipPathname(householdID: string, voiceID: string, language: str
   return `speech/${householdID}/${folder ? `${folder}/` : ""}${createHash("sha256").update(JSON.stringify(key)).digest("hex")}.mp3`;
 }
 
-/** A sentence read in a listed voice, and a short-lived link to it. Kept in the media store, so it's paid for once. */
+/** A sentence read in an offered voice, and a short-lived link to it. Kept in the media store, so it's paid for once.
+ * A family voice's sentences are kept in its own folder, which is deleted with it. */
 export async function speechClip({ store, media, now, house, synthesize }: ClipContext, voiceID: string, language: string, text: string, format: SpeechFormat = "bedside", folder?: string) {
-  const pathname = clipPathname(house.id, voiceID, language, text, format, folder);
+  const pathname = clipPathname(house.id, voiceID, language, text, format, folder ?? (isFamilyVoice(house, voiceID) ? familyVoiceFolder(voiceID) : undefined));
   if (!await media().stat(pathname)) {
     // Counted before asking, so failing requests can't run up the plan either.
     const day = Math.floor(now / 86400);

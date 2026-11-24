@@ -1,3 +1,4 @@
+import type { FamilyVoice, PendingVoice } from "./voices.ts";
 import type { CallTranslation } from "./translation.ts";
 import type { CallServer } from "../calls/server.ts";
 import type { FamilyStore } from "./store.ts";
@@ -19,7 +20,9 @@ export type PendingPhoto = { pathname: string; expiresAt: number };
  * `joinedAt`: when a family member claimed their invitation. Members who joined before it was kept don't have it. */
 /** `features`: what the bedside's app reported it can do, such as showing a call's translation (translation.ts).
  * `appVersion`: the bedside only, the version of Porch its newest check-in reported, such as "0.1.0 (78)". */
-export type Member = { platform?: "android"; features?: string[]; appVersion?: string; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; joinedAt?: number; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; messagePlayedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[] };
+export type Member = { platform?: "android"; features?: string[]; appVersion?: string; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; joinedAt?: number; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; messagePlayedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[];
+  /** `voice`: this caregiver's recorded voice; `pendingVoice`: a recording uploaded to make it (see voices.ts). */
+  voice?: FamilyVoice; pendingVoice?: PendingVoice };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };
@@ -91,7 +94,9 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
 /** `createdAt`: when the bedside set it up; households from before it was kept have none. */
 export type Household = { id: string; name: string; createdAt?: number; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; texts?: TextEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
   blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number;
-  everyCall?: EveryCall };
+  everyCall?: EveryCall;
+  /** Family voices taken out of use and still to delete from ElevenLabs (see voices.ts). */
+  retiredVoices?: string[] };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }
