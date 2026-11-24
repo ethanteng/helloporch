@@ -69,7 +69,9 @@ export const previewSentences: Record<BedsideLanguage, string> = {
   es: "Un familiar quiere hablar con usted por vídeo. La llamada se conectará en cinco segundos.",
   tl: "Tumatawag po si Kapamilya sa video call. Kokonekta ito sa loob ng limang segundo.",
   ko: "가족에게서 영상통화가 왔어요. 5초 후에 연결돼요.",
-  he: "שיחת וידאו מאת מישהו מהמשפחה. מתחברים בעוד חמש שניות.",
+  // The apps isolate a name in a right-to-left sentence (U+2068…U+2069), so this matches the bedside's own preview and
+  // shares its clip.
+  he: "שיחת וידאו מאת \u2068מישהו מהמשפחה\u2069. מתחברים בעוד חמש שניות.",
 };
 // Announcements are a sentence or two. The daily allowance covers a new household's first clips
 // several times over, while keeping one device from spending the whole plan.
