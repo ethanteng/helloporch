@@ -8,8 +8,8 @@ export const languages = {
   es: { name: "Spanish, as spoken in Spain", recognize: "es-ES", speak: "es" },
   tl: { name: "Tagalog (Filipino), as spoken in the Philippines", recognize: "fil-PH", speak: "fil" },
   ko: { name: "Korean, as spoken in South Korea", recognize: "ko-KR", speak: "ko" },
-  // Google's speech recognition still calls Hebrew `iw`.
-  he: { name: "Hebrew, as spoken in Israel", recognize: "iw-IL", speak: "he" },
+  // Gemini Transcribe Live lists Hebrew as he-IL. Android's Locale still calls it iw; that code is not a recognition hint.
+  he: { name: "Hebrew, as spoken in Israel", recognize: "he-IL", speak: "he" },
 } as const;
 export type Language = keyof typeof languages;
 
