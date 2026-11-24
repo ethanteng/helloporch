@@ -110,9 +110,12 @@ class BedsideLanguageTest {
         assertEquals("Calling David.", BedsideLanguage.ENGLISH.format("Calling %@.", "David"))
         assertEquals("סיום שיחה", BedsideLanguage.HEBREW.text("End call"))
         assertEquals("he-IL", BedsideLanguage.HEBREW.speechLanguage)
-        assertEquals("שיחת וידאו מאת מישהו מהמשפחה. מתחברים בעוד חמש שניות.", BedsideLanguage.HEBREW.format("%@ is dropping in with video. Connecting in five seconds.", BedsideLanguage.HEBREW.text("A family member")))
+        // Names are isolated (U+2068…U+2069), as on iOS, so a Latin name keeps its own direction.
+        assertEquals("שיחת וידאו מאת \u2068מישהו מהמשפחה\u2069. מתחברים בעוד חמש שניות.", BedsideLanguage.HEBREW.format("%@ is dropping in with video. Connecting in five seconds.", BedsideLanguage.HEBREW.text("A family member")))
         assertEquals("חיבור וידאו אוטומטי\nמתחבר בעוד 5…", BedsideLanguage.HEBREW.format("Video drop-in\nConnecting in %d…", 5))
         assertEquals("יש 3 הודעות חדשות.", BedsideLanguage.HEBREW.format("You have %d new messages.", 3))
+        assertEquals("מתקשר אל \u2068Dr. Sarah (Mom)\u2069…", BedsideLanguage.HEBREW.format("Calling %@…", "Dr. Sarah (Mom)"))
+        assertEquals("Calling Sarah…", BedsideLanguage.ENGLISH.format("Calling %@…", "Sarah"))
     }
 
     /** A paragraph's first letter sets its direction, so a Hebrew line that began with a name in Latin letters, or with

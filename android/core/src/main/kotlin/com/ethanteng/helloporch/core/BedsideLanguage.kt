@@ -87,8 +87,13 @@ enum class BedsideLanguage(val code: String) {
      * of text take its own direction. */
     val isRightToLeft: Boolean get() = this == HEBREW
     fun text(english: String): String = translations[english] ?: english
-    /** The strings keep iOS's `%@`, so both apps share them word for word; it formats as `%s`. */
-    fun format(english: String, vararg arguments: Any?): String = text(english).replace("%@", "%s").format(locale, *arguments)
+    /** The strings keep iOS's `%@`, so both apps share them word for word; it formats as `%s`. In Hebrew each name is
+     * isolated (U+2068…U+2069), as iOS's formatter does for a right-to-left locale, so a Latin name with punctuation of
+     * its own keeps its order inside the line. */
+    fun format(english: String, vararg arguments: Any?): String {
+        val values = if (isRightToLeft) arguments.map { if (it is String) "\u2068$it\u2069" else it }.toTypedArray() else arguments
+        return text(english).replace("%@", "%s").format(locale, *values)
+    }
 
     companion object {
         fun fromCode(code: String?): BedsideLanguage? = entries.firstOrNull { it.code == code }
