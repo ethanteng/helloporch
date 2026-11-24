@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -132,7 +134,7 @@ fun porchTitleStyle(base: TextStyle = MaterialTheme.typography.titleLarge): Text
 fun PorchTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = porchColors, typography = porchTypography) {
         CompositionLocalProvider(LocalFormButtonShape provides RoundedCornerShape(14.dp), LocalFormButtonColor provides PorchBrand.ink,
-            LocalTitleFontFamily provides newsreader, content = content)
+            LocalTitleFontFamily provides newsreader, LocalTextStyle provides contentDirection(), content = content)
     }
 }
 
@@ -141,9 +143,14 @@ fun PorchTheme(content: @Composable () -> Unit) {
 @Composable
 fun PorchBedsideTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = porchColors) {
-        CompositionLocalProvider(LocalFormButtonColor provides PorchBrand.ink, content = content)
+        CompositionLocalProvider(LocalFormButtonColor provides PorchBrand.ink, LocalTextStyle provides contentDirection(), content = content)
     }
 }
+
+/** Each paragraph reads in its own words' direction, so Hebrew reads right to left, with its punctuation and start
+ * alignment on the right, while English stays left to right. Compose otherwise lays every paragraph out left to right. */
+@Composable
+private fun contentDirection(): TextStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
 
 /** The HelloPorch logo as the website draws it (components/PorchLogo.tsx): the smiling "p" in tomato beside "Porch" in
  * the wordmark's brown. The Call tab's title; TalkBack reads it as the "Porch" heading it replaces. */

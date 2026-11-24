@@ -24,6 +24,7 @@ object BedsideMessageQueue {
     private fun family(tag: String): String = when (val base = tag.substringBefore('-').lowercase()) {
         "zh", "yue", "cmn" -> "zh"
         "fil" -> "tl"
+        "iw" -> "he"
         else -> base
     }
 

@@ -562,7 +562,7 @@ const parts: GuidePart[] = [
           </li>
           <li>
             Under <UI>Bedside language</UI>, choose English, Mandarin (traditional or simplified
-            characters), Cantonese, Spanish, Tagalog or Korean.
+            characters), Cantonese, Spanish, Tagalog, Korean or Hebrew.
           </li>
           <li>
             Under <UI>Announcement voice</UI>, choose one of Porch’s voices (marked Natural)

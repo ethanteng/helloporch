@@ -1,5 +1,6 @@
 package com.ethanteng.helloporch.core
 
+import java.text.Bidi
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -57,6 +58,7 @@ class BedsideLanguageTest {
             "zh-HK" to BedsideLanguage.CANTONESE, "zh-Hant-HK" to BedsideLanguage.CANTONESE, "yue-HK" to BedsideLanguage.CANTONESE, "yue-Hant-HK" to BedsideLanguage.CANTONESE,
             "fil-PH" to BedsideLanguage.TAGALOG, "fil_PH" to BedsideLanguage.TAGALOG, "tl-PH" to BedsideLanguage.TAGALOG, "fil" to BedsideLanguage.TAGALOG,
             "ko-KR" to BedsideLanguage.KOREAN, "ko_KR" to BedsideLanguage.KOREAN, "ko" to BedsideLanguage.KOREAN,
+            "he-IL" to BedsideLanguage.HEBREW, "he" to BedsideLanguage.HEBREW, "iw-IL" to BedsideLanguage.HEBREW, "iw_IL" to BedsideLanguage.HEBREW,
         )
         for ((tag, expected) in cases) {
             for (language in BedsideLanguage.entries) {
@@ -106,6 +108,23 @@ class BedsideLanguageTest {
         assertEquals("Tumatawag po si Ate Rosa sa video call. Kokonekta ito sa loob ng limang segundo.", BedsideLanguage.TAGALOG.format("%@ is dropping in with video. Connecting in five seconds.", "Ate Rosa"))
         assertEquals("Awtomatikong video call\nKokonekta sa loob ng 5…", BedsideLanguage.TAGALOG.format("Video drop-in\nConnecting in %d…", 5))
         assertEquals("Calling David.", BedsideLanguage.ENGLISH.format("Calling %@.", "David"))
+        assertEquals("סיום שיחה", BedsideLanguage.HEBREW.text("End call"))
+        assertEquals("he-IL", BedsideLanguage.HEBREW.speechLanguage)
+        assertEquals("שיחת וידאו מאת מישהו מהמשפחה. מתחברים בעוד חמש שניות.", BedsideLanguage.HEBREW.format("%@ is dropping in with video. Connecting in five seconds.", BedsideLanguage.HEBREW.text("A family member")))
+        assertEquals("חיבור וידאו אוטומטי\nמתחבר בעוד 5…", BedsideLanguage.HEBREW.format("Video drop-in\nConnecting in %d…", 5))
+        assertEquals("יש 3 הודעות חדשות.", BedsideLanguage.HEBREW.format("You have %d new messages.", 3))
+    }
+
+    /** A paragraph's first letter sets its direction, so a Hebrew line that began with a name in Latin letters, or with
+     * "Porch", would lay out left to right. Every Hebrew line starts with a Hebrew word instead. */
+    @Test fun hebrewLinesReadRightToLeftWhateverTheNames() {
+        assertEquals(listOf(BedsideLanguage.HEBREW), BedsideLanguage.entries.filter { it.isRightToLeft })
+        for (key in BedsideLanguage.HEBREW.translations.keys) {
+            val arguments = Regex("%[@d]").findAll(key).map<MatchResult, Any> { if (it.value == "%d") 3 else "Sarah" }.toList().toTypedArray()
+            for (line in BedsideLanguage.HEBREW.format(key, *arguments).split("\n")) {
+                assertFalse(Bidi(line, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseIsLeftToRight(), "$key: $line")
+            }
+        }
     }
 
     @Test fun newLanguageDatesKeepTheLocalDateAndWeekday() {
@@ -118,6 +137,15 @@ class BedsideLanguageTest {
             assertTrue(text.contains("2026")); assertTrue(text.contains("16"))
             assertTrue(text.contains(if (language == BedsideLanguage.SPANISH) "octubre" else "10月"), text)
         }
+    }
+
+    @Test fun hebrewDatesUseHebrewNames() {
+        val zone = ZoneOffset.ofHours(-7)
+        val date = ZonedDateTime.of(2026, 10, 16, 23, 35, 0, 0, zone).toInstant()
+        val locale = BedsideLanguage.HEBREW.locale
+        assertEquals("יום שישי", DateTimeFormatter.ofPattern("EEEE", locale).withZone(zone).format(date))
+        val text = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale).withZone(zone).format(date)
+        assertTrue(text.contains("2026")); assertTrue(text.contains("16")); assertTrue(text.contains("אוקטובר"), text)
     }
 
     @Test fun traditionalChineseCoversOrientationAndCallActions() {
@@ -157,6 +185,6 @@ class BedsideLanguageTest {
 
     /** Caregiver settings say which language each Chinese choice speaks. */
     @Test fun choiceLabelsNameTheSpokenLanguage() {
-        assertEquals(listOf("English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog", "한국어 · Korean"), BedsideLanguage.entries.map { it.choiceLabel })
+        assertEquals(listOf("English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog", "한국어 · Korean", "עברית · Hebrew"), BedsideLanguage.entries.map { it.choiceLabel })
     }
 }

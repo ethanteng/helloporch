@@ -15,7 +15,9 @@ enum class BedsideLanguage(val code: String) {
     @SerialName("es") SPANISH("es"),
     /** Tagalog as spoken in the Philippines. Android, Apple and ElevenLabs call it Filipino (`fil`). */
     @SerialName("tl") TAGALOG("tl"),
-    @SerialName("ko") KOREAN("ko");
+    @SerialName("ko") KOREAN("ko"),
+    /** Hebrew as spoken in Israel, written right to left. Android's `Locale` still calls it `iw`. */
+    @SerialName("he") HEBREW("he");
 
     val displayName: String get() = when (this) {
         ENGLISH -> "English"
@@ -25,13 +27,15 @@ enum class BedsideLanguage(val code: String) {
         SPANISH -> "Español"
         TAGALOG -> "Tagalog"
         KOREAN -> "한국어"
+        HEBREW -> "עברית"
     }
-    /** The name in caregiver settings, which also says which language the Chinese choices speak, and names Korean for
-     * caregivers who don't read Hangul. */
+    /** The name in caregiver settings, which also says which language the Chinese choices speak, and names Korean and
+     * Hebrew for caregivers who don't read their scripts. */
     val choiceLabel: String get() = when (this) {
         TRADITIONAL_CHINESE, SIMPLIFIED_CHINESE -> "$displayName · Mandarin"
         CANTONESE -> "$displayName · Cantonese"
         KOREAN -> "$displayName · Korean"
+        HEBREW -> "$displayName · Hebrew"
         ENGLISH, SPANISH, TAGALOG -> displayName
     }
     val locale: Locale get() = when (this) {
@@ -42,6 +46,7 @@ enum class BedsideLanguage(val code: String) {
         SPANISH -> Locale.forLanguageTag("es-ES")
         TAGALOG -> Locale.forLanguageTag("fil-PH")
         KOREAN -> Locale.forLanguageTag("ko-KR")
+        HEBREW -> Locale.forLanguageTag("he-IL")
     }
     val speechLanguage: String get() = when (this) {
         ENGLISH -> "en-US"
@@ -51,8 +56,9 @@ enum class BedsideLanguage(val code: String) {
         SPANISH -> "es-ES"
         TAGALOG -> "fil-PH"
         KOREAN -> "ko-KR"
+        HEBREW -> "he-IL"
     }
-    /** English/Spanish/Korean allow regional accents. Chinese choices retain their dialect/region. Tagalog takes either of its codes. */
+    /** English/Spanish/Korean allow regional accents. Chinese choices retain their dialect/region. Tagalog and Hebrew take either of their codes. */
     fun supportsSpeechVoice(language: String): Boolean {
         val tag = language.replace("_", "-").lowercase()
         val base = tag.split("-").firstOrNull { it.isNotEmpty() }
@@ -61,6 +67,7 @@ enum class BedsideLanguage(val code: String) {
             SPANISH -> base == "es"
             TAGALOG -> base == "fil" || base == "tl"
             KOREAN -> base == "ko"
+            HEBREW -> base == "he" || base == "iw"
             TRADITIONAL_CHINESE -> tag in setOf("zh-tw", "zh-hant-tw", "cmn-tw", "cmn-hant-tw")
             SIMPLIFIED_CHINESE -> tag in setOf("zh-cn", "zh-hans-cn", "cmn-cn", "cmn-hans-cn")
             CANTONESE -> tag in setOf("zh-hk", "zh-hant-hk", "yue-hk", "yue-hant-hk")
@@ -74,7 +81,11 @@ enum class BedsideLanguage(val code: String) {
         SPANISH -> spanishStrings
         TAGALOG -> tagalogStrings
         KOREAN -> koreanStrings
+        HEBREW -> hebrewStrings
     }
+    /** Hebrew reads right to left. The bedside keeps its layout, which follows the physical keypad, and lets each paragraph
+     * of text take its own direction. */
+    val isRightToLeft: Boolean get() = this == HEBREW
     fun text(english: String): String = translations[english] ?: english
     /** The strings keep iOS's `%@`, so both apps share them word for word; it formats as `%s`. */
     fun format(english: String, vararg arguments: Any?): String = text(english).replace("%@", "%s").format(locale, *arguments)
@@ -455,6 +466,81 @@ enum class BedsideLanguage(val code: String) {
             "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls." to "보호자에게 iPad 설정 → 개인정보 보호 및 보안 → 마이크에서 Porch를 허용해 달라고 하세요.",
             "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup." to "보호자에게 iPad 설정에서 카메라 사용을 허용하거나 음성 통화로 바꿔 달라고 하세요.",
             "A family member" to "가족"
+        )
+
+        private val hebrewStrings = mapOf(
+            "%@ didn't answer." to "השיחה אל %@ לא נענתה.", "%@ isn't available right now." to "אי אפשר להשיג את %@ כרגע.",
+            "Leave a message for %@" to "הודעה עבור %@", "Speak after the beep." to "דברו אחרי הצפצוף.", "Recording your message…" to "ההודעה מוקלטת…", "Finishing your message…" to "ההודעה נשמרת…",
+            "Send message" to "לשלוח את ההודעה", "Don't send" to "לא לשלוח", "Press %@ when you're finished." to "בסיום, לחצו על %@.",
+            "Your message is on its way to %@." to "ההודעה בדרך אל %@.", "No message was recorded." to "לא הוקלטה הודעה.", "Message not sent." to "ההודעה לא נשלחה.",
+            "%@ didn't answer. Please leave a message after the beep." to "השיחה אל %@ לא נענתה. השאירו הודעה אחרי הצפצוף.",
+            "%@ isn't available right now. Please leave a message after the beep." to "אי אפשר להשיג את %@ כרגע. השאירו הודעה אחרי הצפצוף.",
+            "Couldn't record a message." to "לא הצלחנו להקליט הודעה.",
+            "Play 1 message" to "להשמיע הודעה אחת", "Play %d messages" to "להשמיע %d הודעות",
+            "Message from %@" to "הודעה מאת %@", "Voicemail from %@" to "הודעה קולית מאת %@",
+            "Message from %@. Sent %@." to "הודעה מאת %@. נשלחה %@.", "Voicemail from %@. Sent %@." to "הודעה קולית מאת %@. נשלחה %@.",
+            "Text from %@" to "הודעת טקסט מאת %@", "Text from %@. Sent %@." to "הודעת טקסט מאת %@. נשלחה %@.", "Translated from %@" to "תורגם מ%@",
+            "It came with a picture, which Porch can't show yet." to "צורפה אליה תמונה. עדיין אי אפשר להציג תמונות ב-Porch.",
+            "It came with %d pictures, which Porch can't show yet." to "צורפו אליה %d תמונות. עדיין אי אפשר להציג תמונות ב-Porch.",
+            "It came with something Porch can't show yet." to "צורף אליה משהו שעדיין אי אפשר להציג ב-Porch.",
+            "Sent %@" to "נשלחה %@", "Stop" to "לעצור", "No new messages." to "אין הודעות חדשות.", "Unknown caller" to "מספר לא מזוהה", "You have 1 new message." to "יש הודעה חדשה אחת.", "You have %d new messages." to "יש %d הודעות חדשות.", "Not now" to "לא עכשיו",
+            "Morning" to "בוקר", "Afternoon" to "אחר הצהריים", "Evening" to "ערב", "Night" to "לילה",
+            "Spring" to "אביב", "Summer" to "קיץ", "Fall" to "סתיו", "Winter" to "חורף",
+            "Call someone" to "להתקשר", "Caregiver mode" to "הגדרות למטפלים",
+            "Tap or hold to manage contacts and settings." to "הקשה או לחיצה ארוכה פותחות את אנשי הקשר וההגדרות.",
+            "Who would you like to call?" to "למי להתקשר?",
+            "Tap a name or press their number on the keypad." to "געו בשם, או לחצו על המספר שלידו במקלדת.",
+            "Back to clock" to "חזרה לשעון", "Press %@" to "מקש %@",
+            "Call %@, key %@" to "להתקשר אל %@, מקש %@",
+            "Your caregiver can add people using the settings icon on the clock screen." to "אפשר להוסיף אנשים בהגדרות למטפלים, דרך סמל ההגדרות במסך השעון.",
+            "Use this key to answer or end a call." to "במקש הזה עונים לשיחה ומסיימים אותה.",
+            "Use this key to turn your camera off or on during a video call." to "במקש הזה מכבים ומדליקים את המצלמה בשיחת וידאו.",
+            "No one is assigned to %@.\nPlease choose another number." to "אין איש קשר במקש %@.\nבחרו מספר אחר.",
+            "Finish Porch setup" to "הגדרת Porch לא הושלמה",
+            "Open caregiver mode and invite this person to Porch or add their phone number." to "בהגדרות למטפלים, הזמינו את איש הקשר להצטרף אל Porch או הוסיפו את מספר הטלפון שלו.",
+            "Porch isn't ready" to "מערכת Porch עדיין לא מוכנה",
+            "Check People and Drop-in in caregiver mode, then try again." to "בדקו בהגדרות למטפלים את האנשים ואת החיבור האוטומטי, ואז נסו שוב.",
+            "Couldn't call %@" to "לא הצלחנו להתקשר אל %@", "Please ask your caregiver for help, then try again." to "בקשו עזרה, ואז נסו שוב.",
+            "OK" to "אישור", "Connecting…" to "מתחבר…", "Your camera preview" to "התמונה מהמצלמה שלך",
+            "Voice call\nCamera is off" to "שיחה קולית\nהמצלמה כבויה", "Waiting for video" to "ממתין לווידאו",
+            "Mute" to "השתקה", "Unmute" to "ביטול השתקה", "Camera off" to "כיבוי מצלמה", "Camera on" to "הפעלת מצלמה", "End call" to "סיום שיחה",
+            "Couldn't start the call." to "לא הצלחנו להתחיל את השיחה.", "Key %@: hang up" to "מקש %@: ניתוק",
+            "Key %@: video off / on" to "מקש %@: כיבוי / הפעלת מצלמה", "Phone call connected" to "שיחת הטלפון מחוברת",
+            "Translation on" to "התרגום פועל",
+            "Reconnecting phone call…" to "שיחת הטלפון מתחברת מחדש…", "Calling %@'s phone…" to "מתקשר לטלפון של %@…",
+            "Voice call connected" to "השיחה הקולית מחוברת", "Video call connected" to "שיחת הווידאו מחוברת", "Connecting audio…" to "מחבר את הקול…",
+            "Waiting for %@…" to "ממתין לתשובה של %@…", "Connecting with %@…" to "מתחבר עם %@…", "Calling %@ on Porch…" to "מתקשר אל %@ דרך Porch…",
+            "Calling %@…" to "מתקשר אל %@…", "Calling %@." to "מתקשר אל %@.", "%@ joined the call" to "הצטרפות לשיחה: %@", "%@ left the call" to "יציאה מהשיחה: %@",
+            "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered." to "מתקשר אל %@ דרך Porch…\nאם אין מענה, השיחה תעבור לטלפון.",
+            "Couldn't connect the call. Please try again." to "לא הצלחנו לחבר את השיחה. נסו שוב.",
+            "Couldn't change camera. Try again." to "לא הצלחנו לשנות את המצלמה. נסו שוב.", "Couldn't change microphone. Try again." to "לא הצלחנו לשנות את המיקרופון. נסו שוב.",
+            "Ending call…" to "מסיים את השיחה…", "Reconnecting…" to "מתחבר מחדש…",
+            "Retry ending phone call" to "לנסות שוב לנתק את שיחת הטלפון",
+            "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again." to "החיבור של Porch נותק, ולא הצלחנו לוודא ששיחת הטלפון הסתיימה. בדקו את החיבור לאינטרנט ונסו שוב.",
+            "Call ended. Returning to the clock…" to "השיחה הסתיימה. חוזרים לשעון…", "Call ended. Returning to Porch…" to "השיחה הסתיימה. חוזרים אל Porch…",
+            "No one joined. Returning to the clock…" to "אין מענה. חוזרים לשעון…",
+            "The call disconnected. Returning to the clock…" to "השיחה נותקה. חוזרים לשעון…",
+            "The phone call ended before it was answered." to "שיחת הטלפון הסתיימה לפני שנענתה.",
+            "Microphone access is required." to "נדרשת גישה למיקרופון.",
+            "Allow Porch's microphone in Settings to make a phone call." to "כדי להתקשר, אשרו ל-Porch גישה למיקרופון בהגדרות ה-iPad.",
+            "Couldn't switch to their phone." to "לא הצלחנו לעבור לטלפון.", "Couldn't finish connecting the Porch call." to "לא הצלחנו לסיים לחבר את שיחת ה-Porch.",
+            "They answered Porch, but this device couldn't connect. Please try again." to "השיחה נענתה ב-Porch, אבל המכשיר הזה לא הצליח להתחבר. נסו שוב.",
+            "Porch wasn't answered. Trying %@'s phone…" to "אין מענה ב-Porch. מתקשר לטלפון של %@…",
+            "Phone call\nCamera is off" to "שיחת טלפון\nהמצלמה כבויה", "Couldn't connect their phone." to "לא הצלחנו להתחבר לטלפון.",
+            "Their phone didn't answer. Returning to the clock…" to "אין מענה גם בטלפון. חוזרים לשעון…",
+            "Answer" to "לענות", "Answer video call" to "לענות לשיחת וידאו", "Answer audio call" to "לענות לשיחה קולית", "Don't connect" to "לא לחבר", "Decline" to "לדחות",
+            "Press %@ to stop this drop-in." to "כדי לעצור את החיבור, לחצו על %@.",
+            "Tap %@ to answer. Hold %@ to decline." to "כדי לענות, לחצו על %@. כדי לדחות, לחצו לחיצה ארוכה על %@.",
+            "Video drop-in\nConnecting in %d…" to "חיבור וידאו אוטומטי\nמתחבר בעוד %d…",
+            "Audio drop-in\nConnecting in %d…" to "חיבור קולי אוטומטי\nמתחבר בעוד %d…",
+            "Incoming video call" to "שיחת וידאו נכנסת", "Incoming audio call" to "שיחה קולית נכנסת",
+            "Announcing video drop-in…" to "מודיע על חיבור וידאו…", "Announcing audio drop-in…" to "מודיע על חיבור קולי…",
+            "%@ is dropping in with video. Connecting in five seconds." to "שיחת וידאו מאת %@. מתחברים בעוד חמש שניות.",
+            "%@ is dropping in with audio. Connecting in five seconds." to "שיחה קולית מאת %@. מתחברים בעוד חמש שניות.",
+            "The sound couldn't play. Tap Answer to connect." to "לא הצלחנו להשמיע את ההודעה. כדי להתחבר, לחצו על \"לענות\".",
+            "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls." to "כדי להתקשר, אשרו גישה למיקרופון בהגדרות ה-iPad ← פרטיות ואבטחה ← מיקרופון.",
+            "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup." to "אשרו גישה למצלמה בהגדרות ה-iPad ← פרטיות ואבטחה ← מצלמה, או בחרו שיחה קולית בהגדרות של איש הקשר.",
+            "A family member" to "מישהו מהמשפחה"
         )
 
         private val traditionalStrings = mapOf(

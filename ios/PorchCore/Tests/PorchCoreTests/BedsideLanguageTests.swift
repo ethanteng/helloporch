@@ -49,6 +49,7 @@ final class BedsideLanguageTests: XCTestCase {
             ("zh-HK", .cantonese), ("zh-Hant-HK", .cantonese), ("yue-HK", .cantonese), ("yue-Hant-HK", .cantonese),
             ("fil-PH", .tagalog), ("fil_PH", .tagalog), ("tl-PH", .tagalog), ("fil", .tagalog),
             ("ko-KR", .korean), ("ko_KR", .korean), ("ko", .korean),
+            ("he-IL", .hebrew), ("he", .hebrew), ("iw-IL", .hebrew), ("iw_IL", .hebrew),
         ]
         for (tag, expected) in cases {
             for language in BedsideLanguage.allCases {
@@ -100,6 +101,29 @@ final class BedsideLanguageTests: XCTestCase {
         XCTAssertEqual(BedsideLanguage.tagalog.format("Video drop-in\nConnecting in %d…", arguments: [5]), "Awtomatikong video call\nKokonekta sa loob ng 5…")
         XCTAssertEqual(BedsideLanguage.tagalog.format("Tap %@ to answer. Hold %@ to decline.", arguments: ["#", "#"]), "I-tap ang # para sumagot. Pindutin nang matagal ang # para tumanggi.")
         XCTAssertEqual(BedsideLanguage.english.format("Calling %@.", arguments: ["David"]), "Calling David.")
+        XCTAssertEqual(BedsideLanguage.hebrew.text("End call"), "סיום שיחה")
+        XCTAssertEqual(BedsideLanguage.hebrew.speechLanguage, "he-IL")
+        // A right-to-left locale isolates each argument (U+2068…U+2069), so a name in Latin letters keeps its own direction.
+        XCTAssertEqual(BedsideLanguage.hebrew.format("%@ is dropping in with video. Connecting in five seconds.", arguments: [BedsideLanguage.hebrew.text("A family member")]), "שיחת וידאו מאת \u{2068}מישהו מהמשפחה\u{2069}. מתחברים בעוד חמש שניות.")
+        XCTAssertEqual(BedsideLanguage.hebrew.format("Video drop-in\nConnecting in %d…", arguments: [5]), "חיבור וידאו אוטומטי\nמתחבר בעוד 5…")
+        XCTAssertEqual(BedsideLanguage.hebrew.format("You have %d new messages.", arguments: [3]), "יש 3 הודעות חדשות.")
+    }
+    /// A paragraph's first letter sets its direction, so a Hebrew line that began with a name in Latin letters, or with
+    /// "Porch", would lay out left to right. Every Hebrew line starts with a Hebrew word instead.
+    func testHebrewLinesReadRightToLeftWhateverTheNames() {
+        XCTAssertEqual(BedsideLanguage.allCases.filter(\.isRightToLeft), [.hebrew])
+        for key in BedsideLanguage.traditionalChinese.translations.keys {
+            let arguments: [CVarArg] = key.components(separatedBy: "%").dropFirst().map { $0.hasPrefix("d") ? 3 as CVarArg : "Sarah" as CVarArg }
+            for line in BedsideLanguage.hebrew.format(key, arguments: arguments).components(separatedBy: "\n") {
+                XCTAssertTrue(BedsideLanguage.readsRightToLeft(line), "\(key): \(line)")
+            }
+        }
+        XCTAssertTrue(BedsideLanguage.readsRightToLeft("3 הודעות"))
+        XCTAssertTrue(BedsideLanguage.readsRightToLeft("مرحبا"))
+        XCTAssertFalse(BedsideLanguage.readsRightToLeft("Sarah שלום"))
+        XCTAssertFalse(BedsideLanguage.readsRightToLeft("Hi Mom! 💛"))
+        XCTAssertFalse(BedsideLanguage.readsRightToLeft("媽，妳好"))
+        XCTAssertFalse(BedsideLanguage.readsRightToLeft("15:15"))
     }
     func testNewLanguageDatesKeepTheLocalDateAndWeekday() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!
@@ -124,6 +148,16 @@ final class BedsideLanguageTests: XCTestCase {
         XCTAssertEqual(formatter.string(from: date), "금요일")
         formatter.setLocalizedDateFormatFromTemplate("yyyyMMMMd")
         XCTAssertEqual(formatter.string(from: date), "2026년 10월 16일")
+    }
+    func testHebrewDatesUseHebrewNames() {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 23, minute: 35))!
+        let formatter = DateFormatter(); formatter.locale = BedsideLanguage.hebrew.locale
+        formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("EEEE")
+        XCTAssertEqual(formatter.string(from: date), "יום שישי")
+        formatter.setLocalizedDateFormatFromTemplate("yyyyMMMMd")
+        XCTAssertEqual(formatter.string(from: date), "16 באוקטובר 2026")
     }
     func testTagalogDatesUseFilipinoNames() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: -7 * 3600)!
@@ -173,6 +207,6 @@ final class BedsideLanguageTests: XCTestCase {
 
     /// Caregiver settings say which language each Chinese choice speaks.
     func testChoiceLabelsNameTheSpokenLanguage() {
-        XCTAssertEqual(BedsideLanguage.allCases.map(\.choiceLabel), ["English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog", "한국어 · Korean"])
+        XCTAssertEqual(BedsideLanguage.allCases.map(\.choiceLabel), ["English", "繁體中文 · Mandarin", "简体中文 · Mandarin", "廣東話 · Cantonese", "Español", "Tagalog", "한국어 · Korean", "עברית · Hebrew"])
     }
 }

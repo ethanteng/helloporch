@@ -53,6 +53,10 @@ const languages = [
     native: v => v.language === "ko" && (!v.locale || v.locale === "ko-KR"),
     sentences: [`${name}에게서 영상통화가 왔어요. 5초 후에 연결돼요.`, `${name}의 메시지예요. 오늘 오후 3:15에 보냈어요.`,
       `${name}에게서 응답이 없어요. 삐 소리가 나면 메시지를 남겨 주세요.`] },
+  { id: "he", label: "עברית · Hebrew", code: "he", library: ["he"], say: "Carmit",
+    native: v => v.language === "he" && (!v.locale || v.locale === "he-IL"),
+    sentences: [`שיחת וידאו מאת ${name}. מתחברים בעוד חמש שניות.`, `הודעה מאת ${name}. נשלחה היום, 15:15.`,
+      `השיחה אל ${name} לא נענתה. השאירו הודעה אחרי הצפצוף.`] },
 ];
 const script = language => language.sentences.join("\n\n");
 

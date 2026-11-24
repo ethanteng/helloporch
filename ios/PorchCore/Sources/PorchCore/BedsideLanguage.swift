@@ -9,6 +9,8 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
     /// Tagalog as spoken in the Philippines. Apple, Android and ElevenLabs call it Filipino (`fil`).
     case tagalog = "tl"
     case korean = "ko"
+    /// Hebrew as spoken in Israel, written right to left. Android still calls it `iw`.
+    case hebrew = "he"
 
     public var displayName: String {
         switch self {
@@ -19,15 +21,17 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return "Español"
         case .tagalog: return "Tagalog"
         case .korean: return "한국어"
+        case .hebrew: return "עברית"
         }
     }
-    /// The name in caregiver settings, which also says which language the Chinese choices speak, and names Korean for
-    /// caregivers who don't read Hangul.
+    /// The name in caregiver settings, which also says which language the Chinese choices speak, and names Korean and
+    /// Hebrew for caregivers who don't read their scripts.
     public var choiceLabel: String {
         switch self {
         case .traditionalChinese, .simplifiedChinese: return "\(displayName) · Mandarin"
         case .cantonese: return "\(displayName) · Cantonese"
         case .korean: return "\(displayName) · Korean"
+        case .hebrew: return "\(displayName) · Hebrew"
         case .english, .spanish, .tagalog: return displayName
         }
     }
@@ -40,6 +44,7 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return Locale(identifier: "es_ES")
         case .tagalog: return Locale(identifier: "fil_PH")
         case .korean: return Locale(identifier: "ko_KR")
+        case .hebrew: return Locale(identifier: "he_IL")
         }
     }
     public var speechLanguage: String {
@@ -51,10 +56,11 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return "es-ES"
         case .tagalog: return "fil-PH"
         case .korean: return "ko-KR"
+        case .hebrew: return "he-IL"
         }
     }
-    /// English/Spanish/Korean allow regional accents. Chinese choices retain their dialect/region. Tagalog takes either of its
-    /// codes; iPadOS has no Filipino voice today, so Tagalog announcements rely on natural voices.
+    /// English/Spanish/Korean allow regional accents. Chinese choices retain their dialect/region. Tagalog and Hebrew take
+    /// either of their codes; iPadOS has no Filipino voice today, so Tagalog announcements rely on natural voices.
     public func supportsSpeechVoice(language tag: String) -> Bool {
         let tag = tag.replacingOccurrences(of: "_", with: "-").lowercased()
         let base = tag.split(separator: "-").first.map(String.init)
@@ -63,6 +69,7 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return base == "es"
         case .tagalog: return base == "fil" || base == "tl"
         case .korean: return base == "ko"
+        case .hebrew: return base == "he" || base == "iw"
         case .traditionalChinese: return ["zh-tw", "zh-hant-tw", "cmn-tw", "cmn-hant-tw"].contains(tag)
         case .simplifiedChinese: return ["zh-cn", "zh-hans-cn", "cmn-cn", "cmn-hans-cn"].contains(tag)
         case .cantonese: return ["zh-hk", "zh-hant-hk", "yue-hk", "yue-hant-hk"].contains(tag)
@@ -77,7 +84,23 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         case .spanish: return Self.spanishStrings
         case .tagalog: return Self.tagalogStrings
         case .korean: return Self.koreanStrings
+        case .hebrew: return Self.hebrewStrings
         }
+    }
+    /// Hebrew reads right to left. The bedside keeps its layout, which follows the physical keypad, but aligns
+    /// paragraphs of Hebrew text to the right.
+    public var isRightToLeft: Bool { self == .hebrew }
+    /// Whether a paragraph reads right to left, decided as the Unicode bidirectional algorithm does: by its first letter.
+    /// Hebrew and Arabic letters read right to left, any other letter left to right. A received text may be in another
+    /// language than the bedside's, so this goes by the words themselves.
+    public static func readsRightToLeft(_ text: String) -> Bool {
+        for scalar in text.unicodeScalars where scalar.properties.isAlphabetic {
+            switch scalar.value {
+            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF: return true
+            default: return false
+            }
+        }
+        return false
     }
     public func text(_ english: String) -> String { translations[english] ?? english }
     public func format(_ english: String, arguments: [CVarArg]) -> String { String(format: text(english), locale: locale, arguments: arguments) }
@@ -455,6 +478,81 @@ public enum BedsideLanguage: String, Codable, CaseIterable {
         "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls.": "보호자에게 iPad 설정 → 개인정보 보호 및 보안 → 마이크에서 Porch를 허용해 달라고 하세요.",
         "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup.": "보호자에게 iPad 설정에서 카메라 사용을 허용하거나 음성 통화로 바꿔 달라고 하세요.",
         "A family member": "가족"
+    ]
+
+    private static let hebrewStrings: [String: String] = [
+        "%@ didn't answer.": "השיחה אל %@ לא נענתה.", "%@ isn't available right now.": "אי אפשר להשיג את %@ כרגע.",
+        "Leave a message for %@": "הודעה עבור %@", "Speak after the beep.": "דברו אחרי הצפצוף.", "Recording your message…": "ההודעה מוקלטת…",
+        "Send message": "לשלוח את ההודעה", "Don't send": "לא לשלוח", "Press %@ when you're finished.": "בסיום, לחצו על %@.",
+        "Your message is on its way to %@.": "ההודעה בדרך אל %@.", "No message was recorded.": "לא הוקלטה הודעה.", "Message not sent.": "ההודעה לא נשלחה.",
+        "%@ didn't answer. Please leave a message after the beep.": "השיחה אל %@ לא נענתה. השאירו הודעה אחרי הצפצוף.",
+        "%@ isn't available right now. Please leave a message after the beep.": "אי אפשר להשיג את %@ כרגע. השאירו הודעה אחרי הצפצוף.",
+        "Couldn't record a message.": "לא הצלחנו להקליט הודעה.",
+        "Play 1 message": "להשמיע הודעה אחת", "Play %d messages": "להשמיע %d הודעות",
+        "Message from %@": "הודעה מאת %@", "Voicemail from %@": "הודעה קולית מאת %@",
+        "Message from %@. Sent %@.": "הודעה מאת %@. נשלחה %@.", "Voicemail from %@. Sent %@.": "הודעה קולית מאת %@. נשלחה %@.",
+        "Text from %@": "הודעת טקסט מאת %@", "Text from %@. Sent %@.": "הודעת טקסט מאת %@. נשלחה %@.", "Translated from %@": "תורגם מ%@",
+        "It came with a picture, which Porch can't show yet.": "צורפה אליה תמונה. עדיין אי אפשר להציג תמונות ב-Porch.",
+        "It came with %d pictures, which Porch can't show yet.": "צורפו אליה %d תמונות. עדיין אי אפשר להציג תמונות ב-Porch.",
+        "It came with something Porch can't show yet.": "צורף אליה משהו שעדיין אי אפשר להציג ב-Porch.",
+        "Sent %@": "נשלחה %@", "Stop": "לעצור", "No new messages.": "אין הודעות חדשות.", "Unknown caller": "מספר לא מזוהה", "You have 1 new message.": "יש הודעה חדשה אחת.", "You have %d new messages.": "יש %d הודעות חדשות.", "Not now": "לא עכשיו",
+        "Morning": "בוקר", "Afternoon": "אחר הצהריים", "Evening": "ערב", "Night": "לילה",
+        "Spring": "אביב", "Summer": "קיץ", "Fall": "סתיו", "Winter": "חורף",
+        "Call someone": "להתקשר", "Caregiver mode": "הגדרות למטפלים",
+        "Tap or hold to manage contacts and settings.": "הקשה או לחיצה ארוכה פותחות את אנשי הקשר וההגדרות.",
+        "Who would you like to call?": "למי להתקשר?",
+        "Tap a name or press their number on the keypad.": "געו בשם, או לחצו על המספר שלידו במקלדת.",
+        "Back to clock": "חזרה לשעון", "Press %@": "מקש %@",
+        "Call %@, key %@": "להתקשר אל %@, מקש %@",
+        "Your caregiver can add people using the settings icon on the clock screen.": "אפשר להוסיף אנשים בהגדרות למטפלים, דרך סמל ההגדרות במסך השעון.",
+        "Use this key to answer or end a call.": "במקש הזה עונים לשיחה ומסיימים אותה.",
+        "Use this key to turn your camera off or on during a video call.": "במקש הזה מכבים ומדליקים את המצלמה בשיחת וידאו.",
+        "No one is assigned to %@.\nPlease choose another number.": "אין איש קשר במקש %@.\nבחרו מספר אחר.",
+        "Finish Porch setup": "הגדרת Porch לא הושלמה",
+        "Open caregiver mode and invite this person to Porch or add their phone number.": "בהגדרות למטפלים, הזמינו את איש הקשר להצטרף אל Porch או הוסיפו את מספר הטלפון שלו.",
+        "Porch isn't ready": "מערכת Porch עדיין לא מוכנה",
+        "Check People and Drop-in in caregiver mode, then try again.": "בדקו בהגדרות למטפלים את האנשים ואת החיבור האוטומטי, ואז נסו שוב.",
+        "Couldn't call %@": "לא הצלחנו להתקשר אל %@", "Please ask your caregiver for help, then try again.": "בקשו עזרה, ואז נסו שוב.",
+        "OK": "אישור", "Connecting…": "מתחבר…", "Your camera preview": "התמונה מהמצלמה שלך",
+        "Voice call\nCamera is off": "שיחה קולית\nהמצלמה כבויה", "Waiting for video": "ממתין לווידאו",
+        "Mute": "השתקה", "Unmute": "ביטול השתקה", "Camera off": "כיבוי מצלמה", "Camera on": "הפעלת מצלמה", "End call": "סיום שיחה",
+        "Couldn't start the call.": "לא הצלחנו להתחיל את השיחה.", "Key %@: hang up": "מקש %@: ניתוק",
+        "Key %@: video off / on": "מקש %@: כיבוי / הפעלת מצלמה", "Phone call connected": "שיחת הטלפון מחוברת",
+        "Translation on": "התרגום פועל",
+        "Reconnecting phone call…": "שיחת הטלפון מתחברת מחדש…", "Calling %@'s phone…": "מתקשר לטלפון של %@…",
+        "Voice call connected": "השיחה הקולית מחוברת", "Video call connected": "שיחת הווידאו מחוברת", "Connecting audio…": "מחבר את הקול…",
+        "Waiting for %@…": "ממתין לתשובה של %@…", "Connecting with %@…": "מתחבר עם %@…", "Calling %@ on Porch…": "מתקשר אל %@ דרך Porch…",
+        "Calling %@…": "מתקשר אל %@…", "Calling %@.": "מתקשר אל %@.", "%@ joined the call": "הצטרפות לשיחה: %@", "%@ left the call": "יציאה מהשיחה: %@",
+        "Trying %@ on Porch…\nTheir phone will ring if Porch isn't answered.": "מתקשר אל %@ דרך Porch…\nאם אין מענה, השיחה תעבור לטלפון.",
+        "Couldn't connect the call. Please try again.": "לא הצלחנו לחבר את השיחה. נסו שוב.",
+        "Couldn't change camera. Try again.": "לא הצלחנו לשנות את המצלמה. נסו שוב.", "Couldn't change microphone. Try again.": "לא הצלחנו לשנות את המיקרופון. נסו שוב.",
+        "Ending call…": "מסיים את השיחה…", "Reconnecting…": "מתחבר מחדש…",
+        "Retry ending phone call": "לנסות שוב לנתק את שיחת הטלפון",
+        "Porch disconnected. Couldn't confirm the phone call ended. Check the internet connection and try again.": "החיבור של Porch נותק, ולא הצלחנו לוודא ששיחת הטלפון הסתיימה. בדקו את החיבור לאינטרנט ונסו שוב.",
+        "Call ended. Returning to the clock…": "השיחה הסתיימה. חוזרים לשעון…", "Call ended. Returning to Porch…": "השיחה הסתיימה. חוזרים אל Porch…",
+        "No one joined. Returning to the clock…": "אין מענה. חוזרים לשעון…",
+        "The call disconnected. Returning to the clock…": "השיחה נותקה. חוזרים לשעון…",
+        "The phone call ended before it was answered.": "שיחת הטלפון הסתיימה לפני שנענתה.",
+        "Microphone access is required.": "נדרשת גישה למיקרופון.",
+        "Allow Porch's microphone in Settings to make a phone call.": "כדי להתקשר, אשרו ל-Porch גישה למיקרופון בהגדרות ה-iPad.",
+        "Couldn't switch to their phone.": "לא הצלחנו לעבור לטלפון.", "Couldn't finish connecting the Porch call.": "לא הצלחנו לסיים לחבר את שיחת ה-Porch.",
+        "They answered Porch, but this device couldn't connect. Please try again.": "השיחה נענתה ב-Porch, אבל המכשיר הזה לא הצליח להתחבר. נסו שוב.",
+        "Porch wasn't answered. Trying %@'s phone…": "אין מענה ב-Porch. מתקשר לטלפון של %@…",
+        "Phone call\nCamera is off": "שיחת טלפון\nהמצלמה כבויה", "Couldn't connect their phone.": "לא הצלחנו להתחבר לטלפון.",
+        "Their phone didn't answer. Returning to the clock…": "אין מענה גם בטלפון. חוזרים לשעון…",
+        "Answer": "לענות", "Answer video call": "לענות לשיחת וידאו", "Answer audio call": "לענות לשיחה קולית", "Don't connect": "לא לחבר", "Decline": "לדחות",
+        "Press %@ to stop this drop-in.": "כדי לעצור את החיבור, לחצו על %@.",
+        "Tap %@ to answer. Hold %@ to decline.": "כדי לענות, לחצו על %@. כדי לדחות, לחצו לחיצה ארוכה על %@.",
+        "Video drop-in\nConnecting in %d…": "חיבור וידאו אוטומטי\nמתחבר בעוד %d…",
+        "Audio drop-in\nConnecting in %d…": "חיבור קולי אוטומטי\nמתחבר בעוד %d…",
+        "Incoming video call": "שיחת וידאו נכנסת", "Incoming audio call": "שיחה קולית נכנסת",
+        "Announcing video drop-in…": "מודיע על חיבור וידאו…", "Announcing audio drop-in…": "מודיע על חיבור קולי…",
+        "%@ is dropping in with video. Connecting in five seconds.": "שיחת וידאו מאת %@. מתחברים בעוד חמש שניות.",
+        "%@ is dropping in with audio. Connecting in five seconds.": "שיחה קולית מאת %@. מתחברים בעוד חמש שניות.",
+        "The sound couldn't play. Tap Answer to connect.": "לא הצלחנו להשמיע את ההודעה. כדי להתחבר, לחצו על \"לענות\".",
+        "Allow microphone access in iPad Settings → Privacy & Security → Microphone to make calls.": "כדי להתקשר, אשרו גישה למיקרופון בהגדרות ה-iPad ← פרטיות ואבטחה ← מיקרופון.",
+        "Allow camera access in iPad Settings → Privacy & Security → Camera, or choose Voice in this person's setup.": "אשרו גישה למצלמה בהגדרות ה-iPad ← פרטיות ואבטחה ← מצלמה, או בחרו שיחה קולית בהגדרות של איש הקשר.",
+        "A family member": "מישהו מהמשפחה"
     ]
 
     private static let traditionalStrings: [String: String] = [
