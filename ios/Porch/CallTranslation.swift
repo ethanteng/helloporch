@@ -297,7 +297,10 @@ import PorchCore
             entry.addArrangedSubview(PorchStyle.systemLabel("\(who): \(line.heard)", size: 15, color: PorchStyle.nightSecondary))
             if let said = line.said { entry.addArrangedSubview(PorchStyle.systemLabel("\(peerName) hears: \(said)", size: 17, color: .white, weight: .semibold)) }
         }
-        for case let label as UILabel in entry.arrangedSubviews { label.numberOfLines = maxLines; label.textAlignment = .natural }
+        for case let label as UILabel in entry.arrangedSubviews {
+            label.numberOfLines = maxLines
+            label.textAlignment = BedsideLanguage.readsRightToLeft(label.text ?? "") ? .right : .natural
+        }
         return entry
     }
 }

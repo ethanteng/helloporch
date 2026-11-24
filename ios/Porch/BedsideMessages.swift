@@ -529,7 +529,7 @@ final class MessagePlayerViewController: UIViewController {
         // As large as fits: most texts are a line or two.
         let length = text.text.count
         textBody.font = PorchStyle.systemFont(length <= 80 ? 52 : length <= 200 ? 44 : length <= 500 ? 36 : 30, weight: .medium)
-        textBody.textAlignment = length <= 200 ? .center : .natural
+        textBody.textAlignment = length <= 200 ? .center : BedsideLanguage.readsRightToLeft(text.text) ? .right : .left
         textNote.text = ([text.translated ? Self.translatedNote(text.sourceLanguage) : nil].compactMap { $0 } + Self.attachmentNotes(text)).joined(separator: "\n")
         textNote.isHidden = textNote.text?.isEmpty != false
         textOriginal.text = text.body; textOriginal.isHidden = !text.translated || text.body.isEmpty
@@ -604,7 +604,7 @@ final class MessagePlayerViewController: UIViewController {
     }
     /// Words Porch couldn't translate, written in a language other than the bedside's: read in that language's
     /// built-in voice rather than with the bedside voice's accent. Every written Chinese counts as the Chinese choices' language,
-    /// and Filipino (`fil`) as Tagalog.
+    /// Filipino (`fil`) as Tagalog, and Hebrew's old code (`iw`) as Hebrew.
     static func otherLanguage(of text: ReceivedText) -> String? {
         guard !text.translated else { return nil }
         // Apple's recognizer doesn't know Tagalog and would call a Tagalog text Indonesian or English, so a Tagalog
@@ -614,7 +614,7 @@ final class MessagePlayerViewController: UIViewController {
         func family(_ tag: String) -> String {
             let base = tag.split(separator: "-").first.map { String($0).lowercased() } ?? ""
             if ["zh", "yue", "cmn"].contains(base) { return "zh" }
-            return base == "fil" ? "tl" : base
+            return base == "fil" ? "tl" : base == "iw" ? "he" : base
         }
         return family(tag) == family(BedsideText.language.rawValue) ? nil : tag
     }

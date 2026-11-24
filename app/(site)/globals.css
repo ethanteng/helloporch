@@ -13,6 +13,9 @@
   --brown-ink: #64281a;
   --serif: var(--font-serif), "Newsreader", Georgia, serif;
   --sans: var(--font-sans), "DM Sans", system-ui, sans-serif;
+  /* For Korean words among others: a named Korean font takes the text's weight, while the browser's own fallback for
+     Hangul draws it regular. Only on Korean text, since these fonts would also draw Chinese characters. */
+  --sans-ko: var(--font-sans), "DM Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --brand: var(--font-brand), "Bricolage Grotesque", system-ui, sans-serif;
 }
 

@@ -693,13 +693,14 @@
   gap: 22px;
   width: 100%;
   max-width: 560px;
+  container-type: inline-size;
 }
 
+/* The seven languages as equal buttons in one row. Where the column is too narrow for that, two full rows: four
+   buttons, then three wider ones, so both rows line up at the edges. */
 .langPicker {
-  display: flex;
-  /* Six languages fit the 560px column; a narrower one wraps instead of spilling out of the card. */
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   max-width: 100%;
   gap: 4px;
   padding: 5px;
@@ -713,9 +714,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 80px;
+  min-width: 0;
   min-height: 52px;
-  padding: 4px 10px;
+  padding: 4px 6px;
   border: 0;
   border-radius: 99px;
   background: transparent;
@@ -723,6 +724,42 @@
   font: 600 16px/1.15 var(--sans);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+}
+
+@container (max-width: 539px) {
+  .langPicker {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    width: 100%;
+    border-radius: 30px;
+  }
+  .langOption {
+    grid-column: span 3;
+  }
+  .langOption:nth-child(n + 5) {
+    grid-column: span 4;
+  }
+}
+
+/* The smallest phones: tighter buttons so "Cantonese" still fits under 廣東話. */
+@container (max-width: 279px) {
+  .langPicker {
+    gap: 2px;
+    padding: 3px;
+  }
+  .langOption {
+    padding: 4px 1px;
+    font-size: 14px;
+  }
+  .langOption small {
+    font-size: 9.5px;
+    letter-spacing: 0;
+  }
+}
+
+/* Hangul's strokes are thinner: bold matches the other names' semibold. */
+.langOption span:lang(ko) {
+  font-family: var(--sans-ko);
+  font-weight: 700;
 }
 
 .langOption small {
@@ -1248,21 +1285,6 @@
 
   .messagesIpad .ipad {
     width: 170px;
-  }
-
-  .langPicker {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-radius: 28px;
-  }
-
-  .langOption {
-    border-radius: 22px;
-  }
-
-  /* An odd language out takes the whole last row. */
-  .langOption:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
   }
 
   .langBody {
