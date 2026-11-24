@@ -361,18 +361,40 @@ public struct PorchNumberSetup: Codable, Equatable {
 public struct NaturalVoices: Codable, Equatable {
     public struct Voice: Codable, Equatable, Identifiable {
         public let id: String
+        /// A listed voice's name, or a family voice's caregiver's name.
         public let name: String
-        /// How it sounds, such as "Steady, calm and grounded · female".
+        /// How it sounds, such as "Steady, calm and grounded · female", or "Family voice".
         public let detail: String
+        /// A caregiver recorded it (their own voice). Family voices come after the listed ones. Older servers don't send it.
+        public let family: Bool?
+        /// A family voice's caregiver, so their phone can tell which voice is theirs.
+        public let memberID: String?
+        public init(id: String, name: String, detail: String, family: Bool? = nil, memberID: String? = nil) {
+            self.id = id; self.name = name; self.detail = detail; self.family = family; self.memberID = memberID
+        }
+        public var isFamily: Bool { family == true }
     }
     public struct Choices: Codable, Equatable {
         /// The household's voice for this language; nil means the iPad's built-in voice.
         public let selected: String?
         public let defaultVoice: String
         public let voices: [Voice]
+        public init(selected: String?, defaultVoice: String, voices: [Voice]) {
+            self.selected = selected; self.defaultVoice = defaultVoice; self.voices = voices
+        }
+        /// Caregivers' own voices, in the order they were made.
+        public var familyVoices: [Voice] { voices.filter(\.isFamily) }
+        /// The voices Porch lists for everyone.
+        public var listedVoices: [Voice] { voices.filter { !$0.isFamily } }
+        /// The voice a caregiver recorded, by their member ID.
+        public func familyVoice(of memberID: String?) -> Voice? {
+            guard let memberID else { return nil }
+            return voices.first { $0.isFamily && $0.memberID == memberID }
+        }
     }
     /// Keyed by `BedsideLanguage.rawValue`.
     public let languages: [String: Choices]
+    public init(languages: [String: Choices]) { self.languages = languages }
     public func choices(for language: BedsideLanguage) -> Choices? { languages[language.rawValue] }
 }
 /// Returned with caregiver actions after a PIN check. Lists every family device, which a
@@ -395,12 +417,22 @@ public struct FamilyAdminState: Codable, Equatable {
     public let shareAttendance: Bool?
     /// Set while every call drops in. Older servers don't send it.
     public let everyCall: EveryCallDropIn?
-    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, texts: [FamilyText]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil, everyCall: EveryCallDropIn? = nil) {
+    /// Announcement voices for each bedside language, caregivers' own included. Servers without voices set up, and older
+    /// ones, don't send them.
+    public let speech: NaturalVoices?
+    /// The bedside language as the server last heard it, a `BedsideLanguage` raw value. Older servers don't send it.
+    public let bedsideLanguage: String?
+    public init(householdName: String, dropInEnabled: Bool, people: [FamilyPerson], messagesEnabled: Bool? = nil, messages: [FamilyMessage]? = nil, texts: [FamilyText]? = nil, phoneDropIns: [PhoneDropInApproval]? = nil, invitations: [PendingFamilyInvitation]? = nil, callScreening: CallScreening? = nil, shareAttendance: Bool? = nil, everyCall: EveryCallDropIn? = nil, speech: NaturalVoices? = nil, bedsideLanguage: String? = nil) {
         self.householdName = householdName; self.dropInEnabled = dropInEnabled; self.people = people
         self.messagesEnabled = messagesEnabled; self.messages = messages; self.texts = texts; self.phoneDropIns = phoneDropIns; self.invitations = invitations
         self.callScreening = callScreening; self.shareAttendance = shareAttendance; self.everyCall = everyCall
+        self.speech = speech; self.bedsideLanguage = bedsideLanguage
     }
     public var dropInChoice: DropInChoice { DropInChoice(dropInEnabled: dropInEnabled, everyCall: everyCall) }
+    /// The bedside's language, English until the server has heard it.
+    public var language: BedsideLanguage { bedsideLanguage.flatMap(BedsideLanguage.init(rawValue:)) ?? .english }
+    /// The voices a caregiver can choose for the bedside's language, when the server has voices set up.
+    public var announcementVoices: NaturalVoices.Choices? { speech?.choices(for: language) }
 }
 /// One call to or from the bedside, as caregivers see it in Call history (`callHistory`).
 /// `direction` is the bedside's: "incoming" rang the bedside and "outgoing" was placed from it. `via` is "porch", or

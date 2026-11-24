@@ -127,7 +127,14 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   requireValue(requested === undefined || offered(house, language, requested), "Choose one of the listed voices.");
   const voiceID = requested ?? speechVoice(house, language);
   requireValue(voiceID, `This language uses the ${bedsideDevice(house)}'s built-in voice.`, 409);
-  if (!textID) return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) };
+  if (!textID) {
+    try { return { clip: await speechClip({ store, media, now, house, synthesize }, voiceID, language, text) }; }
+    catch (error) {
+      // The daily allowance, as 409 on a caregiver's phone, where 429 ends caregiver mode as too many PIN tries.
+      if (action === "previewSpeech" && error instanceof FamilyError && error.status === 429) throw new FamilyError(error.message, 409);
+      throw error;
+    }
+  }
   // A text's words are private: their reading is kept apart and deleted with the text.
   const folder = `texts/${textID}`;
   const pathname = clipPathname(house.id, voiceID, language, text, "bedside", folder);

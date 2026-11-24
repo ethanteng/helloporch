@@ -228,7 +228,7 @@ test('a family makes at most three voices a day, failed ones included', async ()
   f.voices.failAdd = null;
   assert.equal((await f.record(f.linda.credential)).response.status, 200);
   const { pathname, response } = await f.record(f.tom.credential);
-  assert.equal(response.status, 429);
+  assert.equal(response.status, 409, 'not 429, which phones take for too many PIN tries');
   assert.equal((await response.json()).error, 'You can record again tomorrow.');
   assert.equal(f.media.blobs.has(pathname), false, 'the recording is still deleted');
   assert.equal(f.voices.made.length, 2);

@@ -132,7 +132,8 @@ export async function handleVoiceAction(action: string, { store, media, now, hou
     const day = Math.floor(now / 86400);
     await mutate(store, house.id, latest => {
       const made = latest.voiceUsage?.day === day ? latest.voiceUsage.made : 0;
-      requireValue(made < voiceLimits.madePerDay, "You can record again tomorrow.", 429);
+      // Not 429: on a caregiver's phone, that ends caregiver mode as too many PIN tries.
+      requireValue(made < voiceLimits.madePerDay, "You can record again tomorrow.", 409);
       latest.voiceUsage = { day, made: made + 1 };
     });
     const uploaded = await media().stat(pathname);

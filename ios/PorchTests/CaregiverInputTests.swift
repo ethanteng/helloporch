@@ -88,7 +88,8 @@ final class CaregiverInputTests: XCTestCase {
     @MainActor func testCaregiverHomeOpensEachBedsidePage() throws {
         let home = FamilyAdminViewController(slots: CallSlots())
         let navigation = UINavigationController(rootViewController: home); home.loadViewIfNeeded()
-        XCTAssertEqual(rows(in: home.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("caregiver.page.") }, CaregiverPage.allCases.map { "caregiver.page.\($0.rawValue)" })
+        XCTAssertEqual(rows(in: home.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("caregiver.page.") }, CaregiverPage.allCases.filter { $0 != .voice }.map { "caregiver.page.\($0.rawValue)" },
+                       "Every page but Voice, which the bedside keeps in Display & voice")
         XCTAssertEqual(Array(CaregiverPage.pages(onBedside: true).map { $0.title(onBedside: true) }.prefix(7)), ["People", "Calls", "Drop-in", "Messages", "Display & voice", "Privacy", "Caregivers & PIN"])
         let expected: [(CaregiverPage, AnyClass)] = [(.people, PeopleSettingsViewController.self), (.calls, CallSettingsViewController.self), (.dropIn, DropInSettingsViewController.self),
             (.messages, MessageSettingsViewController.self), (.display, BedsideDisplaySettingsViewController.self), (.privacy, PrivacySettingsViewController.self),
@@ -3551,4 +3552,220 @@ final class ScreenAwakeTests: XCTestCase {
 private final class CallScreenProbe: UIViewController {
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); ScreenAwake.callShown(self, voice: true) }
     override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); ScreenAwake.callDisappeared(self) }
+}
+
+/// Caregivers' own voices: the Voice page in caregiver mode on a phone, recording and listening back, and the bedside's
+/// voice menu.
+final class CaregiverVoiceTests: XCTestCase {
+    @MainActor private func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
+    @MainActor private func buttons(in view: UIView) -> [UIButton] { descendants(view).compactMap { $0 as? UIButton } }
+    @MainActor private func labels(in view: UIView) -> [UILabel] { descendants(view).compactMap { $0 as? UILabel } }
+    @MainActor private func rows(in view: UIView) -> [PorchListRow] { descendants(view).compactMap { $0 as? PorchListRow } }
+    private let remote = FamilyCredential(origin: URL(string: "https://porch.example")!, credential: "me.secret", role: .family)
+
+    /// Rose's household as a caregiver's phone sees it. `mine` adds this phone's own voice; `selected` is the choice
+    /// (nil: the built-in voice).
+    private func state(mine: Bool = false, selected: String? = "hope", language: String = "en", speech: Bool = true) throws -> FamilyAdminState {
+        var voices: [[String: Any]] = [
+            ["id": "hope", "name": "Hope", "detail": "Natural, clear and calm · female"],
+            ["id": "jon", "name": "Jon", "detail": "Warm and grounded · male"],
+            ["id": "TomVoice000000000001", "name": "Tom", "detail": "Family voice", "family": true, "memberID": "tom"],
+        ]
+        if mine { voices.insert(["id": "LindaVoice0000000001", "name": "Linda", "detail": "Family voice", "family": true, "memberID": "me"], at: 2) }
+        var object: [String: Any] = ["householdName": "Rose", "dropInEnabled": true, "people": [
+            ["id": "me", "name": "Linda", "role": "family", "permissions": ["audio": true, "video": true], "online": true, "caregiver": true],
+            ["id": "tom", "name": "Tom", "role": "family", "permissions": ["audio": true, "video": false], "online": false, "caregiver": true]],
+            "bedsideLanguage": language]
+        if speech {
+            object["speech"] = ["languages": [language: ["selected": selected.map { $0 as Any } ?? NSNull(), "defaultVoice": "hope", "voices": voices]]]
+        }
+        return try JSONDecoder().decode(FamilyAdminState.self, from: JSONSerialization.data(withJSONObject: object))
+    }
+
+    @MainActor func testPhonesListVoiceAfterMessagesWhenTheServerHasVoices() throws {
+        let admin = FamilyAdminViewController(remote: remote, state: try state())
+        let navigation = UINavigationController(rootViewController: admin); admin.loadViewIfNeeded()
+        XCTAssertEqual(rows(in: admin.view).compactMap(\.accessibilityIdentifier).filter { $0.hasPrefix("caregiver.page.") },
+                       ["caregiver.page.people", "caregiver.page.calls", "caregiver.page.dropIn", "caregiver.page.messages", "caregiver.page.voice", "caregiver.page.privacy", "caregiver.page.caregivers", "caregiver.page.about"])
+        let voice = try XCTUnwrap(rows(in: admin.view).first { $0.accessibilityIdentifier == "caregiver.page.voice" })
+        XCTAssertEqual(voice.accessibilityLabel, "Voice, Hope", "The row says which voice is in use")
+        voice.sendActions(for: .touchUpInside)
+        XCTAssertTrue(navigation.topViewController is VoiceSettingsViewController)
+        let builtIn = FamilyAdminViewController(remote: remote, state: try state(selected: nil)); builtIn.loadViewIfNeeded()
+        XCTAssertEqual(rows(in: builtIn.view).first { $0.accessibilityIdentifier == "caregiver.page.voice" }?.accessibilityLabel, "Voice, Built-in")
+        let older = FamilyAdminViewController(remote: remote, state: try state(speech: false)); older.loadViewIfNeeded()
+        XCTAssertFalse(rows(in: older.view).contains { $0.accessibilityIdentifier == "caregiver.page.voice" }, "A server without voices has no Voice page")
+        XCTAssertFalse(CaregiverPage.pages(onBedside: true, voices: true).contains(.voice), "The bedside chooses its voice in Display & voice")
+    }
+
+    @MainActor func testVoicePageOffersRecordingYourVoiceThenEveryOtherVoice() throws {
+        let admin = FamilyAdminViewController(remote: remote, state: try state()); admin.loadViewIfNeeded()
+        let page = VoiceSettingsViewController(admin: admin)
+        let navigation = UINavigationController(rootViewController: page); page.loadViewIfNeeded()
+        XCTAssertEqual(page.title, "Voice")
+        XCTAssertTrue(labels(in: page.view).contains { $0.text == "English announcements" })
+        let choices = rows(in: page.view)
+        XCTAssertEqual(choices.compactMap(\.accessibilityIdentifier), ["voice.record", "voice.family.TomVoice000000000001", "voice.listed.hope", "voice.listed.jon", "voice.builtIn"],
+                       "Your voice first, then other caregivers', the listed voices and the built-in one")
+        XCTAssertEqual(choices.map(\.accessibilityLabel), ["Your voice, not recorded. Record", "Tom, Family voice", "Hope, Natural, clear and calm · female", "Jon, Warm and grounded · male", "Built-in voice, On Rose’s iPad"])
+        XCTAssertEqual(choices.filter { $0.accessibilityTraits.contains(.selected) }.compactMap(\.accessibilityIdentifier), ["voice.listed.hope"])
+        XCTAssertEqual(buttons(in: page.view).first { $0.accessibilityIdentifier == "voice.preview" }?.isEnabled, true)
+        XCTAssertFalse(buttons(in: page.view).contains { $0.accessibilityIdentifier == "voice.remove" }, "Nothing to remove before you've recorded")
+        choices[0].sendActions(for: .touchUpInside)
+        let recording = try XCTUnwrap(navigation.topViewController as? VoiceRecordingViewController)
+        recording.loadViewIfNeeded()
+        XCTAssertEqual(recording.title, "Your voice")
+    }
+
+    @MainActor func testYourRecordedVoiceComesFirstAndCanBeRecordedAgainOrRemoved() throws {
+        let admin = FamilyAdminViewController(remote: remote, state: try state(mine: true, selected: "LindaVoice0000000001")); admin.loadViewIfNeeded()
+        let page = VoiceSettingsViewController(admin: admin); page.loadViewIfNeeded()
+        let choices = rows(in: page.view)
+        XCTAssertEqual(choices.first?.accessibilityIdentifier, "voice.mine")
+        XCTAssertEqual(choices.first?.accessibilityLabel, "Linda, Your voice")
+        XCTAssertTrue(choices.first?.accessibilityTraits.contains(.selected) == true)
+        XCTAssertEqual(choices.filter { $0.accessibilityIdentifier?.hasPrefix("voice.family.") == true }.map(\.accessibilityLabel), ["Tom, Family voice"], "Your own voice isn't listed twice")
+        XCTAssertEqual(buttons(in: page.view).compactMap { $0.configuration?.title }.filter { ["Record again", "Remove my voice"].contains($0) }, ["Record again", "Remove my voice"])
+        // The built-in voice is on the iPad, so a phone can't preview it.
+        let spanish = FamilyAdminViewController(remote: remote, state: try state(mine: true, selected: nil, language: "es")); spanish.loadViewIfNeeded()
+        let builtIn = VoiceSettingsViewController(admin: spanish); builtIn.loadViewIfNeeded()
+        XCTAssertTrue(labels(in: builtIn.view).contains { $0.text == "Español announcements" })
+        XCTAssertEqual(rows(in: builtIn.view).filter { $0.accessibilityTraits.contains(.selected) }.compactMap(\.accessibilityIdentifier), ["voice.builtIn"])
+        XCTAssertEqual(buttons(in: builtIn.view).first { $0.accessibilityIdentifier == "voice.preview" }?.isEnabled, false)
+    }
+
+    @MainActor func testPreviewSpeaksTheBedsidesOwnAnnouncement() {
+        XCTAssertEqual(CaregiverVoice.previewSentence(.english), "A family member is dropping in with video. Connecting in five seconds.")
+        XCTAssertEqual(CaregiverVoice.previewSentence(.spanish), PorchIncomingAudio.message(name: BedsideLanguage.spanish.text("A family member"), video: true, language: .spanish))
+    }
+
+    @MainActor func testRecordingPageShowsTheScriptAndWaitsTwentySecondsToStop() throws {
+        let admin = FamilyAdminViewController(remote: remote, state: try state()); admin.loadViewIfNeeded()
+        let page = VoiceRecordingViewController(admin: admin); page.loadViewIfNeeded()
+        let texts = labels(in: page.view).compactMap(\.text)
+        XCTAssertTrue(texts.contains("Read this aloud, somewhere quiet."))
+        for paragraph in CaregiverVoice.script { XCTAssertTrue(texts.contains(paragraph), paragraph) }
+        XCTAssertEqual(CaregiverVoice.script.count, 6)
+        XCTAssertTrue(texts.contains("About a minute"))
+        XCTAssertTrue(texts.contains("0:00"))
+        let button = try XCTUnwrap(descendants(page.view).first { $0 is VoiceRecordButton } as? VoiceRecordButton)
+        XCTAssertEqual(button.accessibilityLabel, "Start recording")
+        XCTAssertTrue(texts.contains("Start"))
+        page.showReading(at: 12, levels: [0.4, 0.8])
+        XCTAssertEqual(button.accessibilityLabel, "Stop recording")
+        XCTAssertFalse(button.isEnabled, "Stop waits for 20 seconds of reading")
+        let script = CaregiverVoice.script.map { text in labels(in: page.view).first { $0.text == text }! }
+        XCTAssertEqual(script.map { $0.textColor == PorchStyle.ink }, [false, true, false, false, false, false], "The paragraph to read now stands out")
+        page.showReading(at: 38, levels: [])
+        XCTAssertTrue(button.isEnabled)
+        XCTAssertTrue(labels(in: page.view).contains { $0.text == "0:38" })
+        XCTAssertEqual(script.map { $0.textColor == PorchStyle.ink }, [false, false, false, true, false, false])
+        XCTAssertEqual(CaregiverVoice.clock(62.4), "1:02")
+        XCTAssertEqual(CaregiverVoice.clock(180), "3:00")
+    }
+
+    @MainActor func testListenBackNeedsConsentBeforeMakingTheVoice() throws {
+        let admin = FamilyAdminViewController(remote: remote, state: try state()); admin.loadViewIfNeeded()
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("voice-test-\(UUID().uuidString).m4a")
+        try Data([0]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let page = VoiceCheckViewController(admin: admin, recording: VoiceRecording(file: file, duration: 62.4, levels: []))
+        page.loadViewIfNeeded()
+        let texts = labels(in: page.view).compactMap(\.text)
+        XCTAssertTrue(texts.contains("Listen back"))
+        XCTAssertTrue(texts.contains("1:02"))
+        XCTAssertTrue(texts.contains("ElevenLabs makes the voice. The recording isn't kept."))
+        let use = try XCTUnwrap(buttons(in: page.view).first { $0.accessibilityIdentifier == "voice.use" })
+        XCTAssertEqual(use.configuration?.title, "Use my voice")
+        XCTAssertFalse(use.isEnabled, "Only after agreeing that it's your voice")
+        let consent = try XCTUnwrap(rows(in: page.view).first { $0.accessibilityIdentifier == "voice.consent" })
+        XCTAssertEqual(consent.accessibilityLabel, "This is my voice. Porch may use it to speak to Rose.")
+        XCTAssertEqual(consent.accessibilityValue, "Not checked")
+        consent.sendActions(for: .touchUpInside)
+        XCTAssertEqual(consent.accessibilityValue, "Checked")
+        XCTAssertTrue(use.isEnabled)
+        XCTAssertEqual(buttons(in: page.view).first { $0.accessibilityIdentifier == "voice.again" }?.configuration?.title, "Record again")
+    }
+
+    @MainActor func testBedsideMenuListsFamilyVoicesBeforeNaturalOnes() throws {
+        let suite = "family-voice-picker-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        BedsidePreferences().save(to: defaults)
+        let natural = try JSONDecoder().decode(NaturalVoices.self, from: Data("""
+            {"languages": {"en": {"selected": "LindaVoice0000000001", "defaultVoice": "hope", "voices": [
+              {"id": "hope", "name": "Hope", "detail": "Natural, clear and calm · female"},
+              {"id": "jon", "name": "Jon", "detail": "Warm and grounded · male"},
+              {"id": "LindaVoice0000000001", "name": "Linda", "detail": "Family voice", "family": true, "memberID": "linda"}]}}}
+            """.utf8))
+        let settings = BedsideDisplaySettingsViewController(defaults: defaults, naturalVoices: { natural })
+        settings.loadViewIfNeeded()
+        let picker = try XCTUnwrap(buttons(in: settings.view).first { $0.accessibilityIdentifier == "bedside.announcementVoice" })
+        XCTAssertEqual(picker.accessibilityValue, "Linda · Family")
+        let sections = try XCTUnwrap(picker.menu).children.compactMap { $0 as? UIMenu }
+        XCTAssertEqual(sections.map(\.title), ["Family voices", "Natural voices", "Built-in voices on this iPad"])
+        XCTAssertEqual(sections[0].children.compactMap { $0 as? UIAction }.map(\.title), ["Linda"])
+        XCTAssertEqual(sections[0].children.compactMap { $0 as? UIAction }.map(\.state), [.on])
+        XCTAssertEqual(sections[1].children.compactMap { $0 as? UIAction }.map(\.title), ["Hope · Natural, clear and calm · female", "Jon · Warm and grounded · male"])
+        settings.selectNaturalVoice("hope")
+        XCTAssertEqual(picker.accessibilityValue, "Hope · Natural")
+        XCTAssertTrue(labels(in: settings.view).contains { $0.text == "Tap Save to use Hope." })
+        settings.selectNaturalVoice("LindaVoice0000000001")
+        XCTAssertEqual(picker.accessibilityValue, "Linda · Family")
+        XCTAssertFalse(labels(in: settings.view).contains { $0.text?.hasPrefix("Tap Save") == true }, "Already saved")
+    }
+
+    /// Draws the Voice, recording and Listen back pages at iPhone width, as they'd look in caregiver mode on a phone. Set
+    /// PORCH_SNAPSHOT_DIR (TEST_RUNNER_PORCH_SNAPSHOT_DIR for xcodebuild) to keep the PNGs.
+    @MainActor func testVoicePagesFitAPhone() throws {
+        let phone = CGSize(width: 393, height: 852)
+        let folder = ProcessInfo.processInfo.environment["PORCH_SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("voice-render-\(UUID().uuidString).m4a")
+        try Data([0]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let levels: [Float] = (0..<600).map { (index: Int) -> Float in
+            let time = Double(index)
+            let swell: Double = 0.6 + 0.4 * sin(time / 31)
+            return Float(0.25 + 0.6 * abs(sin(time / 7)) * swell)
+        }
+        func render(_ name: String, size: CGSize = phone, state: FamilyAdminState, _ make: (FamilyAdminViewController) -> UIViewController, after: (UIViewController) -> Void = { _ in }) throws -> UIViewController {
+            let admin = FamilyAdminViewController(remote: remote, state: state)
+            let navigation = PorchStyle.navigation(admin)
+            let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene).map { UIWindow(windowScene: $0) } ?? UIWindow()
+            window.frame = CGRect(origin: .zero, size: size)
+            window.rootViewController = navigation; window.isHidden = false
+            defer { window.isHidden = true; window.rootViewController = nil }
+            let page = make(admin)
+            navigation.pushViewController(page, animated: false)
+            navigation.view.layoutIfNeeded()
+            after(page)
+            navigation.view.layoutIfNeeded()
+            let image = UIGraphicsImageRenderer(size: size).image { window.layer.render(in: $0.cgContext) }
+            let attachment = XCTAttachment(image: image); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+            if let folder {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try XCTUnwrap(image.pngData()).write(to: folder.appendingPathComponent("\(name).png"))
+            }
+            // Everything a caregiver taps is on the screen, without scrolling.
+            func shown(_ view: UIView) -> Bool { sequence(first: view, next: \.superview).prefix { $0 !== page.view }.allSatisfy { !$0.isHidden } }
+            for control in descendants(page.view) where (control is UIButton || control is PorchListRow || control is VoiceRecordButton) && shown(control) {
+                let frame = control.convert(control.bounds, to: window)
+                XCTAssertLessThanOrEqual(frame.maxY, size.height + 0.5, "\(name): \(control.accessibilityLabel ?? control.accessibilityIdentifier ?? "\(type(of: control))")")
+                XCTAssertGreaterThanOrEqual(frame.minX, -0.5, name); XCTAssertLessThanOrEqual(frame.maxX, size.width + 0.5, name)
+            }
+            return page
+        }
+        _ = try render("voice-not-recorded", state: try state()) { VoiceSettingsViewController(admin: $0) }
+        _ = try render("voice-recorded", state: try state(mine: true, selected: "LindaVoice0000000001")) { VoiceSettingsViewController(admin: $0) }
+        _ = try render("voice-record-start", state: try state()) { VoiceRecordingViewController(admin: $0) }
+        // On a small phone the script gets shorter, so Stop is still on screen.
+        _ = try render("voice-record-small-phone", size: CGSize(width: 375, height: 667), state: try state()) { VoiceRecordingViewController(admin: $0) }
+        _ = try render("voice-recording", state: try state()) { VoiceRecordingViewController(admin: $0) } after: {
+            ($0 as? VoiceRecordingViewController)?.showReading(at: 38, levels: [0.2, 0.4, 0.7, 0.9, 0.5, 0.75, 1, 0.6, 0.35, 0.8, 0.95, 0.55, 0.3, 0.45, 0.75, 0.25, 0.1])
+        }
+        _ = try render("voice-listen-back", state: try state()) { VoiceCheckViewController(admin: $0, recording: VoiceRecording(file: file, duration: 62.4, levels: levels)) }
+        _ = try render("voice-listen-back-agreed", state: try state()) { VoiceCheckViewController(admin: $0, recording: VoiceRecording(file: file, duration: 62.4, levels: levels)) } after: { page in
+            self.rows(in: page.view).first { $0.accessibilityIdentifier == "voice.consent" }?.sendActions(for: .touchUpInside)
+        }
+    }
 }
