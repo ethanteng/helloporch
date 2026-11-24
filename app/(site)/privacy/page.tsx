@@ -61,7 +61,7 @@ const retention: [what: string, howLong: string][] = [
   ["What is said while translation is on", "Not kept. It is transcribed, translated and spoken during the call, then discarded."],
   ["Text and voicemail history", "The sender’s number and when it arrived, for the 200 most recent texts and phone voicemails, for up to 90 days. Not the words or the recording."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
-  ["A caregiver’s own voice", "The recording is deleted as soon as ElevenLabs has made the voice, or after 30 minutes if it’s never used. The voice and the announcements spoken in it are deleted when the caregiver removes it, stops being a caregiver, or leaves the household."],
+  ["A caregiver’s own voice", "The recording is deleted as soon as ElevenLabs has made the voice, or after 30 minutes if it’s never used. The voice and the announcements spoken in it are deleted when the caregiver removes it, stops being a caregiver, is removed, or leaves the household."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
   ["Waitlist and pilot email", "Until you unsubscribe or ask us to remove it."],
   ["Website analytics", "Up to 14 months in Google Analytics, then deleted."],
