@@ -236,6 +236,74 @@ test('a family makes at most three voices a day, failed ones included', async ()
   assert.equal((await f.record(f.tom.credential)).response.status, 200);
 });
 
+test('a recording that never arrived is not a voice, and does not use up the day', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  const failed = await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  assert.deepEqual(failed, { status: 409, error: "The recording didn't upload. Try again." });
+  assert.equal(f.voices.made.length, 0);
+  assert.equal(f.house().voiceUsage, undefined);
+  assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
+});
+
+test('one recording makes one voice when two requests overlap', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  await f.media.put(pathname, new Uint8Array(480_000), 'audio/mp4');
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  const add = f.voices.add.bind(f.voices);
+  f.voices.add = async (name, url) => { await gate; return add(name, url); };
+  const first = f.send('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  const second = f.send('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  await new Promise(resolve => setImmediate(resolve));
+  release();
+  const [a, b] = await Promise.all([first, second]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  assert.equal(f.voices.made.length, 1);
+  assert.equal(f.house().voiceUsage.made, 1);
+});
+
+test('a voice ElevenLabs made is deleted when it cannot be saved', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  await f.media.put(pathname, new Uint8Array(480_000), 'audio/mp4');
+  const original = f.store.compareAndSet.bind(f.store);
+  f.store.compareAndSet = async (key, before, after) => {
+    const next = JSON.parse(after), previous = JSON.parse(before);
+    const gained = next.members?.some(m => m.voice) && !previous.members?.some(m => m.voice);
+    if (gained) return false;
+    return original(key, before, after);
+  };
+  const failed = await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  assert.equal(failed.status, 409);
+  assert.equal(failed.error, 'Porch is busy. Please try again.');
+  assert.equal(f.house().members.find(m => m.name === 'Linda').voice, undefined);
+  assert.equal(f.voices.removed.length, 1);
+  assert.equal(f.voices.removed[0], f.voices.made[0].id);
+  assert.equal(f.house().retiredVoices, undefined);
+  assert.equal(f.media.blobs.has(pathname), false);
+});
+
+test('a clip made after its voice was removed is not kept', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  let release, reached;
+  const gate = new Promise(resolve => { release = resolve; });
+  const atPut = new Promise(resolve => { reached = resolve; });
+  const put = f.media.put.bind(f.media);
+  f.media.put = async (pathname, body, contentType) => {
+    if (pathname.includes(`/voices/${lindas}/`)) { reached(); await gate; }
+    return put(pathname, body, contentType);
+  };
+  const speaking = f.send('speech',{language:'en',text:'Ethan is dropping in.'},f.bedside.credential);
+  await atPut;
+  await f.json('removeVoice',{},f.linda.credential,pin);
+  release();
+  const spoken = await speaking;
+  assert.equal(spoken.status, 503);
+  assert.equal([...f.media.blobs.keys()].some(p => p.includes(lindas)), false);
+});
+
 test('deleting a voice from ElevenLabs never holds up an answer, the bedside’s polls included', async () => {
   const later = [];
   const f = await fixture({ later });

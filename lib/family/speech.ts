@@ -170,6 +170,16 @@ export async function speechClip({ store, media, now, house, synthesize }: ClipC
     const audio = await (synthesize ?? elevenLabs)(voiceID, speechCatalog[language].code, text, speechFormats[format]);
     requireValue(audio.length > 0 && audio.length <= speechLimits.audioBytes, "Natural voices aren't available right now.", 503);
     await media().put(pathname, audio, "audio/mpeg");
+    // The voice may have been removed while this clip was made. Its folder is already gone by then, so this file
+    // would otherwise stay. Don't hand out a link to it.
+    if (isFamilyVoice(house, voiceID)) {
+      const raw = await store.get(`house:${house.id}`);
+      const latest: Household | undefined = raw ? JSON.parse(raw) : undefined;
+      if (!latest || !isFamilyVoice(latest, voiceID)) {
+        await discardMedia(store, media, house.id, [pathname], now);
+        throw new FamilyError("Natural voices aren't available right now.", 503);
+      }
+    }
   }
   const expiresAt = now + speechLimits.downloadSeconds;
   return { voiceID, url: await media().downloadURL(pathname, expiresAt), expiresAt };

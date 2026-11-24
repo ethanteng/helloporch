@@ -137,43 +137,78 @@ export async function handleVoiceAction(action: string, { store, media, now, hou
   requireValue(input.consent === true, "Confirm that this is your voice.");
   const pathname = input.pathname;
   requireValue(typeof pathname === "string" && me.pendingVoice?.pathname === pathname && me.pendingVoice.expiresAt > now, "Record your voice again.", 409);
+  // Drops this recording when this request still owns it. One that lost the race leaves the file for the request that claimed it.
+  const forgetRecording = async () => {
+    try {
+      const { result: owned } = await mutate(store, house.id, latest => {
+        const member = latest.members.find(m => m.id === me.id);
+        if (member?.pendingVoice?.pathname !== pathname) return false;
+        delete member.pendingVoice;
+        return true;
+      });
+      if (owned) await discardMedia(store, media, house.id, [pathname], now);
+    } catch { /* it expires, and the purge pass retries a delete */ }
+  };
+  const uploaded = await media().stat(pathname);
+  if (!uploaded || uploaded.contentType !== "audio/mp4" || uploaded.size > voiceLimits.recordingBytes) {
+    // A missing upload is not an attempt: the daily count starts only once the file is here.
+    await forgetRecording();
+    throw new FamilyError("The recording didn't upload. Try again.", 409);
+  }
   let voiceID: string;
+  let claimed = false;
   try {
     // Counted before asking, so failing requests can't use up the account's allowance either.
+    // Claiming the recording here means a second request for it can't make another voice.
     const day = Math.floor(now / 86400);
     await mutate(store, house.id, latest => {
+      const member = caregiver(latest);
+      requireValue(member.pendingVoice?.pathname === pathname && member.pendingVoice.expiresAt > now, "Record your voice again.", 409);
       const made = latest.voiceUsage?.day === day ? latest.voiceUsage.made : 0;
       // Not 429: on a caregiver's phone, that ends caregiver mode as too many PIN tries.
       requireValue(made < voiceLimits.madePerDay, "You can record again tomorrow.", 409);
       latest.voiceUsage = { day, made: made + 1 };
+      delete member.pendingVoice;
     });
-    const uploaded = await media().stat(pathname);
-    requireValue(uploaded && uploaded.contentType === "audio/mp4" && uploaded.size <= voiceLimits.recordingBytes, "The recording didn't upload. Try again.", 409);
+    claimed = true;
     // ElevenLabs sees two IDs, never a name.
     voiceID = await service().add(`Porch ${house.id.slice(0, 8)} ${me.id.slice(0, 8)}`, await media().downloadURL(pathname, now + voiceLimits.downloadSeconds));
-  } finally {
-    // The recording is only for making the voice. It isn't kept, whatever happened.
-    try {
-      await mutate(store, house.id, latest => {
-        const member = latest.members.find(m => m.id === me.id);
-        if (member?.pendingVoice?.pathname === pathname) delete member.pendingVoice;
-      });
-    } catch { /* it expires */ }
-    try { await discardMedia(store, media, house.id, [pathname], now); } catch { /* the purge pass retries */ }
+  } catch (error) {
+    if (claimed) { try { await discardMedia(store, media, house.id, [pathname], now); } catch { /* the purge pass retries */ } }
+    else await forgetRecording();
+    throw error;
   }
-  const { house: latest, result: kept } = await mutate(store, house.id, latest => {
-    const member = latest.members.find(m => m.id === me.id && m.role === "family" && m.caregiver && !m.revoked);
-    // Their access changed while the voice was being made: it's deleted, not kept.
-    if (!member) { latest.retiredVoices = [...new Set([...latest.retiredVoices ?? [], voiceID])]; return false; }
-    // A new recording replaces their voice wherever it was chosen.
-    retireVoice(latest, member, voiceID);
-    member.voice = { id: voiceID, createdAt: now };
-    latest.speechVoices = { ...latest.speechVoices, [bedsideLanguage(latest)]: voiceID };
-    return true;
-  });
-  await cleanUp(latest);
-  requireValue(kept, "Only a caregiver can record their voice.", 403);
-  return { voiceID };
+  // The recording is only for making the voice. It isn't kept once ElevenLabs has it.
+  try { await discardMedia(store, media, house.id, [pathname], now); } catch { /* the purge pass retries */ }
+  let stored = false;
+  try {
+    const { house: latest, result: kept } = await mutate(store, house.id, latest => {
+      const member = latest.members.find(m => m.id === me.id && m.role === "family" && m.caregiver && !m.revoked);
+      // Their access changed while the voice was being made: it's deleted, not kept.
+      if (!member) { latest.retiredVoices = [...new Set([...latest.retiredVoices ?? [], voiceID])]; return false; }
+      // A new recording replaces their voice wherever it was chosen.
+      retireVoice(latest, member, voiceID);
+      member.voice = { id: voiceID, createdAt: now };
+      latest.speechVoices = { ...latest.speechVoices, [bedsideLanguage(latest)]: voiceID };
+      return true;
+    });
+    stored = true;
+    await cleanUp(latest);
+    requireValue(kept, "Only a caregiver can record their voice.", 403);
+    return { voiceID };
+  } catch (error) {
+    // The clone exists at ElevenLabs but isn't on the household. Retire it so a poll deletes it,
+    // or delete it now if the household can't be saved.
+    if (!stored) {
+      try {
+        const { house: latest } = await mutate(store, house.id, latest => {
+          latest.retiredVoices = [...new Set([...(latest.retiredVoices ?? []), voiceID])];
+        });
+        await cleanUp(latest);
+      } catch { try { await service().remove(voiceID); } catch { /* the slot stays until it's deleted by hand */ } }
+    }
+    throw error;
+  }
 }
 
 const api = "https://api.elevenlabs.io/v1";
