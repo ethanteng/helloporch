@@ -184,7 +184,7 @@ export function elevenLabsVoices(): VoiceService {
     },
     async add(name, recordingURL) {
       let recording: Response;
-      try { recording = await fetch(recordingURL, { signal: AbortSignal.timeout(15_000) }); }
+      try { recording = await fetch(recordingURL, { signal: AbortSignal.timeout(10_000) }); }
       catch { throw new FamilyError("The recording didn't upload. Try again.", 409); }
       if (!recording.ok) throw new FamilyError("The recording didn't upload. Try again.", 409);
       const form = new FormData();
@@ -192,7 +192,8 @@ export function elevenLabsVoices(): VoiceService {
       form.append("files", new Blob([await recording.arrayBuffer()], { type: "audio/mp4" }), "recording.m4a");
       form.append("remove_background_noise", "true");
       form.append("description", "A Porch family voice");
-      const response = await call("/voices/add", { method: "POST", body: form }, 45);
+      // With the fetch above, well inside the family route's minute (maxDuration), which phones wait out.
+      const response = await call("/voices/add", { method: "POST", body: form }, 40);
       if (!response.ok) {
         const { status, code } = await detail(response);
         if (code === "invalid_audio" || status === "invalid_content") throw new FamilyError("That recording didn't work. Record again somewhere quiet.", 422);

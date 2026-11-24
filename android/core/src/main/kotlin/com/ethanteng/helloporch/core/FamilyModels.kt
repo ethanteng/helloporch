@@ -366,18 +366,35 @@ data class NaturalVoices(
     @Serializable
     data class Voice(
         val id: String,
+        /** A family voice is named for whose it is. */
         val name: String,
-        /** How it sounds, such as "Steady, calm and grounded · female". */
+        /** How it sounds, such as "Steady, calm and grounded · female", or "Family voice". */
         val detail: String,
-    )
+        /** A caregiver recorded it on their phone (lib/family/voices.ts). Older servers don't send it. */
+        val family: Boolean? = null,
+        /** A family voice's caregiver, by member ID. */
+        val memberID: String? = null,
+    ) {
+        val isFamily: Boolean get() = family == true
+    }
 
     @Serializable
     data class Choices(
         /** The household's voice for this language; null means the device's built-in voice. */
         val selected: String? = null,
         val defaultVoice: String,
+        /** The listed voices, then caregivers' own, in the order they were recorded. */
         val voices: List<Voice>,
-    )
+    ) {
+        /** The voices Porch offers, without the family's own. */
+        val listed: List<Voice> get() = voices.filter { !it.isFamily }
+        /** Caregivers' recorded voices. */
+        val family: List<Voice> get() = voices.filter { it.isFamily }
+        /** The voice `memberID` recorded, if they have. */
+        fun yours(memberID: String?): Voice? = memberID?.let { id -> family.firstOrNull { it.memberID == id } }
+        /** Other caregivers' recorded voices. */
+        fun others(memberID: String?): List<Voice> = family.filter { it.memberID == null || it.memberID != memberID }
+    }
 
     fun choices(language: BedsideLanguage): Choices? = languages[language.code]
 }
@@ -403,7 +420,17 @@ data class FamilyAdminState(
     val shareAttendance: Boolean? = null,
     /** Every call drops in, while it's on. Older servers don't send it. */
     val everyCall: EveryCallDropIn? = null,
-)
+    /** The announcement voices, caregivers' own among them, which a caregiver's phone can choose and record. Older
+     * servers, and ones without a speech service, don't send them. */
+    val speech: NaturalVoices? = null,
+    /** The bedside language as the server last heard it, a [BedsideLanguage] code. Sent with `speech`. */
+    val bedsideLanguage: String? = null,
+) {
+    /** The bedside's language, English until the server has heard it. */
+    val language: BedsideLanguage get() = BedsideLanguage.fromCode(bedsideLanguage) ?: BedsideLanguage.ENGLISH
+    /** The voices a caregiver can choose for the bedside's language, when the server has voices set up. */
+    val announcementVoices: NaturalVoices.Choices? get() = speech?.choices(language)
+}
 
 /**
  * One call to or from the bedside, as caregivers see it in Call history (`callHistory`).

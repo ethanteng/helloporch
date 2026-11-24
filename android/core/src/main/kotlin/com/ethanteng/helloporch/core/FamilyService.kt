@@ -113,12 +113,14 @@ class FamilyService(val origin: String, val credential: String?, private val tra
     companion object {
         internal const val unreachable = "Couldn't reach Porch. Check the connection and try again."
 
-        /** Seconds to wait for each action's answer. */
+        /** Seconds to wait for each action's answer. Making a family voice waits on ElevenLabs for up to 45 seconds, after
+         * fetching the recording, so it gets the server's whole minute (`maxDuration`). */
         fun timeoutFor(action: String): Long = when (action) {
-            "addPhoneGuest" -> 25
-            "speech" -> 30
+            "addPhoneGuest", "voiceUpload", "removeVoice" -> 25
+            "speech", "previewSpeech" -> 30
             "textMessage" -> 40
             "assignPhoneNumber" -> 45
+            "createVoice" -> 60
             else -> 12
         }
     }
