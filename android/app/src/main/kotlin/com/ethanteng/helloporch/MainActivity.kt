@@ -1,30 +1,44 @@
 package com.ethanteng.helloporch
 
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.ethanteng.helloporch.core.AttendanceTracker
+import com.ethanteng.helloporch.core.PorchExperience
 import com.ethanteng.helloporch.core.RemoteCaregiverSession
 
 /** Porch's one activity. An invitation or setup link that opens Porch arrives here, when it starts or while it's open. */
 class MainActivity : ComponentActivity() {
     private val link = mutableStateOf<String?>(null)
     private val keys = KeyListener()
+    /** Porch is showing a call in Android's floating picture-in-picture window (FloatingCall). */
+    private val pictureInPicture = mutableStateOf(false)
+    /** The family video call that shrinks to that window as Porch leaves the screen, if there is one. */
+    private var floating: PorchCall? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // A link not yet handled survives the activity being recreated, such as when the phone turns.
         link.value = if (savedInstanceState == null) intent?.dataString else savedInstanceState.getString(linkKey)
+        // Android recreates the activity as it shrinks into the floating window, so the new one may start there.
+        pictureInPicture.value = isInPictureInPictureMode
         val app = application as PorchApplication
         if (savedInstanceState == null) { openedForCall(intent); app.messageAlerts.opened(intent) }
         // The Cell2Jack is the bedside's keypad, so it runs only while the bedside is in front, setup included.
@@ -37,7 +51,17 @@ class MainActivity : ComponentActivity() {
         })
         setContent {
             PorchBedsideTheme {
-                CompositionLocalProvider(LocalKeyListener provides keys) {
+                // A family member keeps seeing the person they're on a video call with while they use another app, as on
+                // iOS (CallPictureInPicture). The bedside stays in front. A call that couldn't start stays on its
+                // screen until Close, and must not float: the window would show a photo and name after the other side
+                // was already hung up.
+                val active = app.calls.active
+                val call = active?.takeIf { it.role == PorchExperience.FAMILY && it.video && !it.failed }
+                LaunchedEffect(call) { floatOnLeaving(call) }
+                // The call ended in the window, or it failed: the window closes, rather than showing Porch that small.
+                val over = pictureInPicture.value && (active == null || active.failed)
+                LaunchedEffect(over) { if (over) moveTaskToBack(false) }
+                CompositionLocalProvider(LocalKeyListener provides keys, LocalPictureInPicture provides pictureInPicture.value) {
                     PorchRoot(app, link.value, onLinkHandled = { link.value = null },
                         cordedPhoneSetup = { onDone, onBack -> CordedPhoneSetup(app.cell2jack, onDone, onBack) })
                 }
@@ -65,6 +89,33 @@ class MainActivity : ComponentActivity() {
         val app = application as PorchApplication
         app.calls.openForCall()
         if (action == CallNotifications.ACTION_ANSWER) intent.getStringExtra(CallNotifications.EXTRA_CALL)?.let(app.systemCalls::answerWhenShown)
+    }
+
+    /** Opens the floating window for `call` as Porch leaves, on Android 12 and later by itself, with End call on it. */
+    private fun floatOnLeaving(call: PorchCall?) {
+        floating = call
+        val params = floatingParams(call)
+        if (Build.VERSION.SDK_INT >= 31) params.setAutoEnterEnabled(call != null)
+        runCatching { setPictureInPictureParams(params.build()) }
+    }
+
+    private fun floatingParams(call: PorchCall?): PictureInPictureParams.Builder {
+        // The bedside stands sideways, so its picture is wide.
+        val params = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        if (call != null) params.setActions(listOf(RemoteAction(Icon.createWithResource(this, R.drawable.ic_call_end),
+            "End call", "End call", CallNotifications.hangUp(this))))
+        return params
+    }
+
+    // Android 11 and earlier don't open the window by themselves, so leaving for the home screen or another app does.
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT < 31 && floating != null) runCatching { enterPictureInPictureMode(floatingParams(floating).build()) }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pictureInPicture.value = isInPictureInPictureMode
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -98,3 +149,6 @@ class MainActivity : ComponentActivity() {
 class KeyListener { var onKey: ((KeyEvent) -> Boolean)? = null }
 
 val LocalKeyListener = staticCompositionLocalOf { KeyListener() }
+
+/** Porch is showing a call in Android's floating picture-in-picture window. */
+val LocalPictureInPicture = staticCompositionLocalOf { false }

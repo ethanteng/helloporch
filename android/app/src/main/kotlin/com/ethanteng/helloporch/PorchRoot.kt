@@ -103,7 +103,7 @@ fun PorchRoot(
     val voicemail = calls.voicemail
     when {
         // A call takes over from whatever is showing, as on iOS.
-        active != null -> CallScreen(app, active)
+        active != null -> if (LocalPictureInPicture.current) FloatingCall(active) else CallScreen(app, active)
         incoming != null -> IncomingCallScreen(app, incoming)
         bedside && voicemail != null -> BedsideVoicemailScreen(app, voicemail)
         bedside && playback != null -> MessagePlayerScreen(app, playback)

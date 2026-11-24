@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import AVKit
 import LiveKit
 import PorchCore
 
@@ -403,6 +404,90 @@ private final class CallOverlays: UIScrollView {
     }
 }
 
+/// On a family member's video call, the person they're talking to, in a small floating window while Porch is behind
+/// another app, as FaceTime does. iOS opens it as Porch leaves, and tapping it comes back to the call. The family
+/// member's own camera is off meanwhile (`leftForeground`): iOS stops an app's camera once it leaves the screen.
+@MainActor final class CallPictureInPicture: NSObject, AVPictureInPictureControllerDelegate, VideoViewDelegate {
+    private let content = AVPictureInPictureVideoCallViewController()
+    private let video = VideoView()
+    private let standIn = UIStackView()
+    private var controller: AVPictureInPictureController?
+    private var track: VideoTrack?
+
+    /// `source` is the call screen's video, which the window grows from and shrinks back into.
+    init?(source: UIView, name: String, photo: UIImage?) {
+        guard AVPictureInPictureController.isPictureInPictureSupported() else { return nil }
+        super.init()
+        content.view.backgroundColor = PorchStyle.night
+        // The floating window can show a sample-buffer layer while Porch is in the background, unlike Metal.
+        video.renderMode = .sampleBuffer
+        video.layoutMode = .fill
+        video.delegates.add(delegate: self)
+        // Their photo, or their name, while their camera is off or before they answer.
+        let picture = UIImageView(image: photo)
+        picture.contentMode = .scaleAspectFill; picture.clipsToBounds = true; picture.layer.cornerRadius = 12
+        picture.isHidden = photo == nil
+        NSLayoutConstraint.activate([picture.widthAnchor.constraint(equalToConstant: 72), picture.heightAnchor.constraint(equalToConstant: 72)])
+        let label = UILabel()
+        label.text = name; label.textColor = .white; label.font = PorchStyle.systemFont(17, weight: .semibold)
+        label.textAlignment = .center; label.numberOfLines = 2
+        standIn.axis = .vertical; standIn.alignment = .center; standIn.spacing = 8
+        standIn.addArrangedSubview(picture); standIn.addArrangedSubview(label)
+        for view in [video, standIn] as [UIView] { view.translatesAutoresizingMaskIntoConstraints = false; content.view.addSubview(view) }
+        NSLayoutConstraint.activate([
+            video.leadingAnchor.constraint(equalTo: content.view.leadingAnchor), video.trailingAnchor.constraint(equalTo: content.view.trailingAnchor),
+            video.topAnchor.constraint(equalTo: content.view.topAnchor), video.bottomAnchor.constraint(equalTo: content.view.bottomAnchor),
+            standIn.centerXAnchor.constraint(equalTo: content.view.centerXAnchor), standIn.centerYAnchor.constraint(equalTo: content.view.centerYAnchor),
+            standIn.widthAnchor.constraint(lessThanOrEqualTo: content.view.widthAnchor, constant: -16),
+        ])
+        // The bedside stands sideways, so its picture is wide until a frame says otherwise.
+        content.preferredContentSize = CGSize(width: 1280, height: 720)
+        let controller = AVPictureInPictureController(contentSource: .init(activeVideoCallSourceView: source, contentViewController: content))
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        controller.delegate = self
+        self.controller = controller
+        NotificationCenter.default.addObserver(self, selector: #selector(close), name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    /// Whose video the window shows: the person called first. Nil shows their photo or name.
+    func show(_ track: VideoTrack?) {
+        guard controller != nil else { return }
+        if self.track !== track { self.track = track; video.track = track }
+        standIn.isHidden = track != nil
+        fitToVideo()
+    }
+
+    /// The call is over or no longer has video: the window closes and won't open again.
+    func end() {
+        controller?.canStartPictureInPictureAutomaticallyFromInline = false
+        close()
+        video.track = nil; track = nil; controller = nil
+    }
+
+    /// Porch is back, however the person returned, so the call screen shows the video again.
+    @objc private func close() {
+        if controller?.isPictureInPictureActive == true { controller?.stopPictureInPicture() }
+    }
+
+    private func fitToVideo() {
+        guard let size = track?.dimensions, size.width > 0, size.height > 0 else { return }
+        let fitted = CGSize(width: Int(size.width), height: Int(size.height))
+        if content.preferredContentSize != fitted { content.preferredContentSize = fitted }
+    }
+
+    nonisolated func videoView(_ videoView: VideoView, didUpdate isRendering: Bool) {
+        guard isRendering else { return }
+        Task { @MainActor [weak self] in self?.fitToVideo() }
+    }
+
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController,
+                                    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        completionHandler(true)
+    }
+}
+
 /// Foreground LiveKit media for paired calls, legacy rooms and phone fallback.
 final class NativeCallViewController: UIViewController, RoomDelegate {
     private let contact: CallContact
@@ -437,6 +522,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     /// The approval to ring this person's phone, read as the call opens. The caregiver code and saved approvals are
     /// readable only while the device is unlocked, and the call can switch to their phone after it locks.
     private var phoneApproval: Task<String?, Never>?
+    /// A family member's video call in a floating window while Porch is behind another app.
+    private var pictureInPicture: CallPictureInPicture?
     private(set) var isEnding = false
     private var hasFailed = false
     private var hasConnectedPeer = false
@@ -617,6 +704,10 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(leftForeground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(returnedToForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(familyChanged), name: .porchFamilyChanged, object: nil)
+        // A family member keeps seeing the person they called while they use another app. The bedside stays in front.
+        if call.mode == .video, !isPhoneCall, familySession?.credential.role == .family {
+            pictureInPicture = CallPictureInPicture(source: stage, name: contact.name, photo: personPhoto.image)
+        }
         BedsideText.applyAccessibilityLanguage(to: view)
         if inactivity.timeout != nil {
             inactivityTask = Task { [weak self] in
@@ -728,6 +819,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             }
             hasFailed = true
             ringback.stop(); announcement?.stop()
+            pictureInPicture?.end()
             await room.disconnect()
             stage.show([])
             localVideo.track = nil
@@ -791,6 +883,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         if call.mode == .video {
             let tiles = CallPeople.tiles(peers, first: familySession?.peerID)
             stage.show(tiles)
+            pictureInPicture?.show(tiles.first?.track)
             let showing = stage.isSplit || tiles.first?.track != nil
             placeholder.isHidden = showing
             personPhoto.isHidden = showing
@@ -954,6 +1047,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     func finish(message: String? = nil) {
         guard !isEnding else { return }
         isEnding = true
+        pictureInPicture?.end()
         skipUnansweredHandoff = false
         let unanswered = !endedByCaller && !hasConnectedPeer && !familyAccepted && !isPhoneCall && !isSwitchingToPhone ? onUnanswered : nil
         willOfferUnansweredMessage = unanswered != nil
@@ -1238,6 +1332,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         personPhoto.isHidden = false
         placeholder.text = BedsideText.string("Phone call\nCamera is off")
         isPhoneCall = true
+        pictureInPicture?.end()
         if viewIfLoaded?.window != nil { ScreenAwake.callShown(self, voice: true) }
         updateKeypadHint()
         do {
@@ -1280,6 +1375,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             if Task.isCancelled || isEnding { return }
             hasFailed = true
             ringback.stop(); announcement?.stop()
+            pictureInPicture?.end()
             await room.disconnect()
             isSwitchingToPhone = false
             statusLabel.text = BedsideText.string("Couldn't connect their phone.")

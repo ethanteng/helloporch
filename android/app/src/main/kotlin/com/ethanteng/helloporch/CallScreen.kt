@@ -182,6 +182,22 @@ private fun selfViewWidth(width: Dp, height: Dp, wide: Boolean): Dp {
     return if (wide) side * 4f / 3f else side
 }
 
+/** A family member's video call in Android's floating picture-in-picture window while they use another app: the person
+ * they called, or their photo and name while that person's camera is off, as on iOS (CallPictureInPicture). Their own
+ * camera stays on, since Porch is still on screen, until the window closes or the phone locks. */
+@Composable
+fun FloatingCall(call: PorchCall) {
+    val first = call.tiles.firstOrNull()
+    Box(Modifier.fillMaxSize().background(CallColors.night), contentAlignment = Alignment.Center) {
+        if (first?.track != null) VideoTrackView(call.room, first.track, Modifier.fillMaxSize())
+        else Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Photo(call.photo, Modifier.size(56.dp))
+            Text(first?.name?.takeIf { it.isNotEmpty() } ?: call.name, color = CallColors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
 @Composable
 private fun VideoTile(room: Room, tile: PorchCall.Tile, modifier: Modifier) {
     Box(modifier.background(CallColors.night), contentAlignment = Alignment.BottomStart) {

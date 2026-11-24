@@ -535,6 +535,8 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private var translation: CallTranslation?
     private var leftNotice: String?
     private var leftNoticeTask: Task<Void, Never>?
+    /// A family member's video call in a floating window while Porch is behind another app.
+    private var pictureInPicture: CallPictureInPicture?
     override var canBecomeFirstResponder: Bool { true }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated); ScreenAwake.callShown(self, voice: !SystemIncomingCalls.shared.isVideo)
@@ -612,12 +614,16 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                                  photo: personPhoto.image == nil ? nil : personPhoto, accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
                                  buttons: [microphone, camera] + [translation?.button].compactMap { $0 } + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)
+        // A family member keeps seeing the person calling while they use another app. The bedside stays in front.
+        if calls.isVideo, calls.familyCredential?.role == .family {
+            pictureInPicture = CallPictureInPicture(source: stage, name: calls.callerName, photo: personPhoto.image)
+        }
         refresh()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func refresh() {
         let calls = SystemIncomingCalls.shared
-        guard calls.hasCall else { stage.show([]); localVideo.track = nil; closeCallScreen(animated: true); return }
+        guard calls.hasCall else { stage.show([]); localVideo.track = nil; pictureInPicture?.end(); closeCallScreen(animated: true); return }
         if let room = calls.room, room !== observedRoom {
             room.add(delegate: self); observedRoom = room
         }
@@ -641,6 +647,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         microphone.configuration?.title = calls.room?.localParticipant.isMicrophoneEnabled() == true ? "Mute" : "Unmute"
         let tiles = CallPeople.tiles(peers, first: bedside ? calls.call?.from : mom?.id)
         stage.show(tiles)
+        pictureInPicture?.show(tiles.first?.track)
         let showing = stage.isSplit || tiles.first?.track != nil
         personPhoto.isHidden = showing
         placeholder.isHidden = showing
