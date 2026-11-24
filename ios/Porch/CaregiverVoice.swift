@@ -62,6 +62,9 @@ final class VoiceSettingsViewController: CaregiverPageViewController {
     private enum Preview { case idle, loading, playing }
     private var preview = Preview.idle
     private var previewAttempt: UUID?
+    /// The preview's `previewSpeech` request. Caregiver mode sends one request at a time, so a choice or removal made
+    /// while it's out waits for it, rather than being turned away, as Android's requests queue.
+    private var previewRequest: Task<FamilyResponse?, Error>?
     private let player = VoiceClipPlayer()
 
     override func viewDidLoad() { super.viewDidLoad(); title = "Voice" }
@@ -156,10 +159,14 @@ final class VoiceSettingsViewController: CaregiverPageViewController {
         guard let admin, saving == nil, !removing, let state = admin.current, let choices = state.announcementVoices, voiceID != choices.selected else { return }
         stopPreview()
         saving = .some(voiceID); failure = nil; render()
+        let pending = previewRequest
         Task { [weak self] in
             var message: String?
-            do { _ = try await admin.request("setSpeechVoice", ["language": state.language.rawValue, "voiceID": voiceID.map { $0 as Any } ?? NSNull()]) }
-            catch { message = error.localizedDescription }
+            _ = try? await pending?.value
+            do {
+                let saved = try await admin.request("setSpeechVoice", ["language": state.language.rawValue, "voiceID": voiceID.map { $0 as Any } ?? NSNull()])
+                if saved == nil { message = "Couldn't save. Try again." }
+            } catch { message = error.localizedDescription }
             guard let self else { return }
             self.saving = nil; self.failure = message; self.render()
         }
@@ -179,9 +186,11 @@ final class VoiceSettingsViewController: CaregiverPageViewController {
         guard let admin, saving == nil, !removing else { return }
         stopPreview()
         removing = true; failure = nil; render()
+        let pending = previewRequest
         Task { [weak self] in
             var message: String?
-            do { _ = try await admin.request("removeVoice") } catch { message = error.localizedDescription }
+            _ = try? await pending?.value
+            do { if try await admin.request("removeVoice") == nil { message = "Couldn't remove it. Try again." } } catch { message = error.localizedDescription }
             guard let self else { return }
             self.removing = false; self.failure = message; self.render()
         }
@@ -195,11 +204,13 @@ final class VoiceSettingsViewController: CaregiverPageViewController {
         let language = state.language
         let attempt = UUID(); previewAttempt = attempt
         preview = .loading; failure = nil; render()
+        let values: [String: Any] = ["language": language.rawValue, "voiceID": voiceID, "text": CaregiverVoice.previewSentence(language)]
+        // The server waits up to 15 seconds for a new clip.
+        let request = Task { try await admin.request("previewSpeech", values, timeout: 30) }
+        previewRequest = request
         Task { [weak self] in
             do {
-                let values: [String: Any] = ["language": language.rawValue, "voiceID": voiceID, "text": CaregiverVoice.previewSentence(language)]
-                // The server waits up to 15 seconds for a new clip.
-                guard let response = try await admin.request("previewSpeech", values, timeout: 30) else { self?.finishPreview(attempt, nil); return }
+                guard let response = try await request.value else { self?.finishPreview(attempt, nil); return }
                 guard let clip = response.clip, let url = URL(string: clip.url), url.scheme == "https" else { throw VoiceClipPlayer.unavailable }
                 let audio = try await VoiceClipPlayer.download(url)
                 guard let self, self.previewAttempt == attempt else { return }
