@@ -52,11 +52,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             PorchBedsideTheme {
                 // A family member keeps seeing the person they're on a video call with while they use another app, as on
-                // iOS (CallPictureInPicture). The bedside stays in front.
-                val call = app.calls.active?.takeIf { it.role == PorchExperience.FAMILY && it.video }
+                // iOS (CallPictureInPicture). The bedside stays in front. A call that couldn't start stays on its
+                // screen until Close, and must not float: the window would show a photo and name after the other side
+                // was already hung up.
+                val active = app.calls.active
+                val call = active?.takeIf { it.role == PorchExperience.FAMILY && it.video && !it.failed }
                 LaunchedEffect(call) { floatOnLeaving(call) }
-                // The call ended in the window: it closes, rather than showing the rest of Porch that small.
-                val over = pictureInPicture.value && app.calls.active == null
+                // The call ended in the window, or it failed: the window closes, rather than showing Porch that small.
+                val over = pictureInPicture.value && (active == null || active.failed)
                 LaunchedEffect(over) { if (over) moveTaskToBack(false) }
                 CompositionLocalProvider(LocalKeyListener provides keys, LocalPictureInPicture provides pictureInPicture.value) {
                     PorchRoot(app, link.value, onLinkHandled = { link.value = null },

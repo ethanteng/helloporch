@@ -137,7 +137,10 @@ class PorchCall(
     private var fallbackJob: Job? = null
     private var mediaReady = false
     private var ending = false
-    private var failed = false
+    /** The call couldn't start, or a hang-up couldn't be confirmed. The screen stays up with why, until Close.
+     * Picture-in-picture must not keep showing that as a live call. */
+    var failed by mutableStateOf(false)
+        private set
     private val ringback = Ringback()
     private val cue = TonePlayer()
     private var cuePlayed = false
