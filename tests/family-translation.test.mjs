@@ -100,6 +100,22 @@ test('translation is offered only once the server knows the translator', async (
   assert.equal((await f.send('setCallTranslation',{callID,on:true},ethan.credential)).status,409);
 });
 
+test('translation speaks a listed voice even when announcements use a caregiver’s own', async () => {
+  const f = fixture(), { bedside, ethan, callID } = await f.connected();
+  const key = `house:${bedside.state.householdID}`;
+  const house = JSON.parse(f.store.values.get(key));
+  const member = house.members.find(m => m.id === ethan.state.me.id);
+  member.caregiver = true;
+  member.voice = { id: 'familyVoice00000001', createdAt: 1 };
+  house.speechVoices = { 'zh-Hant': 'familyVoice00000001', en: 'familyVoice00000001', ko: 'familyVoice00000001' };
+  f.store.values.set(key, JSON.stringify(house));
+  await f.json('setCallTranslation', { callID, on: true }, ethan.credential);
+  assert.equal(f.calls[0].metadata.bedsideVoice, 'Z8Aisvg1z70p27kGvkZZ');
+  assert.equal(f.calls[0].metadata.familyVoice, 'OYTbf65OHHFELVut7v2H');
+  await f.json('setCallTranslation', { callID, on: true, language: 'ko' }, ethan.credential);
+  assert.equal(f.calls[1].message.voice, 'uyVNoMrnUku1dZyVEXwD');
+});
+
 test('turning translation on brings the translator in with the bedside language and the family voices', async () => {
   const f=fixture(),{bedside,ethan,callID,room,ids}=await f.connected();
   const on=await f.json('setCallTranslation',{callID,on:true},ethan.credential);
