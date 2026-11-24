@@ -364,11 +364,13 @@ const parts: GuidePart[] = [
           label="Languages you can choose"
           items={[
             { name: "English" },
-            { name: "Mandarin", note: "Traditional or simplified characters" },
+            { name: "Mandarin", note: "Traditional characters" },
+            { name: "Mandarin", note: "Simplified characters" },
             { name: "Cantonese" },
             { name: "Spanish" },
             { name: "Tagalog" },
             { name: "Korean" },
+            { name: "Hebrew" },
           ]}
         />
         <StepVideo

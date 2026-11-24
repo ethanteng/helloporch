@@ -630,10 +630,10 @@ a.kitTag:focus-visible {
   text-wrap: pretty;
 }
 
-/* A short set of choices in a compact table: three across, two on a phone. */
+/* A short set of choices in a compact table: four across, two on a phone, so eight fill every row. */
 .part .choices {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   padding: 0;
   overflow: hidden;

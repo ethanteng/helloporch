@@ -200,6 +200,8 @@
   border-radius: 24px;
   background: var(--honey);
   overflow: hidden;
+  /* The language grid goes four across when the card is wide. */
+  container-type: inline-size;
 }
 
 /* Beats `.need p` below, which sets the body text. */
@@ -221,25 +223,48 @@
   color: var(--muted-2);
 }
 
+/* Every language in an even grid of equal pills: two across, four across where the card is wide. Four rows fit the
+   art's 170px, so none is cut off. */
 .langPills {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  max-width: 220px;
+  width: min(100% - 28px, 240px);
 }
 
 .langPills span {
-  padding: 8px 14px;
+  display: grid;
+  place-items: center;
+  height: 31px;
   border-radius: 99px;
   background: var(--paper);
-  font: 600 17px var(--sans);
+  font: 600 16px/1 var(--sans);
   color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Four across once every label, "More soon" the longest, fits its pill. */
+@container (min-width: 470px) {
+  .langPills {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    width: min(100% - 40px, 480px);
+  }
+  .langPills span {
+    height: 42px;
+    font-size: 17px;
+  }
 }
 
 .langPills span:first-child {
   background: var(--ink);
   color: #fff;
+}
+
+/* Hangul's strokes are thinner: bold matches the other names' semibold. */
+.langPills span:lang(ko) {
+  font-family: var(--sans-ko);
+  font-weight: 700;
 }
 
 /* A language that isn't ready yet: an outline instead of a fill. */
@@ -248,15 +273,6 @@
   background: transparent;
   color: var(--muted-2);
   font-weight: 500;
-}
-
-.langPills[data-lg] {
-  max-width: 300px;
-}
-
-.langPills[data-lg] span {
-  padding: 10px 18px;
-  font-size: 20px;
 }
 
 /* ---------- Who can call ---------- */
