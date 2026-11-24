@@ -189,7 +189,13 @@ private fun VoicePage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
                 val photo = person?.let { memberPhoto(app, admin, it) }
                 VoiceRow(yours.name, "Your voice", selected == yours.id, ready, avatar = { Avatar(yours.name, photo, 40.dp) }) { choose(yours.id) }
             }
-            for (voice in choices.others(me) + choices.listed) {
+            // Other caregivers' voices show who they are, with their photo, as on iOS.
+            for (voice in choices.others(me)) {
+                HorizontalDivider()
+                val photo = state.people.firstOrNull { it.id == voice.memberID }?.let { memberPhoto(app, admin, it) }
+                VoiceRow(voice.name, voice.detail, selected == voice.id, ready, avatar = { Avatar(voice.name, photo, 40.dp) }) { choose(voice.id) }
+            }
+            for (voice in choices.listed) {
                 HorizontalDivider()
                 VoiceRow(voice.name, voice.detail, selected == voice.id, ready) { choose(voice.id) }
             }

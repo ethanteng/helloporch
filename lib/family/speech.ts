@@ -58,6 +58,19 @@ export const speechCatalog: Record<string, { code: string; voices: SpeechVoice[]
   ] },
 };
 export const speechModel = "eleven_v4";
+/** What a caregiver's phone hears in a voice before choosing it: the bedside's own preview, a drop-in announcement
+ * (BedsideLanguage's "%@ is dropping in with video. Connecting in five seconds." with "A family member"). It is the
+ * server's own sentence, so a phone can't make a caregiver's voice say anything else. */
+export const previewSentences: Record<BedsideLanguage, string> = {
+  en: "A family member is dropping in with video. Connecting in five seconds.",
+  "zh-Hant": "家人要和您視訊通話，五秒後接通。",
+  "zh-Hans": "家人要和您视频通话，五秒后接通。",
+  "yue-Hant": "屋企人想同您視像通話，五秒後接通。",
+  es: "Un familiar quiere hablar con usted por vídeo. La llamada se conectará en cinco segundos.",
+  tl: "Tumatawag po si Kapamilya sa video call. Kokonekta ito sa loob ng limang segundo.",
+  ko: "가족에게서 영상통화가 왔어요. 5초 후에 연결돼요.",
+  he: "שיחת וידאו מאת מישהו מהמשפחה. מתחברים בעוד חמש שניות.",
+};
 // Announcements are a sentence or two. The daily allowance covers a new household's first clips
 // several times over, while keeping one device from spending the whole plan.
 export const speechLimits = { textCharacters: 300, dailyCharacters: 4000, audioBytes: 2_000_000, downloadSeconds: 3600 };
@@ -123,7 +136,8 @@ export async function handleSpeechAction(action: string, { store, media, now, ho
   if (action === "previewSpeech") requireValue(me.role === "family" && me.caregiver, "Only a caregiver can preview voices.", 403);
   else requireValue(me.role === "bedside", "Only the bedside speaks announcements.", 403);
   requireValue(synthesize || speechConfigured(), "Natural voices aren't set up on this server.", 503);
-  const text = typeof input.text === "string" ? input.text.trim() : "";
+  // A phone's preview reads the server's sentence, whatever it sends: a family voice says only what Porch says.
+  const text = action === "previewSpeech" ? previewSentences[language as BedsideLanguage] : typeof input.text === "string" ? input.text.trim() : "";
   // A text message's words, which can be longer than an announcement, up to their own limit.
   const textID = action === "speech" && text.length > 0 && await readableText(store, house, input.textID, language as BedsideLanguage, text, now) ? input.textID as string : undefined;
   requireValue(text.length > 0 && (text.length <= speechLimits.textCharacters || textID), `Announcements can have up to ${speechLimits.textCharacters} characters.`);

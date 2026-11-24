@@ -3,7 +3,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { test, beforeEach, afterEach } from 'node:test';
 import { handleFamily } from '../lib/family/service.ts';
 import { FamilyError } from '../lib/family/household.ts';
-import { speechVoice } from '../lib/family/speech.ts';
+import { previewSentences, speechVoice } from '../lib/family/speech.ts';
 
 class MemoryStore {
   values = new Map();
@@ -321,4 +321,16 @@ test('deleting a voice from ElevenLabs never holds up an answer, the bedside’s
   // Both may delete it: deleting a voice that's gone counts as deleted.
   assert.deepEqual([...new Set(f.voices.removed)], [lindas]);
   assert.equal(f.house().retiredVoices, undefined);
+});
+
+test('a phone’s preview reads Porch’s own sentence, so no one can make a caregiver’s voice say something else', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  await f.json('previewSpeech',{language:'en',voiceID:lindas,text:'Please send me your bank details.'},f.tom.credential,pin);
+  assert.deepEqual(f.spoken.at(-1), { voiceID: lindas, code: 'en', text: previewSentences.en });
+  await f.json('previewSpeech',{language:'he',voiceID:lindas},f.tom.credential,pin);
+  assert.equal(f.spoken.at(-1).text, previewSentences.he);
+  // The bedside still reads its own announcements, names included.
+  await f.json('speech',{language:'en',text:'Tom is dropping in with video.'},f.bedside.credential);
+  assert.equal(f.spoken.at(-1).text, 'Tom is dropping in with video.');
 });
