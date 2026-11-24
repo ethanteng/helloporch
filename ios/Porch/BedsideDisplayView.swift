@@ -268,7 +268,8 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
         let selected = voices.first { $0.identifier == identifier }
         let choices = natural?.choices(for: language)
         let naturalChoice = naturalVoice(for: language).flatMap { id in choices?.voices.first { $0.id == id } }
-        let title = naturalChoice.map { "\($0.name) · Natural" } ?? selected.map(PorchAnnouncementVoice.label) ?? "System default"
+        // A caregiver's own voice says whose it is.
+        let title = naturalChoice.map { "\($0.name) · \($0.isFamily ? "Family" : "Natural")" } ?? selected.map(PorchAnnouncementVoice.label) ?? "System default"
         announcementVoice.configuration?.title = title
         announcementVoice.accessibilityValue = title
         let builtIn = naturalChoice == nil
@@ -281,12 +282,14 @@ final class BedsideDisplaySettingsViewController: CaregiverFormViewController {
             }
         }
         if let choices {
-            let naturals = choices.voices.map { voice in
-                UIAction(title: "\(voice.name) · \(voice.detail)", state: voice.id == naturalChoice?.id ? .on : .off) { [weak self] _ in
-                    self?.selectNaturalVoice(voice.id)
-                }
+            func choice(_ voice: NaturalVoices.Voice, title: String) -> UIAction {
+                UIAction(title: title, state: voice.id == naturalChoice?.id ? .on : .off) { [weak self] _ in self?.selectNaturalVoice(voice.id) }
             }
-            announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children: [
+            // Caregivers' own voices, recorded on their phones, come first, by whose they are.
+            let family = choices.familyVoices.map { choice($0, title: $0.name) }
+            let naturals = choices.listedVoices.map { choice($0, title: "\($0.name) · \($0.detail)") }
+            announcementVoice.menu = UIMenu(title: "\(language.displayName) announcement voice", children:
+                (family.isEmpty ? [] : [UIMenu(title: "Family voices", options: .displayInline, children: family)]) + [
                 UIMenu(title: "Natural voices", options: .displayInline, children: naturals),
                 UIMenu(title: "Built-in voices on this iPad", options: .displayInline, children: actions)])
         } else {

@@ -80,14 +80,17 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** Caregiver mode's pages, as iOS's CaregiverPage lists them. */
 enum class CaregiverPage(private val bedsideTitle: String, private val phoneTitle: String = bedsideTitle) {
-    PEOPLE("People", "Family"), CALLS("Calls"), DROP_IN("Drop-in"), MESSAGES("Messages"), DISPLAY("Display & voice"), PRIVACY("Privacy"),
-    CAREGIVERS("Caregivers & PIN", "Caregivers"), DEVICE("This tablet"), ABOUT("About");
+    PEOPLE("People", "Family"), CALLS("Calls"), DROP_IN("Drop-in"), MESSAGES("Messages"), VOICE("Voice"), DISPLAY("Display & voice"),
+    PRIVACY("Privacy"), CAREGIVERS("Caregivers & PIN", "Caregivers"), DEVICE("This tablet"), ABOUT("About");
 
     fun title(onBedside: Boolean): String = if (onBedside) bedsideTitle else phoneTitle
 
     companion object {
-        /** A family phone can't change the keypad, the clock or the tablet itself, so those pages stay on the bedside. */
-        fun pages(onBedside: Boolean): List<CaregiverPage> = if (onBedside) entries else listOf(PEOPLE, CALLS, DROP_IN, MESSAGES, PRIVACY, CAREGIVERS, ABOUT)
+        /** A family phone can't change the keypad, the clock or the tablet itself, so those pages stay on the bedside. A
+         * phone has Voice instead, where a caregiver records their own voice, once the server has `voices`. The bedside
+         * chooses its voice on Display & voice. */
+        fun pages(onBedside: Boolean, voices: Boolean = false): List<CaregiverPage> = if (onBedside) entries - VOICE
+            else listOfNotNull(PEOPLE, CALLS, DROP_IN, MESSAGES, VOICE.takeIf { voices }, PRIVACY, CAREGIVERS, ABOUT)
     }
 }
 
@@ -409,7 +412,7 @@ private fun CaregiverList(app: PorchApplication, admin: CaregiverAdmin, links: F
             }
         }
         CaregiverGroup {
-            CaregiverPage.pages(admin.onBedside).forEachIndexed { index, page ->
+            CaregiverPage.pages(admin.onBedside, voices = state?.speech != null).forEachIndexed { index, page ->
                 if (index > 0) HorizontalDivider()
                 val value = when (page) {
                     CaregiverPage.CAREGIVERS -> state?.people?.count { it.caregiver == true }?.takeIf { it > 0 }?.toString()

@@ -61,16 +61,19 @@ class FamilyServiceTest {
         assertEquals("poll", transport.requests.single().action)
     }
 
-    /** These wait on another service: a phone line, a voice, a translation, a number to buy. */
+    /** These wait on another service: a phone line, a voice, a translation, a number to buy, a family voice being made. */
     @Test fun slowActionsWaitLonger() = runTest {
-        assertEquals(mapOf("addPhoneGuest" to 25L, "speech" to 30L, "textMessage" to 40L, "assignPhoneNumber" to 45L, "poll" to 12L, "startCall" to 12L),
-            listOf("addPhoneGuest", "speech", "textMessage", "assignPhoneNumber", "poll", "startCall").associateWith(FamilyService::timeoutFor))
+        assertEquals(mapOf("addPhoneGuest" to 25L, "speech" to 30L, "previewSpeech" to 30L, "textMessage" to 40L, "assignPhoneNumber" to 45L,
+            "voiceUpload" to 25L, "createVoice" to 60L, "removeVoice" to 25L, "setSpeechVoice" to 12L, "poll" to 12L, "startCall" to 12L),
+            listOf("addPhoneGuest", "speech", "previewSpeech", "textMessage", "assignPhoneNumber", "voiceUpload", "createVoice", "removeVoice",
+                "setSpeechVoice", "poll", "startCall").associateWith(FamilyService::timeoutFor))
         val transport = FakeTransport()
         val service = FamilyService(family, transport)
         service.send("textMessage")
         service.send("assignPhoneNumber", pin = "123456")
+        service.send("createVoice", pin = "123456")
         service.send("poll", timeoutSeconds = 5)
-        assertEquals(listOf(40_000L, 45_000L, 5_000L), transport.requests.map { it.timeoutMillis })
+        assertEquals(listOf(40_000L, 45_000L, 60_000L, 5_000L), transport.requests.map { it.timeoutMillis })
     }
 
     @Test fun readsTheServersOwnResponses() = runTest {

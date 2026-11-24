@@ -29,6 +29,7 @@ Porch is in a small private pilot. Families install it through TestFlight, and e
 - **Answering.** Ordinary calls ring and wait for someone to answer. Family the caregiver approves can drop in with audio or video. The bedside announces them and counts down for five seconds, with a **Don't connect** button. Their Call and Video buttons drop in the same way while the bedside is open, so nobody has to answer them.
 - **Messages.** Family send audio and video messages, which wait until they're played. They can play on their own when someone sits down, using on-device face detection. When a call from the bedside isn't answered, the bedside records a message for that person.
 - **Languages.** English, Traditional Chinese, Simplified Chinese, Cantonese, Spanish, Tagalog, Korean and Hebrew, spoken with the iPad's own voices or natural ElevenLabs voices.
+- **A caregiver's own voice.** A caregiver can read aloud for about a minute on their phone (caregiver mode → Voice), and the bedside speaks announcements in their voice, made by ElevenLabs. The recording isn't kept, and phone callers' voicemail greeting keeps a listed voice.
 
 **For family**, on an iPhone or iPad in family mode:
 

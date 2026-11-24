@@ -7,13 +7,14 @@ extension Notification.Name {
     static let porchCaregiverChanged = Notification.Name("porch.caregiver.changed")
 }
 
-/// Caregiver settings, by what they're about. The bedside has every page. Caregiver mode on a family phone has the
-/// ones kept on the server, and About, and lists the rest as set on the bedside.
+/// Caregiver settings, by what they're about. The bedside has every page but Voice, which it keeps in Display & voice.
+/// Caregiver mode on a family phone has the ones kept on the server, and About, and lists the rest as set on the bedside.
 enum CaregiverPage: String, CaseIterable {
-    case people, calls, dropIn, messages, display, privacy, caregivers, device, about
+    case people, calls, dropIn, messages, voice, display, privacy, caregivers, device, about
 
-    static func pages(onBedside: Bool) -> [CaregiverPage] {
-        onBedside ? allCases : [.people, .calls, .dropIn, .messages, .privacy, .caregivers, .about]
+    /// `voices`: the server offers announcement voices, which a phone chooses on its Voice page.
+    static func pages(onBedside: Bool, voices: Bool = false) -> [CaregiverPage] {
+        onBedside ? allCases.filter { $0 != .voice } : [.people, .calls, .dropIn, .messages] + (voices ? [.voice] : []) + [.privacy, .caregivers, .about]
     }
     func title(onBedside: Bool) -> String {
         switch self {
@@ -21,6 +22,7 @@ enum CaregiverPage: String, CaseIterable {
         case .calls: return "Calls"
         case .dropIn: return "Drop-in"
         case .messages: return "Messages"
+        case .voice: return "Voice"
         case .display: return "Display & voice"
         case .privacy: return "Privacy"
         case .caregivers: return onBedside ? "Caregivers & PIN" : "Caregivers"
@@ -34,6 +36,7 @@ enum CaregiverPage: String, CaseIterable {
         case .calls: return "phone.fill"
         case .dropIn: return "waveform"
         case .messages: return "envelope.fill"
+        case .voice: return "speaker.wave.2.fill"
         case .display: return "sun.and.horizon.fill"
         case .privacy: return "hand.raised.fill"
         case .caregivers: return "lock.fill"
@@ -206,7 +209,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         }
         household.accessibilityIdentifier = "caregiver.household"
         list.addArrangedSubview(group(rows: [household] + (numberRow().map { [$0] } ?? [])))
-        let rows = CaregiverPage.pages(onBedside: onBedside).map { page -> UIView in
+        let rows = CaregiverPage.pages(onBedside: onBedside, voices: state?.speech != nil).map { page -> UIView in
             let row = linkRow(page.title(onBedside: onBedside), value: value(for: page, state), symbol: page.symbol,
                               valueColor: page == .dropIn && state?.dropInChoice == .everyCall ? PorchStyle.danger : nil) { [weak self] in self?.open(page) }
             row.accessibilityIdentifier = "caregiver.page.\(page.rawValue)"
@@ -277,6 +280,11 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         case .caregivers:
             let count = state.people.filter { $0.caregiver == true }.count
             return count == 0 ? nil : "\(count)"
+        case .voice:
+            // The chosen voice's name; one of a family voice is theirs.
+            guard let choices = state.announcementVoices else { return nil }
+            guard let selected = choices.selected else { return "Built-in" }
+            return choices.voices.first { $0.id == selected }?.name
         case .calls, .display, .privacy, .device, .about: return nil
         }
     }
@@ -286,6 +294,7 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         case .calls: return CallSettingsViewController(admin: self)
         case .dropIn: return DropInSettingsViewController(admin: self)
         case .messages: return MessageSettingsViewController(admin: self)
+        case .voice: return VoiceSettingsViewController(admin: self)
         case .display: return BedsideDisplaySettingsViewController()
         case .privacy: return PrivacySettingsViewController(admin: self)
         case .caregivers: return CaregiverAccessViewController(admin: self)
@@ -369,19 +378,28 @@ final class FamilyAdminViewController: CaregiverFormViewController {
     /// call drop in; it's sent instead of the one caregiver mode keeps, and a wrong one is only shown, not locked out.
     /// Too many tries still ends a phone's session, as it does anywhere else.
     @discardableResult func perform(_ action: String, _ values: [String: Any] = [:], typedPIN: String? = nil) async -> Bool {
-        guard !busy, let credential, let kept = caregiverPIN() else { return false }
+        do { return try await request(action, values, typedPIN: typedPIN) != nil }
+        catch { showError(error); return false }
+    }
+    /// Makes a change as `perform` does, but returns the server's response and leaves a failure for the page to show,
+    /// such as beside the voice it was about. Nil when nothing was sent: another change is still going, or caregiver
+    /// mode just locked (and said why). `timeout` is for actions that wait on another service, such as making a voice.
+    func request(_ action: String, _ values: [String: Any] = [:], typedPIN: String? = nil, timeout: TimeInterval = 12) async throws -> FamilyResponse? {
+        guard !busy, let credential, let kept = caregiverPIN() else { return nil }
         busy = true; defer { busy = false }
         do {
-            let response = try await FamilyService(credential).send(action, values, pin: typedPIN ?? kept)
+            let response = try await FamilyService(credential).send(action, values, pin: typedPIN ?? kept, timeout: timeout)
             FamilyCoordinator.shared.update(response)
             if let admin = response.admin { remoteState = admin }
             refresh()
-            return true
+            return response
         } catch {
             // A changed PIN, withdrawn approval or lockout ends a phone's caregiver session. A PIN just typed wrong doesn't.
-            if remote != nil, let failure = error as? FamilyServiceError, (typedPIN == nil ? [401, 403, 429] : [401, 429]).contains(failure.status) { lock(error); return false }
-            refresh(); showError(error)
-            return false
+            // (The server answers an action's own daily limit with 409, not 429, so it shows like any other answer.)
+            let ends: Set<Int> = typedPIN != nil ? [401, 429] : [401, 403, 429]
+            if remote != nil, let failure = error as? FamilyServiceError, ends.contains(failure.status) { lock(error); return nil }
+            refresh()
+            throw error
         }
     }
     /// Uploads a photo a caregiver chose for a family member, then shows it in place of theirs.

@@ -47,6 +47,10 @@
 // can show it. Turning it on dispatches the translator to the local LiveKit, so run translator/ against it too, with
 // speech recognition still through LiveKit Cloud (translator/README.md, "Testing a call"):
 //   node scripts/local-family-server.mjs 3010 --livekit --translator
+//
+// --voices turns on natural voices and caregivers' own voices (lib/family/voices.ts) with stand-ins for ElevenLabs:
+// every announcement is a second of silence, and a recorded voice is made up, so no recording leaves this process.
+//   node scripts/local-family-server.mjs 3010 --voices
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -165,7 +169,21 @@ const media = {
   async stat(pathname) { const blob = blobs.get(pathname); return blob ? { size: blob.body.length, contentType: blob.contentType } : null; },
   async remove(pathnames) { for (const pathname of pathnames) blobs.delete(pathname); },
   async put(pathname, body, contentType) { blobs.set(pathname, { body: Buffer.from(body), contentType }); },
+  async removeFolder(prefix) { for (const pathname of [...blobs.keys()]) if (pathname.startsWith(prefix)) blobs.delete(pathname); },
 };
+// Stand-ins for ElevenLabs (see the top of this file). Silent MP3 frames (MPEG-1 layer III, 128 kbps, 44.1 kHz) play
+// anywhere a clip would.
+const voicing = options.includes('--voices') ? (() => {
+  process.env.ELEVENLABS_API_KEY = 'local';
+  const frame = Buffer.alloc(417); frame.writeUInt32BE(0xFFFB9064, 0);
+  const silence = new Uint8Array(Buffer.concat(Array(38).fill(frame)));
+  let made = 0, kept = 0;
+  return { synthesize: async () => silence, voices: {
+    async slots() { return { used: kept, limit: 10 }; },
+    async add() { await new Promise(resolve => setTimeout(resolve, 1500)); made++; kept++; console.log(`${time()} Made up voice ${made} from a recording`); return `localVoice${String(made).padStart(10, '0')}`; },
+    async remove(id) { kept = Math.max(0, kept - 1); console.log(`${time()} Deleted ${id}`); },
+  } };
+})() : {};
 // Who is in a call's room, which adding someone checks first, as for endRoom. A phone number added to a call needs the
 // real trunk, so it's dialed only with calls on LiveKit Cloud, and with --phone-from as its caller ID, since this
 // household's own number is made up.
@@ -188,7 +206,7 @@ const translator = livekit && options.includes('--translator');
 if (translator) process.env.LIVEKIT_TRANSLATOR_AGENT = 'porch-translator';
 const translating = translator ? { translationServices: () => translationServices({ apiKey: localLiveKit.key, apiSecret: localLiveKit.secret,
   serverUrl: localLiveKit.url.replace(/^ws:/, 'http:') }) } : {};
-const dependencies = { store, numberServices, endRoom, media, phoneGuestServices, ...translating };
+const dependencies = { store, numberServices, endRoom, media, phoneGuestServices, ...translating, ...voicing };
 
 const time = () => new Date().toISOString().slice(11, 19);
 const call = async (action, values = {}, credential, code) => {

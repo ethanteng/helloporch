@@ -18,12 +18,13 @@ import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type M
 import { callTitle, noticeEveryCall } from "./notices.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
+import { dropVoice, elevenLabsVoices, handleVoiceAction, maintainVoices, voiceActions, voicesDue, type VoiceService } from "./voices.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
 import type { Translate } from "./translate.ts";
 import { handleTranslationAction, translationActions, translationFeature, translationOffered, translationServices, type TranslationServices } from "./translation.ts";
 
 export type FamilyDependencies = InboundDependencies & { media?: MediaStore; sendAlert?: (device: VoIPRegistration, alert: MessageAlert) => Promise<PushResult>;
-  synthesize?: Synthesize; translate?: Translate;
+  synthesize?: Synthesize; translate?: Translate; voices?: VoiceService;
   phoneGuestServices?: (configuration: CallServer) => PhoneGuestServices; numberServices?: (settings: NumberSettings) => NumberServices;
   translationServices?: (configuration: CallServer) => TranslationServices };
 
@@ -76,7 +77,7 @@ function memberFor(house: Household, auth: Auth): Member {
 function online(member: Member, now: number) { return !member.revoked && member.available && member.seenAt > now - 30; }
 /** Whether a device can be woken for a call: it registered for push, and this server can push to its platform. */
 type Pushable = (device?: VoIPRegistration) => device is VoIPRegistration;
-const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setDropInMode", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "releaseText", "removeText", "caregiverTexts", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
+const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setDropInMode", "revoke", "cancelInvites", "cancelInvite", "verifyPIN", "setHouseholdName", "setCaregiver", "setMessages", "caregiverMessageMedia", "removeMessage", "releaseMessage", "releaseText", "removeText", "caregiverTexts", "setPhoneDropIn", "setRingSeconds", "setShareAttendance", "setBedsideLanguage", "setSpeechVoice", "previewSpeech", "voiceUpload", "createVoice", "removeVoice", "setMemberOverride", "overridePhotoUpload", "caregiverProfilePhoto", "callHistory", ...screeningActions, ...numberActions];
 // Phone guests' numbers stay with whoever added them; the bedside sees only the name they gave.
 function publicCall(call: Call, me: Member, house: Household) {
   // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
@@ -108,6 +109,8 @@ function adminState(house: Household, now: number, pushable: Pushable) {
   const everyCall = publicEveryCall(house);
   return { householdName: house.name, dropInEnabled: house.dropInEnabled, ...(everyCall ? { everyCall } : {}), messagesEnabled: house.messagesEnabled !== false, messages: publicInbox(house, now), texts: publicTexts(house, now), phoneDropIns: house.phoneDropIns ?? [], callScreening: publicCallScreening(house),
     shareAttendance: attendanceShared(house),
+    // Voices for the bedside's language, including caregivers' own, which their phones can record and choose.
+    ...(speechConfigured() ? { speech: publicSpeech(house), bedsideLanguage: bedsideLanguage(house) } : {}),
     people: house.members.filter(m => !m.revoked && m.role === "family").map(m => publicPerson(m, now, pushable, true)), invitations: pendingInvites(house, now) };
 }
 function snapshot(house: Household, me: Member, now: number, pushable: Pushable = pushConfigured) {
@@ -202,6 +205,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     const now = dependencies.now?.() ?? Math.floor(Date.now() / 1000);
     let mediaStore = dependencies.media;
     const media = () => mediaStore ??= blobMediaStore();
+    const voiceService = () => dependencies.voices ?? elevenLabsVoices();
+    // Deleting voices from ElevenLabs can be slow, so it runs after the answer where it can, and never fails a request.
+    // Devices wait only seconds for an answer, a bedside poll included; the bedside's next poll retries a failure.
+    const cleanUpVoicesLater = async (house: Household) => {
+      const task = async () => { try { await maintainVoices(store, media, house, now, voiceService); } catch { /* the next poll */ } };
+      if (dependencies.afterResponse) dependencies.afterResponse(task); else await task();
+    };
     const action = input.action;
     // Tests that fake the sender can push to any registered device.
     const pushable = (device?: VoIPRegistration): device is VoIPRegistration => dependencies.sendPush ? !!device : pushConfigured(device);
@@ -363,6 +373,14 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const house: Household = JSON.parse(raw);
       const result = await handleSpeechAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, synthesize: dependencies.synthesize });
       if (!caregiverAction) return callJSON(result);
+      const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
+      return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), admin: adminState(current, now, pushable) });
+    }
+    if (voiceActions.has(String(action))) {
+      const raw = await store.get(`house:${auth.householdID}`);
+      requireValue(raw, "This household was not found.", 404);
+      const house: Household = JSON.parse(raw);
+      const result = await handleVoiceAction(String(action), { store, media, now, house, me: memberFor(house, auth), input, voices: dependencies.voices, afterResponse: dependencies.afterResponse });
       const current: Household = JSON.parse((await store.get(`house:${auth.householdID}`)) ?? raw);
       return callJSON({ ...result, state: snapshot(current, memberFor(current, auth), now, pushable), admin: adminState(current, now, pushable) });
     }
@@ -544,7 +562,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       }
       if (action === "leaveHousehold") {
         requireValue(me.role === "family", "A bedside device can't leave its household.", 403);
-        removedMedia = profileMedia(me);
+        removedMedia = [...profileMedia(me), ...dropVoice(house, me)];
         me.revoked = true; delete me.voip; delete me.alerts; delete me.caregiver; delete me.profile; delete me.override; delete me.pendingPhotos;
         const call = house.call;
         const invite = activePorchGuest(call);
@@ -649,12 +667,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           requireValue(target, "This family member was not found.", 404);
           if (action === "revoke") {
             requireValue(target.id !== me.id, "To remove this device, choose Join a different family.", 403);
-            removedMedia = profileMedia(target);
+            removedMedia = [...profileMedia(target), ...dropVoice(house, target)];
             target.revoked = true; delete target.voip; delete target.alerts; delete target.caregiver; delete target.profile; delete target.override; delete target.pendingPhotos;
           } else if (action === "setCaregiver") {
             requireValue(target.id !== me.id, "Another caregiver must change your caregiver access.", 403);
             requireValue(typeof input.enabled === "boolean", "Choose whether they can use caregiver mode.");
-            if (input.enabled) target.caregiver = true; else delete target.caregiver;
+            // Only caregivers have a voice of their own on Porch.
+            if (input.enabled) target.caregiver = true; else { delete target.caregiver; removedMedia = dropVoice(house, target); }
           } else target.permissions = permissions(input.permissions);
         }
         const call = house.call, invite = activePorchGuest(call);
@@ -757,6 +776,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       // No one else can play the bedside's messages for this device.
       try { await removeMessagesTo(store, media, house, auth.deviceID, now); } catch { /* purged after 90 days */ }
       try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
+      if (house.retiredVoices?.length) await cleanUpVoicesLater(house);
       return callJSON({ left: true });
     }
     const me = memberFor(house, auth);
@@ -802,10 +822,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     // Message housekeeping never fails the request it rides on; the next poll retries it.
     if (action === "revoke" && typeof input.memberID === "string") { try { await removeMessagesFrom(store, media, house, input.memberID, now); } catch { /* retried by caregivers */ } }
     try { await discardMedia(store, media, house.id, removedMedia, now); } catch { /* an unused photo is harmless */ }
+    if ((action === "revoke" || action === "setCaregiver") && house.retiredVoices?.length) await cleanUpVoicesLater(house);
     if (action === "poll" && me.role === "bedside") {
       try { await maintainMessages(store, media, house, now); } catch { /* next poll */ }
       try { await maintainTexts(store, media, house, now); } catch { /* next poll */ }
       try { await maintainProfiles(store, media, house, now); } catch { /* next poll */ }
+      if (voicesDue(house, now)) await cleanUpVoicesLater(house);
       // A number that couldn't be set up yet. Twilio and LiveKit can take longer than the iPad waits for a poll, so
       // the try runs after this one is answered, and a later poll shows the number.
       if (porchNumberDue(house, now)) {

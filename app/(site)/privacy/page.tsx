@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 17, 2026";
+const updated = "November 24, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -40,7 +40,7 @@ const providers: [name: string, role: string, receives: string][] = [
   ["Apple", "Delivers call and message notifications to iPhones and iPads through the Apple Push Notification service, and runs TestFlight.", "Notification tokens, the caller’s name and call type for an incoming call, a message sender’s name and length, and, for caregivers while every call drops in, who turned it on or off and each phone caller’s number."],
   ["Google Firebase", "Delivers call and message notifications to Android phones and tablets through Firebase Cloud Messaging.", "Notification tokens, the caller’s name and call type for an incoming call, a message sender’s name and length, and, for caregivers while every call drops in, who turned it on or off and each phone caller’s number."],
   ["Google ML Kit", "Notices a face in view on an Android tablet, while noticing someone in front of the tablet is on, unless a caregiver turns it off. The noticing happens on the tablet.", "Details about the device and the app, identifiers, and how well the feature performed and any errors, which Google uses for diagnostics and usage analytics. Never an image or anything the camera sees."],
-  ["ElevenLabs", "Turns short announcements and text messages sent to a Porch number into natural speech, when a household uses a natural voice. Speaks live call translation aloud.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation. For a call, the translated sentence."],
+  ["ElevenLabs", "Turns short announcements and text messages sent to a Porch number into natural speech, when a household uses a natural voice. Speaks live call translation aloud. Makes a caregiver’s own voice from a recording, when they choose to record one.", "The sentence to be spoken. For an announcement, that may include a family member’s name. For a text, the words the tablet reads, which are the message or its translation. For a call, the translated sentence. For a caregiver’s own voice, about a minute of them reading aloud, under a label made of random IDs rather than their name. ElevenLabs keeps the voice it makes until it’s removed."],
   ["Anthropic", "Translates a text message into the language set on the tablet, when the message isn’t already in that language. During a call with translation on, translates what was just said into the listener’s language.", "The words of that text. On a call, what was just said and the few sentences before it, which can include names someone said, but not phone numbers or who is on the call."],
   ["MailerLite", "Sends waitlist and pilot emails.", "Your email address, and your waitlist answer if you give one."],
   ["Google Analytics", "Counts visits to the website, so we can see which pages help people. It isn’t used in the Porch app.", "The pages you visit, the site that sent you, browser and device details, and your IP address, which it uses to estimate your general location."],
@@ -61,6 +61,7 @@ const retention: [what: string, howLong: string][] = [
   ["What is said while translation is on", "Not kept. It is transcribed, translated and spoken during the call, then discarded."],
   ["Text and voicemail history", "The sender’s number and when it arrived, for the 200 most recent texts and phone voicemails, for up to 90 days. Not the words or the recording."],
   ["Natural-voice announcements", "Kept so each sentence is made only once, until the household is deleted."],
+  ["A caregiver’s own voice", "The recording is deleted as soon as ElevenLabs has made the voice, or after 30 minutes if it’s never used. The voice and the announcements spoken in it are deleted when the caregiver removes it, stops being a caregiver, is removed, or leaves the household."],
   ["Household details", "While your household uses Porch. When you ask us to delete it, we delete its details, photos, messages and recordings within 30 days."],
   ["Waitlist and pilot email", "Until you unsubscribe or ask us to remove it."],
   ["Website analytics", "Up to 14 months in Google Analytics, then deleted."],
@@ -150,6 +151,13 @@ export default function PrivacyPage() {
               <li>
                 <strong>Profile photos.</strong> A photo each person adds for themselves, or that a caregiver adds for
                 them, if you choose to.
+              </li>
+              <li>
+                <strong>A caregiver’s own voice.</strong> If a caregiver chooses to, they can read aloud for about a
+                minute on their own phone, after agreeing that it’s their voice, so announcements on your loved one’s
+                tablet can be spoken in it. We send the recording to ElevenLabs to make the voice, then delete it. We
+                keep which caregiver the voice belongs to. Only that caregiver can record it, and phone callers never
+                hear it.
               </li>
               <li>
                 <strong>Device sign-in details.</strong> A random identifier for each paired device and a secret that
@@ -392,6 +400,10 @@ export default function PrivacyPage() {
               <li>
                 <strong>Announcements and text messages</strong> can use an iPad’s built-in voice, so nothing is sent to a
                 speech service. A text in another language can still be sent for translation.
+              </li>
+              <li>
+                <strong>A caregiver’s own voice</strong> can be removed by that caregiver at any time in caregiver mode.
+                Porch then goes back to another voice.
               </li>
               <li>
                 <strong>Leaving.</strong> A family member can leave a household in the app, and a caregiver can remove

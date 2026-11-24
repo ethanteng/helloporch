@@ -92,7 +92,8 @@ type GreetingContext = { store: FamilyStore; media: () => MediaStore; now: numbe
 async function greet(house: Household | undefined, sentences: Greeting[], { afterResponse, ...context }: GreetingContext, next: Greeting[] = []): Promise<string[]> {
   const fallback = sentences.map(sentence => say(greetings.en[sentence]));
   const language = house && bedsideLanguage(house);
-  const voiceID = house && language && speechVoice(house, language);
+  // Callers can be strangers, so they never hear a caregiver's own voice.
+  const voiceID = house && language && speechVoice(house, language, false);
   if (!house || !language || !voiceID || !(context.synthesize || speechConfigured())) return fallback;
   const clip = (sentence: Greeting) => speechClip({ ...context, house }, voiceID, language, greetings[language][sentence], "phone");
   const clips = Promise.all(sentences.map(clip));

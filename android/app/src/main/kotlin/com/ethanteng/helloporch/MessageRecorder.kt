@@ -39,8 +39,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * The microphone, or the front camera and microphone, for one message, as iOS's BedsideMessageRecorder records the
- * bedside's: recording stops on its own at two minutes, and a recording `keep` turns down isn't kept, such as one
- * without any sound. The sound is always MediaRecorder's AAC, 44.1 kHz mono at 64 kbps: an `.m4a` for audio, and for
+ * bedside's: recording stops on its own at two minutes (`maxSeconds`, three for a caregiver's voice), and a recording
+ * `keep` turns down isn't kept, such as one without any sound. The sound is always MediaRecorder's AAC, 44.1 kHz mono at 64 kbps: an `.m4a` for audio, and for
  * video the sound of an `.mp4` whose picture is CameraX's SD quality (about 640×480), put together by MessageMuxer.
  * CameraX records only the picture because it would take the sound's format from the device's recording profiles, and
  * some name 8 kHz (the KB10's) or AMR (the emulator's). Main thread only.
@@ -50,6 +50,8 @@ class MessageRecorder(
     video: Boolean,
     /** Whether a recording of this many seconds, with sound heard on this many checks, is worth sending. */
     private val keep: (seconds: Double, loudChecks: Int) -> Boolean = MessageRecordingCheck::keep,
+    /** Where recording stops on its own. */
+    private val maxSeconds: Double = MessageRecordingCheck.MAX_SECONDS,
 ) {
     /** Becomes false when the camera can't be used, and the message is audio instead. */
     var video = video
@@ -73,7 +75,7 @@ class MessageRecorder(
     private var picture: File? = null
     private var soundRunning = false
     private var soundComplete = false
-    /** The two-minute limit stops MediaRecorder itself, which can win the race with [stopSound]. */
+    /** The time limit stops MediaRecorder itself, which can win the race with [stopSound]. */
     private var soundAtLimit = false
     /** When the microphone and the camera were asked to stop, which is about when each recording ends: with each one's
      * length, when each started, which lines the sound up with the picture (MessageSoundSync). */
@@ -144,9 +146,9 @@ class MessageRecorder(
             recorder.setAudioSamplingRate(44_100)
             recorder.setAudioChannels(1)
             recorder.setAudioEncodingBitRate(64_000)
-            recorder.setMaxDuration((MessageRecordingCheck.MAX_SECONDS * 1_000).toInt())
+            recorder.setMaxDuration((maxSeconds * 1_000).toInt())
             recorder.setOutputFile(file.path)
-            // Two minutes stops it, and what was recorded is kept; for video, the camera stops with it.
+            // The limit stops it, and what was recorded is kept; for video, the camera stops with it.
             recorder.setOnInfoListener { _, what, _ ->
                 if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
                     // It stops itself, and that can finish before this runs, so stop() then throws.
@@ -178,7 +180,7 @@ class MessageRecorder(
         soundRunning = true
         soundComplete = true
         if (capture != null && picture != null) {
-            val output = FileOutputOptions.Builder(picture).setDurationLimitMillis((MessageRecordingCheck.MAX_SECONDS * 1_000).toLong()).build()
+            val output = FileOutputOptions.Builder(picture).setDurationLimitMillis((maxSeconds * 1_000).toLong()).build()
             val main = ContextCompat.getMainExecutor(context)
             recording = try {
                 capture.output.prepareRecording(context, output).start(main) { event ->
@@ -198,11 +200,13 @@ class MessageRecorder(
         return true
     }
 
-    /** Called a few times a second while recording: whether something louder than a quiet room was heard. */
-    fun sample() {
-        if (!isRecording) return
-        val amplitude = (runCatching { audio?.maxAmplitude ?: 0 }.getOrDefault(0)) / 32_767.0
-        if (MessageRecordingCheck.loud(amplitude)) loudChecks += 1
+    /** Called a few times a second while recording: whether something louder than a quiet room was heard. Returns the
+     * loudest sample since the last call, from 0 to 32767, for a level meter. */
+    fun sample(): Int {
+        if (!isRecording) return 0
+        val loudest = runCatching { audio?.maxAmplitude ?: 0 }.getOrDefault(0)
+        if (MessageRecordingCheck.loud(loudest / 32_767.0)) loudChecks += 1
+        return loudest
     }
 
     /** Finishes the recording; [onFinish] receives it. */
@@ -249,7 +253,7 @@ class MessageRecorder(
         finished = true
         // Before the file is ready, so a screen can stop offering "Don't send". Cancel already chose to throw it away.
         if (!discarding) onStopped?.invoke()
-        val duration = minOf(MessageRecordingCheck.MAX_SECONDS, elapsed)
+        val duration = minOf(maxSeconds, elapsed)
         startedAt = 0L
         recording = null
         // The camera can stop first, such as at two minutes.

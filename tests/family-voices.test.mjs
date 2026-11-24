@@ -1,0 +1,336 @@
+import assert from 'node:assert/strict';
+import { randomUUID, randomBytes } from 'node:crypto';
+import { test, beforeEach, afterEach } from 'node:test';
+import { handleFamily } from '../lib/family/service.ts';
+import { FamilyError } from '../lib/family/household.ts';
+import { previewSentences, speechVoice } from '../lib/family/speech.ts';
+
+class MemoryStore {
+  values = new Map();
+  async get(key) { return this.values.get(key) ?? null; }
+  async create(key, value) { if (this.values.has(key)) return false; this.values.set(key,value); return true; }
+  async compareAndSet(key, before, after) { if (this.values.get(key) !== before) return false; this.values.set(key,after); return true; }
+}
+class FakeMedia {
+  blobs = new Map(); folders = [];
+  async uploadTarget(pathname, contentType, maximumSizeInBytes, validUntil) { return { url: `https://blob.test/put/${pathname}`, method: 'PUT', headers: { 'x-content-type': contentType }, expiresAt: validUntil }; }
+  async downloadURL(pathname, validUntil) { return `https://blob.test/get/${pathname}?until=${validUntil}`; }
+  async stat(pathname) { return this.blobs.get(pathname) ?? null; }
+  async put(pathname, body, contentType) { this.blobs.set(pathname, { size: body.length, contentType }); }
+  async remove(pathnames) { for (const p of pathnames) this.blobs.delete(p); }
+  async removeFolder(prefix) { this.folders.push(prefix); for (const p of [...this.blobs.keys()]) if (p.startsWith(prefix)) this.blobs.delete(p); }
+}
+class FakeVoices {
+  made = []; removed = []; used = 0; limit = 10; failRemove = false; failAdd = null; count = 0;
+  async slots() { return { used: this.used, limit: this.limit }; }
+  async add(name, url) {
+    if (this.failAdd) throw this.failAdd;
+    const id = `familyVoice${String(++this.count).padStart(8, '0')}`;
+    this.made.push({ id, name, url }); this.used++; return id;
+  }
+  async remove(id) { if (this.failRemove) throw new FamilyError('down', 503); this.removed.push(id); this.used--; }
+}
+const env = { LIVEKIT_URL:'wss://test.livekit.cloud', LIVEKIT_API_KEY:'test-key', LIVEKIT_API_SECRET:'test-secret-not-real', PORCH_CONTACT_SETUP_CODE:'private-test-caregiver-secret', PORCH_CALL_ACCESS_CODE:'private-test-calling-code', ELEVENLABS_API_KEY:'test-speech-key' };
+let previous;
+beforeEach(() => { previous = Object.fromEntries(Object.keys(env).map(k => [k,process.env[k]])); Object.assign(process.env,env); });
+afterEach(() => { for (const [k,v] of Object.entries(previous)) { if(v===undefined) delete process.env[k]; else process.env[k]=v; } });
+const hope = 'OYTbf65OHHFELVut7v2H', jon = 'MFZUKuGQUsGJPQjTS4wC', sukYee = '7rrBp44bogxpbQBDkenR';
+const pin = '123456';
+
+async function fixture({ later } = {}) {
+  const store = new MemoryStore(), media = new FakeMedia(), voices = new FakeVoices(), spoken = [];
+  let now = 1_800_000_000;
+  const synthesize = async (voiceID, code, text) => { spoken.push({ voiceID, code, text }); return new Uint8Array([1, 2, 3]); };
+  const send = (action, values={}, credential, code) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(code?{'X-Porch-Setup-Code':code}:{})},body:JSON.stringify({action,...(["claimInvite","createHousehold"].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString("hex")}:{}),...values})}),{store,media,now:()=>now,endRoom:async()=>{},synthesize,voices,...(later?{afterResponse:task=>later.push(task)}:{})});
+  const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
+  const failure = async (...args) => { const response=await send(...args); return { status: response.status, error: (await response.json()).error }; };
+  const bedside = await json('createHousehold',{name:'Mom'},undefined,env.PORCH_CONTACT_SETUP_CODE);
+  await json('initializeCaregiverPIN',{pin},bedside.credential);
+  const join = async (name, caregiver=false) => json('claimInvite',{code:(await json('createInvite',{name,permissions:{audio:true,video:true},caregiver},bedside.credential,pin)).code});
+  const linda = await join('Linda', true), tom = await join('Tom', true), ethan = await join('Ethan');
+  const house = () => JSON.parse(store.values.get(`house:${bedside.state.householdID}`));
+  // A recording uploaded the way the apps do: ask for the upload, PUT it, then make the voice.
+  const record = async (credential, { consent = true, seconds = 62 } = {}) => {
+    const { upload, pathname } = await json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:seconds},credential,pin);
+    assert.match(upload.url, /^https:\/\/blob\.test\/put\/voices\//);
+    await media.put(pathname, new Uint8Array(480_000), 'audio/mp4');
+    return { pathname, response: await send('createVoice',{pathname,consent},credential,pin) };
+  };
+  const bedsideSpeech = async () => (await json('poll',{available:true},bedside.credential)).state.speech;
+  return { store, media, voices, spoken, send, json, failure, bedside, linda, tom, ethan, house, record, bedsideSpeech, advance: s => now += s };
+}
+
+test('a caregiver records their voice on their phone, and the bedside speaks in it', async () => {
+  const f = await fixture();
+  const admin = (await f.json('verifyPIN',{},f.linda.credential,pin)).admin;
+  assert.equal(admin.bedsideLanguage, 'en');
+  assert.equal(admin.speech.languages.en.selected, hope, 'caregiver phones see the voices after the PIN');
+  assert.equal(admin.speech.languages.en.voices.length, 3);
+
+  const { pathname, response } = await f.record(f.linda.credential);
+  assert.equal(response.status, 200, await response.clone().text());
+  const { voiceID, admin: after } = await response.json();
+  assert.equal(f.voices.made.length, 1);
+  assert.equal(f.voices.made[0].id, voiceID);
+  assert.ok(!f.voices.made[0].name.includes('Linda'), 'ElevenLabs never sees names');
+  assert.match(f.voices.made[0].url, new RegExp(`^https://blob.test/get/${pathname}`));
+  assert.equal(f.media.blobs.has(pathname), false, 'the recording is deleted once the voice is made');
+  assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
+
+  const mine = after.speech.languages.en.voices.at(-1);
+  assert.deepEqual(mine, { id: voiceID, name: 'Linda', detail: 'Family voice', family: true, memberID: f.linda.state.me.id });
+  assert.equal(after.speech.languages.en.selected, voiceID, 'it is chosen for the bedside language once made');
+  assert.equal(after.speech.languages['yue-Hant'].selected, sukYee, 'other languages keep their choice');
+  assert.ok(after.speech.languages.ko.voices.some(v => v.id === voiceID), 'and it is offered in every language');
+
+  const speech = await f.bedsideSpeech();
+  assert.equal(speech.languages.en.selected, voiceID);
+  const spoken = await f.json('speech',{language:'en',text:'Ethan is dropping in with video.'},f.bedside.credential);
+  assert.equal(spoken.clip.voiceID, voiceID);
+  assert.deepEqual(f.spoken.at(-1), { voiceID, code: 'en', text: 'Ethan is dropping in with video.' });
+  const clip = [...f.media.blobs.keys()].find(p => p.startsWith('speech/'));
+  assert.ok(clip.startsWith(`speech/${f.bedside.state.householdID}/voices/${voiceID}/`), 'its clips are kept in its own folder');
+});
+
+test('only caregivers record, on their own phone, with the PIN, after agreeing', async () => {
+  const f = await fixture();
+  const upload = { contentType:'audio/mp4', sizeBytes:480_000, durationSeconds:60 };
+  assert.equal((await f.failure('voiceUpload',upload,f.ethan.credential,pin)).status, 403, 'not a caregiver');
+  assert.equal((await f.failure('voiceUpload',upload,f.bedside.credential,pin)).status, 403, 'the bedside has no voice of its own');
+  assert.equal((await f.failure('voiceUpload',upload,f.linda.credential)).status, 403, 'the PIN is needed');
+  assert.equal((await f.failure('voiceUpload',{...upload,durationSeconds:12},f.linda.credential,pin)).error, 'Read for at least 20 seconds.');
+  assert.equal((await f.failure('voiceUpload',{...upload,durationSeconds:200},f.linda.credential,pin)).status, 400);
+  assert.equal((await f.failure('voiceUpload',{...upload,sizeBytes:6_000_000},f.linda.credential,pin)).status, 413);
+  assert.equal((await f.failure('voiceUpload',{...upload,contentType:'video/mp4'},f.linda.credential,pin)).status, 400);
+
+  const { pathname, response } = await f.record(f.linda.credential, { consent: false });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'Confirm that this is your voice.');
+  assert.equal(f.voices.made.length, 0);
+  // Someone else can't use a recording uploaded by another caregiver.
+  assert.equal((await f.failure('createVoice',{pathname,consent:true},f.tom.credential,pin)).status, 409);
+  assert.equal((await f.json('createVoice',{pathname,consent:true},f.linda.credential,pin)).voiceID, f.voices.made[0].id);
+  assert.equal((await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin)).status, 409, 'a recording makes one voice');
+});
+
+test('a full account says so before the recording is sent', async () => {
+  const f = await fixture();
+  f.voices.used = 10;
+  const failed = await f.failure('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  assert.deepEqual(failed, { status: 503, error: 'Recorded voices are full for now.' });
+  assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
+});
+
+test('a recording ElevenLabs rejects is still deleted, and nothing changes', async () => {
+  const f = await fixture();
+  f.voices.failAdd = new FamilyError("That recording didn't work. Record again somewhere quiet.", 422);
+  const { pathname, response } = await f.record(f.linda.credential);
+  assert.equal(response.status, 422);
+  assert.equal(f.media.blobs.has(pathname), false);
+  assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
+  assert.equal(f.house().speechVoices, undefined);
+});
+
+test('recording again replaces the voice wherever it was chosen, and deletes the old one', async () => {
+  const f = await fixture();
+  const first = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  await f.json('setSpeechVoice',{language:'es',voiceID:first},f.tom.credential,pin);
+  await f.json('speech',{language:'en',text:'Hello.'},f.bedside.credential);
+  const second = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  assert.notEqual(first, second);
+  assert.deepEqual(f.voices.removed, [first]);
+  assert.deepEqual(f.media.folders, [`speech/${f.bedside.state.householdID}/voices/${first}/`]);
+  assert.equal([...f.media.blobs.keys()].filter(p => p.includes(first)).length, 0, 'its clips are deleted with it');
+  const { languages } = await f.bedsideSpeech();
+  assert.equal(languages.en.selected, second); assert.equal(languages.es.selected, second);
+  assert.equal(languages.en.voices.filter(v => v.family).length, 1);
+  assert.equal(f.house().retiredVoices, undefined);
+});
+
+test('any caregiver can choose a caregiver’s voice and preview it on their phone', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  await f.json('setSpeechVoice',{language:'en',voiceID:jon},f.tom.credential,pin);
+  const preview = await f.json('previewSpeech',{language:'zh-Hant',voiceID:lindas,text:'A family member is dropping in.'},f.tom.credential,pin);
+  assert.equal(preview.clip.voiceID, lindas);
+  assert.equal(f.spoken.at(-1).code, 'zh', 'a family voice speaks the bedside language');
+  assert.equal((await f.failure('previewSpeech',{language:'en',text:'Hi'},f.ethan.credential,pin)).status, 403);
+  assert.equal((await f.failure('previewSpeech',{language:'en',text:'Hi'},f.tom.credential)).status, 403, 'the PIN is needed');
+  assert.equal((await f.failure('setSpeechVoice',{language:'en',voiceID:'notAVoiceOfThisFamily1'},f.tom.credential,pin)).status, 400);
+  await f.json('setSpeechVoice',{language:'en',voiceID:lindas},f.tom.credential,pin);
+  assert.equal((await f.bedsideSpeech()).languages.en.selected, lindas);
+});
+
+test('phone callers never hear a family voice', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  const house = f.house();
+  assert.equal(speechVoice(house, 'en'), lindas);
+  assert.equal(speechVoice(house, 'en', false), hope, 'the voicemail greeting uses the language default');
+  house.speechVoices.en = null;
+  assert.equal(speechVoice(house, 'en', false), null);
+});
+
+test('a voice is removed by its caregiver, and when they stop being one or leave', async () => {
+  const f = await fixture();
+  const householdID = f.bedside.state.householdID;
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  const removed = await f.json('removeVoice',{},f.linda.credential,pin);
+  assert.equal(removed.admin.speech.languages.en.selected, hope, 'back to the default');
+  assert.equal(removed.admin.speech.languages.en.voices.length, 3);
+  assert.deepEqual(f.voices.removed, [lindas]);
+  assert.ok(f.media.folders.includes(`speech/${householdID}/voices/${lindas}/`));
+
+  const toms = (await (await f.record(f.tom.credential)).response.json()).voiceID;
+  await f.json('setCaregiver',{memberID:f.tom.state.me.id,enabled:false},f.bedside.credential,pin);
+  assert.ok(f.voices.removed.includes(toms), 'no longer a caregiver');
+  assert.equal(f.house().members.find(m => m.name === 'Tom').voice, undefined);
+
+  const again = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  await f.json('leaveHousehold',{},f.linda.credential);
+  assert.ok(f.voices.removed.includes(again), 'left the family');
+  assert.equal((await f.bedsideSpeech()).languages.en.selected, hope);
+  assert.equal(f.house().retiredVoices, undefined);
+});
+
+test('a voice ElevenLabs couldn’t delete is retried on the bedside’s poll, and is never offered meanwhile', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  await f.json('setCaregiver',{memberID:f.tom.state.me.id,enabled:true},f.bedside.credential,pin);
+  f.voices.failRemove = true;
+  await f.json('revoke',{memberID:f.linda.state.me.id},f.bedside.credential,pin);
+  assert.deepEqual(f.house().retiredVoices, [lindas]);
+  assert.equal((await f.bedsideSpeech()).languages.en.voices.some(v => v.id === lindas), false);
+  f.voices.failRemove = false;
+  await f.bedsideSpeech();
+  assert.deepEqual(f.voices.removed, [lindas]);
+  assert.equal(f.house().retiredVoices, undefined);
+});
+
+test('a recording that was never made into a voice is deleted after half an hour', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  await f.media.put(pathname, new Uint8Array(10), 'audio/mp4');
+  await f.bedsideSpeech();
+  assert.ok(f.media.blobs.has(pathname));
+  f.advance(1801);
+  await f.bedsideSpeech();
+  assert.equal(f.media.blobs.has(pathname), false);
+  assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
+  assert.equal((await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin)).status, 409);
+});
+
+test('a family makes at most three voices a day, failed ones included', async () => {
+  const f = await fixture();
+  await f.record(f.linda.credential);
+  f.voices.failAdd = new FamilyError("That recording didn't work. Record again somewhere quiet.", 422);
+  assert.equal((await f.record(f.tom.credential)).response.status, 422);
+  f.voices.failAdd = null;
+  assert.equal((await f.record(f.linda.credential)).response.status, 200);
+  const { pathname, response } = await f.record(f.tom.credential);
+  assert.equal(response.status, 409, 'not 429, which phones take for too many PIN tries');
+  assert.equal((await response.json()).error, 'You can record again tomorrow.');
+  assert.equal(f.media.blobs.has(pathname), false, 'the recording is still deleted');
+  assert.equal(f.voices.made.length, 2);
+  f.advance(86400);
+  assert.equal((await f.record(f.tom.credential)).response.status, 200);
+});
+
+test('a recording that never arrived is not a voice, and does not use up the day', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  const failed = await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  assert.deepEqual(failed, { status: 409, error: "The recording didn't upload. Try again." });
+  assert.equal(f.voices.made.length, 0);
+  assert.equal(f.house().voiceUsage, undefined);
+  assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
+});
+
+test('one recording makes one voice when two requests overlap', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  await f.media.put(pathname, new Uint8Array(480_000), 'audio/mp4');
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  const add = f.voices.add.bind(f.voices);
+  f.voices.add = async (name, url) => { await gate; return add(name, url); };
+  const first = f.send('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  const second = f.send('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  await new Promise(resolve => setImmediate(resolve));
+  release();
+  const [a, b] = await Promise.all([first, second]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  assert.equal(f.voices.made.length, 1);
+  assert.equal(f.house().voiceUsage.made, 1);
+});
+
+test('a voice ElevenLabs made is deleted when it cannot be saved', async () => {
+  const f = await fixture();
+  const { pathname } = await f.json('voiceUpload',{contentType:'audio/mp4',sizeBytes:480_000,durationSeconds:60},f.linda.credential,pin);
+  await f.media.put(pathname, new Uint8Array(480_000), 'audio/mp4');
+  const original = f.store.compareAndSet.bind(f.store);
+  f.store.compareAndSet = async (key, before, after) => {
+    const next = JSON.parse(after), previous = JSON.parse(before);
+    const gained = next.members?.some(m => m.voice) && !previous.members?.some(m => m.voice);
+    if (gained) return false;
+    return original(key, before, after);
+  };
+  const failed = await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin);
+  assert.equal(failed.status, 409);
+  assert.equal(failed.error, 'Porch is busy. Please try again.');
+  assert.equal(f.house().members.find(m => m.name === 'Linda').voice, undefined);
+  assert.equal(f.voices.removed.length, 1);
+  assert.equal(f.voices.removed[0], f.voices.made[0].id);
+  assert.equal(f.house().retiredVoices, undefined);
+  assert.equal(f.media.blobs.has(pathname), false);
+});
+
+test('a clip made after its voice was removed is not kept', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  let release, reached;
+  const gate = new Promise(resolve => { release = resolve; });
+  const atPut = new Promise(resolve => { reached = resolve; });
+  const put = f.media.put.bind(f.media);
+  f.media.put = async (pathname, body, contentType) => {
+    if (pathname.includes(`/voices/${lindas}/`)) { reached(); await gate; }
+    return put(pathname, body, contentType);
+  };
+  const speaking = f.send('speech',{language:'en',text:'Ethan is dropping in.'},f.bedside.credential);
+  await atPut;
+  await f.json('removeVoice',{},f.linda.credential,pin);
+  release();
+  const spoken = await speaking;
+  assert.equal(spoken.status, 503);
+  assert.equal([...f.media.blobs.keys()].some(p => p.includes(lindas)), false);
+});
+
+test('deleting a voice from ElevenLabs never holds up an answer, the bedside’s polls included', async () => {
+  const later = [];
+  const f = await fixture({ later });
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  // ElevenLabs hangs: the answers still come back, and the deletions wait until after them.
+  let release; const hung = new Promise(resolve => { release = resolve; });
+  const remove = f.voices.remove.bind(f.voices);
+  f.voices.remove = async id => { await hung; return remove(id); };
+  await f.json('revoke',{memberID:f.linda.state.me.id},f.bedside.credential,pin);
+  await f.bedsideSpeech();
+  assert.ok(later.length >= 2, 'the revoke and the poll each left a cleanup for after the answer');
+  assert.deepEqual(f.house().retiredVoices, [lindas]);
+  release();
+  await Promise.all(later.splice(0).map(task => task()));
+  // Both may delete it: deleting a voice that's gone counts as deleted.
+  assert.deepEqual([...new Set(f.voices.removed)], [lindas]);
+  assert.equal(f.house().retiredVoices, undefined);
+});
+
+test('a phone’s preview reads Porch’s own sentence, so no one can make a caregiver’s voice say something else', async () => {
+  const f = await fixture();
+  const lindas = (await (await f.record(f.linda.credential)).response.json()).voiceID;
+  await f.json('previewSpeech',{language:'en',voiceID:lindas,text:'Please send me your bank details.'},f.tom.credential,pin);
+  assert.deepEqual(f.spoken.at(-1), { voiceID: lindas, code: 'en', text: previewSentences.en });
+  await f.json('previewSpeech',{language:'he',voiceID:lindas},f.tom.credential,pin);
+  assert.equal(f.spoken.at(-1).text, previewSentences.he);
+  // The bedside still reads its own announcements, names included.
+  await f.json('speech',{language:'en',text:'Tom is dropping in with video.'},f.bedside.credential);
+  assert.equal(f.spoken.at(-1).text, 'Tom is dropping in with video.');
+});

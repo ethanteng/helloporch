@@ -51,9 +51,11 @@ export function translationServices(config: { apiKey: string; apiSecret: string;
 function bedsideOf(house: Household, call: Call) {
   return house.members.find(m => m.role === "bedside" && !m.revoked && [call.from, call.to].includes(m.id));
 }
-/** The household's natural voice for a language, or its default when the family chose the iPad's built-in voice for announcements. */
+/** A listed voice for a language: the one chosen for announcements, or the language's default when that choice is the
+ * tablet's built-in voice or a caregiver's own. A caregiver's voice speaks announcements only. Translation, like a
+ * phone greeting, stays on a listed voice, so a phone guest never hears the clone say someone else's words. */
 function voiceFor(house: Household, language: BedsideLanguage) {
-  return speechVoice(house, language) ?? speechCatalog[language].voices[0].id;
+  return speechVoice(house, language, false) ?? speechCatalog[language].voices[0].id;
 }
 
 /** Whether `me` can turn translation on for this call: one of its two ends, with the bedside on an app that supports it. */

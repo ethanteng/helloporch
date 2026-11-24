@@ -53,6 +53,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -88,13 +90,15 @@ fun CaregiverPageContent(app: PorchApplication, admin: CaregiverAdmin, links: Fa
         CaregiverPage.CALLS -> { CallsPages(app, admin, links, onBack); return }
         CaregiverPage.DROP_IN -> { DropInPages(app, admin, links, onBack); return }
         CaregiverPage.MESSAGES -> { MessagesPages(app, admin, links, onBack); return }
+        // Recording opens in its place.
+        CaregiverPage.VOICE -> { VoicePages(app, admin, links, onBack); return }
         // Contact, Licenses and each license open in its place.
         CaregiverPage.ABOUT -> { AboutScreen(navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }); return }
         else -> {}
     }
     FormScreen(page.title(admin.onBedside), navigation = onBack?.let { back -> { TextButton(onClick = back) { Text("Back") } } }) {
         when (page) {
-            CaregiverPage.PEOPLE, CaregiverPage.CALLS, CaregiverPage.DROP_IN, CaregiverPage.MESSAGES, CaregiverPage.ABOUT -> {}
+            CaregiverPage.PEOPLE, CaregiverPage.CALLS, CaregiverPage.DROP_IN, CaregiverPage.MESSAGES, CaregiverPage.VOICE, CaregiverPage.ABOUT -> {}
             CaregiverPage.DISPLAY -> DisplayPage(app, admin, links)
             CaregiverPage.PRIVACY -> PrivacyPage(app, admin, links)
             CaregiverPage.CAREGIVERS -> CaregiversPage(admin, links, onScreen)
@@ -347,7 +351,8 @@ private fun DisplayPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
     saved?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
 }
 
-/** The announcement voice for the bedside's language: the household's natural voices, and the tablet's own. */
+/** The announcement voice for the bedside's language: caregivers' own voices, the household's natural voices, and the
+ * tablet's own. */
 @Composable
 private fun AnnouncementVoice(app: PorchApplication, language: BedsideLanguage, builtIn: String?, choices: com.ethanteng.helloporch.core.NaturalVoices.Choices?,
     natural: String?, onBuiltIn: (String?) -> Unit, onNatural: (String) -> Unit) {
@@ -360,12 +365,20 @@ private fun AnnouncementVoice(app: PorchApplication, language: BedsideLanguage, 
     DisposableEffect(Unit) { onDispose { announcer.stop() } }
     val naturalChoice = natural?.let { id -> choices?.voices?.firstOrNull { it.id == id } }
     val chosen = voices.firstOrNull { it.name == builtIn }
-    val title = naturalChoice?.let { "${it.name} · Natural" } ?: chosen?.let { voiceLabel(it) } ?: "System default"
+    val title = naturalChoice?.let { "${it.name} · ${if (it.isFamily) "Family" else "Natural"}" } ?: chosen?.let { voiceLabel(it) } ?: "System default"
     FormSection("Announcement voice") {
         Box {
             OutlinedButton(onClick = { open = true }, Modifier.fillMaxWidth()) { Text(title) }
             DropdownMenu(open, onDismissRequest = { open = false }) {
-                choices?.voices?.forEach { voice ->
+                // Voices caregivers recorded on their phones come first, under their own heading, as on iOS.
+                val family = choices?.family.orEmpty()
+                if (family.isNotEmpty()) {
+                    MenuHeading("Family voices")
+                    family.forEach { voice -> DropdownMenuItem(text = { Text(voice.name) }, onClick = { open = false; onNatural(voice.id) }) }
+                    HorizontalDivider()
+                    MenuHeading("Natural voices")
+                }
+                choices?.listed?.forEach { voice ->
                     DropdownMenuItem(text = { Text("${voice.name} · ${voice.detail}") }, onClick = { open = false; onNatural(voice.id) })
                 }
                 if (choices != null) HorizontalDivider()
@@ -391,6 +404,13 @@ private fun AnnouncementVoice(app: PorchApplication, language: BedsideLanguage, 
         })
         status?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
+}
+
+/** A group's name in a menu, such as Family voices. */
+@Composable
+private fun MenuHeading(title: String) {
+    Text(title, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp).semantics { heading() },
+        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 private fun voiceLabel(voice: android.speech.tts.Voice): String {
