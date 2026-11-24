@@ -588,7 +588,8 @@ final class VoiceCheckViewController: CaregiverFormViewController {
             do {
                 let size = try recording.file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 let seconds = (recording.duration * 10).rounded() / 10
-                guard let created = try await admin.request("voiceUpload", ["contentType": "audio/mp4", "sizeBytes": size, "durationSeconds": seconds]) else { self?.stopWorking(nil); return }
+                // slots() waits up to 15 seconds on ElevenLabs. The 12-second default would give up while that was still going.
+                guard let created = try await admin.request("voiceUpload", ["contentType": "audio/mp4", "sizeBytes": size, "durationSeconds": seconds], timeout: 25) else { self?.stopWorking(nil); return }
                 guard let target = created.upload, let pathname = created.pathname, let url = URL(string: target.url) else {
                     throw FamilyServiceError(message: "Recording a voice isn't available right now.", status: 503)
                 }
