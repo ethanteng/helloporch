@@ -95,8 +95,8 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
 export type Household = { id: string; name: string; createdAt?: number; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; texts?: TextEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
   blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number;
   everyCall?: EveryCall;
-  /** Family voices taken out of use and still to delete from ElevenLabs (see voices.ts). */
-  retiredVoices?: string[] };
+  /** Family voices taken out of use and still to delete from ElevenLabs, and voices made on one UTC day (see voices.ts). */
+  retiredVoices?: string[]; voiceUsage?: { day: number; made: number } };
 export type Auth = { householdID: string; deviceID: string; hash: string };
 export type InboundPhone = { room: string; roomSID: string; participantIdentity: string; participantSID: string; trunkID: string; calledNumber: string; callerNumber?: string; checkedAt?: number; cleanedUp?: boolean };
 export class FamilyError extends Error { status: number; code?: string; constructor(message: string, status = 400, code?: string) { super(message); this.status = status; this.code = code; } }

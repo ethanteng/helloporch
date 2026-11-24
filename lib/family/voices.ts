@@ -21,7 +21,8 @@ export type VoiceService = {
 };
 export type VoiceContext = { store: FamilyStore; media: () => MediaStore; now: number; house: Household; me: Member; input: Record<string, unknown>; voices?: VoiceService };
 
-export const voiceLimits = { recordingBytes: 5_000_000, minSeconds: 20, maxSeconds: 180, uploadSeconds: 1800, downloadSeconds: 300 };
+// ElevenLabs allows the whole account a few dozen new voices a month, so one family can make only a few a day.
+export const voiceLimits = { recordingBytes: 5_000_000, minSeconds: 20, maxSeconds: 180, uploadSeconds: 1800, downloadSeconds: 300, madePerDay: 3 };
 export const voiceActions = new Set(["voiceUpload", "createVoice", "removeVoice"]);
 // ElevenLabs voice IDs.
 export const voiceIDPattern = /^[A-Za-z0-9]{16,40}$/;
@@ -127,6 +128,13 @@ export async function handleVoiceAction(action: string, { store, media, now, hou
   requireValue(typeof pathname === "string" && me.pendingVoice?.pathname === pathname && me.pendingVoice.expiresAt > now, "Record your voice again.", 409);
   let voiceID: string;
   try {
+    // Counted before asking, so failing requests can't use up the account's allowance either.
+    const day = Math.floor(now / 86400);
+    await mutate(store, house.id, latest => {
+      const made = latest.voiceUsage?.day === day ? latest.voiceUsage.made : 0;
+      requireValue(made < voiceLimits.madePerDay, "You can record again tomorrow.", 429);
+      latest.voiceUsage = { day, made: made + 1 };
+    });
     const uploaded = await media().stat(pathname);
     requireValue(uploaded && uploaded.contentType === "audio/mp4" && uploaded.size <= voiceLimits.recordingBytes, "The recording didn't upload. Try again.", 409);
     // ElevenLabs sees two IDs, never a name.

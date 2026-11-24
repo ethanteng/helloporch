@@ -219,3 +219,19 @@ test('a recording that was never made into a voice is deleted after half an hour
   assert.equal(f.house().members.find(m => m.name === 'Linda').pendingVoice, undefined);
   assert.equal((await f.failure('createVoice',{pathname,consent:true},f.linda.credential,pin)).status, 409);
 });
+
+test('a family makes at most three voices a day, failed ones included', async () => {
+  const f = await fixture();
+  await f.record(f.linda.credential);
+  f.voices.failAdd = new FamilyError("That recording didn't work. Record again somewhere quiet.", 422);
+  assert.equal((await f.record(f.tom.credential)).response.status, 422);
+  f.voices.failAdd = null;
+  assert.equal((await f.record(f.linda.credential)).response.status, 200);
+  const { pathname, response } = await f.record(f.tom.credential);
+  assert.equal(response.status, 429);
+  assert.equal((await response.json()).error, 'You can record again tomorrow.');
+  assert.equal(f.media.blobs.has(pathname), false, 'the recording is still deleted');
+  assert.equal(f.voices.made.length, 2);
+  f.advance(86400);
+  assert.equal((await f.record(f.tom.credential)).response.status, 200);
+});
