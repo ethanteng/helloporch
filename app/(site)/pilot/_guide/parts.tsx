@@ -158,7 +158,7 @@ export function Choices({ label, items }: { label: string; items: { name: string
   return (
     <ul className={styles.choices} aria-label={label}>
       {items.map(({ name, note }) => (
-        <li key={name}>
+        <li key={`${name} ${note ?? ""}`}>
           {name}
           {note && <span>{note}</span>}
         </li>

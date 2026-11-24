@@ -51,7 +51,7 @@ const multiLanguage: Clip = {
   id: "multi-language",
   title: "Porch in their own language",
   description:
-    "Porch can run in English, Mandarin, Cantonese, Spanish, Tagalog, or Korean. Whichever you pick, the screens and everything Porch says out loud switch over, so they’re not stuck trying to follow along in English.",
+    "Porch can run in English, Mandarin, Cantonese, Spanish, Tagalog, Korean, or Hebrew. Whichever you pick, the screens and everything Porch says out loud switch over, so they’re not stuck trying to follow along in English.",
   duration: "17 sec",
   src: "https://lazmh5osa7q134vr.public.blob.vercel-storage.com/Multi-language%20support%20compressed.mp4",
   poster: "/features/multi-language.jpg",

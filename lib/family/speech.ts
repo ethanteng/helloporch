@@ -49,6 +49,11 @@ export const speechCatalog: Record<string, { code: string; voices: SpeechVoice[]
     { id: "ksaI0TCD9BstzEzlxj4q", name: "Seulki", detail: "Inviting, calm and measured · female" },
     { id: "YBRudLRm83BV5Mazcr42", name: "Jason", detail: "Gentle, calm and measured · male" },
   ] },
+  he: { code: "he", voices: [
+    { id: "s0T0DT6EAPeX57MQpn3I", name: "Danit", detail: "Natural and clear · female" },
+    { id: "ZiofZHcEBTn5sRySe5h8", name: "Nimrod", detail: "Warm and confident · male" },
+    { id: "l7Q9rbdCC6j3J5dNlOOg", name: "Itamar", detail: "Clear, steady narrator · male" },
+  ] },
 };
 export const speechModel = "eleven_v4";
 // Announcements are a sentence or two. The daily allowance covers a new household's first clips

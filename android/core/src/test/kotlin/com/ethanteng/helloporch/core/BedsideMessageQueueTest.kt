@@ -40,6 +40,7 @@ class BedsideMessageQueueTest {
         assertTrue(BedsideMessageQueue.sameLanguage("zh-Hant", "yue-Hant"))
         assertTrue(BedsideMessageQueue.sameLanguage("cmn-Hans-CN", "zh-Hans"))
         assertTrue(BedsideMessageQueue.sameLanguage("fil", "tl"))
+        assertTrue(BedsideMessageQueue.sameLanguage("iw", "he"))
         assertTrue(BedsideMessageQueue.sameLanguage("en-US", "en"))
         assertFalse(BedsideMessageQueue.sameLanguage("es", "en"))
         assertFalse(BedsideMessageQueue.sameLanguage("ko", "zh-Hant"))

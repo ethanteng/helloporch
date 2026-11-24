@@ -75,6 +75,12 @@ export const greetings: Record<BedsideLanguage, Record<Greeting, string>> = {
     noMessage: "녹음된 메시지가 없습니다. 안녕히 계세요.",
     thanks: "감사합니다. 안녕히 계세요.",
   },
+  he: {
+    unavailable: "מצטערים, אין כרגע מי שיענה. נסו להתקשר שוב מאוחר יותר. להתראות.",
+    leaveMessage: "מצטערים, אין כרגע מי שיענה לטלפון. השאירו הודעה אחרי הצליל, ואז נתקו.",
+    noMessage: "לא הוקלטה הודעה. להתראות.",
+    thanks: "תודה רבה. להתראות.",
+  },
 };
 // Twilio waits 15 seconds for an answer. A greeting heard for the first time is recorded meanwhile;
 // if it takes longer than this, the caller hears Twilio's voice and the next caller hears the natural one.

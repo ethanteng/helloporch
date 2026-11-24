@@ -100,19 +100,22 @@ export default function Home() {
             <article className={styles.need}>
               <div className={styles.needArt}>
                 <div className={styles.langPills} aria-hidden="true">
-                  <span>普通话</span>
-                  <span>廣東話</span>
-                  <span>Español</span>
-                  <span>Tagalog</span>
-                  <span>한국어</span>
-                  <span>English</span>
+                  <span lang="zh-Hans">普通话</span>
+                  <span lang="zh-Hant-HK">廣東話</span>
+                  <span lang="es">Español</span>
+                  <span lang="tl">Tagalog</span>
+                  <span lang="ko">한국어</span>
+                  <span lang="he" dir="rtl">
+                    עברית
+                  </span>
+                  <span lang="en">English</span>
                   <span data-soon>More soon</span>
                 </div>
               </div>
               <p className={styles.needIf}>If English isn’t their first language</p>
               <h3>Speak their language.</h3>
               <p>
-                Porch supports Mandarin, Cantonese, Spanish, Tagalog, and Korean, and can translate and read your text messages aloud in their
+                Porch supports Mandarin, Cantonese, Spanish, Tagalog, Korean, and Hebrew, and can translate and read your text messages aloud in their
                 language. More languages coming soon.
               </p>
             </article>

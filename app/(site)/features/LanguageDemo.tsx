@@ -5,7 +5,8 @@ import { PhoneIcon, SpeakerIcon } from "./icons";
 import styles from "./story.module.css";
 
 // The bedside in each language it speaks. The clock, the button and the spoken drop-in come from the app's own
-// strings (ios/PorchCore/Sources/PorchCore/BedsideLanguage.swift); times follow each locale's clock.
+// strings (ios/PorchCore/Sources/PorchCore/BedsideLanguage.swift); times follow each locale's clock. As on the bedside,
+// Hebrew text reads right to left (dir="auto") while the screen keeps its layout.
 const LANGUAGES = [
   {
     id: "zh-Hans",
@@ -73,6 +74,19 @@ const LANGUAGES = [
     message: "엄마, 일요일에 봬요. 사랑해요!",
   },
   {
+    id: "he",
+    name: "עברית",
+    english: "Hebrew",
+    scene: "לילה · סתיו",
+    day: "יום רביעי",
+    before: "",
+    time: "20:15",
+    after: "",
+    call: "להתקשר",
+    spoken: "שיחת וידאו מאת Sarah. מתחברים בעוד חמש שניות.",
+    message: "נתראה ביום ראשון, אמא. אוהבת אותך!",
+  },
+  {
     id: "en",
     name: "English",
     english: "English",
@@ -88,6 +102,11 @@ const LANGUAGES = [
 ];
 
 const SENT = LANGUAGES[LANGUAGES.length - 1].message;
+
+// Hebrew quotes with straight marks: curly ones don't turn around in right-to-left text.
+function quote(language: (typeof LANGUAGES)[number], text = language.spoken) {
+  return language.id === "he" ? `"${text}"` : `“${text}”`;
+}
 
 export default function LanguageDemo() {
   const [chosen, setChosen] = useState(LANGUAGES[0].id);
@@ -115,8 +134,12 @@ export default function LanguageDemo() {
           <div className={styles.clock} lang={language.id}>
             <span className={styles.stars} />
             <span className={styles.moon} />
-            <p className={styles.clockScene}>{language.scene}</p>
-            <p className={styles.clockDay}>{language.day}</p>
+            <p className={styles.clockScene} dir="auto">
+              {language.scene}
+            </p>
+            <p className={styles.clockDay} dir="auto">
+              {language.day}
+            </p>
             <p className={styles.clockTime}>
               {language.before ? <span className={styles.clockPeriod}>{language.before}</span> : null}
               {language.time}
@@ -135,15 +158,15 @@ export default function LanguageDemo() {
             <p className={styles.tag}>
               <SpeakerIcon /> Out loud
             </p>
-            <p className={styles.spoken} lang={language.id}>
-              “{language.spoken}”
+            <p className={styles.spoken} lang={language.id} dir="auto">
+              {quote(language)}
             </p>
           </div>
           {/* A text to the Porch number, as the bedside shows it: the translation, then the original under it. */}
           <div className={styles.langNote}>
             <p className={styles.tag}>A text from Sarah</p>
-            <p className={styles.translated} lang={language.id}>
-              “{language.message}”
+            <p className={styles.translated} lang={language.id} dir="auto">
+              {quote(language, language.message)}
             </p>
             {language.id === "en" ? null : <p className={styles.original}>Translated from English: “{SENT}”</p>}
           </div>
