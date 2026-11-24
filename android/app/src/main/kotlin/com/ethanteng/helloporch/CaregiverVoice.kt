@@ -153,6 +153,7 @@ private fun VoicePage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
     // Saved at once, as a phone has no Save. What's shown goes back if it isn't.
     fun choose(voiceID: String?) {
         if (!ready || voiceID == selected) return
+        preview.stop()
         choosing = Choosing(voiceID)
         error = null
         admin.launch {
@@ -215,6 +216,7 @@ private fun VoicePage(app: PorchApplication, admin: CaregiverAdmin, links: Famil
         confirmButton = {
             TextButton(onClick = {
                 confirmRemove = false
+                preview.stop()
                 removing = true
                 error = null
                 admin.launch {
