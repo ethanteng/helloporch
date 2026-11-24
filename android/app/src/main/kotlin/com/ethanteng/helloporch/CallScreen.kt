@@ -192,7 +192,7 @@ fun FloatingCall(call: PorchCall) {
         if (first?.track != null) VideoTrackView(call.room, first.track, Modifier.fillMaxSize())
         else Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Photo(call.photo, Modifier.size(56.dp))
-            Text(first?.name ?: call.name, color = CallColors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+            Text(first?.name?.takeIf { it.isNotEmpty() } ?: call.name, color = CallColors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
