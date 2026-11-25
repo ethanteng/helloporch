@@ -277,6 +277,15 @@ class CallCenter(private val app: PorchApplication) {
             } catch (e: Exception) {
                 if (cancelOpening) { announcement.stop(); return@launch }
                 app.cell2jack.record("callStartFailed", "error" to e.message)
+                // They're on Do Not Disturb on their phone: never their regular phone either. A message, as when their
+                // Porch can't ring, or else just that they aren't available. As on iOS.
+                if ((e as? FamilyServiceException)?.code == "doNotDisturb") {
+                    if (memberID != null && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
+                        announcement.finished()
+                        if (!cancelOpening) leaveMessage(memberID, name, photo, mode, BedsideVoicemail.Reason.UNAVAILABLE)
+                    } else { announcement.stop(); note(text("%@ isn't available right now.", name)) }
+                    return@launch
+                }
                 // Their Porch app can't ring, or they have no Porch app, so their phone can. Only a confirmed "offline":
                 // a lost answer may still have started a Porch call.
                 if (contact?.phoneNumber != null && (e as? FamilyServiceException)?.code == "offline" && app.onScreen && active == null) {

@@ -718,9 +718,17 @@ final class CallViewController: UIViewController {
             } catch {
                 if self.cancelOpening { return }
                 Cell2JackKeypad.shared.record(["kind": "callStartFailed", "error": error.localizedDescription])
+                // They're on Do Not Disturb on their phone: never their regular phone either. A message, as when their
+                // Porch can't ring, or else just that they aren't available.
+                if (error as? FamilyServiceError)?.code == "doNotDisturb" {
+                    if let memberID, CallPreferences.leaveMessageWhenUnanswered() {
+                        await announcement.finished()
+                        if self.cancelOpening { return }
+                        self.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unavailable)
+                    } else { announcement.stop(); self.displayStatus(BedsideText.string("%@ isn't available right now.", contact.name), temporary: true) }
                 // A lost response may still have created a Porch call. Only a
                 // confirmed offline result permits an unpaired phone handoff.
-                if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
+                } else if contact.phoneNumber != nil, (error as? FamilyServiceError)?.code == "offline", UIApplication.shared.applicationState == .active, self.presentedViewController == nil {
                     do {
                         let screen = try NativeCallViewController.phoneFallback(contact)
                         screen.announcement = announcement

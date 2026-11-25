@@ -363,7 +363,7 @@ fun rememberMediaAccess(ask: Boolean = true): MediaAccess {
 }
 
 internal val FamilyPerson.shortStatus: String
-    get() = if (online) "Porch is open" else if (canReceiveCalls == true) "Can ring while locked" else "Offline"
+    get() = if (doNotDisturb == true) "Do Not Disturb" else if (online) "Porch is open" else if (canReceiveCalls == true) "Can ring while locked" else "Offline"
 
 internal val FamilyPerson.dropInModes: String?
     get() = when {

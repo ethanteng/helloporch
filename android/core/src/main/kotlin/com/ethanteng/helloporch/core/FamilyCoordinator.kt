@@ -71,6 +71,9 @@ class FamilyCoordinator(
     /** The app's version, such as "1.0 (12)" as Google Play shows it, which the bedside's check-ins report for the admin
      * Porches list. */
     private val appVersion: String? = null,
+    /** A family phone's Do Not Disturb as its check-ins say it ([DoNotDisturb.checkIn]), so each family can turn the
+     * bedside's calls away while the phone is closed. Nothing leaves it as the server last heard it. */
+    private val doNotDisturb: () -> JsonElement? = { null },
     private val afterChange: (FamilyLinks) -> Unit = {},
 ) {
     private class Link(val credential: FamilyCredential) {
@@ -137,6 +140,7 @@ class FamilyCoordinator(
                     bedsideLanguage()?.let { values["language"] = JsonPrimitive(it.code) }
                     appVersion?.let { values["appVersion"] = JsonPrimitive(it) }
                 }
+                if (credential.role == PorchExperience.FAMILY) doNotDisturb()?.let { values["doNotDisturb"] = it }
                 val result = serviceFor(credential).send("poll", pollOrder.next(values))
                 if (this.generation != generation) return
                 link.state = result.state; link.error = null; link.accessRemoved = false
@@ -164,9 +168,10 @@ class FamilyCoordinator(
         isActive = false; generation++
         for (link in entries) {
             link.job?.cancel(); link.job = null
-            // Numbered now, after any poll still in flight.
-            val values = pollOrder.next(mapOf("available" to JsonPrimitive(false)))
+            // Numbered now, after any poll still in flight. It says Do Not Disturb too, in case it changed just before.
             val credential = link.credential
+            val quiet = if (credential.role == PorchExperience.FAMILY) doNotDisturb() else null
+            val values = pollOrder.next(mapOf("available" to JsonPrimitive(false)) + (quiet?.let { mapOf("doNotDisturb" to it) } ?: emptyMap()))
             scope.launch {
                 try { serviceFor(credential).send("poll", values) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
             }

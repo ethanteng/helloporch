@@ -15,6 +15,7 @@ import com.ethanteng.helloporch.core.BedsidePreferences
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.ContactPhotoStore
+import com.ethanteng.helloporch.core.DoNotDisturb
 import com.ethanteng.helloporch.core.FamilyCoordinator
 import com.ethanteng.helloporch.core.FamilyCredential
 import com.ethanteng.helloporch.core.FamilyLinks
@@ -50,7 +51,7 @@ class PorchApplication : Application() {
     val coordinator by lazy {
         FamilyCoordinator(device, scope, { service(it) }, PollOrder(), canReceive = { onScreen && screenReady }, attendance = AttendanceTracker.shared,
             afterChange = ::afterSnapshot, bedsideLanguage = { BedsidePreferences.load(settings).language },
-            appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", doNotDisturb = { DoNotDisturb.load(settings).checkIn() })
     }
     val keypadReport by lazy { KeypadNumberReport(scope, { service(it) }, pin = { caregiverPIN }, now = SystemClock::elapsedRealtime) }
     /** The call this device is ringing for or on. */

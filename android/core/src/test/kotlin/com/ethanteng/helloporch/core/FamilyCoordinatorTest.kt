@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -84,6 +85,39 @@ class FamilyCoordinatorTest {
         assertNull(first["language"], "only the bedside says its language")
         assertNull(first["features"], "or what it can show")
         assertNull(first["appVersion"], "or which version of Porch it runs")
+    }
+
+    /** Each family hears this phone's Do Not Disturb with every check-in, the one sent as Porch pauses too, so it can
+     * turn the bedside's calls away while the phone is closed. */
+    @Test fun aFamilyPhoneSaysItsDoNotDisturbWithEveryCheckIn() = runTest {
+        val phone = FamilyHarness(this)
+        phone.device.save(family(1)); phone.device.save(family(2))
+        phone.answerPolls()
+        phone.coordinator.start()
+        runCurrent()
+        assertEquals(listOf(Json.parseToJsonElement("""{"on":false}""")).let { it + it }, phone.transport.requests("poll").map { it["doNotDisturb"] }, "both families")
+        phone.doNotDisturb = DoNotDisturb(scheduled = true)
+        advanceTimeBy(3_500)
+        val scheduled = Json.parseToJsonElement("""{"on":false,"hours":{"start":22,"end":7},"timeZone":"America/Los_Angeles"}""")
+        assertEquals(listOf(scheduled, scheduled), phone.transport.requests("poll").drop(2).map { it["doNotDisturb"] })
+        phone.doNotDisturb = DoNotDisturb(on = true)
+        phone.coordinator.pause()
+        runCurrent()
+        val closing = phone.transport.requests("poll").drop(4)
+        assertEquals(listOf(JsonPrimitive(false), JsonPrimitive(false)), closing.map { it["available"] })
+        assertEquals(List(2) { Json.parseToJsonElement("""{"on":true}""") }, closing.map { it["doNotDisturb"] })
+    }
+
+    @Test fun theBedsideNeverSaysDoNotDisturb() = runTest {
+        val tablet = FamilyHarness(this, canBeBedside = true)
+        tablet.device.save(TestFamilies.bedside(1))
+        tablet.doNotDisturb = DoNotDisturb(on = true)
+        tablet.answerPolls { snapshot(it.deviceID!!, role = "bedside") }
+        tablet.coordinator.start()
+        runCurrent()
+        tablet.coordinator.pause()
+        runCurrent()
+        assertEquals(listOf(null, null), tablet.transport.requests("poll").map { it["doNotDisturb"] })
     }
 
     @Test fun theBedsideSaysItsLanguageItsVersionAndThatItCanShowTranslation() = runTest {

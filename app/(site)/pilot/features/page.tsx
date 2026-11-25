@@ -384,7 +384,9 @@ const parts: GuidePart[] = [
             asks them to speak after the beep. They press 0 when finished, then tap{" "}
             <UI>Send message</UI> or <UI>Don’t send</UI>. The message appears under{" "}
             <UI>Messages</UI> on the family member’s phone. If Porch called
-            a regular phone instead, that phone’s voicemail may answer.
+            a regular phone instead, that phone’s voicemail may answer. If the person turned on{" "}
+            <a href="#your-app">Do Not Disturb</a>, the tablet asks for a message right away and doesn’t call
+            their regular phone.
           </li>
           <li>
             <strong>When you call your loved one:</strong> If they don’t answer, Porch asks{" "}
@@ -785,6 +787,11 @@ const parts: GuidePart[] = [
             <UI>Start video calls with my camera on</UI>.
           </li>
           <li>
+            <strong>Do Not Disturb.</strong> Tap <UI>You</UI>, then <UI>Do Not Disturb</UI>. Turn on{" "}
+            <UI>Now</UI>, or <UI>Every day</UI> and set <UI>Starting at</UI> and <UI>Until</UI>. Porch calls
+            won’t ring your phone, and your loved one can leave a message instead, which arrives quietly.
+          </li>
+          <li>
             Tap <UI>You</UI>, then <UI>Join another family</UI>, to connect with another loved one. You can join
             up to four family groups on one phone.
           </li>
@@ -796,7 +803,7 @@ const parts: GuidePart[] = [
             so people can hear you. On Android, tap <UI>Ring when Porch is closed</UI> if shown.
           </li>
         </ul>
-        <Setting rows={[["Default", "Your camera is on when a video call starts."]]} />
+        <Setting rows={[["Default", "Your camera is on when a video call starts. Do Not Disturb is off."]]} />
       </>
     ),
   },
