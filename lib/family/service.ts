@@ -18,6 +18,7 @@ import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type M
 import { callTitle, noticeEveryCall } from "./notices.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
+import { doNotDisturbCode, inDoNotDisturb, noteDoNotDisturb } from "./do-not-disturb.ts";
 import { dropVoice, elevenLabsVoices, handleVoiceAction, maintainVoices, voiceActions, voicesDue, type VoiceService } from "./voices.ts";
 import { handleTextAction, heldTextCount, maintainTexts, publicTexts, textActions } from "./texts.ts";
 import type { Translate } from "./translate.ts";
@@ -97,6 +98,8 @@ function publicPerson(m: Member, now: number, pushable: Pushable, profiles = fal
   // `platform` lets each app name the other devices, such as "Mom's iPad" or "Mom's tablet".
   return { id: m.id, name: displayName(m), ...(photo ? { photoID: photo.id } : {}), role: m.role, platform: m.platform ?? "ios", permissions: m.permissions, online: online(m, now), canReceiveCalls: online(m, now) || pushable(m.voip),
     ...(m.role === "family" ? { caregiver: !!m.caregiver } : {}),
+    // Porch calls don't ring them now, which caregiver screens show in place of whether their app is open.
+    ...(inDoNotDisturb(m, now) ? { doNotDisturb: true } : {}),
     ...(profiles && m.role === "family" ? { invitedName: m.name, profile: publicProfile(m.profile), override: publicProfile(m.override) } : {}) };
 }
 // Unclaimed, unexpired invitations with the name the caregiver gave them, never their secret.
@@ -159,9 +162,10 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
     ...(bedsideCall ? { bedsideCall } : {}),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
-    // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only.
+    // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only. Someone on Do
+    // Not Disturb can't be rung in, so they aren't offered.
     ...(me.role === "family" ? { family: house.members.filter(m => !m.revoked && m.role === "family" && m.id !== me.id)
-      .map(m => ({ id: m.id, name: displayName(m), canReceiveCalls: online(m, now) || pushable(m.voip) })) } : {}),
+      .map(m => ({ id: m.id, name: displayName(m), canReceiveCalls: !inDoNotDisturb(m, now) && (online(m, now) || pushable(m.voip)) })) } : {}),
     invitations: me.role === "bedside" ? pendingInvites(house, now) : [],
     people: house.members.filter(m => !m.revoked && m.role !== me.role).map(publicMember),
     // A family member rung into the call sees an incoming call of their own. Someone who left a call that went on
@@ -178,11 +182,13 @@ async function alertRecipient(store: FamilyStore, householdID: string, recipient
   const house: Household = JSON.parse(raw);
   const recipient = house.members.find(m => m.id === recipientID && !m.revoked);
   const registration = recipient?.alerts;
-  if (!registration) return;
+  if (!recipient || !registration) return;
   const from = house.members.find(m => m.role === "bedside")?.name ?? house.name;
   const length = `${Math.floor(message.durationSeconds / 60)}:${String(message.durationSeconds % 60).padStart(2, "0")}`;
+  // On Do Not Disturb, the notice comes without a sound and, on an iPhone, without lighting the screen.
   const result = await (dependencies.sendAlert ?? sendAlertPush)(registration, { messageID: message.id, recipientID, title: `${from} left you a message`,
-    body: `${message.mode === "video" ? "Video" : "Audio"} message · ${length}`, badge: unheardCount(house, recipientID, now) });
+    body: `${message.mode === "video" ? "Video" : "Audio"} message · ${length}`, badge: unheardCount(house, recipientID, now),
+    ...(inDoNotDisturb(recipient, now) ? { quiet: true } : {}) });
   if (result.invalidToken) await mutate(store, householdID, current => {
     const member = current.members.find(m => m.id === recipientID);
     if (member) forgetRegistration(member, registration);
@@ -607,6 +613,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         if (newest) {
           me.available = input.available;
           noteAttendance(house, me, input.attendedSeconds, now);
+          // A family phone says its Do Not Disturb with every check-in. One that doesn't say leaves it as it was.
+          noteDoNotDisturb(me, input.doNotDisturb);
         }
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
@@ -693,6 +701,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const target = house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
+        // Before whether their app can ring: the bedside offers a message for this, and never tries their regular phone.
+        if (me.role === "bedside" && inDoNotDisturb(target, now)) throw new FamilyError(`${displayName(target)} isn't taking calls right now.`, 409, doNotDisturbCode);
         if (!online(target, now) && !(input.kind === "call" && pushable(target.voip))) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
         if (input.kind === "dropIn") requireValue(target.role === "bedside" && mayDropIn(house, me, input.mode), "You are not approved for this type of drop-in.", 403);
         const kind = callKind(house, me, target, input.mode, input.kind, online(target, now));

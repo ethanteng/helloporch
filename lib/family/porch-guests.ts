@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { activePorchGuest, callRoom, displayName, expire, FamilyError, mutate, requireValue, ringLimits, type Call, type Household, type Member, type PorchGuest } from "./household.ts";
 import { inRoom, type PhoneGuestServices } from "./phone-guests.ts";
+import { doNotDisturbCode, inDoNotDisturb } from "./do-not-disturb.ts";
 import type { FamilyStore } from "./store.ts";
 
 // Ringing another family member into a call with the bedside, such as a brother joining Mom and Ethan with video.
@@ -52,6 +53,7 @@ export async function handlePorchGuestAction(_action: string, context: PorchGues
   requireValue(call.left?.[bedside.id] === undefined, `${displayName(bedside)} has left this call.`, 409);
   const target = house.members.find(m => m.id === input.memberID && !m.revoked && m.role === "family" && ![call.from, call.to].includes(m.id));
   requireValue(target, "This person isn't in your family on Porch.", 404);
+  if (inDoNotDisturb(target, now)) throw new FamilyError(`${displayName(target)} isn't taking calls right now.`, 409, doNotDisturbCode);
   if (!context.reachable(target)) throw new FamilyError(`${displayName(target)}'s Porch app isn't ready. Ask them to open it.`, 409, "offline");
   // Don't ring anybody until both of you are actually in the call.
   requireValue(await inRoom(rooms, callRoom(call), bedside.id) && await inRoom(rooms, callRoom(call), me.id),
