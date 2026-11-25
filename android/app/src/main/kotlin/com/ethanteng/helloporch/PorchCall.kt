@@ -215,13 +215,16 @@ class PorchCall(
         changeCameraForForeground(true)
     }
 
-    /** [on] is applied after any camera change already in flight. A turn-on that finishes after Porch has left is
-     * undone, and remembered, so the picture isn't published while Porch is away. */
+    /** [on] is applied after any camera change already in flight, including a switch from front to back. A switch
+     * restarts the camera, so turning it off in the middle would let that restart publish it again while Porch is
+     * away. A turn-on that finishes after Porch has left is undone, and remembered. */
     private fun changeCameraForForeground(on: Boolean): Job {
         val previous = foregroundCamera
+        val switching = controlJob
         val target = room
         val job = scope.launch {
             previous?.join()
+            switching?.join()
             if (ending || target !== room) return@launch
             // Porch left again before the camera came back: it comes back next time instead.
             if (on && !app.onScreen) {
@@ -244,25 +247,40 @@ class PorchCall(
     fun toggleCamera() = changeMedia(camera = true)
 
     /** Turns this phone's camera around, front to back or back to front, one change at a time with Mute and the camera:
-     * a camera turned off while it's turning around could otherwise start again unseen. It turns the camera the call
-     * already sends, so the side it faces stays through Camera off and on, and through leaving Porch. */
+     * a camera turned off while it's turning around could otherwise start again unseen. Leaving Porch is that too. A
+     * switch waits for a leave already under way, and a leave waits for a switch already under way. A switch that
+     * finishes after Porch has left turns the camera back off. It turns the camera the call already sends, so the side
+     * it faces stays through Camera off and on, and through leaving Porch. */
     fun switchCamera() {
         val track = localTrack as? LocalVideoTrack
         if (!canSwitchCamera || track == null || controlJob != null || !mediaReady || ending || switchingToPhone || !video) return
+        val foreground = foregroundCamera
         controlsEnabled = false
         controlJob = scope.launch {
+            var switched = false
             try {
+                foreground?.join()
+                // Porch left, or the camera was turned off, before this switch began.
+                if (ending || !app.onScreen || cameraWhenBack || !room.localParticipant.isCameraEnabled) return@launch
                 val target = if (track.options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
                 track.switchCamera(position = target)
                 // LiveKit turns the camera on the camera's own thread, and updates the track's options once it has.
                 withTimeoutOrNull(3_000) { while (track.options.position != target) delay(50) }
                     ?: throw IllegalStateException("not switched")
-                if (!ending) refresh()
+                switched = true
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {
                 if (!ending) status = "Couldn't switch camera. Try again."
             } finally {
+                // The switch restarts the camera. Porch leaving in that moment has to win, or the picture comes back
+                // while the phone is away and nobody is watching the self view.
+                val stoppedForBackground = !ending && !app.onScreen && room.localParticipant.isCameraEnabled
+                if (stoppedForBackground) {
+                    cameraWhenBack = true
+                    runCatching { room.localParticipant.setCameraEnabled(false) }
+                }
+                if (!ending && (switched || stoppedForBackground)) refresh()
                 controlJob = null
                 if (!ending) controlsEnabled = true
             }

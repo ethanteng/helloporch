@@ -424,6 +424,25 @@ extension Notification.Name {
             _ = try? await room.localParticipant.setCamera(enabled: false); changed()
         }
     }
+
+    /// Turns the camera around, after any camera change already in flight. A switch restarts the camera, so one that
+    /// overlaps Porch leaving would start it again while the phone is away. The side it faces stays on the capturer
+    /// the call already sends.
+    func flipCamera() async throws {
+        let previous = cameraTask
+        let work = Task { () throws -> Void in
+            await previous?.value
+            guard self.wantsCamera, !self.ending, UIApplication.shared.applicationState == .active,
+                  let track = self.room?.localParticipant.videoTracks.first(where: { !$0.isMuted })?.track else { return }
+            try await CallCameraSwitch.flip(track)
+            if UIApplication.shared.applicationState != .active {
+                _ = try? await self.room?.localParticipant.setCamera(enabled: false)
+                self.changed()
+            }
+        }
+        cameraTask = Task { _ = try? await work.value }
+        try await work.value
+    }
     func requestEnd() {
         guard let uuid else { return }
         controller.request(CXTransaction(action: CXEndCallAction(call: uuid))) { [weak self] error in
@@ -601,11 +620,11 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         }, for: .touchUpInside)
         if SystemIncomingCalls.shared.isVideo, SystemIncomingCalls.shared.familyCredential?.role == .family, let button = CallCameraSwitch.makeButton() {
             button.addAction(UIAction { [weak self] _ in
-                guard let self, !self.cameraChanging, let track = self.localVideo.track else { return }
+                guard let self, !self.cameraChanging, self.localVideo.track != nil else { return }
                 self.cameraChanging = true
                 Task {
                     defer { self.cameraChanging = false }
-                    do { try await CallCameraSwitch.flip(track) } catch { self.status.text = "Couldn't switch camera. Try again." }
+                    do { try await SystemIncomingCalls.shared.flipCamera() } catch { self.status.text = "Couldn't switch camera. Try again." }
                 }
             }, for: .touchUpInside)
             cameraSwitch = button

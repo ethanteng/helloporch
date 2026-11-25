@@ -1013,11 +1013,28 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
 
     @objc private func switchCamera() {
         guard controlTask == nil, mediaReady, !isEnding, !isSwitchingToPhone, call.mode == .video, !isPhoneCall, let track = localVideo.track else { return }
+        // The camera change Porch makes as it leaves, if one is already running. Captured before this task exists so
+        // the two cannot wait on each other.
+        let foreground = foregroundCameraTask
         setControlsEnabled(false)
         controlTask = Task {
             defer { controlTask = nil }
+            await foreground?.value
+            // Porch left, or the camera was turned off, before this switch began.
+            guard !isEnding, !cameraWhenBack, UIApplication.shared.applicationState == .active, room.localParticipant.isCameraEnabled() else {
+                if !isEnding { setControlsEnabled(true) }
+                return
+            }
             do { try await CallCameraSwitch.flip(track) } catch {
                 if !isEnding { statusLabel.text = "Couldn't switch camera. Try again." }
+            }
+            // Flipping restarts the camera. Porch leaving in that moment has to win, or the picture comes back while
+            // the phone is away and nobody is watching the self view.
+            if !isEnding, UIApplication.shared.applicationState != .active {
+                cameraWhenBack = true
+                _ = try? await room.localParticipant.setCamera(enabled: false)
+                cameraButton.configuration?.title = BedsideText.string(room.localParticipant.isCameraEnabled() ? "Camera off" : "Camera on")
+                refresh()
             }
             if !isEnding { setControlsEnabled(true) }
         }
@@ -1101,9 +1118,12 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     }
 
     private func changeCameraForForeground(on: Bool) {
-        let previous = foregroundCameraTask, room = room
+        // A switch already under way restarts the camera on its own. Wait for it, or turning the camera off here
+        // loses to that restart and the picture comes back while Porch is away.
+        let previous = foregroundCameraTask, switching = controlTask, room = room
         foregroundCameraTask = Task { [weak self] in
             await previous?.value
+            await switching?.value
             guard let self, !self.isEnding, room === self.room else { return }
             // Porch left again before the camera came back: it comes back next time instead.
             if on && UIApplication.shared.applicationState == .background { self.cameraWhenBack = true; return }
