@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -170,9 +174,23 @@ fun CallScreen(app: PorchApplication, call: PorchCall) = LargeType {
         }
         call.guests?.let { CallGuestDialogs(it, call.video) }
         call.localTrack?.let { track ->
-            VideoTrackView(call.room, track, Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(16.dp).width(selfWidth)
-                .aspectRatio(if (wide) 4f / 3f else 3f / 4f).clip(RoundedCornerShape(12.dp)), mirror = true)
+            Box(Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(16.dp).width(selfWidth)
+                .aspectRatio(if (wide) 4f / 3f else 3f / 4f).clip(RoundedCornerShape(12.dp))) {
+                // Mirrored while it faces them, as a mirror would be. Turned around, it shows the room as it is.
+                VideoTrackView(call.room, track, Modifier.fillMaxSize(), mirror = call.frontCamera)
+                if (call.canSwitchCamera) SwitchCameraButton(call.controlsEnabled, call::switchCamera, Modifier.align(Alignment.BottomEnd).padding(6.dp))
+            }
         }
+    }
+}
+
+/** In the corner of a family phone's self view: turns its camera around, as iOS's CallCameraSwitch does. */
+@Composable
+private fun SwitchCameraButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    FilledIconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(40.dp),
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color.Black.copy(alpha = 0.55f), contentColor = Color.White,
+            disabledContainerColor = Color.Black.copy(alpha = 0.55f), disabledContentColor = Color.White.copy(alpha = 0.5f))) {
+        Icon(painterResource(R.drawable.ic_cameraswitch), contentDescription = "Switch camera", Modifier.size(22.dp))
     }
 }
 
