@@ -529,6 +529,13 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
     private let microphone = PorchStyle.systemButton("Mute", symbol: "mic.slash")
     private let camera = PorchStyle.systemButton("Camera on", symbol: "video")
     private var cameraEnabled = false
+    /// Front to back and back again, on a family phone's video call.
+    private var cameraSwitch: UIButton?
+    /// The camera turning on or off, or around. One at a time: a camera turned off while it's turning around could
+    /// otherwise start again unseen.
+    private var cameraChanging = false {
+        didSet { camera.isEnabled = !cameraChanging; cameraSwitch?.isEnabled = !cameraChanging }
+    }
     private weak var observedRoom: Room?
     private var keypad = CallTrigger()
     private var guests: CallGuestControls?
@@ -580,8 +587,10 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
         CallScreenLayout.configure(end, title: "End call", symbol: "phone.down.fill", isEnd: true)
         camera.isHidden = !SystemIncomingCalls.shared.isVideo
         camera.addAction(UIAction { [weak self] _ in
-            guard let self else { return }
+            guard let self, !self.cameraChanging else { return }
+            self.cameraChanging = true
             Task {
+                defer { self.cameraChanging = false }
                 do {
                     let enabled = !self.cameraEnabled
                     try await SystemIncomingCalls.shared.setCamera(enabled: enabled)
@@ -590,6 +599,17 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                 } catch { showPorchError(error, on: self) }
             }
         }, for: .touchUpInside)
+        if SystemIncomingCalls.shared.isVideo, SystemIncomingCalls.shared.familyCredential?.role == .family, let button = CallCameraSwitch.makeButton() {
+            button.addAction(UIAction { [weak self] _ in
+                guard let self, !self.cameraChanging, let track = self.localVideo.track else { return }
+                self.cameraChanging = true
+                Task {
+                    defer { self.cameraChanging = false }
+                    do { try await CallCameraSwitch.flip(track) } catch { self.status.text = "Couldn't switch camera. Try again." }
+                }
+            }, for: .touchUpInside)
+            cameraSwitch = button
+        }
         placeholder.text = "Voice call"; placeholder.textColor = .white; placeholder.textAlignment = .center
         placeholder.font = PorchStyle.systemFont(28)
         localVideo.isHidden = true
@@ -610,7 +630,7 @@ final class SystemCallViewController: UIViewController, RoomDelegate {
                 SystemIncomingCalls.shared.call.flatMap { $0.id == call.id ? $0 : nil }
             }
         }
-        CallScreenLayout.install(in: view, video: stage, preview: calls.isVideo ? localVideo : nil, placeholder: placeholder, title: title, status: status,
+        CallScreenLayout.install(in: view, video: stage, preview: calls.isVideo ? localVideo : nil, previewButton: cameraSwitch, placeholder: placeholder, title: title, status: status,
                                  photo: personPhoto.image == nil ? nil : personPhoto, accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
                                  buttons: [microphone, camera] + [translation?.button].compactMap { $0 } + (guests.map { [$0.addButton] } ?? []) + [end])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .porchSystemCallChanged, object: nil)

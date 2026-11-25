@@ -1,7 +1,10 @@
 package com.ethanteng.helloporch
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -27,6 +30,8 @@ import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
+import io.livekit.android.room.track.CameraPosition
+import io.livekit.android.room.track.LocalVideoTrack
 import io.livekit.android.room.track.VideoTrack
 import io.livekit.android.util.flow
 import kotlinx.coroutines.CancellationException
@@ -38,6 +43,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -113,6 +119,11 @@ class PorchCall(
     var tiles by mutableStateOf<List<Tile>>(emptyList()); private set
     /** This device's camera, for the self view. */
     var localTrack by mutableStateOf<VideoTrack?>(null); private set
+    /** A family phone's video call can turn the camera around, to show Mom the room or what's in front of them, on a
+     * phone with a camera on each side. The bedside has no switch: its camera faces the person in bed. */
+    val canSwitchCamera = role == PorchExperience.FAMILY && video && hasFrontAndBackCameras(app)
+    /** The camera faces the person holding the phone. Their self view is mirrored only then, as on iOS. */
+    var frontCamera by mutableStateOf(true); private set
     var keypadHint by mutableStateOf<String?>(null); private set
     /** Permissions the call needs and doesn't have yet. The screen asks for them and answers [permissionsAnswered]. */
     var permissionRequest by mutableStateOf<List<String>?>(null); private set
@@ -231,6 +242,32 @@ class PorchCall(
 
     fun toggleMicrophone() = changeMedia(camera = false)
     fun toggleCamera() = changeMedia(camera = true)
+
+    /** Turns this phone's camera around, front to back or back to front, one change at a time with Mute and the camera:
+     * a camera turned off while it's turning around could otherwise start again unseen. It turns the camera the call
+     * already sends, so the side it faces stays through Camera off and on, and through leaving Porch. */
+    fun switchCamera() {
+        val track = localTrack as? LocalVideoTrack
+        if (!canSwitchCamera || track == null || controlJob != null || !mediaReady || ending || switchingToPhone || !video) return
+        controlsEnabled = false
+        controlJob = scope.launch {
+            try {
+                val target = if (track.options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
+                track.switchCamera(position = target)
+                // LiveKit turns the camera on the camera's own thread, and updates the track's options once it has.
+                withTimeoutOrNull(3_000) { while (track.options.position != target) delay(50) }
+                    ?: throw IllegalStateException("not switched")
+                if (!ending) refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                if (!ending) status = "Couldn't switch camera. Try again."
+            } finally {
+                controlJob = null
+                if (!ending) controlsEnabled = true
+            }
+        }
+    }
 
     /** The End call button, Back, the call-control key, or the receiver put back. While an unanswered call is already
      * ending, this is that hang-up again: the message is skipped, as putting the receiver back does. */
@@ -416,6 +453,7 @@ class PorchCall(
                 .sortedBy { if (it.identity?.value == first) 0 else 1 }
                 .map { peer -> Tile(peer.identity?.value.orEmpty(), peer.name.orEmpty(), videoOf(peer)) }
             localTrack = videoOf(room.localParticipant)
+            frontCamera = (localTrack as? LocalVideoTrack)?.options?.position != CameraPosition.BACK
             showingPlaceholder = !(tiles.size > 1 || tiles.firstOrNull()?.track != null)
         }
         addedPeople(peers)
@@ -799,3 +837,10 @@ class PorchCall(
         const val PHONE_IDENTITY = "phone"
     }
 }
+
+/** Whether this device has a camera on each side, so a call can turn from one to the other. */
+private fun hasFrontAndBackCameras(context: Context): Boolean = runCatching {
+    val cameras = context.getSystemService(CameraManager::class.java)
+    val facing = cameras.cameraIdList.mapNotNull { cameras.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) }
+    CameraCharacteristics.LENS_FACING_FRONT in facing && CameraCharacteristics.LENS_FACING_BACK in facing
+}.getOrDefault(false)

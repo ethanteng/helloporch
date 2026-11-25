@@ -41,8 +41,9 @@ import PorchCore
     }
 
     /// `video` fills the screen: a `VideoView`, or a `CallVideoStage` when more than one person may join.
-    /// `accessory` sits above the buttons, such as an added phone's status and controls.
-    static func install(in view: UIView, video: UIView, preview: VideoView? = nil,
+    /// `accessory` sits above the buttons, such as an added phone's status and controls. `previewButton` sits in the
+    /// self view's corner and shows only while the self view does, such as `CallCameraSwitch`'s.
+    static func install(in view: UIView, video: UIView, preview: VideoView? = nil, previewButton: UIButton? = nil,
                         placeholder: UILabel? = nil, title: UILabel, status: UILabel,
                         hint: UILabel? = nil, photo: UIImageView? = nil, accessory: UIView? = nil, buttons: [UIButton]) {
         view.backgroundColor = .black
@@ -201,7 +202,15 @@ import PorchCore
                 preview.topAnchor.constraint(greaterThanOrEqualTo: heading.bottomAnchor, constant: 12),
                 preview.widthAnchor.constraint(greaterThanOrEqualToConstant: 64), width,
             ]
-            scroll.adopt(.init(preview: preview, width: width, upright: upright, sideways: sideways, holding: holding, column: columnConstraints, absent: absent))
+            if let previewButton {
+                previewButton.translatesAutoresizingMaskIntoConstraints = false
+                scroll.addSubview(previewButton)
+                NSLayoutConstraint.activate([
+                    previewButton.trailingAnchor.constraint(equalTo: preview.trailingAnchor, constant: -6),
+                    previewButton.bottomAnchor.constraint(equalTo: preview.bottomAnchor, constant: -6),
+                ])
+            }
+            scroll.adopt(.init(preview: preview, button: previewButton, width: width, upright: upright, sideways: sideways, holding: holding, column: columnConstraints, absent: absent))
         }
     }
 
@@ -290,29 +299,77 @@ final class CallButtonRows: UIStackView {
     }
 }
 
+/// The button in the corner of a family phone's self view that turns its camera around, to show Mom the room or
+/// what's in front of them, and back again. The bedside has none: its camera faces the person in bed. It turns the
+/// camera the call already sends, so the side it faces stays through Camera off and on, and through leaving Porch.
+@MainActor enum CallCameraSwitch {
+    /// Nil where there's nothing to switch to: a device without both a front and a back camera, such as the simulator.
+    static func makeButton() -> UIButton? {
+        let positions: [AVCaptureDevice.Position] = [.front, .back]
+        guard positions.allSatisfy({ AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: $0) != nil }) else { return nil }
+        return button()
+    }
+
+    /// The button alone, also for layout tests on the simulator.
+    static func button() -> UIButton {
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: "arrow.triangle.2.circlepath.camera",
+                                      withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.55)
+        configuration.baseForegroundColor = .white
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = .zero
+        let button = UIButton(configuration: configuration)
+        button.accessibilityLabel = "Switch camera"
+        button.accessibilityIdentifier = "call.switchCamera"
+        NSLayoutConstraint.activate([button.widthAnchor.constraint(equalToConstant: 40), button.heightAnchor.constraint(equalToConstant: 40)])
+        return button
+    }
+
+    /// Turns around the camera that `track`, this device's own, comes from.
+    static func flip(_ track: VideoTrack?) async throws {
+        guard let capturer = (track as? LocalVideoTrack)?.capturer as? CameraCapturer else { return }
+        try await capturer.switchCameraPosition()
+    }
+}
+
 /// The overlays above a call's video. They size the self view as most calling apps do, about 30% of the screen's
 /// short side and at most 200 points on an iPad, and turn it with the screen, as the camera's picture turns. The
 /// person's photo and name move with it to stay uncovered.
 private final class CallOverlays: UIScrollView {
     struct SelfView {
         let preview: UIView
+        /// In the self view's corner, shown only while it is.
+        let button: UIView?
         let width: NSLayoutConstraint
         let upright, sideways, holding, column, absent: [NSLayoutConstraint]
     }
     private var selfView: SelfView?
+    private var previewShown: NSKeyValueObservation?
 
     func adopt(_ layout: SelfView) {
         selfView = layout
         NSLayoutConstraint.activate(layout.upright + layout.holding + layout.column)
+        if let button = layout.button {
+            button.isHidden = layout.preview.isHidden
+            previewShown = layout.preview.observe(\.isHidden) { [weak button] preview, _ in
+                Task { @MainActor [weak button, weak preview] in
+                    guard let preview else { return }
+                    button?.isHidden = preview.isHidden
+                }
+            }
+        }
     }
 
     func releaseSelfView() {
         guard let selfView else { return }
         // Clear this before changing constraints so a nested layout cannot put the self view back.
         self.selfView = nil
+        previewShown = nil
         NSLayoutConstraint.deactivate(selfView.upright + selfView.sideways + selfView.holding + selfView.column)
         NSLayoutConstraint.activate(selfView.absent)
         selfView.preview.removeFromSuperview()
+        selfView.button?.removeFromSuperview()
     }
 
     override func layoutSubviews() {
@@ -503,6 +560,8 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     private let microphoneButton = UIButton(type: .system)
     private let cameraButton = UIButton(type: .system)
     private let endButton = UIButton(type: .system)
+    /// Front to back and back again, on a family phone's video call.
+    private var cameraSwitch: UIButton?
     private var connectionTask: Task<Void, Never>?
     private var waitTask: Task<Void, Never>?
     private var controlTask: Task<Void, Never>?
@@ -666,6 +725,11 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         cameraButton.isHidden = call.mode == .voice
         microphoneButton.isEnabled = false
         cameraButton.isEnabled = false
+        if call.mode == .video, !isPhoneCall, familySession?.credential.role == .family, let button = CallCameraSwitch.makeButton() {
+            button.addTarget(self, action: #selector(switchCamera), for: .touchUpInside)
+            button.isEnabled = false
+            cameraSwitch = button
+        }
 
         keypadHint.textAlignment = .center
         updateKeypadHint()
@@ -688,7 +752,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         if translation == nil { translation = CallTranslation.preview(peerName: contact.name) }
         #endif
         CallScreenLayout.install(in: view, video: stage, preview: call.mode == .video && !isPhoneCall ? localVideo : nil,
-                                 placeholder: placeholder, title: title, status: statusLabel,
+                                 previewButton: cameraSwitch, placeholder: placeholder, title: title, status: statusLabel,
                                  hint: keypadHint, photo: personPhoto.image == nil ? nil : personPhoto,
                                  accessory: CallScreenLayout.accessories([translation?.panel, guests?.bar]),
                                  buttons: [microphoneButton, cameraButton] + [translation?.button].compactMap { $0 }
@@ -800,6 +864,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             mediaReady = true
             microphoneButton.isEnabled = true
             cameraButton.isEnabled = true
+            cameraSwitch?.isEnabled = true
             refresh()
             waitTask = Task { [weak self] in
                 let seconds: UInt64 = self?.familyAccepted == true ? 30 : self?.contact.phoneNumber == nil ? (self?.familySession.map { UInt64($0.waitSeconds) } ?? 90) : UInt64(self?.fallbackSeconds ?? CallPreferences.defaultFallbackSeconds)
@@ -829,8 +894,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             placeholder.isHidden = false
             personPhoto.isHidden = false
             placeholder.text = BedsideText.error(error.localizedDescription)
-            microphoneButton.isEnabled = false
-            cameraButton.isEnabled = false
+            setControlsEnabled(false)
             endButton.configuration?.title = BedsideText.string("Back to clock")
         }
     }
@@ -941,10 +1005,27 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
     @objc private func toggleMicrophone() { changeMedia(camera: false) }
     @objc private func toggleCamera() { changeMedia(camera: true) }
 
+    /// Mute, the camera and which way it faces change one at a time: a camera turned off while it's turning around
+    /// could otherwise start again unseen.
+    private func setControlsEnabled(_ enabled: Bool) {
+        microphoneButton.isEnabled = enabled; cameraButton.isEnabled = enabled; cameraSwitch?.isEnabled = enabled
+    }
+
+    @objc private func switchCamera() {
+        guard controlTask == nil, mediaReady, !isEnding, !isSwitchingToPhone, call.mode == .video, !isPhoneCall, let track = localVideo.track else { return }
+        setControlsEnabled(false)
+        controlTask = Task {
+            defer { controlTask = nil }
+            do { try await CallCameraSwitch.flip(track) } catch {
+                if !isEnding { statusLabel.text = "Couldn't switch camera. Try again." }
+            }
+            if !isEnding { setControlsEnabled(true) }
+        }
+    }
+
     private func changeMedia(camera: Bool) {
         guard controlTask == nil, mediaReady, !isEnding, !isSwitchingToPhone, !camera || (call.mode == .video && !isPhoneCall) else { return }
-        microphoneButton.isEnabled = false
-        cameraButton.isEnabled = false
+        setControlsEnabled(false)
         controlTask = Task {
             defer { controlTask = nil }
             do {
@@ -961,7 +1042,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
             } catch {
                 if !isEnding { statusLabel.text = BedsideText.string(camera ? "Couldn't change camera. Try again." : "Couldn't change microphone. Try again.") }
             }
-            if !isEnding { microphoneButton.isEnabled = true; cameraButton.isEnabled = true }
+            if !isEnding { setControlsEnabled(true) }
         }
     }
 
@@ -1059,8 +1140,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         waitTask?.cancel()
         inactivityTask?.cancel()
         controlTask?.cancel()
-        microphoneButton.isEnabled = false
-        cameraButton.isEnabled = false
+        setControlsEnabled(false)
         endButton.isEnabled = false
         // The message screen comes next, so don't say the call is returning to the clock.
         statusLabel.text = unanswered != nil ? BedsideText.string("%@ didn't answer.", contact.name) : BedsideText.string(message ?? "Ending call…")
@@ -1311,8 +1391,7 @@ final class NativeCallViewController: UIViewController, RoomDelegate {
         isSwitchingToPhone = true
         ringback.stop()
         mediaReady = false
-        microphoneButton.isEnabled = false
-        cameraButton.isEnabled = false
+        setControlsEnabled(false)
         cameraButton.isHidden = true
         statusLabel.text = BedsideText.string("Porch wasn't answered. Trying %@'s phone…", contact.name)
         // Disconnect releases camera/mic before joining a separate voice room.

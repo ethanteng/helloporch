@@ -2651,6 +2651,53 @@ final class CallScreenLayoutTests: XCTestCase {
         XCTAssertFalse(photo.hasAmbiguousLayout)
     }
 
+    @MainActor func testSwitchCameraSitsInTheSelfViewsCornerWhileTheCameraIsOn() async throws {
+        // A family phone's Switch camera button rides on its own picture: in the corner, upright or sideways, shown
+        // only while the camera is, and gone with the self view when the call becomes a phone call.
+        for size in [CGSize(width: 375, height: 667), CGSize(width: 393, height: 852), CGSize(width: 852, height: 393), CGSize(width: 1024, height: 1366)] {
+            let screen = UIViewController(), remote = VideoView(), preview = VideoView()
+            remote.backgroundColor = UIColor(white: 0.18, alpha: 1)
+            preview.backgroundColor = UIColor(white: 0.55, alpha: 1)
+            preview.isHidden = true
+            let flip = CallCameraSwitch.button()
+            let buttons = [UIButton(type: .system), UIButton(type: .system), UIButton(type: .system)]
+            for ((button, text), symbol) in zip(zip(buttons, ["Mute", "Camera off", "End call"]), ["mic.slash", "video.slash", "phone.down.fill"]) {
+                CallScreenLayout.configure(button, title: text, symbol: symbol, isEnd: button === buttons.last)
+            }
+            CallScreenLayout.install(in: screen.view, video: remote, preview: preview, previewButton: flip,
+                                     placeholder: PorchStyle.systemLabel("Waiting for video", size: 28, color: .white),
+                                     title: PorchStyle.systemLabel("Mom", size: 40, color: .white),
+                                     status: PorchStyle.systemLabel("Video call connected", size: 17, color: .white), buttons: buttons)
+            screen.view.frame = CGRect(origin: .zero, size: size)
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            // Before the camera starts, the self view and its button are hidden.
+            XCTAssertTrue(flip.isHidden, "\(size)")
+            preview.isHidden = false
+            for _ in 0..<20 where flip.isHidden { try await Task.sleep(nanoseconds: 10_000_000) }
+            XCTAssertFalse(flip.isHidden, "Shown with the camera in \(size)")
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            let corner = flip.convert(flip.bounds, to: preview)
+            XCTAssertEqual(corner.maxX, preview.bounds.maxX - 6, accuracy: 0.5, "\(size)")
+            XCTAssertEqual(corner.maxY, preview.bounds.maxY - 6, accuracy: 0.5, "\(size)")
+            XCTAssertTrue(preview.bounds.contains(corner), "\(size): \(corner) in \(preview.bounds)")
+            XCTAssertEqual(flip.bounds.size, CGSize(width: 40, height: 40))
+            XCTAssertFalse(flip.hasAmbiguousLayout)
+            XCTAssertEqual(flip.accessibilityLabel, "Switch camera")
+            let attachment = XCTAttachment(image: UIGraphicsImageRenderer(size: size).image { screen.view.layer.render(in: $0.cgContext) })
+            attachment.name = "Switch camera \(Int(size.width))x\(Int(size.height))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            // Camera off hides the self view, and the button with it.
+            preview.isHidden = true
+            for _ in 0..<20 where !flip.isHidden { try await Task.sleep(nanoseconds: 10_000_000) }
+            XCTAssertTrue(flip.isHidden, "Hidden with the camera off in \(size)")
+            preview.isHidden = false
+            CallScreenLayout.releaseSelfView(in: screen.view)
+            screen.view.setNeedsLayout(); screen.view.layoutIfNeeded()
+            XCTAssertNil(flip.superview, "\(size)")
+        }
+    }
+
 }
 
 /// The welcome screen and setting up a new bedside one screen at a time.
