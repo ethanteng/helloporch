@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { activePorchGuest, callRoom, displayName, expire, FamilyError, mutate, requireValue, ringLimits, type Call, type Household, type Member, type PorchGuest } from "./household.ts";
+import { activePorchGuest, callIDFor, callRoom, displayName, expire, FamilyError, mutate, requireValue, ringLimits, type Call, type Household, type Member, type PorchGuest } from "./household.ts";
 import { inRoom, type PhoneGuestServices } from "./phone-guests.ts";
 import { doNotDisturbCode, inDoNotDisturb } from "./do-not-disturb.ts";
 import type { FamilyStore } from "./store.ts";
@@ -20,16 +20,19 @@ export type PorchGuestContext = { store: FamilyStore; now: number; house: Househ
 function bedsideOf(house: Household, call: Call) {
   return house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
 }
-/** How a family guest's phone names the call: "Ethan with Mom". */
+/** How a family guest's phone names the call: "Ethan with Mom", or just "Mom" when the bedside called them both. */
 export function guestCallerName(house: Household, call: Call, guest: PorchGuest): string {
-  const adder = house.members.find(m => m.id === guest.addedBy), bedside = bedsideOf(house, call);
+  const bedside = bedsideOf(house, call);
+  if (guest.group) return bedside ? displayName(bedside) : "Family";
+  const adder = house.members.find(m => m.id === guest.addedBy);
   return [adder, bedside].filter((m): m is Member => !!m).map(displayName).join(" with ") || "Family";
 }
 /** A family guest's own view of the call: an ordinary incoming call that is ringing, answered, or over. */
 export function guestCall(house: Household, call: Call, guest: PorchGuest) {
   // Ringing is an incoming call only while the call they were invited to is still going. Otherwise their phone
-  // would keep ringing, and answering would fail, after everyone else had already hung up.
-  const live = call.state === "accepted";
+  // would keep ringing, and answering would fail, after everyone else had already hung up. A group call rings them
+  // before anyone has answered (group-calls.ts).
+  const live = call.state === "accepted" || (guest.group === true && call.state === "pending");
   const state = guest.state === "ringing" && live ? "pending" : guest.state === "joined" && live ? "accepted" : "ended";
   return { id: guest.id, from: guest.addedBy, to: guest.memberID, mode: call.mode, kind: "call", state, createdAt: guest.invitedAt,
     ...(guest.joinedAt ? { acceptedAt: guest.joinedAt } : {}), expiresAt: guest.state === "ringing" ? guest.ringUntil : call.expiresAt,
@@ -45,7 +48,7 @@ export function publicPorchGuest(house: Household, call: Call) {
 export async function handlePorchGuestAction(_action: string, context: PorchGuestContext) {
   const { store, now, house, me, input, rooms } = context;
   const call = house.call;
-  requireValue(call && call.id === input.callID && [call.from, call.to].includes(me.id) && !call.phone, "This call is no longer available.", 404);
+  requireValue(call && [call.from, call.to].includes(me.id) && callIDFor(call, me.id) === input.callID && !call.phone, "This call is no longer available.", 404);
   requireValue(me.role === "family", "Only a family member on the call can add someone.", 403);
   requireValue(call.state === "accepted" && call.left?.[me.id] === undefined, "Add someone once you're both on the call.", 409);
   const bedside = bedsideOf(house, call);

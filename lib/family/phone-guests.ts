@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { RoomServiceClient, SipClient } from "livekit-server-sdk";
 import type { CallServer } from "../calls/server.ts";
-import { activePhoneGuest, callRoom, displayName, expire, FamilyError, mutate, phoneGuestIdentity, requireValue, type Call, type Household, type Member, type PhoneGuest } from "./household.ts";
+import { activePhoneGuest, callIDFor, callRoom, displayName, expire, FamilyError, mutate, phoneGuestIdentity, requireValue, type Call, type Household, type Member, type PhoneGuest } from "./household.ts";
 import type { FamilyStore } from "./store.ts";
 
 // Three-way calls with a regular phone: a family caregiver talking with the bedside can dial a number, such as a bank
@@ -98,7 +98,7 @@ async function reapStoredPhoneGuests(context: PhoneGuestContext) {
 export async function handlePhoneGuestAction(action: string, context: PhoneGuestContext) {
   const { store, now, house, me, input, services } = context;
   const call = house.call;
-  requireValue(call && call.id === input.callID && [call.from, call.to].includes(me.id) && !call.phone, "This call is no longer available.", 404);
+  requireValue(call && [call.from, call.to].includes(me.id) && callIDFor(call, me.id) === input.callID && !call.phone, "This call is no longer available.", 404);
   const room = callRoom(call);
   if (action === "removePhoneGuest") {
     const guest = call.guests?.find(g => g.id === input.guestID);

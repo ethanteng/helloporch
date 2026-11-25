@@ -1,5 +1,5 @@
 import { AgentDispatchClient, DataPacket_Kind, RoomServiceClient } from "livekit-server-sdk";
-import { bedsideLanguage, callRoom, FamilyError, isBedsideLanguage, mutate, presentMembers, requireValue, type BedsideLanguage, type Call,
+import { bedsideLanguage, callIDFor, callRoom, FamilyError, isBedsideLanguage, mutate, presentMembers, requireValue, type BedsideLanguage, type Call,
   type Household, type Member } from "./household.ts";
 import { speechCatalog, speechVoice } from "./speech.ts";
 import type { FamilyStore } from "./store.ts";
@@ -68,7 +68,7 @@ export function translationOffered(house: Household, call: Call, me: Member) {
 
 export async function handleTranslationAction(_action: string, { store, now, house, me, input, services }: TranslationContext) {
   const call = house.call;
-  requireValue(call && call.id === input.callID && call.state === "accepted", "Translation works only while the call is on.", 409);
+  requireValue(call && callIDFor(call, me.id) === input.callID && call.state === "accepted", "Translation works only while the call is on.", 409);
   requireValue(typeof input.on === "boolean", "Say whether translation should be on.");
   requireValue(me.role === "family" && [call.from, call.to].includes(me.id) && presentMembers(call).includes(me.id),
     "Only the person on this call with the bedside can turn translation on or off.", 403);

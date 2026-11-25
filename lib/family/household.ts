@@ -38,15 +38,18 @@ export type Invite = { id: string; secretHash: string; name: string; permissions
  * approved phone number's, so a later rename or removal doesn't change the call in history.
  * `expiresAt`: when a call still ringing stops ringing. An answered call has no time limit: it's `noCallLimit`.
  * `everyCall`: a phone call that came in while every call dropped in, which caregivers are told about and can end;
- * `verified` says whether the carrier verified its caller ID. */
-export type Call = { id: string; from: string; to: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
+ * `verified` says whether the carrier verified its caller ID.
+ * `toCallID`: on a group call (group-calls.ts), the ID the person called knows this call by when they were rung as a
+ * family guest and became the person called: they answered first, or the one called before them couldn't answer. */
+export type Call = { id: string; from: string; to: string; toCallID?: string; mode: Mode; kind: "call" | "dropIn"; state: "pending" | "accepted" | "ended"; createdAt: number; receivedAt?: number; announcedAt?: number; acceptedAt?: number; expiresAt: number; reason?: string; phone?: InboundPhone;
   guests?: PhoneGuest[]; porchGuests?: PorchGuest[]; left?: Record<string, number>; endedAt?: number; endedBy?: string; peerName?: string;
   /** Live translation on this call (translation.ts). Every call starts without it. */
   translation?: CallTranslation; everyCall?: { verified: boolean } };
 /** A family member rung into a call with the bedside, such as a brother joining Mom and Ethan with video. `id` names
- * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room. */
+ * this invitation: their phone treats it as an incoming call of its own, which answering joins to the same room.
+ * `group`: rung by a bedside key that calls two people at once, from the moment the call started (group-calls.ts). */
 export type PorchGuest = { id: string; memberID: string; addedBy: string; invitedAt: number; ringUntil: number;
-  state: "ringing" | "joined" | "declined" | "missed" | "cancelled" | "left"; receivedAt?: number; joinedAt?: number; endedAt?: number };
+  state: "ringing" | "joined" | "declined" | "missed" | "cancelled" | "left"; receivedAt?: number; joinedAt?: number; endedAt?: number; group?: true };
 /** A regular phone a family caregiver added to their call with the bedside, such as a bank that needs Mom on the line.
  * It stays only while the person who added it does. `label` is what the bedside shows; the number never reaches it.
  * `endedAt` is set once its telephone leg is known to be gone. `gone`: LiveKit confirmed the leg isn't in the room
@@ -193,6 +196,9 @@ export function bedsideLanguage(house: Household): BedsideLanguage {
 }
 
 export function callRoom(call: Call): string { return call.phone?.room ?? `porch-paired-${call.id}`; }
+/** The ID `memberID`'s device knows the call by: its own for the person called on a group call who was rung as a guest
+ * (`toCallID`), otherwise the call's. */
+export function callIDFor(call: Call, memberID: string): string { return memberID === call.to ? call.toCallID ?? call.id : call.id; }
 /** The family member ringing into or on this call. A call has at most one at a time. */
 export function activePorchGuest(call?: Call): PorchGuest | undefined { return call?.porchGuests?.find(g => g.state === "ringing" || g.state === "joined"); }
 /** The members still on an answered call: its two ends and a family guest who answered, less anyone who left. */
