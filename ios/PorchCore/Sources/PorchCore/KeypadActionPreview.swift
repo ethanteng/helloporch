@@ -72,6 +72,9 @@ public struct KeypadActionPreview {
         if action == .messages {
             return result(.playMessages, "Would open messages", "Message availability is not fetched or changed in this preview.", action: action)
         }
+        if let group = slots.group(for: digit) {
+            return result(.person, "Would call \(group.name)", "\(group.mode == .video ? "Video" : "Voice") group call selected from the saved HelloPorch assignment. No call was placed.", action: action, name: group.name, selected: digit)
+        }
         guard let person = slots.contact(for: digit) else {
             return result(.unassigned, "No action assigned to \(symbol)", "This key is set to No action in the saved HelloPorch setup.", action: action, selected: digit)
         }

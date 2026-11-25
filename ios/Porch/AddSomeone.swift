@@ -425,7 +425,7 @@ final class AddCheckViewController: AddSomeoneScreen {
             let circle = FamilyAdminViewController.circle(size: 64)
             circle.backgroundColor = foreground.withAlphaComponent(0.16)
             let initials = UILabel()
-            initials.text = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+            initials.text = FamilyAdminViewController.initials(name)
             initials.font = PorchFonts.sans(23, weight: .semibold)
             initials.textColor = foreground
             FamilyAdminViewController.center(initials, in: circle)
@@ -934,6 +934,7 @@ final class AddKeyViewController: AddSomeoneScreen {
                 let label: String
                 switch action {
                 case .person: label = slots.contact(for: digit)?.name ?? ""
+                case .group: label = slots.group(for: digit)?.name ?? ""
                 case .callControl: label = "Answer / hang up"
                 case .toggleVideo: label = "Video on / off"
                 case .messages: label = "Messages"
@@ -994,7 +995,7 @@ final class KeyActionViewController: CaregiverFormViewController {
     init(admin: FamilyAdminViewController, key: Int, offersSomeone: Bool) {
         self.admin = admin; self.key = key; self.offersSomeone = offersSomeone
         let current = admin.slots?.action(for: key) ?? .unassigned
-        choice = current == .person ? .unassigned : current
+        choice = current == .person || current == .group ? .unassigned : current
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("Use init(admin:key:offersSomeone:)") }
@@ -1006,14 +1007,23 @@ final class KeyActionViewController: CaregiverFormViewController {
         let heading = PorchStyle.label("What should key \(symbol) do?", size: 28, color: PorchStyle.ink, weight: .bold)
         heading.accessibilityTraits = .header
         form.addArrangedSubview(heading)
+        var people: [UIView] = []
         if offersSomeone {
             let someone = PorchListRow([PorchStyle.label("Someone", size: 18, color: PorchStyle.ink)], label: "Someone") { [weak self] in
                 guard let self, let admin = self.admin else { return }
                 self.navigationController?.pushViewController(AddWhoViewController(admin: admin, draft: AddSomeoneDraft(key: self.key, fromKeyTile: true)), animated: true)
             }
             someone.accessibilityIdentifier = "keypad.action.person"
-            form.addArrangedSubview(group(rows: [someone]))
+            people.append(someone)
         }
+        // Rings two people on Porch at once.
+        let groupCall = PorchListRow([PorchStyle.label("Group call", size: 18, color: PorchStyle.ink)], label: "Group call") { [weak self] in
+            guard let self, let admin = self.admin else { return }
+            self.navigationController?.pushViewController(GroupPeopleViewController(admin: admin, draft: GroupKeyDraft(key: self.key)), animated: true)
+        }
+        groupCall.accessibilityIdentifier = "keypad.action.group"
+        people.append(groupCall)
+        form.addArrangedSubview(group(rows: people))
         let rows = Self.options.map { action, title -> UIView in
             let radio = UIImageView()
             radio.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22)
@@ -1048,5 +1058,244 @@ final class KeyActionViewController: CaregiverFormViewController {
             if let people = navigation.viewControllers.last(where: { $0 is PeopleSettingsViewController }) { navigation.popToViewController(people, animated: true) }
             else { navigation.popToRootViewController(animated: true) }
         } catch { admin.showError(error) }
+    }
+}
+
+// MARK: Group call
+
+/// A key that rings two people on Porch at once, being made or changed. Both of its screens share it.
+final class GroupKeyDraft {
+    let key: Int
+    /// The group already on the key, when changing it.
+    let existing: CallGroup?
+    var memberIDs: [String]
+    /// The caregiver's name for the key. Empty goes by the people's names.
+    var name: String
+    var video: Bool
+    var colorHex: String?
+    /// The caregiver's photo for the key. Without one, the key shows its people's photos.
+    var photo: Data?
+    init(key: Int, existing: CallGroup? = nil) {
+        self.key = key; self.existing = existing
+        memberIDs = existing?.memberIDs ?? []
+        name = existing?.customName ?? ""
+        video = existing?.mode != .voice
+        colorHex = existing?.buttonColorHex
+        photo = existing?.photoData
+    }
+    var keySymbol: String { CallSlots.symbol(for: key) }
+    /// The people's names as Porch shows them now, or as the key last showed them.
+    @MainActor func names(_ admin: FamilyAdminViewController?) -> [String] {
+        memberIDs.map { id in
+            admin?.current?.people.first { $0.id == id }?.name
+                ?? existing.flatMap { group in group.memberIDs.firstIndex(of: id).map { group.memberNames[$0] } } ?? ""
+        }
+    }
+    /// The group as it would be saved.
+    @MainActor func group(_ admin: FamilyAdminViewController?) throws -> CallGroup {
+        try CallGroup(name: name, memberIDs: memberIDs, memberNames: names(admin), mode: video ? .video : .voice, buttonColorHex: colorHex, photoData: photo)
+    }
+}
+
+/// Back to the People page a key's screens were opened from.
+@MainActor private func finishKeySetup(_ screen: UIViewController) {
+    screen.view.endEditing(true)
+    guard let navigation = screen.navigationController else { return }
+    if let people = navigation.viewControllers.last(where: { $0 is PeopleSettingsViewController }) { navigation.popToViewController(people, animated: true) }
+    else { navigation.popToRootViewController(animated: true) }
+}
+
+/// Group call, first step: the two people the key rings, from the family on Porch. Changing a group's people opens it again.
+final class GroupPeopleViewController: CaregiverFormViewController {
+    private weak var admin: FamilyAdminViewController?
+    private let draft: GroupKeyDraft
+    /// Opened from the group's own page: Done goes back there.
+    private let changing: Bool
+    private var chosen: [String]
+    private var rows: [(id: String, box: UIImageView, row: PorchListRow)] = []
+    private let nextButton: UIButton
+    init(admin: FamilyAdminViewController, draft: GroupKeyDraft, changing: Bool = false) {
+        self.admin = admin; self.draft = draft; self.changing = changing
+        chosen = draft.memberIDs
+        nextButton = PorchStyle.button(changing ? "Done" : "Next")
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(admin:draft:changing:)") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Key \(draft.keySymbol)"
+        hideKeyboardControl()
+        let headline = PorchStyle.label("Who's in the group?", size: 28, color: PorchStyle.ink, weight: .bold)
+        headline.accessibilityTraits = .header
+        form.addArrangedSubview(headline)
+        let people = admin?.current?.people ?? []
+        // Someone who has left Porch since can't be rung, so isn't kept.
+        chosen = chosen.filter { id in people.contains { $0.id == id } }
+        guard people.count >= CallGroup.maximumPeople else {
+            let none = PorchStyle.label("Group calls need two people on Porch.", size: 18)
+            none.accessibilityIdentifier = "group.needsPeople"
+            form.addArrangedSubview(none)
+            return
+        }
+        form.addArrangedSubview(PorchStyle.label("Choose two.", size: 17))
+        let list = people.map { person -> UIView in
+            let box = UIImageView()
+            box.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22)
+            box.setContentHuggingPriority(.required, for: .horizontal)
+            let photo = FamilyPhotos.shared.data(for: person.photoID)
+            if photo == nil { admin?.loadPhoto(of: person) }
+            let name = PorchStyle.label(person.name, size: 18, color: PorchStyle.ink, weight: .medium)
+            let row = PorchListRow([box, FamilyAdminViewController.avatar(person.name, photo: photo), name], label: person.name, chevron: false) { [weak self] in self?.toggle(person.id) }
+            row.accessibilityIdentifier = "group.person.\(person.id)"
+            rows.append((person.id, box, row))
+            return row
+        }
+        form.addArrangedSubview(group("On Porch", rows: list))
+        nextButton.accessibilityIdentifier = "group.next"
+        nextButton.addTarget(self, action: #selector(goNext), for: .touchUpInside)
+        form.addArrangedSubview(nextButton)
+        update()
+    }
+    private func toggle(_ id: String) {
+        if let index = chosen.firstIndex(of: id) { chosen.remove(at: index) }
+        else if chosen.count < CallGroup.maximumPeople { chosen.append(id) }
+        update()
+    }
+    private func update() {
+        let full = chosen.count >= CallGroup.maximumPeople
+        for (id, box, row) in rows {
+            let on = chosen.contains(id)
+            box.image = UIImage(systemName: on ? "checkmark.circle.fill" : "circle")
+            box.tintColor = on ? PorchStyle.accent : PorchStyle.secondary
+            row.isEnabled = on || !full
+            row.alpha = row.isEnabled ? 1 : 0.45
+            row.accessibilityTraits = on ? [.button, .selected] : row.isEnabled ? .button : [.button, .notEnabled]
+        }
+        nextButton.isEnabled = full
+    }
+    @objc private func goNext() {
+        guard let admin, chosen.count == CallGroup.maximumPeople else { return }
+        draft.memberIDs = chosen
+        if changing { navigationController?.popViewController(animated: true) }
+        else { navigationController?.pushViewController(GroupKeyViewController(admin: admin, draft: draft), animated: true) }
+    }
+}
+
+/// Group call, last step, and a group key's own page: the key as the bedside shows it, then its name, photo, color and call.
+final class GroupKeyViewController: CaregiverFormViewController {
+    private weak var admin: FamilyAdminViewController?
+    private let draft: GroupKeyDraft
+    private lazy var chooser = PhotoChooser(presenter: self) { [weak self] data in self?.photoChosen(data) }
+    private let nameField = UITextField()
+    private let preview = UIStackView()
+    private let save = PorchStyle.button("Save")
+    init(admin: FamilyAdminViewController, draft: GroupKeyDraft) {
+        self.admin = admin; self.draft = draft
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(admin:draft:)") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Key \(draft.keySymbol)"
+        nameField.accessibilityIdentifier = "group.name"
+        nameField.text = draft.name
+        nameField.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.draft.name = (self.nameField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            self.showPreview()
+        }, for: .editingChanged)
+        save.accessibilityIdentifier = "group.save"
+        save.addTarget(self, action: #selector(saveGroup), for: .touchUpInside)
+    }
+    // Comes back from People with the draft changed.
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); render() }
+
+    private var names: [String] { draft.names(admin) }
+    private var shownName: String { draft.name.isEmpty ? CallGroup.joined(names) : draft.name }
+    private func render() {
+        form.arrangedSubviews.forEach { form.removeArrangedSubview($0); $0.removeFromSuperview() }
+        let headline = PorchStyle.label(draft.existing == nil ? "Check key \(draft.keySymbol)" : "Key \(draft.keySymbol)", size: 28, color: PorchStyle.ink, weight: .bold)
+        headline.accessibilityTraits = .header
+        form.addArrangedSubview(headline)
+        let caption = PorchStyle.label("On \(admin?.current?.householdName ?? "your loved one")’s screen", size: 15, weight: .semibold)
+        caption.textAlignment = .center
+        form.addArrangedSubview(caption)
+        form.setCustomSpacing(8, after: caption)
+        form.addArrangedSubview(preview)
+        showPreview()
+        form.addArrangedSubview(appearance())
+        let name = field(nameField, title: "Name", placeholder: CallGroup.joined(names))
+        // `field` resets capitalization; a name is capitalized word by word.
+        nameField.autocapitalizationType = .words
+        var rows: [UIView] = [padded([name])]
+        if draft.existing != nil {
+            let people = linkRow("People", value: CallGroup.joined(names), symbol: "person.2") { [weak self] in
+                guard let self, let admin = self.admin else { return }
+                self.navigationController?.pushViewController(GroupPeopleViewController(admin: admin, draft: self.draft, changing: true), animated: true)
+            }
+            people.accessibilityIdentifier = "group.row.people"
+            rows.append(people)
+        }
+        let mode = UISegmentedControl(items: ["Video", "Voice"])
+        mode.selectedSegmentIndex = draft.video ? 0 : 1
+        mode.accessibilityIdentifier = "group.mode"
+        mode.accessibilityLabel = "Call"
+        mode.addAction(UIAction { [weak self, weak mode] _ in self?.draft.video = mode?.selectedSegmentIndex == 0 }, for: .valueChanged)
+        rows.append(listRow(PorchStyle.label("Call", size: 18, color: PorchStyle.ink), trailing: mode))
+        form.addArrangedSubview(group(rows: rows))
+        save.configuration?.title = draft.existing == nil ? "Add to key \(draft.keySymbol)" : "Save"
+        form.addArrangedSubview(save)
+        if draft.existing != nil {
+            let remove = centeredLink("Remove", destructive: true) { [weak self] in self?.confirmRemove() }
+            remove.accessibilityIdentifier = "group.remove"
+            form.addArrangedSubview(remove)
+        }
+    }
+    /// The key as the bedside shows it, redrawn as its name, photo or color changes.
+    private func showPreview() {
+        preview.arrangedSubviews.forEach { preview.removeArrangedSubview($0); $0.removeFromSuperview() }
+        let group = try? CallGroup(name: draft.name, memberIDs: draft.memberIDs, memberNames: names, mode: draft.video ? .video : .voice)
+        let photo = draft.photo ?? group.flatMap(RecipientAppearance.groupPhoto)
+        preview.addArrangedSubview(AddCheckViewController.preview(name: shownName, photo: photo, colorHex: draft.colorHex, key: draft.keySymbol, identifier: "group.preview"))
+    }
+    /// The key's own photo, and the button colors.
+    private func appearance() -> UIView {
+        let photo = PorchStyle.button(draft.photo == nil ? "Photo" : "Change photo", symbol: "photo", filled: false)
+        photo.configuration?.contentInsets = .init(top: 10, leading: 12, bottom: 10, trailing: 12)
+        photo.accessibilityIdentifier = "group.photo"
+        var choices: [UIMenuElement] = chooser.menu.children
+        if draft.photo != nil {
+            choices.append(UIMenu(options: .displayInline, children: [UIAction(title: "Remove photo", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+                self?.draft.photo = nil; self?.render()
+            }]))
+        }
+        photo.menu = UIMenu(children: choices)
+        photo.showsMenuAsPrimaryAction = true
+        let row = UIStackView(arrangedSubviews: [FamilyAdminViewController.singleLine(photo), UIView(),
+            AddSwatch.row(selected: draft.colorHex) { [weak self] hex in self?.draft.colorHex = hex; self?.render() }])
+        row.alignment = .center
+        return row
+    }
+    private func photoChosen(_ data: Data?) {
+        guard let data else { showPorchError(FamilyServiceError(message: "That photo couldn't be opened. Please choose another photo.", status: 400), on: self); return }
+        draft.photo = data; render()
+    }
+    @objc private func saveGroup() {
+        guard let admin else { return }
+        do {
+            let group = try draft.group(admin)
+            try admin.saveSlots { try $0.setGroup(group, for: draft.key) }
+            finishKeySetup(self)
+        } catch { admin.showError(error) }
+    }
+    private func confirmRemove() {
+        guard let admin else { return }
+        let alert = UIAlertController(title: "Take \(shownName) off the keypad?", message: "Key \(draft.keySymbol) will be empty.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self, weak admin] _ in
+            guard let self, let admin else { return }
+            do { try admin.saveSlots { try $0.setGroup(nil, for: self.draft.key) }; finishKeySetup(self) } catch { admin.showError(error) }
+        })
+        present(alert, animated: true)
     }
 }

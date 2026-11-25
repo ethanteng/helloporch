@@ -2,9 +2,13 @@ import Foundation
 
 public enum KeypadAction: String, Codable, CaseIterable {
     case unassigned, person, callControl, toggleVideo, messages
+    /// Rings two family members at once (`CallGroup`). Saved beside the keypad, never in a slot, so a build from before
+    /// group calls reads the key as empty.
+    case group
     public var title: String {
         switch self {
         case .unassigned: return "No action"
+        case .group: return "Call a group"
         case .person: return "Call a person"
         case .callControl: return "Answer / decline / hang up"
         case .toggleVideo: return "Turn video off / on"
@@ -29,6 +33,8 @@ public struct CallSlots: Equatable {
     /// those two keys can still read the keypad.
     private static let digitSlots = 10
     private static let symbolsStorageKey = "porch.slots.v2.symbols"
+    /// Group keys, by key, beside the slots: a build from before group calls sees those keys as empty.
+    private static let groupsStorageKey = "porch.slots.v2.groups"
     /// Whether this device has kept a keypad, in this format or an older one: a sign it has been a bedside.
     public static func isSaved(in defaults: UserDefaults = .standard) -> Bool {
         [storageKey, "porch.slots.v1", "porch.contact.v1"].contains { defaults.object(forKey: $0) != nil }
@@ -36,21 +42,33 @@ public struct CallSlots: Equatable {
     /// Removes the saved keypad, in every format, and every keypad photo, such as when this iPad becomes someone else's
     /// bedside. Loading it again gives a new keypad.
     public static func forget(in defaults: UserDefaults = .standard, photoStore: ContactPhotoStore = .standard) {
-        for key in [storageKey, symbolsStorageKey, "porch.slots.v1", "porch.contact.v1"] { defaults.removeObject(forKey: key) }
+        for key in [storageKey, symbolsStorageKey, groupsStorageKey, "porch.slots.v1", "porch.contact.v1"] { defaults.removeObject(forKey: key) }
         photoStore.prune(keeping: [], olderThan: .distantFuture)
     }
     /// A key with no action is saved as a person key with no one on it, the way builds from before
     /// No action saved an empty key, so they can still read the keypad.
     private struct Slot: Codable, Equatable { var action: KeypadAction; var contact: CallContact? }
     private var slots: [Slot]
+    /// Group keys by key. A group's own slot is kept empty.
+    private var groups: [Int: CallGroup] = [:]
     public var contacts: [CallContact?] { slots.map { $0.action == .person ? $0.contact : nil } }
+    /// Every group key's group, in key order.
+    public var allGroups: [(digit: Int, group: CallGroup)] { Self.digits.compactMap { digit in groups[digit].map { (digit, $0) } } }
 
     public init() {
         slots = Self.digits.map { Slot(action: $0 == 0 ? .callControl : $0 == 9 ? .toggleVideo : .person) }
     }
     private func index(_ digit: Int) -> Int? { Self.digits.firstIndex(of: digit) }
     public func action(for digit: Int) -> KeypadAction? {
-        index(digit).map { slots[$0].action == .person && slots[$0].contact == nil ? .unassigned : slots[$0].action }
+        if groups[digit] != nil { return .group }
+        return index(digit).map { slots[$0].action == .person && slots[$0].contact == nil ? .unassigned : slots[$0].action }
+    }
+    public func group(for digit: Int) -> CallGroup? { groups[digit] }
+    /// Puts a group on a key, in place of whatever was there, or takes it off (nil), leaving the key empty.
+    public mutating func setGroup(_ group: CallGroup?, for digit: Int) throws {
+        guard let index = index(digit) else { throw ValidationError.invalidSlot }
+        slots[index] = Slot(action: .person, contact: nil)
+        groups[digit] = group
     }
     public func contact(for digit: Int) -> CallContact? {
         guard let index = index(digit), slots[index].action == .person else { return nil }
@@ -59,6 +77,9 @@ public struct CallSlots: Equatable {
     public func digit(for action: KeypadAction) -> Int? { Self.digits.first { self.action(for: $0) == action } }
     public mutating func setAction(_ action: KeypadAction, for digit: Int) throws {
         guard let index = index(digit) else { throw ValidationError.invalidSlot }
+        // A group goes on a key with `setGroup`. Choosing it here keeps the group there is.
+        if action == .group { guard groups[digit] != nil else { throw ValidationError.invalidSlot }; return }
+        groups[digit] = nil
         slots[index].action = action == .unassigned ? .person : action
         if action != .person { slots[index].contact = nil }
     }
@@ -74,6 +95,7 @@ public struct CallSlots: Equatable {
             return try CallContact(name: contact.customName, address: contact.address, shortcutName: contact.shortcutName, buttonColorHex: contact.buttonColorHex).preservingPhoto(from: contact)
         }
         slots[index] = Slot(action: .person, contact: validated)
+        groups[digit] = nil
     }
     /// Pair by the server-issued invitation identity, never a name the person chose.
     /// Removal of a member also removes their stale calling target.
@@ -83,6 +105,9 @@ public struct CallSlots: Equatable {
     public mutating func reconcile(with state: FamilySnapshot, memberPhotos: ContactPhotoStore = ContactPhotoStore.standard.familyMembers) throws {
         guard state.me.role == .bedside else { return }
         try followInvitations(state)
+        // A group shows its people's current names.
+        let names = Dictionary(state.people.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        for (digit, group) in groups { groups[digit] = group.showing(names: names) }
         for digit in Self.digits {
             guard let contact = contact(for: digit), let native = contact.nativeCall else { continue }
             let member = Self.member(for: contact, in: state)
@@ -190,6 +215,7 @@ public struct CallSlots: Equatable {
             var saved = try decoder.decode([Slot].self, from: data)
             if let symbols = defaults.data(forKey: symbolsStorageKey) { saved += try decoder.decode([Slot].self, from: symbols) }
             result = try restoring(saved)
+            if let groups = defaults.data(forKey: groupsStorageKey) { try result.restoreGroups(decoder.decode([String: CallGroup].self, from: groups)) }
             if result.contacts.contains(where: { $0?.hasInlinePhoto == true }) {
                 // An unavailable filesystem must not make existing contacts
                 // unusable. Keep the inline record and retry migration later.
@@ -216,6 +242,13 @@ public struct CallSlots: Equatable {
         if let symbols { saved += try decoder.decode([Slot].self, from: symbols) }
         return try restoring(saved)
     }
+    /// Saved group keys, by key symbol, on keys that are otherwise empty.
+    private mutating func restoreGroups(_ saved: [String: CallGroup]) throws {
+        for (symbol, group) in saved {
+            guard let digit = Self.digit(forSymbol: symbol), action(for: digit) == .unassigned else { throw ValidationError.invalidSavedSlots }
+            try setGroup(group, for: digit)
+        }
+    }
     /// Saved slots in `digits` order. Setups from before * and # have only the ten digits,
     /// and those two keys keep their defaults.
     private static func restoring(_ saved: [Slot]) throws -> Self {
@@ -235,11 +268,13 @@ public struct CallSlots: Equatable {
         // that cannot be stored does not leave the ten digits already replaced.
         let digits = try encoder.encode(Array(slots.prefix(Self.digitSlots)))
         let symbols = try encoder.encode(Array(slots.dropFirst(Self.digitSlots)))
+        let groups = try encoder.encode(Dictionary(uniqueKeysWithValues: self.groups.map { (Self.symbol(for: $0.key), $0.value) }))
         defaults.set(digits, forKey: Self.storageKey)
         defaults.set(symbols, forKey: Self.symbolsStorageKey)
+        if self.groups.isEmpty { defaults.removeObject(forKey: Self.groupsStorageKey) } else { defaults.set(groups, forKey: Self.groupsStorageKey) }
         defaults.removeObject(forKey: "porch.slots.v1")
         defaults.removeObject(forKey: "porch.contact.v1")
-        photoStore.prune(keeping: Set(contacts.compactMap { $0?.photoID }))
+        photoStore.prune(keeping: Set(contacts.compactMap { $0?.photoID } + self.groups.values.compactMap(\.photoID)))
     }
     public enum ValidationError: LocalizedError {
         case invalidSlot, invalidSavedSlots

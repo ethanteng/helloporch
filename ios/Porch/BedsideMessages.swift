@@ -856,13 +856,26 @@ extension MessagePlayerViewController: Cell2JackDigitReceiving {
         NotificationCenter.default.addObserver(self, selector: #selector(send), name: .porchFamilyChanged, object: nil)
         send()
     }
-    func add(_ recording: MessageRecording, to memberID: String) throws {
+    /// Queues a recording for each of `memberIDs`, such as both people on a group key. Each gets a copy of their own,
+    /// since a sent message's file is deleted.
+    func add(_ recording: MessageRecording, to memberIDs: [String]) throws {
         start()
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let id = UUID().uuidString.lowercased()
-        let name = "\(id).\(recording.file.pathExtension)"
-        try FileManager.default.moveItem(at: recording.file, to: folder.appendingPathComponent(name))
-        items.append(Item(id: id, file: name, to: memberID, mode: recording.mode, contentType: recording.contentType, duration: recording.duration, createdAt: Date()))
+        var added: [Item] = []
+        do {
+            for (index, memberID) in memberIDs.enumerated() {
+                let id = UUID().uuidString.lowercased()
+                let name = "\(id).\(recording.file.pathExtension)"
+                let destination = folder.appendingPathComponent(name)
+                if index == memberIDs.count - 1 { try FileManager.default.moveItem(at: recording.file, to: destination) }
+                else { try FileManager.default.copyItem(at: recording.file, to: destination) }
+                added.append(Item(id: id, file: name, to: memberID, mode: recording.mode, contentType: recording.contentType, duration: recording.duration, createdAt: Date()))
+            }
+        } catch {
+            for item in added { try? FileManager.default.removeItem(at: file(for: item)) }
+            throw error
+        }
+        items += added
         save(); send()
     }
     /// Drops every message still waiting to be sent, when this iPad stops being their bedside: they're for a household
@@ -925,7 +938,8 @@ final class BedsideVoicemailViewController: UIViewController {
     }
     var onFinish: (() -> Void)?
     private let contact: CallContact
-    private let memberID: String
+    /// Who gets the message: one person, or everyone on a group key.
+    private let memberIDs: [String]
     private let reason: Reason
     private let recorder: BedsideMessageRecorder
     private let staticPreview: Bool
@@ -960,8 +974,11 @@ final class BedsideVoicemailViewController: UIViewController {
     override var canBecomeFirstResponder: Bool { true }
     override var prefersStatusBarHidden: Bool { true }
 
-    init(contact: CallContact, memberID: String, mode: NativeCall.Mode, reason: Reason, staticPreview: Bool = false) {
-        self.contact = contact; self.memberID = memberID; self.reason = reason; self.staticPreview = staticPreview
+    convenience init(contact: CallContact, memberID: String, mode: NativeCall.Mode, reason: Reason, staticPreview: Bool = false) {
+        self.init(contact: contact, memberIDs: [memberID], mode: mode, reason: reason, staticPreview: staticPreview)
+    }
+    init(contact: CallContact, memberIDs: [String], mode: NativeCall.Mode, reason: Reason, staticPreview: Bool = false) {
+        self.contact = contact; self.memberIDs = memberIDs; self.reason = reason; self.staticPreview = staticPreview
         recorder = BedsideMessageRecorder(video: mode == .video)
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen; isModalInPresentation = true
@@ -1154,7 +1171,7 @@ final class BedsideVoicemailViewController: UIViewController {
         phase = .done; timer?.invalidate()
         guard let recording else { complete(BedsideText.string("No message was recorded.")); return }
         do {
-            try BedsideOutbox.shared.add(recording, to: memberID)
+            try BedsideOutbox.shared.add(recording, to: memberIDs)
             complete(Self.sentConfirmation(to: contact.name), speak: true)
         } catch {
             try? FileManager.default.removeItem(at: recording.file)

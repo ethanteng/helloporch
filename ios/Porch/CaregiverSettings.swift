@@ -443,8 +443,12 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         return view
     }
     /// Their photo, or initials, in a fixed circle. It never stretches, so a row's text column takes the spare width.
+    /// Up to two initials, from words that start with a letter: "Ethan & David" is "ED".
+    static func initials(_ name: String) -> String {
+        name.split(separator: " ").filter { $0.first?.isLetter == true }.prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+    }
     static func avatar(_ name: String, photo: Data? = nil, size: CGFloat = 44) -> UIView {
-        let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+        let initials = initials(name)
         let badge = circle(size: size)
         if let image = RecipientAppearance.photo(photo) {
             let view = UIImageView(image: image)
@@ -589,8 +593,16 @@ final class PeopleSettingsViewController: CaregiverPageViewController {
         let key = CallSlots.symbol(for: digit)
         let action = slots.action(for: digit) ?? .unassigned
         let contact = slots.contact(for: digit)
+        let groupKey = slots.group(for: digit)
         let title: String, detail: String?, badge: UIView
         switch action {
+        case .group:
+            title = groupKey?.name ?? ""
+            badge = FamilyAdminViewController.avatar(title, photo: groupKey.flatMap { $0.photoData ?? RecipientAppearance.groupPhoto($0) })
+            // Someone who has left Porch can't be rung: the caregiver chooses again.
+            let people = admin.current?.people
+            let missing = groupKey?.memberIDs.contains { id in people.map { !$0.contains { $0.id == id } } ?? false } ?? true
+            detail = missing ? "Finish setup" : groupKey?.mode == .voice ? "Group · Voice" : "Group · Video"
         case .person:
             title = contact?.name ?? ""
             badge = FamilyAdminViewController.avatar(contact?.name ?? key, photo: contact?.photoData)
@@ -603,12 +615,13 @@ final class PeopleSettingsViewController: CaregiverPageViewController {
         let tile = KeypadTile(key: key, title: title, detail: detail, badge: badge, empty: action == .unassigned) { [weak self, weak admin] in
             guard let self, let admin else { return }
             if action == .person, contact != nil { self.push(PersonViewController(admin: admin, slot: digit)); return }
+            if let groupKey { self.push(GroupKeyViewController(admin: admin, draft: GroupKeyDraft(key: digit, existing: groupKey))); return }
             // An empty key asks who goes on it. A key with a control on it can change what it does, or take someone.
             if action == .unassigned { self.push(AddWhoViewController(admin: admin, draft: AddSomeoneDraft(key: digit, fromKeyTile: true))); return }
             self.push(KeyActionViewController(admin: admin, key: digit, offersSomeone: true))
         }
         tile.accessibilityIdentifier = "keypad.key.\(key)"
-        tile.accessibilityLabel = "Key \(key), \(contact?.name ?? action.title)"
+        tile.accessibilityLabel = "Key \(key), \(contact?.name ?? groupKey?.name ?? action.title)"
         tile.accessibilityValue = detail
         return tile
     }

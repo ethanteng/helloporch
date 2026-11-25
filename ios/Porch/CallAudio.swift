@@ -214,11 +214,15 @@ import PorchCore
             }
         }
         for contact in contacts where contact.nativeCall != nil { texts.append(OutgoingCallAnnouncement.message(name: contact.name, language: language)) }
+        // A group key says its name the same way. When no one answers, it always says they didn't.
+        let groups = slots.allGroups.map(\.group.name)
+        for name in groups { texts.append(OutgoingCallAnnouncement.message(name: name, language: language)) }
         if state.messagesEnabled != false {
             for contact in contacts where contact.familyMemberID != nil {
                 texts += BedsideVoicemailViewController.Reason.allCases.map { $0.prompt(for: contact.name) }
                 texts.append(BedsideVoicemailViewController.sentConfirmation(to: contact.name))
             }
+            for name in groups { texts += [BedsideVoicemailViewController.Reason.unanswered.prompt(for: name), BedsideVoicemailViewController.sentConfirmation(to: name)] }
             let waiting = (state.messages ?? []).filter { $0.held != true }
             // Texts count with the messages in the notice.
             let waitingTexts = (state.texts ?? []).filter { !$0.held }
