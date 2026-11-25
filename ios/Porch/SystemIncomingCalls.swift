@@ -433,7 +433,7 @@ extension Notification.Name {
         let work = Task { () throws -> Void in
             await previous?.value
             guard self.wantsCamera, !self.ending, UIApplication.shared.applicationState == .active,
-                  let track = self.room?.localParticipant.videoTracks.first(where: { !$0.isMuted })?.track else { return }
+                  let track = self.room?.localParticipant.videoTracks.first(where: { !$0.isMuted })?.track as? VideoTrack else { return }
             try await CallCameraSwitch.flip(track)
             if UIApplication.shared.applicationState != .active {
                 _ = try? await self.room?.localParticipant.setCamera(enabled: false)
