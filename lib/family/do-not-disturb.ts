@@ -12,11 +12,18 @@ export const doNotDisturbCode = "doNotDisturb";
 
 const hourOf = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 23;
 
+/** One per time zone: every check-in by the bedside asks about each family member. */
+const formatters = new Map<string, Intl.DateTimeFormat>();
 /** The hour of the day, 0–23, at `now` in an IANA time zone such as "America/Los_Angeles", or nothing for one this
  * server doesn't know. */
 function hourIn(timeZone: string, now: number): number | undefined {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" }).formatToParts(new Date(now * 1000));
+    let formatter = formatters.get(timeZone);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" });
+      if (formatters.size < 1000) formatters.set(timeZone, formatter);
+    }
+    const parts = formatter.formatToParts(new Date(now * 1000));
     const hour = Number(parts.find(part => part.type === "hour")?.value);
     return hourOf(hour) ? hour : undefined;
   } catch { return undefined; }

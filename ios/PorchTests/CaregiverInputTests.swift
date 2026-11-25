@@ -2085,6 +2085,38 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertTrue(zip(before, after).allSatisfy { $0 === $1 }, "the same buttons are still showing")
     }
 
+    /// Do Not Disturb is this phone's own, under On this iPhone: Now, or Every day with its hours, saved as they change.
+    /// You says what it's set to.
+    @MainActor func testDoNotDisturbIsThisPhonesOwnAndYouSaysWhatItIsSetTo() throws {
+        let before = DoNotDisturb.load(); defer { before.save() }
+        DoNotDisturb().save()
+        let you = FamilyYouViewController()
+        let navigation = UINavigationController(rootViewController: you); you.loadViewIfNeeded()
+        let row = try XCTUnwrap(rows(in: you.view).first { $0.accessibilityIdentifier == "family.doNotDisturb" })
+        XCTAssertEqual(row.accessibilityLabel, "Do Not Disturb, Off")
+        row.sendActions(for: .touchUpInside)
+        let page = try XCTUnwrap(navigation.topViewController as? DoNotDisturbViewController); page.loadViewIfNeeded()
+        XCTAssertEqual(page.title, "Do Not Disturb")
+        func switches() -> [UISwitch] { descendants(page.view).compactMap { $0 as? UISwitch } }
+        func steppers() -> [UIStepper] { descendants(page.view).compactMap { $0 as? UIStepper } }
+        XCTAssertTrue(steppers().isEmpty, "the hours show once Every day is on")
+        let now = try XCTUnwrap(switches().first { $0.accessibilityIdentifier == "doNotDisturb.on" })
+        now.isOn = true; now.sendActions(for: .valueChanged)
+        XCTAssertTrue(DoNotDisturb.load().on)
+        XCTAssertEqual(DoNotDisturbViewController.summary(DoNotDisturb.load()), "On")
+        now.isOn = false; now.sendActions(for: .valueChanged)
+        let daily = try XCTUnwrap(switches().first { $0.accessibilityIdentifier == "doNotDisturb.scheduled" })
+        daily.isOn = true; daily.sendActions(for: .valueChanged)
+        let start = try XCTUnwrap(steppers().first { $0.accessibilityIdentifier == "doNotDisturb.start" })
+        XCTAssertEqual(start.value, 22); XCTAssertTrue(start.wraps, "11 PM goes on to midnight")
+        start.value = 23; start.sendActions(for: .valueChanged)
+        XCTAssertEqual(DoNotDisturb.load().startHour, 23)
+        XCTAssertEqual(start.accessibilityValue, MessageSettingsViewController.hourText(23))
+        navigation.popViewController(animated: false); you.viewWillAppear(false)
+        let updated = try XCTUnwrap(rows(in: you.view).first { $0.accessibilityIdentifier == "family.doNotDisturb" })
+        XCTAssertEqual(updated.accessibilityLabel, "Do Not Disturb, \(MessageSettingsViewController.hourText(23))–\(MessageSettingsViewController.hourText(7))")
+    }
+
     @MainActor func testFamilyNameAndPhotoPageIsOnlyTheNameAndPhoto() {
         let profile = FamilyProfileViewController(); profile.loadViewIfNeeded()
         XCTAssertEqual(profile.title, "Your name and photo")
