@@ -486,7 +486,7 @@ final class CaregiverInputTests: XCTestCase {
     /// background thread, so every notice tapped while Porch wasn't open crashed it.
     func testTappedNoticesOpenTheirTabAndFinishOnTheMainThread() {
         let notices: [(type: String?, opens: Notification.Name)] = [
-            ("everyCall", .porchOpenCallTab), ("callNotice", .porchOpenCallTab), (nil, .porchOpenReceivedMessages),
+            ("everyCall", .porchOpenCallTab), ("callNotice", .porchOpenCallTab), ("phone", .porchOpenCallTab), (nil, .porchOpenReceivedMessages),
         ]
         for notice in notices {
             let content = UNMutableNotificationContent()
