@@ -51,6 +51,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         /// For caregivers: a phone call that started while every call drops in, while it rings or is on. Its time is
         /// updated in place.
         let liveCall: BedsideCall?
+        /// For caregivers: the bedside's desk phone, once it's been out long enough that they were told.
+        let phoneOut: BedsidePhone?
     }
     private struct Presentation: Equatable {
         let cards: [Card]
@@ -128,7 +130,8 @@ final class FamilyHomeViewController: CaregiverFormViewController {
             }
             return Card(id: credential.deviceID, name: name, family: family, removed: link?.accessRemoved == true, connected: state != nil && bedside != nil,
                         callable: link?.error == nil && bedside?.online == true && state?.busy == false, dropIns: dropIns, everyCall: everyCall,
-                        liveCall: state?.me.caregiver == true ? state?.bedsideCall : nil)
+                        liveCall: state?.me.caregiver == true ? state?.bedsideCall : nil,
+                        phoneOut: state?.me.caregiver == true ? state?.bedsidePhone : nil)
         }, starting: starting, ringing: SystemIncomingCalls.shared.hasCall, largeText: traitCollection.preferredContentSizeCategory.isAccessibilityCategory,
            width: (form.bounds.width > 0 ? form.bounds.width : min(view.bounds.width - 48, 760)).rounded())
         for credential in credentials {
@@ -168,7 +171,16 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         header.spacing = 14; header.alignment = .center
         var views: [UIView] = [header]
         if !card.removed, let call = card.liveCall { views.insert(liveCallStrip(call, credential: credential), at: 0) }
-        if let everyCall = card.everyCall, !card.removed { views.insert(everyCallBanner(everyCall, credential: credential), at: 0) }
+        // Notices for caregivers on top, close together when there are two, so they read as one group.
+        var notices: [UIView] = []
+        if let everyCall = card.everyCall, !card.removed { notices.append(everyCallBanner(everyCall, credential: credential)) }
+        if !card.removed, let phone = card.phoneOut { notices.append(phoneBanner(phone, name: card.name, credential: credential)) }
+        if notices.count > 1 {
+            let group = UIStackView(arrangedSubviews: notices)
+            group.axis = .vertical; group.spacing = 8
+            group.accessibilityIdentifier = "family.notices"
+            views.insert(group, at: 0)
+        } else if let notice = notices.first { views.insert(notice, at: 0) }
         if card.removed {
             // A family that removed this phone can't reach it again. Taking it off leaves the others as they are.
             let remove = PorchStyle.button("Remove from this phone", symbol: "minus.circle", filled: false)
@@ -241,14 +253,7 @@ final class FamilyHomeViewController: CaregiverFormViewController {
     }
     /// For caregivers while every call drops in: who turned it on, and a Turn off that needs no PIN.
     private func everyCallBanner(_ who: String, credential: FamilyCredential) -> UIView {
-        let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle.fill"))
-        icon.tintColor = PorchStyle.danger
-        icon.setContentHuggingPriority(.required, for: .horizontal)
-        let title = PorchStyle.label("Every call drops in", size: 16, color: DropInSettingsViewController.darkRed, weight: .bold)
-        let detail = PorchStyle.label(who, size: 14, color: UIColor(red: 0x6B / 255, green: 0x3A / 255, blue: 0x2E / 255, alpha: 1))
-        let text = UIStackView(arrangedSubviews: [title, detail])
-        text.axis = .vertical; text.spacing = 1
-        text.isAccessibilityElement = true; text.accessibilityLabel = "Every call drops in. \(who)"
+        let (title, detail) = ("Every call drops in", who)
         let off = PorchStyle.button("Turn off", filled: false)
         off.configuration?.baseForegroundColor = UIColor(red: 0xB0 / 255, green: 0x3A / 255, blue: 0x2E / 255, alpha: 1)
         off.configuration?.background.backgroundColor = PorchStyle.surface
@@ -278,14 +283,84 @@ final class FamilyHomeViewController: CaregiverFormViewController {
                 }
             }
         }, for: .touchUpInside)
-        let banner = UIStackView(arrangedSubviews: [icon, text, off])
-        banner.spacing = 10; banner.alignment = .center
-        banner.isLayoutMarginsRelativeArrangement = true
-        banner.directionalLayoutMargins = .init(top: 8, leading: 12, bottom: 8, trailing: 8)
+        let banner = Self.noticeRow(icon: UIImage(systemName: "exclamationmark.triangle.fill"), iconColor: PorchStyle.danger,
+                                    title: title, titleColor: DropInSettingsViewController.darkRed,
+                                    detail: detail, detailColor: UIColor(red: 0x6B / 255, green: 0x3A / 255, blue: 0x2E / 255, alpha: 1), trailing: off)
+        banner.arrangedSubviews[1].isAccessibilityElement = true
+        banner.arrangedSubviews[1].accessibilityLabel = "\(title). \(detail)"
         banner.backgroundColor = DropInSettingsViewController.redTint
         banner.layer.cornerRadius = 14
         banner.accessibilityIdentifier = "family.everyCall"
         return banner
+    }
+    /// A caregiver's notice on a card: an icon, a bold line with a smaller one under it, and a button or chevron. Every
+    /// notice has the same icon column, text start, height and right edge, so two read as one group.
+    static func noticeRow(icon: UIImage?, iconColor: UIColor, title: String, titleColor: UIColor, detail: String, detailColor: UIColor, trailing: UIView) -> UIStackView {
+        let image = UIImageView(image: icon)
+        image.tintColor = iconColor
+        image.contentMode = .center
+        image.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+        let iconColumn = UIView()
+        image.translatesAutoresizingMaskIntoConstraints = false
+        iconColumn.addSubview(image)
+        NSLayoutConstraint.activate([
+            iconColumn.widthAnchor.constraint(equalToConstant: 26),
+            image.centerXAnchor.constraint(equalTo: iconColumn.centerXAnchor), image.centerYAnchor.constraint(equalTo: iconColumn.centerYAnchor),
+            image.topAnchor.constraint(greaterThanOrEqualTo: iconColumn.topAnchor), image.bottomAnchor.constraint(lessThanOrEqualTo: iconColumn.bottomAnchor),
+        ])
+        let titleLabel = PorchStyle.label(title, size: 16, color: titleColor, weight: .bold)
+        let detailLabel = PorchStyle.label(detail, size: 14, color: detailColor)
+        // One line each, a little smaller where it's narrow, so two notices stay the same height on a small iPhone. With
+        // the largest text sizes they wrap instead.
+        if !UITraitCollection.current.preferredContentSizeCategory.isAccessibilityCategory {
+            for label in [titleLabel, detailLabel] { label.numberOfLines = 1; label.adjustsFontSizeToFitWidth = true; label.minimumScaleFactor = 0.8 }
+        }
+        let text = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        text.axis = .vertical; text.spacing = 2
+        trailing.setContentHuggingPriority(.required, for: .horizontal)
+        trailing.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let row = UIStackView(arrangedSubviews: [iconColumn, text, trailing])
+        row.spacing = 12; row.alignment = .center
+        row.isLayoutMarginsRelativeArrangement = true
+        row.directionalLayoutMargins = .init(top: 10, leading: 12, bottom: 10, trailing: 10)
+        row.heightAnchor.constraint(greaterThanOrEqualToConstant: 70).isActive = true
+        return row
+    }
+    /// For caregivers: the bedside's desk phone has been out a while. A tap opens what to check. The whole banner is the
+    /// button: beside a button, "Phone not connected" would wrap on most iPhones.
+    private func phoneBanner(_ phone: BedsidePhone, name: String, credential: FamilyCredential) -> UIView {
+        let since = "Since \(DropInSettingsViewController.time(phone.since))"
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
+        chevron.tintColor = PhoneOutStyle.title
+        // As wide as a button's padding, so the chevron sits in from the edge like Turn off's title.
+        chevron.contentMode = .center
+        chevron.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        let row = Self.noticeRow(icon: PhoneOutStyle.phoneOff(), iconColor: PhoneOutStyle.icon, title: "Phone not connected", titleColor: PhoneOutStyle.title,
+                                 detail: since, detailColor: PhoneOutStyle.meta, trailing: chevron)
+        row.isUserInteractionEnabled = false
+        let banner = PhoneOutStyle.Banner()
+        banner.backgroundColor = PhoneOutStyle.tint
+        banner.layer.cornerRadius = 14
+        row.translatesAutoresizingMaskIntoConstraints = false
+        banner.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: banner.leadingAnchor), row.trailingAnchor.constraint(equalTo: banner.trailingAnchor),
+            row.topAnchor.constraint(equalTo: banner.topAnchor), row.bottomAnchor.constraint(equalTo: banner.bottomAnchor),
+        ])
+        banner.isAccessibilityElement = true
+        banner.accessibilityTraits = .button
+        banner.accessibilityLabel = "\(name)’s phone isn’t connected. \(since)"
+        banner.accessibilityHint = "Shows what to check"
+        banner.accessibilityIdentifier = "family.phone"
+        banner.addAction(UIAction { [weak self] _ in self?.showPhoneCheck(credential: credential, name: name) }, for: .touchUpInside)
+        return banner
+    }
+    /// What to check for this family's bedside phone, from its banner or its notification.
+    func showPhoneCheck(credential: FamilyCredential, name: String? = nil) {
+        guard presentedViewController == nil, let state = FamilyCoordinator.shared.state(for: credential), let phone = state.bedsidePhone else { return }
+        let bedside = state.people.first { $0.role == .bedside }
+        present(PhoneCheckViewController.sheet(credential: credential, name: name ?? bedside?.name ?? state.householdName,
+                                               device: bedside?.platform == "android" ? "tablet" : "iPad", phone: phone), animated: true)
     }
     /// A phone call on the bedside that started while every call drops in: who, what it's doing, and End call, which
     /// needs no PIN.

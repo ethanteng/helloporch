@@ -1067,15 +1067,15 @@ extension Notification.Name {
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
         Self.respond(to: response.actionIdentifier, content: response.notification.request.content, completion: completionHandler)
     }
-    /// Opens the thread with whoever left the message or, for a notice about every call dropping in or a call it let
-    /// through, the Call tab. A call notice's End call and Turn off Every call are sent as they are, without opening
+    /// Opens the thread with whoever left the message or, for a notice about every call dropping in, a call it let
+    /// through or the bedside's phone, the Call tab. A call notice's End call and Turn off Every call are sent as they are, without opening
     /// Porch. Each family knows this phone by its own ID, which the notification carries. `completion` runs on the main
     /// thread once that's done.
     nonisolated static func respond(to actionIdentifier: String, content: UNNotificationContent, completion: @escaping () -> Void) {
         let info = content.userInfo
         let recipient = info["recipientID"] as? String, callID = info["callID"] as? String
         let action = serverAction(actionIdentifier)
-        let name: Notification.Name = ["everyCall", "callNotice"].contains(info["type"] as? String) ? .porchOpenCallTab : .porchOpenReceivedMessages
+        let name: Notification.Name = ["everyCall", "callNotice", "phone"].contains(info["type"] as? String) ? .porchOpenCallTab : .porchOpenReceivedMessages
         Task {
             if let action { await send(action, callID: callID, recipientID: recipient, content: content) }
             await MainActor.run {

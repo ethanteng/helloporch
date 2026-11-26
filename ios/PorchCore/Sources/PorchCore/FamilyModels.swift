@@ -324,6 +324,9 @@ public struct FamilySnapshot: Codable, Equatable {
     /// Family caregivers: a phone call that started while every call drops in, while it rings or is connected. Older
     /// servers don't send it.
     public let bedsideCall: BedsideCall?
+    /// Family caregivers: the bedside's desk phone, once it's been out long enough that they were told, until it's
+    /// back. Older servers don't send it.
+    public let bedsidePhone: BedsidePhone?
     /// Bedside only: who can ring by phone. Older servers don't send it.
     public let callScreening: CallScreening?
     /// Bedside only: family see when someone is at the iPad, unless a caregiver turned it off. The iPad reports it only

@@ -370,6 +370,8 @@ struct FamilyCallSession {
                         if credential.role == .bedside {
                             values["features"] = ["translation"]; values["language"] = BedsidePreferences.load().language.rawValue
                             values["appVersion"] = PorchVersion.text
+                            // Its desk phone, so caregivers hear when it's been out for a while. Off screen, nothing.
+                            if let phone = Cell2JackKeypad.shared.checkIn() { values["phone"] = phone.json }
                         }
                         // A family phone's Do Not Disturb, so each family can turn the bedside's calls away while it's closed.
                         if credential.role == .family { values["doNotDisturb"] = DoNotDisturb.load().checkIn() }
