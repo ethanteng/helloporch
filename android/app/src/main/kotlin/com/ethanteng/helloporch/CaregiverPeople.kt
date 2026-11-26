@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.AddSomeoneDraft
 import com.ethanteng.helloporch.core.CallContact
+import com.ethanteng.helloporch.core.CallGroup
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyAdminState
 import com.ethanteng.helloporch.core.FamilyInvitation
@@ -92,10 +93,11 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Where the People page is: its list, or a person, Add someone or an invitation opened from it. Kept across a rotation. */
+/** Where the People page is: its list, or a person, a group key, Add someone or an invitation opened from it. Kept across a
+ * rotation. */
 data class PeopleRoute(val kind: Kind, val memberID: String? = null, val slot: Int? = null, val start: AddSomeoneStart = AddSomeoneStart.PEOPLE) :
     java.io.Serializable {
-    enum class Kind { PERSON, ADD, INVITE }
+    enum class Kind { PERSON, GROUP, ADD, INVITE }
 }
 
 /**
@@ -114,6 +116,7 @@ fun PeoplePages(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks
             PeopleList(app, admin, links, onOpen = { route = it })
         }
         PeopleRoute.Kind.PERSON -> PersonPage(app, admin, links, open.memberID, open.slot, onDone = close)
+        PeopleRoute.Kind.GROUP -> open.slot?.let { GroupKey(app, admin, links, it, editing = true, onBack = close, onDone = close) }
         PeopleRoute.Kind.ADD -> AddSomeone(app, admin, links, open.slot, open.start, onDone = close)
         PeopleRoute.Kind.INVITE -> InviteScreen(app, admin, links, onDone = close)
     }
@@ -135,9 +138,10 @@ private fun PeopleList(app: PorchApplication, admin: CaregiverAdmin, links: Fami
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { digit ->
                     KeyTile(app, digit, slots, state, Modifier.weight(1f).fillMaxHeight()) {
-                        // A person opens their page, and an empty key adds someone to it. Any other key opens what it does.
+                        // A person or group opens their page, and an empty key adds someone to it. Any other key opens what it does.
                         onOpen(when (slots.action(digit) ?: KeypadAction.UNASSIGNED) {
                             KeypadAction.PERSON -> PeopleRoute(PeopleRoute.Kind.PERSON, slot = digit)
+                            KeypadAction.GROUP -> PeopleRoute(PeopleRoute.Kind.GROUP, slot = digit)
                             KeypadAction.UNASSIGNED -> PeopleRoute(PeopleRoute.Kind.ADD, slot = digit, start = AddSomeoneStart.KEY_TILE)
                             else -> PeopleRoute(PeopleRoute.Kind.ADD, slot = digit, start = AddSomeoneStart.CONTROL)
                         })
@@ -155,8 +159,10 @@ private fun KeyTile(app: PorchApplication, digit: Int, slots: CallSlots, state: 
     val key = CallSlots.symbol(digit)
     val action = slots.action(digit) ?: KeypadAction.UNASSIGNED
     val contact = slots.contact(digit)
+    val group = slots.group(digit)
     val (title, detail, glyph) = when (action) {
         KeypadAction.PERSON -> Triple(contact?.name.orEmpty(), contact?.let { keyDetail(it, state) }, null)
+        KeypadAction.GROUP -> Triple(group?.name.orEmpty(), group?.let { groupDetail(it, state) }, null)
         KeypadAction.UNASSIGNED -> Triple("Add", null, "+")
         KeypadAction.CALL_CONTROL -> Triple("Answer / hang up", "Hold to decline", "☎︎")
         KeypadAction.TOGGLE_VIDEO -> Triple("Video on / off", null, "▶︎")
@@ -165,15 +171,16 @@ private fun KeyTile(app: PorchApplication, digit: Int, slots: CallSlots, state: 
     val empty = action == KeypadAction.UNASSIGNED
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
-    val photo = remember(contact, FamilyPhotos.saved) { contact?.photoData }
+    // A group key without a photo of its own shows its people's.
+    val photo = remember(contact, group, state?.people, FamilyPhotos.saved) { contact?.photoData ?: group?.let { GroupAppearance.photo(app, it, state?.people) } }
     Box(modifier.heightIn(min = 150.dp).clip(shape)
         .then(if (empty) Modifier.border(1.5.dp, colors.outlineVariant, shape) else Modifier.background(colors.surfaceContainerHigh))
         .clickable(role = Role.Button, onClick = onClick)
-        .semantics { contentDescription = "Key $key, ${contact?.name ?: action.title}"; detail?.let { stateDescription = it } }) {
+        .semantics { contentDescription = "Key $key, ${contact?.name ?: group?.name ?: action.title}"; detail?.let { stateDescription = it } }) {
         Box(Modifier.fillMaxWidth().clearAndSetSemantics {}.padding(start = 12.dp, top = 10.dp, end = 8.dp, bottom = 12.dp)) {
             Text(key, color = colors.primary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Column(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (glyph != null) GlyphBadge(glyph, empty) else Avatar(contact?.name ?: key, photo, 48.dp)
+                if (glyph != null) GlyphBadge(glyph, empty) else Avatar(contact?.name ?: group?.name ?: key, photo, 48.dp)
                 Text(title, color = if (empty) colors.onSurfaceVariant else colors.onSurface, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center,
                     maxLines = 2)
                 detail?.let { Text(it, fontSize = 13.sp, color = colors.onSurfaceVariant, textAlign = TextAlign.Center, maxLines = 2) }
@@ -199,6 +206,11 @@ private fun keyDetail(contact: CallContact, state: FamilyAdminState?): String {
     if (contact.invitationID != null && state?.invitations?.any { it.id == contact.invitationID } == true) return "Invite sent"
     return if (contact.phoneNumber == null) "Finish setup" else "Phone"
 }
+
+/** How a group key rings its people, or that one of them has left Porch and the key needs a caregiver. */
+private fun groupDetail(group: CallGroup, state: FamilyAdminState?): String =
+    if (state != null && group.memberIDs.any { id -> state.people.none { it.id == id } }) "Finish setup"
+    else "Group · ${if (group.mode == NativeCall.Mode.VIDEO) "Video" else "Voice"}"
 
 /** Everyone with access and everyone invited, so a waiting invitation sits beside the people it will join. */
 @Composable

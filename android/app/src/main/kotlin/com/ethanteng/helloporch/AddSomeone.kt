@@ -91,7 +91,7 @@ import kotlinx.serialization.json.JsonPrimitive
 /** Where Add someone opens: from People's Add someone, from an empty key, or from a key that does something else. */
 enum class AddSomeoneStart { PEOPLE, KEY_TILE, CONTROL }
 
-private enum class AddScreen { WHO, REACH, CHECK, INVITE, PHONE, APP, KEY, KEY_ACTION }
+private enum class AddScreen { WHO, REACH, CHECK, INVITE, PHONE, APP, KEY, KEY_ACTION, GROUP }
 
 /** A photo chosen for someone being added. It outlives a rotation here, rather than in the saved draft: a photo can be
  * close to 1 MB, more than a screen may keep when it turns. */
@@ -189,8 +189,13 @@ fun AddSomeone(app: PorchApplication, admin: CaregiverAdmin, links: FamilyLinks,
             // Opened from the key, it's that key's. From Step 1, it's the key Step 1 is for.
             val control = screens.size == 1
             (if (control) draft.tile else draft.key)?.let { at ->
-                KeyActionScreen(admin, at, control, onBack = ::back, onSomeone = { open(AddScreen.WHO) }, onSaved = onDone)
+                KeyActionScreen(admin, at, control, onBack = ::back, onSomeone = { open(AddScreen.WHO) }, onGroup = { open(AddScreen.GROUP) },
+                    onSaved = onDone)
             }
+        }
+        // A group for the key What should key N do? was for.
+        AddScreen.GROUP -> (if (screens.first() == AddScreen.KEY_ACTION) draft.tile else draft.key)?.let { at ->
+            GroupKey(app, admin, links, at, editing = false, onBack = ::back, onDone = onDone)
         }
     }
 }
@@ -402,8 +407,7 @@ internal fun KeyPreview(name: String, photo: ByteArray?, key: String, color: Col
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (photo != null) Photo(photo, Modifier.size(96.dp))
         else Box(Modifier.size(64.dp).clip(CircleShape).background(text), contentAlignment = Alignment.Center) {
-            val initials = name.split(" ").filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }
-            Text(initials, Modifier.clearAndSetSemantics {}, color = background, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Text(initials(name), Modifier.clearAndSetSemantics {}, color = background, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         }
         Text(name, color = text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text("Press $key", color = if (color == null) CallColors.secondary else text.copy(alpha = 0.8f), fontSize = 17.sp, fontWeight = FontWeight.Medium,
@@ -665,6 +669,7 @@ private fun occupant(slots: CallSlots, digit: Int): String = when (slots.action(
     KeypadAction.CALL_CONTROL -> "Answer / hang up"
     KeypadAction.TOGGLE_VIDEO -> "Video on / off"
     KeypadAction.MESSAGES -> "Messages"
+    KeypadAction.GROUP -> slots.group(digit)?.name.orEmpty()
     KeypadAction.UNASSIGNED, null -> ""
 }
 
@@ -690,16 +695,27 @@ private fun KeyChoice(key: String, label: String, selected: Boolean, enabled: Bo
 private val keyActions = listOf(KeypadAction.CALL_CONTROL to "Answer / hang up", KeypadAction.TOGGLE_VIDEO to "Video on / off",
     KeypadAction.MESSAGES to "Play messages", KeypadAction.UNASSIGNED to "Nothing")
 
-/** What a key does other than call someone. Opened from the key itself (`control`), it can put someone on it instead. */
+/** What a key does other than call someone. Opened from the key itself (`control`), it can put someone on it instead.
+ * Either way, it can ring a group. */
 @Composable
-private fun KeyActionScreen(admin: CaregiverAdmin, key: Int, control: Boolean, onBack: () -> Unit, onSomeone: () -> Unit, onSaved: () -> Unit) {
+private fun KeyActionScreen(admin: CaregiverAdmin, key: Int, control: Boolean, onBack: () -> Unit, onSomeone: () -> Unit, onGroup: () -> Unit,
+    onSaved: () -> Unit) {
     val symbol = CallSlots.symbol(key)
-    var choice by rememberSaveable(key) { mutableStateOf(admin.slots.action(key)?.takeIf { it != KeypadAction.PERSON } ?: KeypadAction.UNASSIGNED) }
+    var choice by rememberSaveable(key) {
+        mutableStateOf(admin.slots.action(key)?.takeIf { it != KeypadAction.PERSON && it != KeypadAction.GROUP } ?: KeypadAction.UNASSIGNED)
+    }
     FormScreen("Key $symbol", navigation = { BackButton(onBack) }) {
         Heading("What should key $symbol do?")
-        if (control) CaregiverGroup {
-            CaregiverRow(onClick = onSomeone) {
-                Text("Someone", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        CaregiverGroup {
+            if (control) {
+                CaregiverRow(onClick = onSomeone) {
+                    Text("Someone", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Chevron()
+                }
+                HorizontalDivider()
+            }
+            CaregiverRow(onClick = onGroup) {
+                Text("Group call", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Chevron()
             }
         }

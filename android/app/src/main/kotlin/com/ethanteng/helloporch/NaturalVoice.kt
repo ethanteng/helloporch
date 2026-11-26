@@ -84,6 +84,7 @@ object NaturalVoice {
             }
         }
         contacts.forEach { texts += Announcer.callingMessage(app, it.name) }
+        slots.allGroups.forEach { (_, group) -> texts += Announcer.callingMessage(app, group.name) }
         /** A text's words, read with its ID: they can be longer than an announcement. */
         val words = mutableListOf<Pair<String, String>>()
         if (state.messagesEnabled != false) {

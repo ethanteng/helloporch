@@ -9,6 +9,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 
 @Serializable
 enum class KeypadAction(val title: String) {
@@ -17,6 +19,9 @@ enum class KeypadAction(val title: String) {
     @SerialName("callControl") CALL_CONTROL("Answer / decline / hang up"),
     @SerialName("toggleVideo") TOGGLE_VIDEO("Turn video off / on"),
     @SerialName("messages") MESSAGES("Play / stop messages"),
+    /** Rings two family members at once ([CallGroup]). Saved beside the keypad, never in a slot, so a build from before
+     * group calls reads the key as empty. */
+    @SerialName("group") GROUP("Call a group"),
 }
 
 /**
@@ -25,21 +30,38 @@ enum class KeypadAction(val title: String) {
  *
  * Changing a keypad changes it in place; [copy] it first to keep the original.
  */
-class CallSlots private constructor(private val slots: MutableList<Slot>) {
+class CallSlots private constructor(
+    private val slots: MutableList<Slot>,
+    /** Group keys by key. A group's own slot is kept empty. */
+    private val groups: MutableMap<Int, CallGroup> = mutableMapOf(),
+) {
     /** A key with no action is saved as a person key with no one on it, as the iOS app saves it. */
     private data class Slot(val action: KeypadAction, val contact: CallContact? = null)
 
     constructor() : this(digits.map { Slot(if (it == 0) KeypadAction.CALL_CONTROL else if (it == 9) KeypadAction.TOGGLE_VIDEO else KeypadAction.PERSON) }.toMutableList())
 
-    fun copy() = CallSlots(slots.toMutableList())
+    fun copy() = CallSlots(slots.toMutableList(), groups.toMutableMap())
 
     val contacts: List<CallContact?> get() = slots.map { if (it.action == KeypadAction.PERSON) it.contact else null }
+
+    /** Every group key's group, in key order. */
+    val allGroups: List<Pair<Int, CallGroup>> get() = digits.mapNotNull { digit -> groups[digit]?.let { digit to it } }
 
     private fun index(digit: Int): Int? = digits.indexOf(digit).takeIf { it >= 0 }
 
     fun action(digit: Int): KeypadAction? = index(digit)?.let { index ->
         val slot = slots[index]
-        if (slot.action == KeypadAction.PERSON && slot.contact == null) KeypadAction.UNASSIGNED else slot.action
+        if (digit in groups) KeypadAction.GROUP
+        else if (slot.action == KeypadAction.PERSON && slot.contact == null) KeypadAction.UNASSIGNED else slot.action
+    }
+
+    fun group(digit: Int): CallGroup? = groups[digit]
+
+    /** Puts a group on a key, in place of whatever was there, or takes it off (null), leaving the key empty. */
+    fun setGroup(group: CallGroup?, digit: Int) {
+        val index = index(digit) ?: throw ValidationException(invalidSlot)
+        slots[index] = Slot(KeypadAction.PERSON)
+        if (group == null) groups.remove(digit) else groups[digit] = group
     }
 
     fun contact(digit: Int): CallContact? {
@@ -51,6 +73,9 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
 
     fun setAction(action: KeypadAction, digit: Int) {
         val index = index(digit) ?: throw ValidationException(invalidSlot)
+        // A group goes on a key with [setGroup]. Choosing it here keeps the group there is.
+        if (action == KeypadAction.GROUP) { if (digit !in groups) throw ValidationException(invalidSlot); return }
+        groups.remove(digit)
         slots[index] = Slot(if (action == KeypadAction.UNASSIGNED) KeypadAction.PERSON else action, if (action == KeypadAction.PERSON) slots[index].contact else null)
     }
 
@@ -61,6 +86,7 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
                 familyMemberID = it.familyMemberID, invitationID = it.invitationID, memberName = it.memberName, buttonColorHex = it.buttonColorHex).preservingPhoto(it)
         }
         slots[index] = Slot(KeypadAction.PERSON, validated)
+        groups.remove(digit)
     }
 
     /** Pair by the server-issued invitation identity, never a name the person chose.
@@ -71,6 +97,9 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
     fun reconcile(state: FamilySnapshot, memberPhotos: ContactPhotoStore) {
         if (state.me.role != PorchExperience.BEDSIDE) return
         followInvitations(state)
+        // A group shows its people's current names.
+        val names = state.people.distinctBy { it.id }.associate { it.id to it.name }
+        for (entry in groups) entry.setValue(entry.value.showing(names))
         for (digit in digits) {
             val contact = contact(digit) ?: continue
             val member = member(contact, state)
@@ -166,14 +195,27 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         val serializer = ListSerializer(SavedSlot.serializer())
         val digits = PorchJson.encodeToString(serializer, saved.take(digitSlots))
         val symbols = PorchJson.encodeToString(serializer, saved.drop(digitSlots))
+        val groups = allGroups.associate { (digit, group) -> symbol(digit) to group.saving(photoStore) }
+            .takeIf { it.isNotEmpty() }?.let { PorchJson.encodeToString(groupsSerializer, it) }
         settings.putString(storageKey, digits)
         settings.putString(symbolsStorageKey, symbols)
-        photoStore.prune(keeping = contacts.mapNotNull { it?.photoID }.toSet())
+        if (groups == null) settings.remove(groupsStorageKey) else settings.putString(groupsStorageKey, groups)
+        photoStore.prune(keeping = contacts.mapNotNull { it?.photoID }.toSet() + this.groups.values.mapNotNull { it.photoID })
     }
 
-    override fun equals(other: Any?) = other is CallSlots && other.slots == slots
-    override fun hashCode() = slots.hashCode()
-    override fun toString() = "CallSlots(${digits.zip(slots).joinToString { (digit, slot) -> "${symbol(digit)}: ${slot.action} ${slot.contact ?: ""}".trim() }})"
+    /** Saved group keys, by key symbol, on keys that are otherwise empty. */
+    private fun restoreGroups(saved: Map<String, SavedGroup>, photoStore: ContactPhotoStore) {
+        for ((symbol, group) in saved) {
+            val digit = digit(symbol)
+            if (digit == null || action(digit) != KeypadAction.UNASSIGNED) throw ValidationException(invalidSavedSlots)
+            setGroup(CallGroup.restored(group, photoStore), digit)
+        }
+    }
+
+    override fun equals(other: Any?) = other is CallSlots && other.slots == slots && other.groups == groups
+    override fun hashCode() = 31 * slots.hashCode() + groups.hashCode()
+    override fun toString() = "CallSlots(${digits.zip(slots).joinToString { (digit, slot) ->
+        groups[digit]?.let { "${symbol(digit)}: $it" } ?: "${symbol(digit)}: ${slot.action} ${slot.contact ?: ""}".trim() }})"
 
     companion object {
         const val star = 10
@@ -210,6 +252,10 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
          * from before those two keys can still read the keypad. */
         private const val digitSlots = 10
         private const val symbolsStorageKey = "porch.slots.v2.symbols"
+        /** Group keys, by key symbol, beside the slots, as the iOS app saves them: a build from before group calls sees
+         * those keys as empty. */
+        private const val groupsStorageKey = "porch.slots.v2.groups"
+        private val groupsSerializer = MapSerializer(String.serializer(), SavedGroup.serializer())
 
         /** Whether this device has kept a keypad: a sign it has been a bedside. */
         fun isSaved(settings: PorchSettings): Boolean = settings.contains(storageKey)
@@ -219,12 +265,19 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
         fun forget(settings: PorchSettings, photoStore: ContactPhotoStore) {
             settings.remove(storageKey)
             settings.remove(symbolsStorageKey)
+            settings.remove(groupsStorageKey)
             photoStore.prune(keeping = emptySet(), olderThan = Instant.MAX)
         }
 
         fun load(settings: PorchSettings, photoStore: ContactPhotoStore): CallSlots {
             val data = settings.getString(storageKey) ?: return CallSlots()
-            return restoring(decoded(data) + (settings.getString(symbolsStorageKey)?.let(::decoded) ?: emptyList()), photoStore)
+            val result = restoring(decoded(data) + (settings.getString(symbolsStorageKey)?.let(::decoded) ?: emptyList()), photoStore)
+            settings.getString(groupsStorageKey)?.let { groups ->
+                val saved = try { PorchJson.decodeFromString(groupsSerializer, groups) } catch (_: SerializationException) { throw ValidationException(invalidSavedSlots) }
+                // A group Porch won't take, such as one with three people, is a keypad that can't be read.
+                try { result.restoreGroups(saved, photoStore) } catch (_: ValidationException) { throw ValidationException(invalidSavedSlots) }
+            }
+            return result
         }
 
         /** Read a saved setup for a preview without settings writes, photo persistence, or pruning the app's photo store.
@@ -238,7 +291,8 @@ class CallSlots private constructor(private val slots: MutableList<Slot>) {
             if (saved.size != count && saved.size != digitSlots) throw ValidationException(invalidSavedSlots)
             val result = CallSlots()
             for ((digit, slot) in digits.zip(saved)) {
-                if (slot.action != KeypadAction.PERSON && slot.contact != null) throw ValidationException(invalidSavedSlots)
+                // A group is saved beside the slots, never in one.
+                if (slot.action == KeypadAction.GROUP || (slot.action != KeypadAction.PERSON && slot.contact != null)) throw ValidationException(invalidSavedSlots)
                 result.setContact(slot.contact?.let { CallContact.restored(it, photoStore) }, digit)
                 result.setAction(slot.action, digit)
             }

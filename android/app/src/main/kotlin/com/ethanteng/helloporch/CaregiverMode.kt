@@ -535,12 +535,18 @@ fun Avatar(name: String, photo: ByteArray? = null, size: Dp = 52.dp) {
         Image(bitmap, contentDescription = null, Modifier.size(size).clip(CircleShape), contentScale = ContentScale.Crop)
         return
     }
-    val initials = name.split(" ").filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }
     Surface(Modifier.size(size).clip(CircleShape), color = MaterialTheme.colorScheme.primaryContainer) {
         Box(contentAlignment = Alignment.Center) {
-            Text(initials, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(initials(name), fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
+}
+
+/** Up to two initials, from the words that start with a letter: "ED" for "Ethan & David". A name with none of those
+ * starts with whatever it has. */
+internal fun initials(name: String): String {
+    val words = name.split(" ").filter { it.isNotEmpty() }
+    return words.filter { it.first().isLetter() }.ifEmpty { words }.take(2).joinToString("") { it.first().uppercase() }
 }
 
 /** "45 sec", "2 min" or "1 min 30 sec", as iOS shows a wait. */

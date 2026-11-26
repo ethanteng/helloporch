@@ -428,7 +428,7 @@ internal fun PersonPage(app: PorchApplication, admin: CaregiverAdmin, links: Fam
 
 /** Photo, or Change photo once there is one. With a photo that can go, it offers that beside choosing another. */
 @Composable
-private fun PhotoButton(hasPhoto: Boolean, removal: String?, enabled: Boolean, onChoose: () -> Unit, onRemove: () -> Unit) {
+internal fun PhotoButton(hasPhoto: Boolean, removal: String?, enabled: Boolean, onChoose: () -> Unit, onRemove: () -> Unit) {
     Box {
         var open by remember { mutableStateOf(false) }
         OutlinedButton(onClick = { if (removal == null) onChoose() else open = true }, enabled = enabled, contentPadding = PaddingValues(horizontal = 14.dp)) {
