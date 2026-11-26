@@ -91,6 +91,11 @@ class KeypadActionPreview(slots: CallSlots) {
         if (action == KeypadAction.MESSAGES) {
             return result(Result.Kind.PLAY_MESSAGES, "Would open messages", "Message availability is not fetched or changed in this preview.", action)
         }
+        saved.group(digit)?.let { group ->
+            return result(Result.Kind.PERSON, "Would call ${group.name}",
+                "${if (group.mode == NativeCall.Mode.VIDEO) "Video" else "Voice"} group call selected from the saved HelloPorch assignment. No call was placed.",
+                action, group.name, digit)
+        }
         val person = saved.contact(digit)
             ?: return result(Result.Kind.UNASSIGNED, "No action assigned to $symbol", "This key is set to No action in the saved HelloPorch setup.", action, selected = digit)
         return result(Result.Kind.PERSON, "Would call ${person.name}",

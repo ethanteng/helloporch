@@ -1363,7 +1363,7 @@ final class CaregiverInputTests: XCTestCase {
         let screen = KeyActionViewController(admin: home, key: 8, offersSomeone: false); screen.loadViewIfNeeded()
         let choices = rows(in: screen.view).filter { $0.accessibilityIdentifier?.hasPrefix("keypad.action.") == true }
         func chosen() -> [String?] { choices.filter { $0.accessibilityTraits.contains(.selected) }.map(\.accessibilityIdentifier) }
-        XCTAssertEqual(choices.compactMap(\.accessibilityLabel), ["Answer / hang up", "Video on / off", "Play messages", "Nothing"])
+        XCTAssertEqual(choices.compactMap(\.accessibilityLabel), ["Group call", "Answer / hang up", "Video on / off", "Play messages", "Nothing"])
         XCTAssertEqual(Set(choices.compactMap(\.accessibilityIdentifier)), Set(KeypadAction.allCases.filter { $0 != .person }.map { "keypad.action.\($0.rawValue)" }), "Every key action but a person is offered")
         XCTAssertEqual(chosen(), ["keypad.action.messages"])
         choices.first { $0.accessibilityIdentifier == "keypad.action.callControl" }?.sendActions(for: .touchUpInside)
@@ -1602,10 +1602,58 @@ final class CaregiverInputTests: XCTestCase {
         let action = KeyActionViewController(admin: home, key: 4, offersSomeone: true)
         let actions = UINavigationController(rootViewController: people); actions.pushViewController(action, animated: false)
         action.loadViewIfNeeded()
-        XCTAssertEqual(rows(in: action.view).compactMap(\.accessibilityIdentifier), ["keypad.action.person", "keypad.action.callControl", "keypad.action.toggleVideo", "keypad.action.messages", "keypad.action.unassigned"])
+        XCTAssertEqual(rows(in: action.view).compactMap(\.accessibilityIdentifier), ["keypad.action.person", "keypad.action.group", "keypad.action.callControl", "keypad.action.toggleVideo", "keypad.action.messages", "keypad.action.unassigned"])
         rows(in: action.view).first { $0.accessibilityIdentifier == "keypad.action.callControl" }!.sendActions(for: .touchUpInside)
         buttons(in: action.view).first { $0.accessibilityIdentifier == "keypad.action.save" }!.sendActions(for: .touchUpInside)
         XCTAssertEqual(home.slots?.action(for: 4), .callControl, "A control can be saved on any digit without a person's name or phone number")
+    }
+
+    @MainActor func testGroupCallIsAKeyChoiceAndAGroupKeyCanBeChanged() throws {
+        let ethan = "11111111-1111-4111-8111-111111111111", david = "22222222-2222-4222-8222-222222222222"
+        var slots = CallSlots()
+        try slots.setGroup(CallGroup(name: "Kids", memberIDs: [ethan, david], memberNames: ["Ethan", "David"], mode: .video, buttonColorHex: "1565C0"), for: 3)
+        let home = FamilyAdminViewController(slots: slots)
+        let people = PeopleSettingsViewController(admin: home)
+        let navigation = UINavigationController(rootViewController: people); people.loadViewIfNeeded()
+        let key = try XCTUnwrap(descendants(people.view).first { $0.accessibilityIdentifier == "keypad.key.3" } as? UIControl)
+        XCTAssertEqual(key.accessibilityLabel, "Key 3, Kids")
+        XCTAssertEqual(key.accessibilityValue, "Group · Video")
+        key.sendActions(for: .touchUpInside)
+        let page = try XCTUnwrap(navigation.topViewController as? GroupKeyViewController, "A group key opens its own page")
+        page.loadViewIfNeeded(); page.viewWillAppear(false)
+        XCTAssertTrue(descendants(page.view).compactMap { ($0 as? UILabel)?.text }.contains("Key 3"))
+        XCTAssertEqual(descendants(page.view).first { $0.accessibilityIdentifier == "group.preview" }?.accessibilityLabel, "Kids, press 3")
+        XCTAssertEqual((descendants(page.view).first { $0.accessibilityIdentifier == "group.name" } as? UITextField)?.text, "Kids")
+        let row = try XCTUnwrap(rows(in: page.view).first { $0.accessibilityIdentifier == "group.row.people" })
+        XCTAssertTrue(row.accessibilityLabel?.contains("Ethan & David") == true, "\(row.accessibilityLabel ?? "")")
+        let mode = try XCTUnwrap(descendants(page.view).first { $0.accessibilityIdentifier == "group.mode" } as? UISegmentedControl)
+        XCTAssertEqual(mode.selectedSegmentIndex, 0)
+        mode.selectedSegmentIndex = 1; mode.sendActions(for: .valueChanged)
+        XCTAssertNotNil(descendants(page.view).first { $0.accessibilityIdentifier == "group.remove" })
+        let save = try XCTUnwrap(buttons(in: page.view).first { $0.accessibilityIdentifier == "group.save" })
+        XCTAssertEqual(save.configuration?.title, "Save")
+        save.sendActions(for: .touchUpInside)
+        XCTAssertEqual(home.slots?.group(for: 3)?.mode, .voice)
+        XCTAssertEqual(home.slots?.group(for: 3)?.name, "Kids"); XCTAssertEqual(home.slots?.group(for: 3)?.memberIDs, [ethan, david])
+
+        // Any key can become a group. Without two people on Porch, there's no one to choose.
+        let action = KeyActionViewController(admin: home, key: 4, offersSomeone: false)
+        navigation.pushViewController(action, animated: false); action.loadViewIfNeeded()
+        try XCTUnwrap(rows(in: action.view).first { $0.accessibilityIdentifier == "keypad.action.group" }).sendActions(for: .touchUpInside)
+        let choose = try XCTUnwrap(navigation.topViewController as? GroupPeopleViewController)
+        choose.loadViewIfNeeded()
+        XCTAssertEqual(choose.title, "Key 4")
+        if FamilyCoordinator.shared.state == nil {
+            XCTAssertNotNil(descendants(choose.view).first { $0.accessibilityIdentifier == "group.needsPeople" })
+        }
+        // A new group's last step adds it to the key.
+        let draft = GroupKeyDraft(key: 4); draft.memberIDs = [david, ethan]
+        let check = GroupKeyViewController(admin: home, draft: draft)
+        navigation.pushViewController(check, animated: false); check.loadViewIfNeeded(); check.viewWillAppear(false)
+        XCTAssertTrue(descendants(check.view).compactMap { ($0 as? UILabel)?.text }.contains("Check key 4"))
+        XCTAssertNil(descendants(check.view).first { $0.accessibilityIdentifier == "group.row.people" }, "People were just chosen")
+        XCTAssertNil(descendants(check.view).first { $0.accessibilityIdentifier == "group.remove" })
+        XCTAssertEqual(buttons(in: check.view).first { $0.accessibilityIdentifier == "group.save" }?.configuration?.title, "Add to key 4")
     }
 
     // MARK: Add someone

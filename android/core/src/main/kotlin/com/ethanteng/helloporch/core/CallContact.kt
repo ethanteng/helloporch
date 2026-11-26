@@ -45,6 +45,9 @@ class CallContact private constructor(
     /** The caregiver's keypad photo only. A key that takes up a different invitation must not keep the previous person's photo. */
     internal fun preservingCaregiverPhoto(original: CallContact) = copy(photo = original.photo)
 
+    /** The same contact showing `photo`, such as a group key's, without reading its file. */
+    internal fun showing(photo: ContactPhoto?) = copy(photo = photo)
+
     /** The same contact showing its family member's current name and photo, which must be in `photos`. */
     internal fun showingMember(name: String?, photoID: String?, photos: ContactPhotoStore) =
         copy(memberName = name, memberPhoto = photoID?.let { storedPhoto(it, photos) })
@@ -128,7 +131,7 @@ class CallContact private constructor(
             photo = saved.photoID?.let { ContactPhoto(it, photoStore) },
         )
 
-        private fun validatedColor(value: String?): String? {
+        internal fun validatedColor(value: String?): String? {
             if (value == null) return null
             if (!colorPattern.matches(value)) throw ValidationException(ContactError.invalidAppearance)
             return value.uppercase()
@@ -138,7 +141,7 @@ class CallContact private constructor(
 
         private val colorPattern = Regex("^[0-9A-Fa-f]{6}$")
         private val e164Pattern = Regex("^\\+[1-9][0-9]{6,14}$")
-        private val uuidPattern = Regex("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
+        internal val uuidPattern = Regex("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
     }
 }
 
@@ -180,10 +183,19 @@ internal object ContactError {
 }
 
 /** Characters as a person counts them, as Swift counts a String: an emoji made of several code points is one. */
-private fun String.characterCount(): Int {
+internal fun String.characterCount(): Int {
     val characters = BreakIterator.getCharacterInstance()
     characters.setText(this)
     var count = 0
     while (characters.next() != BreakIterator.DONE) count++
     return count
+}
+
+/** The first `count` characters, counted as [characterCount] counts them, so an emoji is never cut in half. */
+internal fun String.takeCharacters(count: Int): String {
+    val characters = BreakIterator.getCharacterInstance()
+    characters.setText(this)
+    var end = 0
+    repeat(count) { val next = characters.next(); if (next == BreakIterator.DONE) return this; end = next }
+    return substring(0, end)
 }

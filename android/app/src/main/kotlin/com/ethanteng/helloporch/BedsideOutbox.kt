@@ -35,18 +35,30 @@ class BedsideOutbox(private val app: PorchApplication) {
         send()
     }
 
-    /** Keeps `recording` for `memberID` and sends it. Throws when it can't be kept. */
-    fun add(recording: MessageRecording, memberID: String) {
+    /** Keeps `recording` for each of `memberIDs`, such as both people on a group key, and sends it. A message has one
+     * recipient, so each gets a copy of their own, which goes once it's sent. Throws when it can't be kept. */
+    fun add(recording: MessageRecording, memberIDs: List<String>) {
         start()
         folder.mkdirs()
-        val id = UUID.randomUUID().toString()
-        val name = "$id.${recording.file.extension}"
-        val kept = File(folder, name)
-        if (!recording.file.renameTo(kept)) {
-            recording.file.copyTo(kept, overwrite = true)
-            recording.file.delete()
+        val added = mutableListOf<OutboxItem>()
+        try {
+            memberIDs.forEachIndexed { index, memberID ->
+                val id = UUID.randomUUID().toString()
+                val name = "$id.${recording.file.extension}"
+                val kept = File(folder, name)
+                if (index < memberIDs.lastIndex) recording.file.copyTo(kept, overwrite = true)
+                else if (!recording.file.renameTo(kept)) {
+                    recording.file.copyTo(kept, overwrite = true)
+                    recording.file.delete()
+                }
+                added += OutboxItem(id, name, memberID, recording.mode, recording.contentType, recording.durationSeconds, now())
+            }
+        } catch (e: Exception) {
+            // None of it is kept, so no copy is left in the folder without its message.
+            added.forEach { file(it).delete() }
+            throw e
         }
-        items += OutboxItem(id, name, memberID, recording.mode, recording.contentType, recording.durationSeconds, now())
+        items += added
         save()
         send()
     }

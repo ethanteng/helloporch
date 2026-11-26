@@ -37,6 +37,8 @@ public struct CallContact: Codable, Equatable {
     func preservingPhoto(from original: Self) -> Self {
         var result = self; result.photo = original.photo; result.memberPhoto = original.memberPhoto; return result
     }
+    /// The same contact showing `photo`, such as a group key's, without reading its file.
+    func showing(photo: ContactPhoto?) -> Self { var result = self; result.photo = photo; return result }
     /// The caregiver's keypad photo only. A key that takes up a different invitation must not keep the previous person's photo.
     func preservingCaregiverPhoto(from original: Self) -> Self {
         var result = self; result.photo = original.photo; return result

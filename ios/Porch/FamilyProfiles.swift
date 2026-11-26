@@ -266,3 +266,44 @@ final class FamilyProfileViewController: CaregiverFormViewController {
         }
     }
 }
+
+/// Group keys show their people's photos, which only the family app keeps (the keypad preview has none).
+extension RecipientAppearance {
+    /// A group key without a photo of its own shows its people's photos side by side, each half filled, and the initial
+    /// of anyone without one. Nil when neither has a photo, so the key reads like a person without one.
+    @MainActor static func groupPhoto(_ group: CallGroup) -> Data? {
+        let photos = group.memberIDs.map { FamilyPhotos.shared.photo(forMember: $0).flatMap(UIImage.init(data:)) }
+        guard photos.contains(where: { $0 != nil }) else { return nil }
+        let side: CGFloat = 480
+        let format = UIGraphicsImageRendererFormat.default(); format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { context in
+            let width = side / CGFloat(photos.count)
+            for (index, photo) in photos.enumerated() {
+                let frame = CGRect(x: CGFloat(index) * width, y: 0, width: width, height: side)
+                context.cgContext.saveGState()
+                UIBezierPath(rect: frame).addClip()
+                if let photo {
+                    let scale = max(frame.width / photo.size.width, frame.height / photo.size.height)
+                    let scaled = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
+                    photo.draw(in: CGRect(x: frame.midX - scaled.width / 2, y: frame.midY - scaled.height / 2, width: scaled.width, height: scaled.height))
+                } else {
+                    PorchStyle.nightSurface.setFill(); UIRectFill(frame)
+                    let initial = (group.memberNames[index].first.map { String($0).uppercased() } ?? "") as NSString
+                    let attributes: [NSAttributedString.Key: Any] = [.font: PorchStyle.systemFont(side * 0.3, weight: .semibold), .foregroundColor: UIColor.white]
+                    let size = initial.size(withAttributes: attributes)
+                    initial.draw(at: CGPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2), withAttributes: attributes)
+                }
+                context.cgContext.restoreGState()
+            }
+            // A thin line between the two halves.
+            UIColor.white.withAlphaComponent(0.85).setFill()
+            for index in 1..<photos.count { UIRectFill(CGRect(x: CGFloat(index) * width - 2, y: 0, width: 4, height: side)) }
+        }
+        return image.jpegData(compressionQuality: 0.85)
+    }
+    /// A group key as the bedside shows and calls it: its name, color, and its photo or its people's.
+    @MainActor static func groupContact(_ group: CallGroup) -> CallContact {
+        guard group.photoData == nil, let photo = groupPhoto(group) else { return group.callContact }
+        return (try? group.callContact.updating(photoData: .some(photo))) ?? group.callContact
+    }
+}

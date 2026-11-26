@@ -662,6 +662,15 @@ final class CallViewController: UIViewController {
             displayStatus(BedsideText.string(action == .callControl ? "Use this key to answer or end a call." : "Use this key to turn your camera off or on during a video call."), temporary: true)
             return
         }
+        if let group = slots.group(for: slot) {
+            // Only people still on Porch are rung. Until the first check-in, the server decides.
+            let people = FamilyCoordinator.shared.state.map { state in group.memberIDs.filter { id in state.people.contains { $0.id == id } } } ?? group.memberIDs
+            guard !people.isEmpty else {
+                showError("Finish Porch setup", message: "Open caregiver mode and choose people on Porch for this key."); return
+            }
+            startFamilyCall(RecipientAppearance.groupContact(group), memberID: nil, mode: group.mode, group: people)
+            return
+        }
         // A key with no action has no one to call either.
         guard let contact = slots.contact(for: slot) else {
             displayStatus(BedsideText.string("No one is assigned to %@.\nPlease choose another number.", CallSlots.symbol(for: slot)), temporary: true)
@@ -688,7 +697,8 @@ final class CallViewController: UIViewController {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    private func startFamilyCall(_ contact: CallContact, memberID: String?, mode: NativeCall.Mode) {
+    /// `group`: the people a group key rings at once, who all get the message if no one answers.
+    private func startFamilyCall(_ contact: CallContact, memberID: String?, mode: NativeCall.Mode, group: [String]? = nil) {
         guard PorchDevice.credential(for: .bedside) != nil, !opening else {
             showError("Porch isn't ready", message: "Check People and Drop-in in caregiver mode, then try again."); return
         }
@@ -703,7 +713,9 @@ final class CallViewController: UIViewController {
             guard let self else { return }
             defer { self.opening = false; self.announcement = nil; self.refreshCallButton(); self.refreshPresence() }
             do {
-                let session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds())
+                let session: FamilyCallSession
+                if let group { session = try await FamilyCoordinator.shared.startGroupCall(memberIDs: group, name: contact.name, mode: mode) }
+                else { session = try await FamilyCoordinator.shared.startCall(targetID: memberID, name: contact.name, mode: mode, dropIn: false, waitSeconds: contact.phoneNumber == nil ? 45 : CallPreferences.fallbackSeconds()) }
                 if self.cancelOpening {
                     await session.end()
                     Cell2JackKeypad.shared.record(["kind": "pendingCallCancelled"])
@@ -712,7 +724,7 @@ final class CallViewController: UIViewController {
                 Cell2JackKeypad.shared.record(["kind": "callSessionCreated"])
                 guard self.presentedViewController == nil, UIApplication.shared.applicationState == .active else { announcement.stop(); await session.end(); return }
                 let screen = try NativeCallViewController.paired(session, contact: contact)
-                if let memberID { screen.onUnanswered = { [weak self] in self?.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unanswered) } }
+                if let recipients = group ?? memberID.map({ [$0] }) { screen.onUnanswered = { [weak self] in self?.leaveMessage(for: contact, memberIDs: recipients, mode: mode, reason: .unanswered) } }
                 screen.announcement = announcement
                 self.present(screen, animated: true)
             } catch {
@@ -721,10 +733,11 @@ final class CallViewController: UIViewController {
                 // They're on Do Not Disturb on their phone: never their regular phone either. A message, as when their
                 // Porch can't ring, or else just that they aren't available.
                 if (error as? FamilyServiceError)?.code == "doNotDisturb" {
-                    if let memberID, CallPreferences.leaveMessageWhenUnanswered() {
+                    // A group key's message goes to both, and "didn't answer" reads right for two people.
+                    if let recipients = group ?? memberID.map({ [$0] }), CallPreferences.leaveMessageWhenUnanswered() {
                         await announcement.finished()
                         if self.cancelOpening { return }
-                        self.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unavailable)
+                        self.leaveMessage(for: contact, memberIDs: recipients, mode: mode, reason: group == nil ? .unavailable : .unanswered)
                     } else { announcement.stop(); self.displayStatus(BedsideText.string("%@ isn't available right now.", contact.name), temporary: true) }
                 // A lost response may still have created a Porch call. Only a
                 // confirmed offline result permits an unpaired phone handoff.
@@ -734,22 +747,23 @@ final class CallViewController: UIViewController {
                         screen.announcement = announcement
                         self.present(screen, animated: true)
                     } catch { announcement.stop(); self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
-                } else if let memberID, (error as? FamilyServiceError)?.code == "offline", CallPreferences.leaveMessageWhenUnanswered() {
+                } else if let recipients = group ?? memberID.map({ [$0] }), (error as? FamilyServiceError)?.code == "offline", CallPreferences.leaveMessageWhenUnanswered() {
                     // Their Porch app can't ring and there's no phone to try: leave a message, as for a missed call.
                     // The message screen says they aren't available, so it waits for who was called to be said.
+                    // A group's "didn't answer" reads right for two people.
                     await announcement.finished()
                     if self.cancelOpening { return }
-                    self.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unavailable)
+                    self.leaveMessage(for: contact, memberIDs: recipients, mode: mode, reason: group == nil ? .unavailable : .unanswered)
                 } else { announcement.stop(); self.showError(BedsideText.string("Couldn't call %@", contact.name), message: error.localizedDescription) }
             }
         }
     }
 
     /// A Porch call that wasn't answered, and didn't ring through to a regular phone, records a message.
-    private func leaveMessage(for contact: CallContact, memberID: String, mode: NativeCall.Mode, reason: BedsideVoicemailViewController.Reason) {
+    private func leaveMessage(for contact: CallContact, memberIDs: [String], mode: NativeCall.Mode, reason: BedsideVoicemailViewController.Reason) {
         guard !presenceSuppressed, CallPreferences.leaveMessageWhenUnanswered(), presentedViewController == nil,
               view.window?.windowScene?.activationState == .foregroundActive else { return }
-        let screen = BedsideVoicemailViewController(contact: contact, memberID: memberID, mode: mode, reason: reason)
+        let screen = BedsideVoicemailViewController(contact: contact, memberIDs: memberIDs, mode: mode, reason: reason)
         screen.onFinish = { [weak self] in self?.resume() }
         present(screen, animated: true)
     }
@@ -865,7 +879,7 @@ final class PeoplePickerViewController: UIViewController {
         let nameSize = max(54, min(88, cardWidth * 0.18))
         let numberSize = max(36, min(48, cardWidth * 0.10))
         grid.arrangedSubviews.forEach { grid.removeArrangedSubview($0); $0.removeFromSuperview() }
-        let people = CallSlots.digits.compactMap { index in slots.contact(for: index).map { (index, $0) } }
+        let people = CallSlots.digits.compactMap { index in (slots.contact(for: index) ?? slots.group(for: index).map(RecipientAppearance.groupContact)).map { (index, $0) } }
         if people.isEmpty {
             grid.addArrangedSubview(PorchStyle.systemLabel(BedsideText.string("Your caregiver can add people using the settings icon on the clock screen."), size: 24, color: PorchStyle.nightText))
         }
@@ -907,7 +921,7 @@ final class PeoplePickerViewController: UIViewController {
         }
     }
     private func choose(_ number: Int) {
-        guard !choosing, slots.contact(for: number) != nil else { return }
+        guard !choosing, slots.contact(for: number) != nil || slots.group(for: number) != nil else { return }
         choosing = true; view.isUserInteractionEnabled = false; onCall?(number)
     }
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {

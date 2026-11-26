@@ -5,7 +5,7 @@ import { familyStore, type FamilyStore } from "./store.ts";
 import { activationKey, createActivation, markInvitationSetUp, rememberHousehold, type Activation } from "./activations.ts";
 import { checkCaregiverCode, configureCaregiverPIN, initializeCaregiverPIN, caregiverPINKey, CaregiverAuthError } from "./caregiver.ts";
 
-import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideDevice, bedsideLanguage, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, everyCallOn, expire, FamilyError, isBedsideLanguage, isCaregiver, mayDropIn, mutate, noCallLimit, noteAttendance, phoneDropIn, publicEveryCall, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
+import { activePhoneGuest, activePorchGuest, attendanceShared, bedsideDevice, bedsideLanguage, callIDFor, callKind, callRoom, carriesOn, deliveryUnavailable, finishCall, leaveCall, phoneGuestIdentity, presentMembers, type PorchGuest, config, displayName, displayPhoto, dropInAllowed, everyCallOn, expire, FamilyError, isBedsideLanguage, isCaregiver, mayDropIn, mutate, noCallLimit, noteAttendance, phoneDropIn, publicEveryCall, requireValue, ringLimits, ringSeconds, takesAvailability, type Auth, type Call, type Household, type Invite, type Member, type Permissions } from "./household.ts";
 import { callHistory, callLogEntry, recordCallAfter } from "./call-log.ts";
 import { cleanupInboundCall, reconcileInboundCall, type InboundDependencies } from "./inbound.ts";
 import { blobMediaStore, type MediaStore } from "./media.ts";
@@ -13,6 +13,7 @@ import { discardMedia, handleMessageAction, heldCount, maintainMessages, message
 import { handleNumberAction, numberActions, porchNumberDue, publicPhoneSetup, retryPorchNumber, type NumberServices, type NumberSettings } from "./numbers.ts";
 import { canAddPhoneGuests, endPhoneGuests, handlePhoneGuestAction, inRoom, needsReaping, phoneGuestActions, phoneGuestServices, publicPhoneGuest, reapEndedPhoneGuests, type PhoneGuestServices } from "./phone-guests.ts";
 import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest } from "./porch-guests.ts";
+import { groupGuests, groupMembers, groupName, promoteGroupGuest, ringingGroupGuest } from "./group-calls.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
 import { callTitle, noticeEveryCall } from "./notices.ts";
@@ -83,7 +84,8 @@ const caregiverActions = ["createInvite", "setPermissions", "setDropIn", "setDro
 function publicCall(call: Call, me: Member, house: Household) {
   // `peerName` is for call history, and can be an approved number's name, which only caregivers see.
   // `everyCall` is the server's own note of how a phone call came in; caregivers see it as `bedsideCall`.
-  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, peerName: _peerName, everyCall: _everyCall, ...result } = call;
+  // `toCallID` is only the person called's own ID for the call, which their view of it uses (see snapshot).
+  const { phone: _phone, guests: _guests, porchGuests: _porchGuests, left, peerName: _peerName, everyCall: _everyCall, toCallID: _toCallID, ...result } = call;
   const phoneGuest = publicPhoneGuest(call, me), porchGuest = publicPorchGuest(house, call);
   const bedside = house.members.find(m => m.role === "bedside" && [call.from, call.to].includes(m.id));
   return { ...result, ...(phoneGuest ? { phoneGuest } : {}), ...(porchGuest ? { porchGuest } : {}),
@@ -171,7 +173,7 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
     // A family member rung into the call sees an incoming call of their own. Someone who left a call that went on
     // can't rejoin it; the household stays busy until it ends.
     call: call && invited ? guestCall(house, call, invited)
-      : call && [call.from, call.to].includes(me.id) && call.left?.[me.id] === undefined ? { ...publicCall(call, me, house), source: call.phone ? "phone" : "porch", callerName: callerName(call),
+      : call && [call.from, call.to].includes(me.id) && call.left?.[me.id] === undefined ? { ...publicCall(call, me, house), id: callIDFor(call, me.id), source: call.phone ? "phone" : "porch", callerName: callerName(call),
       ...(call.phone?.callerNumber ? { callerNumber: call.phone.callerNumber } : {}) } : null,
     busy: !!call && call.state !== "ended", serverTime: now };
 }
@@ -460,7 +462,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       const call = house?.call;
       if (house && call?.state === "accepted" && !call.phone) {
         const me = memberFor(house, auth);
-        const leaving = (call.id === input.callID && [call.from, call.to].includes(me.id)) ||
+        const leaving = ([call.from, call.to].includes(me.id) && callIDFor(call, me.id) === input.callID) ||
           call.porchGuests?.some(g => g.id === input.callID && g.memberID === me.id && g.state === "joined");
         const remaining = presentMembers(call).filter(id => id !== me.id);
         if (leaving && presentMembers(call).includes(me.id) && carriesOn(call, remaining)) {
@@ -619,7 +621,7 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const call = house.call;
         // Receipt is scoped to the authenticated recipient and exact pending
         // ordinary call; it never grants foreground readiness or drop-in consent.
-        if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === call.id) call.receivedAt ??= now;
+        if (call?.to === me.id && call.kind === "call" && call.state === "pending" && input.receivedCallID === callIDFor(call, me.id)) call.receivedAt ??= now;
         const ringing = call?.porchGuests?.find(g => g.id === input.receivedCallID && g.memberID === me.id && g.state === "ringing");
         if (ringing) ringing.receivedAt ??= now;
         if (me.available && house.call?.to === me.id && house.call.state === "pending" && !house.call.announcedAt) house.call.announcedAt = now;
@@ -698,12 +700,21 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
           throw new FamilyError("This person hasn't paired a Porch app yet.", 409, "offline");
         }
-        const target = house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
+        // A bedside key can ring two people at once (group-calls.ts): the first who can ring is the person called. The
+        // bedside never rings someone on Do Not Disturb, so a group rings the other one.
+        const group = input.targetIDs !== undefined ? groupMembers(house, me, input.targetIDs, input.kind) : undefined;
+        const quiet = (m: Member) => me.role === "bedside" && inDoNotDisturb(m, now);
+        const ringable = (m: Member) => !quiet(m) && (online(m, now) || (input.kind === "call" && pushable(m.voip)));
+        const target = group ? group.find(ringable) ?? group.find(m => !quiet(m)) ?? group[0] : house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
-        // Before whether their app can ring: the bedside offers a message for this, and never tries their regular phone.
-        if (me.role === "bedside" && inDoNotDisturb(target, now)) throw new FamilyError(`${displayName(target)} isn't taking calls right now.`, 409, doNotDisturbCode);
-        if (!online(target, now) && !(input.kind === "call" && pushable(target.voip))) throw new FamilyError("Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        if (!ringable(target)) {
+          // Do Not Disturb comes before whether an app can ring: the bedside offers a message for it, and never tries a
+          // regular phone. A group with someone on it and no one else who can ring says so too.
+          const resting = group ? group.filter(quiet) : quiet(target) ? [target] : [];
+          if (resting.length) throw new FamilyError(`${resting.map(displayName).join(" and ")} ${resting.length > 1 ? "aren't" : "isn't"} taking calls right now.`, 409, doNotDisturbCode);
+          throw new FamilyError(group && group.length > 1 ? "Their Porch apps are not ready." : "Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        }
         if (input.kind === "dropIn") requireValue(target.role === "bedside" && mayDropIn(house, me, input.mode), "You are not approved for this type of drop-in.", 403);
         const kind = callKind(house, me, target, input.mode, input.kind, online(target, now));
         // Family phones call only the bedside, which rings for the caregiver's chosen time.
@@ -711,8 +722,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(typeof wait === "number" && Number.isInteger(wait) && wait >= 5 && wait <= 120, "Choose a waiting time from 5 to 120 seconds.");
         me.seenAt = now;
         replaced = house.call;
+        // The rest of a group rings with it, those who can, for as long as the person called does.
+        const others = group?.filter(m => m.id !== target.id && ringable(m)) ?? [];
         house.call = { id: randomUUID(), from: me.id, to: target.id, mode: input.mode, kind, state: "pending", createdAt: now, expiresAt: now + wait + 30,
-          peerName: displayName(me.role === "bedside" ? target : me) };
+          ...(others.length ? { porchGuests: groupGuests(me, others, now, now + wait + 30) } : {}),
+          peerName: group ? groupName(input.groupName, group) : displayName(me.role === "bedside" ? target : me) };
         return undefined;
       }
       if (action === "acceptCall" || action === "endCall" || action === "joinCall" || action === "fallback") {
@@ -729,6 +743,16 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
             }
             return undefined;
           }
+          // Answering a group call before anyone else makes them the person called (group-calls.ts).
+          if (invite.group && call.state === "pending") {
+            requireValue(action === "acceptCall", "Answer this call before joining.", 403);
+            requireValue(input.available === true, "Open Porch to answer this call.", 409);
+            requireValue(invite.state === "ringing" && invite.ringUntil > now && call.expiresAt > now, "This call ended or expired.", 410);
+            promoteGroupGuest(call, invite, now, "ringing");
+            call.state = "accepted"; call.acceptedAt = now; call.expiresAt = noCallLimit;
+            me.available = false; me.seenAt = now;
+            return undefined;
+          }
           requireValue(call.state === "accepted" && call.left?.[me.id] === undefined, "This call ended or expired.", 410);
           if (action === "acceptCall") {
             requireValue(input.available === true, "Open Porch to answer this call.", 409);
@@ -738,16 +762,21 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           } else { requireValue(invite.state === "joined", "Answer this call before joining.", 403); me.seenAt = now; }
           return undefined;
         }
-        requireValue(call && call.id === input.callID && [call.from, call.to].includes(me.id), "This call is no longer available.", 404);
+        requireValue(call && [call.from, call.to].includes(me.id) && callIDFor(call, me.id) === input.callID, "This call is no longer available.", 404);
         if (action === "fallback") {
           requireValue(me.role === "bedside" && call.from === me.id && call.kind === "call", "Phone fallback is only available to the bedside caller.", 403);
+          // A group key has no phone to try, and trying one would hang up the other person still ringing.
+          requireValue(!call.porchGuests?.some(g => g.group), "A group call has no phone to try.", 409);
           if (call.state === "accepted") throw new FamilyError("They answered on Porch. Phone fallback was cancelled.", 409, "answered");
           requireValue(call.state === "pending", "This call already ended.", 410);
           finishCall(call, "Trying their regular phone.", now); cleanupRoom = callRoom(call);
         } else if (action === "endCall") {
           if (call.left?.[me.id] !== undefined) return undefined; // Already off a call that went on.
           if (mayLeave && call.state === "accepted" && carriesOn(call, presentMembers(call).filter(id => id !== me.id))) leaveCall(call, me.id, now);
-          else {
+          else if (call.state === "pending" && call.to === me.id && ringingGroupGuest(call)) {
+            // Declining a group call leaves it ringing the other person, who becomes the person called.
+            promoteGroupGuest(call, ringingGroupGuest(call)!, now, "declined");
+          } else {
             // Someone tapping Decline while it is still ringing. The bedside sends this same
             // request when the ring runs out, iOS stops it, or it fails first, and marks that
             // `unanswered`, so call history can show a missed call instead of a decline.
@@ -798,33 +827,50 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     if (entry) await recordCallAfter(store, house.id, entry, now, dependencies.afterResponse);
     if (action === "startCall" && house.call?.kind === "call") {
       const call = house.call;
-      const target = house.members.find(m => m.id === call.to)!;
-      const registration = target.voip;
-      if (pushable(registration)) {
+      // The person called, and on a group call the other person too, ringing at once (group-calls.ts).
+      const rings = [{ id: call.id, memberID: call.to, expiresAt: call.expiresAt },
+        ...(call.porchGuests ?? []).filter(g => g.group).map(g => ({ id: g.id, memberID: g.memberID, expiresAt: g.ringUntil }))];
+      const failed = (await Promise.all(rings.map(async ring => {
+        const registration = house.members.find(m => m.id === ring.memberID)?.voip;
+        if (!pushable(registration)) return undefined;
         // Outside the CAS mutation: concurrent callers/retries cannot send pushes
         // for a call that never won the household reservation.
         let delivery: PushResult;
         try { delivery = await (dependencies.sendPush ?? sendVoIPPush)(registration, {
-          callID: call.id, recipientID: target.id, callerName: displayName(me), mode: call.mode, expiresAt: call.expiresAt,
+          callID: ring.id, recipientID: ring.memberID, callerName: displayName(me), mode: call.mode, expiresAt: ring.expiresAt,
         }); } catch { delivery = { delivered: false }; }
-        if (!delivery.delivered) {
-          const updated = await mutate(store, house.id, current => {
-            const recipient = current.members.find(m => m.id === target.id);
+        return delivery.delivered ? undefined : { ring, registration, delivery };
+      }))).filter((f): f is NonNullable<typeof f> => !!f);
+      if (failed.length) {
+        const updated = await mutate(store, house.id, current => {
+          const active = current.call;
+          // Each phone that couldn't be reached first forgets a token APNs refused. A call-specific recipient receipt
+          // or answer outweighs a missing APNs acknowledgment, even while the recipient is backgrounded.
+          const unreached = failed.filter(({ ring, registration, delivery }) => {
+            const recipient = current.members.find(m => m.id === ring.memberID);
             if (delivery.invalidToken && recipient) forgetRegistration(recipient, registration);
-            const active = current.call;
-            // A call-specific recipient receipt or answer outweighs a missing
-            // APNs acknowledgment, even while the recipient is backgrounded.
-            if (recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending" && active.receivedAt === undefined) {
-              finishCall(active, deliveryUnavailable, now);
-              return true;
-            }
-            return false;
-          });
-          Object.assign(house, updated.house);
-          if (updated.result) {
-            try { await endRoom(callRoom(call), dependencies); } catch { /* no recipient joined */ }
-            throw new FamilyError("Couldn't reach their Porch app. Try their phone.", 409, "offline");
+            // An answer can land while these pushes are still going out. A group guest whose phone never got the
+            // call still has to stop ringing; ending or swapping the call only applies while nobody has answered.
+            return recipient && !online(recipient, now) && active?.id === call.id && (active.state === "pending" || active.state === "accepted");
+          }).map(f => f.ring);
+          if (!active || active.id !== call.id) return false;
+          for (const ring of unreached) {
+            const guest = active.porchGuests?.find(g => g.id === ring.id && g.memberID === ring.memberID && g.state === "ringing" && g.receivedAt === undefined);
+            if (guest) { guest.state = "missed"; guest.endedAt = now; }
           }
+          if (active.state !== "pending") return false;
+          const called = unreached.find(ring => ring.memberID === active.to && ring.id === callIDFor(active, active.to));
+          if (!called || active.receivedAt !== undefined) return false;
+          // A group call goes on ringing the other person, who becomes the person called.
+          const other = ringingGroupGuest(active);
+          if (other) { promoteGroupGuest(active, other, now, "missed"); return false; }
+          finishCall(active, deliveryUnavailable, now);
+          return true;
+        });
+        Object.assign(house, updated.house);
+        if (updated.result) {
+          try { await endRoom(callRoom(call), dependencies); } catch { /* no recipient joined */ }
+          throw new FamilyError(rings.length > 1 ? "Couldn't reach their Porch apps." : "Couldn't reach their Porch app. Try their phone.", 409, "offline");
         }
       }
     }

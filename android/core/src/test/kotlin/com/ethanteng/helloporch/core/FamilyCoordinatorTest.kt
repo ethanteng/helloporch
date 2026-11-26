@@ -337,6 +337,21 @@ class FamilyCoordinatorTest {
         assertEquals(60, tablet.coordinator.startCall("family-1", "Ethan", NativeCall.Mode.VIDEO, dropIn = true, waitSeconds = 60).waitSeconds)
     }
 
+    /** A group key rings its people at once, in the key's order, with the key's name for call history. */
+    @Test fun aGroupKeyAsksForEveryoneOnIt() = runTest {
+        val tablet = FamilyHarness(this, canBeBedside = true)
+        tablet.device.save(TestFamilies.bedside(1))
+        tablet.transport.reply = {
+            if (it.action == "poll") awaitCancellation()
+            else ok(mapOf("state" to snapshot(it.deviceID!!, role = "bedside", call = call(state = "pending", from = it.deviceID!!, to = "family-2"))))
+        }
+        tablet.coordinator.start()
+        val session = tablet.coordinator.startGroupCall(listOf("family-2", "family-1"), "Kids", NativeCall.Mode.VOICE)
+        assertEquals(ModelFixtures.json(mapOf("action" to "startCall", "mode" to "voice", "kind" to "call", "waitSeconds" to 45,
+            "targetIDs" to listOf("family-2", "family-1"), "groupName" to "Kids")), tablet.transport.requests("startCall").single().body)
+        assertEquals("Kids", session.peerName); assertEquals(45, session.waitSeconds); assertEquals("family-2", session.peerID)
+    }
+
     /** A newer call replaced this one, and the server has already released it. */
     @Test fun endingACallThatsGoneCountsAsEnded() = runTest {
         val transport = FakeTransport { failure(404, "No such call.") }

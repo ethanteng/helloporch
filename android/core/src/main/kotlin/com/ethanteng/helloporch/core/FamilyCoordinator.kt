@@ -238,10 +238,23 @@ class FamilyCoordinator(
         waitSeconds: Int = 45,
         family: FamilyCredential? = null,
     ): FamilyCallSession {
+        val target = if (targetID != null) mapOf("targetID" to JsonPrimitive(targetID)) else mapOf("unlinked" to JsonPrimitive(true))
+        return start(target, name, mode, if (dropIn) "dropIn" else "call", waitSeconds, family)
+    }
+
+    /**
+     * A bedside key that rings two family members at once (lib/family/group-calls.ts): `memberIDs` in the key's order,
+     * and the key's `name`, which call history and the call screen show. The first who can ring is the person called,
+     * and the other rings beside them. When neither can, the server answers "offline".
+     */
+    suspend fun startGroupCall(memberIDs: List<String>, name: String, mode: NativeCall.Mode, waitSeconds: Int = 45): FamilyCallSession =
+        start(mapOf("targetIDs" to JsonArray(memberIDs.map(::JsonPrimitive)), "groupName" to JsonPrimitive(name)), name, mode, "call", waitSeconds, null)
+
+    private suspend fun start(target: Map<String, JsonElement>, name: String, mode: NativeCall.Mode, kind: String, waitSeconds: Int,
+        family: FamilyCredential?): FamilyCallSession {
         val credential = family ?: credential ?: throw FamilyServiceException("Pair this device first.", 401)
-        val values = mutableMapOf("mode" to PorchJson.encodeToJsonElement(NativeCall.Mode.serializer(), mode),
-            "kind" to JsonPrimitive(if (dropIn) "dropIn" else "call"), "waitSeconds" to JsonPrimitive(waitSeconds))
-        if (targetID != null) values["targetID"] = JsonPrimitive(targetID) else values["unlinked"] = JsonPrimitive(true)
+        val values = mapOf("mode" to PorchJson.encodeToJsonElement(NativeCall.Mode.serializer(), mode),
+            "kind" to JsonPrimitive(kind), "waitSeconds" to JsonPrimitive(waitSeconds)) + target
         val service = serviceFor(credential)
         val result = service.send("startCall", values)
         update(result)

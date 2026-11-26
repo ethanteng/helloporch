@@ -64,7 +64,8 @@ import kotlinx.coroutines.launch
  */
 class BedsideVoicemail(
     private val app: PorchApplication,
-    private val memberID: String,
+    /** Who it's for: one family member, or each of a group key's people, who get a copy each. */
+    private val memberIDs: List<String>,
     val name: String,
     val photo: ByteArray?,
     video: Boolean,
@@ -224,7 +225,7 @@ class BedsideVoicemail(
         timer?.cancel()
         if (recording == null) { complete(text("No message was recorded.")); return }
         try {
-            app.outbox.add(recording, memberID)
+            app.outbox.add(recording, memberIDs)
             complete(sentConfirmation(app, name), speak = true)
         } catch (_: Exception) {
             recording.file.delete()

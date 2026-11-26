@@ -35,15 +35,19 @@ import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.FamilyLinks
 
 /**
- * Who the bedside can call, as iOS's people picker shows the keypad: a card for each person on a key, with the key to
- * press. Pressing the key here calls them too. A caregiver puts people on keys in caregiver mode's People page.
+ * Who the bedside can call, as iOS's people picker shows the keypad: a card for each person or group on a key, with the
+ * key to press. Pressing the key here calls them too. A caregiver puts people on keys in caregiver mode's People page.
  */
 @Composable
 fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     // A photo that just downloaded shows at once, not at the next check-in.
     val slots = remember(links, FamilyPhotos.saved) { try { CallSlots.load(app.settings, app.photos) } catch (_: Exception) { CallSlots() } }
-    val keyed = remember(slots) { CallSlots.digits.mapNotNull { digit -> slots.contact(digit)?.let { digit to it } } }
+    // A group key shows as a person's does: its name, color, and its photo or its people's.
+    val people = links.state?.people
+    val keyed = remember(slots, people, FamilyPhotos.saved) {
+        CallSlots.digits.mapNotNull { digit -> (slots.contact(digit) ?: slots.group(digit)?.let { GroupAppearance.contact(app, it, people) })?.let { digit to it } }
+    }
     // One choice. A second tap would otherwise start another call and report that caregiver mode isn't set up.
     var chosen by remember { mutableStateOf(false) }
     fun place(call: () -> Unit) {
@@ -53,7 +57,7 @@ fun BedsidePeople(app: PorchApplication, links: FamilyLinks, onClose: () -> Unit
         call()
     }
     // A key with nobody on it stays here. Closing first would leave the clock, which is where that notice is shown.
-    CallKeys(app, onDigit = { digit -> if (slots.contact(digit) != null) place { app.calls.bedsideKey(digit) } },
+    CallKeys(app, onDigit = { digit -> if (keyed.any { it.first == digit }) place { app.calls.bedsideKey(digit) } },
         onHangUp = { "hang-up ignored on people" })
     fun text(english: String, vararg arguments: Any?) = BedsideText.string(app, english, *arguments)
     // The sizes the iOS people picker uses, which the bedside is built around: large enough to read from the bed.

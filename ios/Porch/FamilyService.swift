@@ -504,4 +504,13 @@ struct FamilyCallSession {
         let wait = credential.role != .family ? waitSeconds : call.kind == "dropIn" ? CallPreferences.dropInWaitSeconds : result.state?.ringSeconds ?? CallPreferences.defaultVoicemailSeconds
         return FamilyCallSession(credential: credential, call: call, peerName: name, waitSeconds: wait)
     }
+    /// The bedside calls a group key's people at once (the server's group-calls.ts): the first who can ring is called, the
+    /// other rings too, and whoever answers first is on the call. `name` is the key's, for call history.
+    func startGroupCall(memberIDs: [String], name: String, mode: NativeCall.Mode, waitSeconds: Int = 45) async throws -> FamilyCallSession {
+        guard let credential else { throw FamilyServiceError(message: "Pair this device first.", status: 401) }
+        let result = try await FamilyService(credential).send("startCall", ["targetIDs": memberIDs, "groupName": name, "mode": mode.rawValue, "kind": "call", "waitSeconds": waitSeconds])
+        update(result)
+        guard let call = result.state?.call else { throw FamilyServiceError(message: "Couldn't start the call.", status: 503) }
+        return FamilyCallSession(credential: credential, call: call, peerName: name, waitSeconds: waitSeconds)
+    }
 }

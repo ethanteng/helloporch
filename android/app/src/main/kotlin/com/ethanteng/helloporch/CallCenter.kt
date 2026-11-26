@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.ethanteng.helloporch.core.CallContact
+import com.ethanteng.helloporch.core.CallGroup
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
 import com.ethanteng.helloporch.core.CallTrigger
@@ -236,6 +237,7 @@ class CallCenter(private val app: PorchApplication) {
                 else "Use this key to turn your camera off or on during a video call."))
             return
         }
+        slots.group(digit)?.let { call(it); return }
         val contact = slots.contact(digit) ?: run {
             note(text("No one is assigned to %@.\nPlease choose another number.", CallSlots.symbol(digit)))
             return
@@ -246,7 +248,22 @@ class CallCenter(private val app: PorchApplication) {
     private fun call(contact: CallContact) =
         startBedsideCall(contact.familyMemberID, contact.name, contact.nativeCall.mode, contact.photoData, contact)
 
-    private fun startBedsideCall(memberID: String?, name: String, mode: NativeCall.Mode, photo: ByteArray?, contact: CallContact?) {
+    /** A group key rings its people still on Porch at once, in the key's order, as iOS's does. Until the first check-in,
+     * the server decides who that is. It has no phone to fall back to, so with none of them left it needs a caregiver. */
+    private fun call(group: CallGroup) {
+        val people = app.coordinator.links.value.state?.people
+        val members = group.memberIDs.filter { id -> people == null || people.any { it.id == id } }
+        if (members.isEmpty()) {
+            error = text("Finish Porch setup") + "\n\n" + BedsideText.error(app, "Open caregiver mode and choose people on Porch for this key.")
+            return
+        }
+        val contact = GroupAppearance.contact(app, group, people)
+        startBedsideCall(null, contact.name, group.mode, contact.photoData, contact, group = members)
+    }
+
+    /** `group`: the people a group key rings at once, in its order, in place of `memberID`. */
+    private fun startBedsideCall(memberID: String?, name: String, mode: NativeCall.Mode, photo: ByteArray?, contact: CallContact?,
+        group: List<String>? = null) {
         if (app.device.credential(PorchExperience.BEDSIDE) == null || opening) {
             error = text("Check People and Drop-in in caregiver mode, then try again.")
             return
@@ -258,11 +275,14 @@ class CallCenter(private val app: PorchApplication) {
         // Said while the call is set up, so whoever pressed the key hears straight away who they're calling.
         val announcement = OutgoingAnnouncement(app, name)
         this.announcement = announcement
+        // Who a message is for when no one answers: the person on the key, or everyone a group key rang.
+        val recipients = group ?: listOfNotNull(memberID)
         app.scope.launch {
             try {
                 // Someone with a phone number rings on Porch for the fallback wait, then on their phone (PorchCall).
                 val wait = if (contact?.phoneNumber == null) 45 else CallPreferences.fallbackSeconds(app.settings)
-                val session = app.coordinator.startCall(memberID, name, mode, dropIn = false, waitSeconds = wait)
+                val session = if (group != null) app.coordinator.startGroupCall(group, name, mode, waitSeconds = wait)
+                    else app.coordinator.startCall(memberID, name, mode, dropIn = false, waitSeconds = wait)
                 if (cancelOpening || !app.onScreen) {
                     announcement.stop()
                     session.end()
@@ -270,7 +290,7 @@ class CallCenter(private val app: PorchApplication) {
                     return@launch
                 }
                 app.cell2jack.record("callSessionCreated")
-                val unanswered = memberID?.let { id -> { leaveMessage(id, name, photo, mode, BedsideVoicemail.Reason.UNANSWERED) } }
+                val unanswered = recipients.takeIf { it.isNotEmpty() }?.let { ids -> { leaveMessage(ids, name, photo, mode, BedsideVoicemail.Reason.UNANSWERED) } }
                 show(session.copy(peerContact = contact), name, photo, announcement, contact, unanswered)
             } catch (e: CancellationException) {
                 throw e
@@ -280,9 +300,11 @@ class CallCenter(private val app: PorchApplication) {
                 // They're on Do Not Disturb on their phone: never their regular phone either. A message, as when their
                 // Porch can't ring, or else just that they aren't available. As on iOS.
                 if ((e as? FamilyServiceException)?.code == "doNotDisturb") {
-                    if (memberID != null && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
+                    // A group key's message goes to both, and "didn't answer" reads right for two people.
+                    if (recipients.isNotEmpty() && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
                         announcement.finished()
-                        if (!cancelOpening) leaveMessage(memberID, name, photo, mode, BedsideVoicemail.Reason.UNAVAILABLE)
+                        if (!cancelOpening) leaveMessage(recipients, name, photo, mode,
+                            if (group == null) BedsideVoicemail.Reason.UNAVAILABLE else BedsideVoicemail.Reason.UNANSWERED)
                     } else { announcement.stop(); note(text("%@ isn't available right now.", name)) }
                     return@launch
                 }
@@ -296,11 +318,13 @@ class CallCenter(private val app: PorchApplication) {
                     call.start()
                     return@launch
                 }
-                if (memberID != null && (e as? FamilyServiceException)?.code == "offline" && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
+                if (recipients.isNotEmpty() && (e as? FamilyServiceException)?.code == "offline" && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
                     // Their Porch app can't ring and there's no phone to try: leave a message, as for a missed call. The
-                    // message screen says they aren't available, so it waits for who was called to be said.
+                    // message screen says they aren't available, so it waits for who was called to be said. A group's
+                    // "didn't answer" reads right for two people.
                     announcement.finished()
-                    if (!cancelOpening) leaveMessage(memberID, name, photo, mode, BedsideVoicemail.Reason.UNAVAILABLE)
+                    if (!cancelOpening) leaveMessage(recipients, name, photo, mode,
+                        if (group == null) BedsideVoicemail.Reason.UNAVAILABLE else BedsideVoicemail.Reason.UNANSWERED)
                     return@launch
                 }
                 announcement.stop()
@@ -370,11 +394,12 @@ class CallCenter(private val app: PorchApplication) {
 
     /**
      * A Porch call that wasn't answered, and didn't ring through to a regular phone, records a message for that family
-     * member, as iOS's `leaveMessage` does: only with Leave a message if no one answers on, and with Porch in front.
+     * member, as iOS's `leaveMessage` does: only with Leave a message if no one answers on, and with Porch in front. A
+     * group key's message goes to each of its people.
      */
-    private fun leaveMessage(memberID: String, name: String, photo: ByteArray?, mode: NativeCall.Mode, reason: BedsideVoicemail.Reason) {
+    private fun leaveMessage(memberIDs: List<String>, name: String, photo: ByteArray?, mode: NativeCall.Mode, reason: BedsideVoicemail.Reason) {
         if (!CallPreferences.leaveMessageWhenUnanswered(app.settings) || !app.onScreen || active != null || incoming != null || voicemail != null) return
-        voicemail = BedsideVoicemail(app, memberID, name, photo, video = mode == NativeCall.Mode.VIDEO, reason,
+        voicemail = BedsideVoicemail(app, memberIDs, name, photo, video = mode == NativeCall.Mode.VIDEO, reason,
             onClosed = { if (voicemail === it) voicemail = null })
     }
 
