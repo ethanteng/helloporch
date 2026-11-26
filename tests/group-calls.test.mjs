@@ -24,11 +24,12 @@ function fixture() {
     async getParticipant(room, identity) { if (!rooms.get(room)?.has(identity)) throw Object.assign(new Error('not found'), { code:'not_found' }); return { identity, attributes:{} }; },
     async removeParticipant(room, identity) { rooms.get(room)?.delete(identity); },
   } };
+  let duringPush = null;
   const send = (action, values={}, credential, code) => handleFamily(new Request('https://porch.example/api/family',{method:'POST',
     headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(code?{'X-Porch-Setup-Code':code}:{})},
     body:JSON.stringify({action,...(['claimInvite','createHousehold'].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex')}:{}),...values})}),
     {store,now:()=>now,endRoom:async room=>{ deleted.push(room); rooms.delete(room); },phoneGuestServices:()=>services,
-      sendPush:async (registration,payload)=>{ pushes.push({registration,payload}); return { delivered: !failing.has(payload.recipientID) }; }});
+      sendPush:async (registration,payload)=>{ pushes.push({registration,payload}); if (duringPush) await duringPush(payload); return { delivered: !failing.has(payload.recipientID) }; }});
   const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
   const member = async (bedside, name) => {
     const invitation = await json('createInvite',{name,permissions:{audio:true,video:true}},bedside.credential,pin);
@@ -50,7 +51,7 @@ function fixture() {
   const call = (setup, values={}) => json('startCall',{targetIDs:[setup.ids.ethan,setup.ids.david],groupName:'Kids',mode:'video',kind:'call',waitSeconds:45,...values},setup.bedside.credential);
   const view = async credential => (await json('poll',{available:false},credential)).state.call;
   const stored = setup => JSON.parse(store.values.get(`house:${setup.bedside.state.householdID}`));
-  return { store, rooms, deleted, pushes, failing, send, json, family, call, view, stored, join, advance:seconds=>now+=seconds, now:()=>now };
+  return { store, rooms, deleted, pushes, failing, send, json, family, call, view, stored, join, duringPush:fn=>{ duringPush=fn; }, advance:seconds=>now+=seconds, now:()=>now };
 }
 
 test('a group key rings both phones at once, each with its own incoming call from Mom',async()=>{
@@ -231,4 +232,19 @@ test('someone on Do Not Disturb isn\'t rung: the other is, and with both on it t
   const both=await f.send('startCall',{targetIDs:[ids.ethan,ids.david],mode:'video',kind:'call'},setup.bedside.credential);
   assert.equal(both.status,409);
   assert.deepEqual(await both.json().then(body=>[body.errorCode,body.error]),['doNotDisturb',"Ethan and David aren't taking calls right now."]);
+});
+
+test('a push that fails after the other person has answered stops ringing that phone',async()=>{
+  const f=fixture(),setup=await f.family(),{ethan,ids}=setup;
+  // David can't be reached, and Ethan answers while that push is still being reported.
+  f.failing.add(ids.david);
+  f.duringPush(async payload=>{
+    if (payload.recipientID!==ids.ethan) return;
+    const callID=f.pushes.find(p=>p.payload.recipientID===ids.ethan).payload.callID;
+    await f.json('acceptCall',{callID,available:true},ethan.credential);
+  });
+  const started=(await f.call(setup)).state.call;
+  assert.equal(started.state,'accepted'); assert.equal(started.to,ids.ethan);
+  assert.equal(started.porchGuest.state,'missed','David is not left ringing after his push failed');
+  assert.equal((await f.view(setup.david.credential)).state,'ended');
 });

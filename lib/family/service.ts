@@ -843,13 +843,16 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
           const unreached = failed.filter(({ ring, registration, delivery }) => {
             const recipient = current.members.find(m => m.id === ring.memberID);
             if (delivery.invalidToken && recipient) forgetRegistration(recipient, registration);
-            return recipient && !online(recipient, now) && active?.id === call.id && active.state === "pending";
+            // An answer can land while these pushes are still going out. A group guest whose phone never got the
+            // call still has to stop ringing; ending or swapping the call only applies while nobody has answered.
+            return recipient && !online(recipient, now) && active?.id === call.id && (active.state === "pending" || active.state === "accepted");
           }).map(f => f.ring);
-          if (!active) return false;
+          if (!active || active.id !== call.id) return false;
           for (const ring of unreached) {
             const guest = active.porchGuests?.find(g => g.id === ring.id && g.memberID === ring.memberID && g.state === "ringing" && g.receivedAt === undefined);
             if (guest) { guest.state = "missed"; guest.endedAt = now; }
           }
+          if (active.state !== "pending") return false;
           const called = unreached.find(ring => ring.memberID === active.to && ring.id === callIDFor(active, active.to));
           if (!called || active.receivedAt !== undefined) return false;
           // A group call goes on ringing the other person, who becomes the person called.
