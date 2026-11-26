@@ -300,9 +300,11 @@ class CallCenter(private val app: PorchApplication) {
                 // They're on Do Not Disturb on their phone: never their regular phone either. A message, as when their
                 // Porch can't ring, or else just that they aren't available. As on iOS.
                 if ((e as? FamilyServiceException)?.code == "doNotDisturb") {
-                    if (memberID != null && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
+                    // A group key's message goes to both, and "didn't answer" reads right for two people.
+                    if (recipients.isNotEmpty() && CallPreferences.leaveMessageWhenUnanswered(app.settings)) {
                         announcement.finished()
-                        if (!cancelOpening) leaveMessage(memberID, name, photo, mode, BedsideVoicemail.Reason.UNAVAILABLE)
+                        if (!cancelOpening) leaveMessage(recipients, name, photo, mode,
+                            if (group == null) BedsideVoicemail.Reason.UNAVAILABLE else BedsideVoicemail.Reason.UNANSWERED)
                     } else { announcement.stop(); note(text("%@ isn't available right now.", name)) }
                     return@launch
                 }

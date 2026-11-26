@@ -733,10 +733,11 @@ final class CallViewController: UIViewController {
                 // They're on Do Not Disturb on their phone: never their regular phone either. A message, as when their
                 // Porch can't ring, or else just that they aren't available.
                 if (error as? FamilyServiceError)?.code == "doNotDisturb" {
-                    if let memberID, CallPreferences.leaveMessageWhenUnanswered() {
+                    // A group key's message goes to both, and "didn't answer" reads right for two people.
+                    if let recipients = group ?? memberID.map({ [$0] }), CallPreferences.leaveMessageWhenUnanswered() {
                         await announcement.finished()
                         if self.cancelOpening { return }
-                        self.leaveMessage(for: contact, memberID: memberID, mode: mode, reason: .unavailable)
+                        self.leaveMessage(for: contact, memberIDs: recipients, mode: mode, reason: group == nil ? .unavailable : .unanswered)
                     } else { announcement.stop(); self.displayStatus(BedsideText.string("%@ isn't available right now.", contact.name), temporary: true) }
                 // A lost response may still have created a Porch call. Only a
                 // confirmed offline result permits an unpaired phone handoff.
