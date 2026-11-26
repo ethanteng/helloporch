@@ -42,6 +42,8 @@ data class FamilyPerson(
     val joinedAt: Long? = null,
     /** Family devices only: approved to open caregiver mode with the PIN. */
     val caregiver: Boolean? = null,
+    /** Family devices only: on Do Not Disturb now, so Porch calls don't ring them. Older servers don't send it. */
+    val doNotDisturb: Boolean? = null,
 )
 
 @Serializable

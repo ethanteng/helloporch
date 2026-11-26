@@ -3,6 +3,7 @@ import type { CallTranslation } from "./translation.ts";
 import type { CallServer } from "../calls/server.ts";
 import type { FamilyStore } from "./store.ts";
 import type { VoIPRegistration } from "./push.ts";
+import type { DoNotDisturb } from "./do-not-disturb.ts";
 
 export type Role = "bedside" | "family";
 export type Mode = "voice" | "video";
@@ -22,7 +23,9 @@ export type PendingPhoto = { pathname: string; expiresAt: number };
  * `appVersion`: the bedside only, the version of Porch its newest check-in reported, such as "0.1.0 (78)". */
 export type Member = { platform?: "android"; features?: string[]; appVersion?: string; voip?: VoIPRegistration; alerts?: VoIPRegistration; invitationID?: string; joinedAt?: number; caregiver?: boolean; id: string; name: string; role: Role; secretHash: string; permissions: Permissions; revoked: boolean; seenAt: number; available: boolean; lastPoll?: PollOrder; attendedAt?: number; messagePlayedAt?: number; profile?: Profile; override?: Profile; pendingPhotos?: PendingPhoto[];
   /** `voice`: this caregiver's recorded voice; `pendingVoice`: a recording uploaded to make it (see voices.ts). */
-  voice?: FamilyVoice; pendingVoice?: PendingVoice };
+  voice?: FamilyVoice; pendingVoice?: PendingVoice;
+  /** A family phone's Do Not Disturb, as its newest check-in said (see do-not-disturb.ts); unset is off. */
+  doNotDisturb?: DoNotDisturb };
 /** Where a poll falls among those one app launch sent. */
 export type PollOrder = { launch: string; sequence: number };
 export type Invite = { id: string; secretHash: string; name: string; permissions: Permissions; caregiver?: boolean; expiresAt: number; claimedBy?: string };

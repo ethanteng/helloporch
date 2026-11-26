@@ -1055,7 +1055,13 @@ extension Notification.Name {
     // UIKit then updates the app's snapshot there and aborts: every tapped notice crashed Porch when it wasn't open.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        Self.onMain { completionHandler([.banner, .list, .sound]) }
+        let options = Self.presentation(for: notification.request.content)
+        Self.onMain { completionHandler(options) }
+    }
+    /// How a notice shows while Porch is open. A message left while this phone was on Do Not Disturb comes passive
+    /// (lib/family/push.ts), so it goes only in the list, as iOS files it while Porch is closed: no banner or sound.
+    nonisolated static func presentation(for content: UNNotificationContent) -> UNNotificationPresentationOptions {
+        content.interruptionLevel == .passive ? [.list] : [.banner, .list, .sound]
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {

@@ -136,17 +136,21 @@ export async function sendVoIPPush(device: VoIPRegistration, call: IncomingCallP
 /** A visible notification on a family phone. APNs and FCM keep it for a week if the phone is off.
  * `recipientID` is the member it's for. A phone in several families is a different member in each, so this says which
  * family's thread to open, and keeps each family's notifications in their own group. */
-export type MessageAlert = { messageID: string; recipientID: string; title: string; body: string; badge: number };
+/** `quiet`: the person is on Do Not Disturb (do-not-disturb.ts), so the notice makes no sound. An iPhone files it without
+ * lighting the screen, and an Android phone posts it in its quiet channel, which the app makes. */
+export type MessageAlert = { messageID: string; recipientID: string; title: string; body: string; badge: number; quiet?: boolean };
 export async function sendAlertPush(device: VoIPRegistration, alert: MessageAlert, createSession: typeof connect = connect, now = Math.floor(Date.now() / 1000), request: typeof fetch = fetch): Promise<PushResult> {
   if (!pushConfigured(device)) return { delivered: false };
   if (device.platform === "android") {
     // Android has no badge field: launchers count notifications. Each family's newest message replaces its last one.
-    return sendFCM(device, { data: { type: "message", messageID: alert.messageID, recipientID: alert.recipientID, badge: String(alert.badge) },
-      android: { priority: "HIGH", ttl: `${7 * 86400}s`, notification: { title: alert.title, body: alert.body, channel_id: "messages", sound: "default",
+    // An app from before the quiet channel doesn't have it, so Firebase uses the messages channel, as before. A quiet
+    // one waits for the phone to wake rather than waking it.
+    return sendFCM(device, { data: { type: "message", messageID: alert.messageID, recipientID: alert.recipientID, badge: String(alert.badge), ...(alert.quiet ? { quiet: "1" } : {}) },
+      android: { priority: alert.quiet ? "NORMAL" : "HIGH", ttl: `${7 * 86400}s`, notification: { title: alert.title, body: alert.body, channel_id: alert.quiet ? "messages-quiet" : "messages", ...(alert.quiet ? {} : { sound: "default" }),
         tag: `porch-messages-${alert.recipientID}`, notification_count: alert.badge } } }, request, now);
   }
   return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: alert.messageID, expiration: now + 7 * 86400,
-    payload: { aps: { alert: { title: alert.title, body: alert.body }, sound: "default", badge: alert.badge, "thread-id": `porch-messages-${alert.recipientID}` }, messageID: alert.messageID, recipientID: alert.recipientID } }, createSession);
+    payload: { aps: { alert: { title: alert.title, body: alert.body }, ...(alert.quiet ? { "interruption-level": "passive" } : { sound: "default" }), badge: alert.badge, "thread-id": `porch-messages-${alert.recipientID}` }, messageID: alert.messageID, recipientID: alert.recipientID } }, createSession);
 }
 
 /** A visible notice on a caregiver's phone that isn't a message: every call to the bedside was turned on or off

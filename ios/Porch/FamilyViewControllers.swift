@@ -141,7 +141,9 @@ final class FamilyHomeViewController: CaregiverFormViewController {
         let push = SystemIncomingCalls.shared.pushReady ? nil : "Keep Porch open so you don't miss calls."
         let device = UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad"
         let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .denied ? "Allow microphone access in \(device) Settings → Porch to answer calls." : nil
-        status.text = credentials.isEmpty ? "Ask the caregiver to invite you." : microphone ?? push
+        // So nobody forgets that calls are being turned away. Polls refresh this, so scheduled hours show as they start.
+        let quiet = DoNotDisturb.load().applies(at: Date()) ? "Do Not Disturb is on" : nil
+        status.text = credentials.isEmpty ? "Ask the caregiver to invite you." : microphone ?? quiet ?? push
         status.isHidden = status.text == nil
         guard next != displayed else { updateCallTimes(); return }
         displayed = next

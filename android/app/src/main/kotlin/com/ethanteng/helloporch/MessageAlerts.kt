@@ -49,12 +49,14 @@ class MessageAlerts(private val app: PorchApplication) {
         if (app.device.experience != PorchExperience.FAMILY || app.device.families.none { it.deviceID == recipient }) return
         if (!allowed()) return
         val count = data["badge"]?.toIntOrNull() ?: 1
-        val notification = NotificationCompat.Builder(app, CHANNEL)
+        // Left while this phone was on Do Not Disturb: in the quiet channel, as Firebase would have shown it.
+        val quiet = data["quiet"] == "1"
+        val notification = NotificationCompat.Builder(app, if (quiet) QUIET_CHANNEL else CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(title ?: "New message")
             .setContentText(body)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setNumber(count)
             .setContentIntent(open(app, recipient))
@@ -151,6 +153,9 @@ class MessageAlerts(private val app: PorchApplication) {
         /** The channel the server names for message notifications. */
         const val CHANNEL = "messages"
 
+        /** The channel the server names for messages left while this phone is on Do Not Disturb: no sound, no pop-up. */
+        const val QUIET_CHANNEL = "messages-quiet"
+
         /** The channel the server names for Every call notices. */
         const val EVERY_CALL_CHANNEL = "every-call"
         private const val EVERY_CALL_TAG_PREFIX = "porch-everycall-"
@@ -163,6 +168,9 @@ class MessageAlerts(private val app: PorchApplication) {
             val manager = context.getSystemService<NotificationManager>() ?: return
             manager.createNotificationChannel(NotificationChannel(CHANNEL, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "When your loved one leaves you a message after a call you missed."
+            })
+            manager.createNotificationChannel(NotificationChannel(QUIET_CHANNEL, "Messages during Do Not Disturb", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Messages your loved one leaves while Do Not Disturb is on in Porch."
             })
             manager.createNotificationChannel(NotificationChannel(EVERY_CALL_CHANNEL, "Drop-in changes", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "For caregivers: when someone turns Every call drop-in on or off."

@@ -495,8 +495,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
 }
 
 extension FamilyPerson {
-    var status: String { online ? "Porch is open on their device" : canReceiveCalls == true ? "Porch calls can ring while their device is locked" : "Their device is offline" }
-    var shortStatus: String { online ? "Porch is open" : canReceiveCalls == true ? "Can ring while locked" : "Offline" }
+    var status: String { doNotDisturb == true ? "Do Not Disturb is on" : online ? "Porch is open on their device" : canReceiveCalls == true ? "Porch calls can ring while their device is locked" : "Their device is offline" }
+    var shortStatus: String { doNotDisturb == true ? "Do Not Disturb" : online ? "Porch is open" : canReceiveCalls == true ? "Can ring while locked" : "Offline" }
     var dropInModes: String? {
         permissions.audio && permissions.video ? "Audio and video" : permissions.audio ? "Audio" : permissions.video ? "Video" : nil
     }

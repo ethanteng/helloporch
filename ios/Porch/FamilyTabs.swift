@@ -289,7 +289,7 @@ final class FamilyInboxViewController: CaregiverFormViewController {
 /// The You tab: this phone's families, each with its own page, joining another, and this phone's own settings.
 final class FamilyYouViewController: CaregiverFormViewController {
     private let content = UIStackView()
-    private struct Shown: Equatable { let families: [[String?]]; let canJoin: Bool }
+    private struct Shown: Equatable { let families: [[String?]]; let canJoin: Bool; let doNotDisturb: String }
     private var shown: Shown?
     private var device: String { UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
     override func viewDidLoad() {
@@ -301,10 +301,13 @@ final class FamilyYouViewController: CaregiverFormViewController {
         render()
     }
     deinit { NotificationCenter.default.removeObserver(self) }
+    // Back from Do Not Disturb, its row says what was chosen.
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); render() }
     @objc private func render() {
         guard isViewLoaded else { return }
         let families = PorchDevice.families
-        let next = Shown(families: families.map { [$0.deviceID, familyTitle($0), bedsideName($0)] }, canJoin: families.count < FamilyNames.limit)
+        let next = Shown(families: families.map { [$0.deviceID, familyTitle($0), bedsideName($0)] }, canJoin: families.count < FamilyNames.limit,
+                         doNotDisturb: DoNotDisturbViewController.summary(DoNotDisturb.load()))
         guard next != shown else { return }
         shown = next
         content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
@@ -327,7 +330,11 @@ final class FamilyYouViewController: CaregiverFormViewController {
         let camera = UISwitch(); camera.isOn = CallPreferences.startVideoWithCamera()
         camera.accessibilityIdentifier = "family.startVideoWithCamera"
         camera.addAction(UIAction { [weak camera] _ in if let camera { CallPreferences.saveStartVideoWithCamera(camera.isOn) } }, for: .valueChanged)
-        var phone: [UIView] = [toggleRow("Start video calls with my camera on", camera)]
+        let quiet = linkRow("Do Not Disturb", value: next.doNotDisturb, symbol: "moon") { [weak self] in
+            self?.navigationController?.pushViewController(DoNotDisturbViewController(), animated: true)
+        }
+        quiet.accessibilityIdentifier = "family.doNotDisturb"
+        var phone: [UIView] = [quiet, toggleRow("Start video calls with my camera on", camera)]
         if PorchDevice.canBeBedside {
             phone.append(linkRow("Use this \(device) as the bedside Porch", symbol: "ipad") { [weak self] in self?.confirmBedside() })
         }
@@ -340,6 +347,64 @@ final class FamilyYouViewController: CaregiverFormViewController {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Use as bedside", style: .default) { _ in PorchDevice.experience = .bedside })
         present(alert, animated: true)
+    }
+}
+
+/// Do Not Disturb on this phone, for all its families: Porch calls don't ring it, now or every day for set hours, and
+/// your loved one is offered to leave a message instead. Each family hears it with this phone's next check-in.
+final class DoNotDisturbViewController: CaregiverFormViewController {
+    private let content = UIStackView()
+    private var device: String { UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
+    override func viewDidLoad() {
+        super.viewDidLoad(); title = "Do Not Disturb"
+        content.axis = .vertical; content.spacing = 24
+        form.addArrangedSubview(content)
+        hideKeyboardControl()
+        render()
+    }
+    /// What the You tab shows for it: Off, On, or the hours.
+    static func summary(_ settings: DoNotDisturb) -> String {
+        settings.on ? "On" : settings.scheduled ? "\(MessageSettingsViewController.hourText(settings.startHour))–\(MessageSettingsViewController.hourText(settings.endHour))" : "Off"
+    }
+    private func render() {
+        content.arrangedSubviews.forEach { content.removeArrangedSubview($0); $0.removeFromSuperview() }
+        let settings = DoNotDisturb.load()
+        content.addArrangedSubview(PorchStyle.label("Porch calls won’t ring this \(device). Your loved one can leave a message instead.", size: 17))
+        let now = UISwitch(); now.isOn = settings.on
+        now.accessibilityIdentifier = "doNotDisturb.on"
+        now.addAction(UIAction { [weak now] _ in
+            guard let now else { return }
+            var settings = DoNotDisturb.load(); settings.on = now.isOn; settings.save()
+        }, for: .valueChanged)
+        content.addArrangedSubview(group(rows: [toggleRow("Now", detail: "Until you turn it off", now)]))
+        let scheduled = UISwitch(); scheduled.isOn = settings.scheduled
+        scheduled.accessibilityIdentifier = "doNotDisturb.scheduled"
+        scheduled.addAction(UIAction { [weak self, weak scheduled] _ in
+            guard let self, let scheduled else { return }
+            var settings = DoNotDisturb.load(); settings.scheduled = scheduled.isOn; settings.save()
+            self.render()
+        }, for: .valueChanged)
+        var schedule = [toggleRow("Every day", scheduled)]
+        if settings.scheduled { schedule += [hourRow("Starting at", \.startHour), hourRow("Until", \.endHour)] }
+        content.addArrangedSubview(group(rows: schedule))
+    }
+    private func hourRow(_ title: String, _ hour: WritableKeyPath<DoNotDisturb, Int>) -> UIView {
+        let stepper = UIStepper()
+        stepper.minimumValue = Double(DoNotDisturb.hourRange.lowerBound); stepper.maximumValue = Double(DoNotDisturb.hourRange.upperBound)
+        // Round the clock: 11 PM goes on to midnight.
+        stepper.wraps = true
+        stepper.value = Double(DoNotDisturb.load()[keyPath: hour])
+        let value = PorchStyle.label(MessageSettingsViewController.hourText(Int(stepper.value)))
+        let row = stepperRow(title, value: value, stepper)
+        stepper.accessibilityLabel = "Do Not Disturb \(title.lowercased())"
+        stepper.accessibilityIdentifier = hour == \DoNotDisturb.startHour ? "doNotDisturb.start" : "doNotDisturb.end"
+        stepper.accessibilityValue = value.text
+        stepper.addAction(UIAction { [weak stepper, weak value] _ in
+            guard let stepper else { return }
+            var settings = DoNotDisturb.load(); settings[keyPath: hour] = Int(stepper.value); settings.save()
+            value?.text = MessageSettingsViewController.hourText(Int(stepper.value)); stepper.accessibilityValue = value?.text
+        }, for: .valueChanged)
+        return row
     }
 }
 

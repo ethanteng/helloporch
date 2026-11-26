@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.icu.text.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.ethanteng.helloporch.core.CallPreferences
+import com.ethanteng.helloporch.core.DoNotDisturb
 import com.ethanteng.helloporch.core.PorchNumber
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,6 +65,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -115,6 +118,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 
 /** Family mode's screens: joining a family from an invitation, then three tabs, as on iOS (FamilyTabs.swift): Call, with
  * a card for each family's bedside; Messages, with one thread for each; and You, with this phone's families, each with a
@@ -137,6 +144,8 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     var thread by rememberSaveable { mutableStateOf<String?>(null) }
     var page by rememberSaveable { mutableStateOf<String?>(null) }
     var pageScreen by rememberSaveable { mutableStateOf(FamilyPageScreen.PAGE) }
+    // On You, this phone's Do Not Disturb.
+    var quiet by rememberSaveable { mutableStateOf(false) }
     var composing by rememberSaveable(stateSaver = composingSaver) { mutableStateOf<Composing?>(null) }
     // Joining or removing a family changes the list before any family has checked in.
     var changes by remember { mutableIntStateOf(0) }
@@ -238,7 +247,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
     }
     FamilyTabBar(tab, messages = familyMessagesWaiting(families, links), onSelect = { chosen ->
         // The tab that's showing goes back to its first screen, as iOS's do.
-        if (chosen == tab) { thread = null; page = null; pageScreen = FamilyPageScreen.PAGE }
+        if (chosen == tab) { thread = null; page = null; pageScreen = FamilyPageScreen.PAGE; quiet = false }
         tab = chosen
     }) {
         when (tab) {
@@ -247,7 +256,8 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
                 MessageThreadScreen(app, threadFamily, links, onBack = { thread = null },
                     onRecord = { name -> composing = Composing(threadFamily.deviceID, name, "message", startAudio = false) })
             } else MessagesTab(app, links, families, onThread = { thread = it.deviceID }, onReview = { openCaregiver(it, true) })
-            FamilyTab.YOU -> if (pageFamily != null) {
+            FamilyTab.YOU -> if (quiet) DoNotDisturbScreen(app, onBack = { quiet = false })
+            else if (pageFamily != null) {
                 val back = { pageScreen = FamilyPageScreen.PAGE }
                 when (pageScreen) {
                     FamilyPageScreen.PROFILE -> FamilyProfileScreen(app, pageFamily, links, onBack = back)
@@ -257,7 +267,7 @@ fun FamilyScreens(app: PorchApplication, link: String?, onLinkHandled: () -> Uni
                         onCaregiver = { openCaregiver(pageFamily, false) }, onGone = { page = null; changes++ })
                 }
             } else YouTab(app, links, families, onFamily = { page = it.deviceID; pageScreen = FamilyPageScreen.PAGE },
-                onJoinAnother = { joining = true }, onAbout = { about = true })
+                onJoinAnother = { joining = true }, onAbout = { about = true }, onDoNotDisturb = { quiet = true })
         }
     }
     PorchErrorDialog(caregiverNotice) { caregiverNotice = null }
@@ -501,6 +511,11 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
     }
     Box(Modifier.fillMaxSize()) {
         FormScreen("Porch", wordmark = true) {
+            // So nobody forgets that calls are being turned away, as on iOS. Check-ins redraw this, so scheduled hours
+            // show as they start.
+            if (families.isNotEmpty() && DoNotDisturb.load(app.settings).applies(Instant.now()))
+                Text("Do Not Disturb is on", Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             RingWhenClosed(app)
             val several = families.size > 1
             // Every card's call buttons follow the card with the most, so they look alike.
@@ -770,8 +785,9 @@ private fun NeedsOKBar(title: String, detail: String, onClick: () -> Unit) {
 /** The You tab: this phone's families, each with its own page, joining another, and this phone's own settings. */
 @Composable
 private fun YouTab(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onFamily: (FamilyCredential) -> Unit,
-    onJoinAnother: () -> Unit, onAbout: () -> Unit) {
+    onJoinAnother: () -> Unit, onAbout: () -> Unit, onDoNotDisturb: () -> Unit) {
     var camera by remember { mutableStateOf(CallPreferences.startVideoWithCamera(app.settings)) }
+    val hour = hourText()
     FormScreen("You") {
         CaregiverGroup("Your families") {
             families.forEachIndexed { index, family ->
@@ -789,6 +805,8 @@ private fun YouTab(app: PorchApplication, links: FamilyLinks, families: List<Fam
             }
         }
         CaregiverGroup("On this phone") {
+            ValueRow("Do Not Disturb", doNotDisturbSummary(DoNotDisturb.load(app.settings), hour), onClick = onDoNotDisturb)
+            HorizontalDivider()
             ToggleRow("Start video calls with my camera on", camera, onChange = {
                 CallPreferences.saveStartVideoWithCamera(it, app.settings)
                 camera = it
@@ -796,6 +814,48 @@ private fun YouTab(app: PorchApplication, links: FamilyLinks, families: List<Fam
         }
         // Privacy policy and About Porch, as at the bottom of every family device's screens, as on iOS.
         PorchLinks(onAbout)
+    }
+}
+
+/** An hour of the day as this phone writes it, such as 10 PM or 22:00. */
+@Composable
+private fun hourText(): (Int) -> String {
+    val locale = LocalConfiguration.current.locales[0]
+    return { value -> DateFormat.getInstanceForSkeleton("j", locale)
+        .format(Date.from(LocalDate.of(2026, 1, 1).atTime(value, 0).atZone(ZoneId.systemDefault()).toInstant())) }
+}
+
+/** What You shows for Do Not Disturb: Off, On, or the hours. As on iOS. */
+private fun doNotDisturbSummary(settings: DoNotDisturb, hour: (Int) -> String) =
+    if (settings.on) "On" else if (settings.scheduled) "${hour(settings.startHour)}–${hour(settings.endHour)}" else "Off"
+
+/** Do Not Disturb on this phone, for all its families: Porch calls don't ring it, now or every day for set hours, and your
+ * loved one is offered to leave a message instead. Each family hears it with this phone's next check-in. As on iOS. */
+@Composable
+private fun DoNotDisturbScreen(app: PorchApplication, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    var settings by remember { mutableStateOf(DoNotDisturb.load(app.settings)) }
+    val save = { next: DoNotDisturb -> next.save(app.settings); settings = DoNotDisturb.load(app.settings) }
+    val hour = hourText()
+    // Round the clock: 11 PM goes on to midnight.
+    val earlier = { value: Int -> (value + 23) % 24 }
+    val later = { value: Int -> (value + 1) % 24 }
+    FormScreen("Do Not Disturb", navigation = { TextButton(onClick = onBack) { Text("Back") } }) {
+        Text("Porch calls won’t ring this phone. Your loved one can leave a message instead.", style = MaterialTheme.typography.bodyLarge)
+        CaregiverGroup {
+            ToggleRow("Now", settings.on, onChange = { save(settings.copy(on = it)) }, detail = "Until you turn it off")
+        }
+        CaregiverGroup {
+            ToggleRow("Every day", settings.scheduled, onChange = { save(settings.copy(scheduled = it)) })
+            if (settings.scheduled) {
+                HorizontalDivider()
+                StepperRow("Starting at", hour(settings.startHour),
+                    onMinus = { save(settings.copy(startHour = earlier(settings.startHour))) }, onPlus = { save(settings.copy(startHour = later(settings.startHour))) })
+                HorizontalDivider()
+                StepperRow("Until", hour(settings.endHour),
+                    onMinus = { save(settings.copy(endHour = earlier(settings.endHour))) }, onPlus = { save(settings.copy(endHour = later(settings.endHour))) })
+            }
+        }
     }
 }
 

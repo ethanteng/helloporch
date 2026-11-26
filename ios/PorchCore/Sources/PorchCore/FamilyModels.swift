@@ -82,6 +82,8 @@ public struct FamilyPerson: Codable, Equatable, Identifiable {
     public let joinedAt: TimeInterval?
     /// Family devices only: approved to open caregiver mode with the PIN.
     public let caregiver: Bool?
+    /// Family devices only: on Do Not Disturb now, so Porch calls don't ring them. Older servers don't send it.
+    public var doNotDisturb: Bool? = nil
 }
 public struct FamilyCallRecord: Codable, Equatable, Identifiable {
     public let id: String

@@ -88,6 +88,9 @@ test('message alerts are ordinary notifications for the app, kept by APNs for a 
   assert.equal(headers['apns-expiration'],String(1800000000+7*86400)); assert.equal(headers['apns-id'],alert.messageID);
   // A phone in several families opens the right family's thread, and groups each family's messages apart.
   assert.deepEqual(body,{aps:{alert:{title:alert.title,body:alert.body},sound:'default',badge:2,'thread-id':`porch-messages-${alert.recipientID}`},messageID:alert.messageID,recipientID:alert.recipientID});
+  // On Do Not Disturb, it's filed without a sound or lighting the screen.
+  assert.equal((await sendAlertPush({token:'cd'.repeat(32),environment:'sandbox'},{...alert,quiet:true},session,1800000000)).delivered,true);
+  assert.deepEqual(received[1].body,{aps:{alert:{title:alert.title,body:alert.body},'interruption-level':'passive',badge:2,'thread-id':`porch-messages-${alert.recipientID}`},messageID:alert.messageID,recipientID:alert.recipientID});
  } finally {
   server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
   keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);
@@ -216,6 +219,11 @@ test('Android message alerts are notifications on the messages channel, one per 
  assert.deepEqual(JSON.parse(google.sends()[0].options.body),{message:{token:android.token,
   data:{type:'message',messageID:alert.messageID,recipientID:alert.recipientID,badge:'2'},
   android:{priority:'HIGH',ttl:'604800s',notification:{title:alert.title,body:alert.body,channel_id:'messages',sound:'default',tag:`porch-messages-${alert.recipientID}`,notification_count:2}}}});
+ // On Do Not Disturb, it goes in the quiet channel without a sound, and says so for Porch to show it the same way.
+ assert.equal((await sendAlertPush(android,{...alert,quiet:true},undefined,1800000000,google.request)).delivered,true);
+ assert.deepEqual(JSON.parse(google.sends()[1].options.body),{message:{token:android.token,
+  data:{type:'message',messageID:alert.messageID,recipientID:alert.recipientID,badge:'2',quiet:'1'},
+  android:{priority:'NORMAL',ttl:'604800s',notification:{title:alert.title,body:alert.body,channel_id:'messages-quiet',tag:`porch-messages-${alert.recipientID}`,notification_count:2}}}});
 }));
 
 test('Android every-call notices use their own channel, the newest replacing the last for that family',()=>withFCM(async()=>{

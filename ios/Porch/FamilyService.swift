@@ -371,6 +371,8 @@ struct FamilyCallSession {
                             values["features"] = ["translation"]; values["language"] = BedsidePreferences.load().language.rawValue
                             values["appVersion"] = PorchVersion.text
                         }
+                        // A family phone's Do Not Disturb, so each family can turn the bedside's calls away while it's closed.
+                        if credential.role == .family { values["doNotDisturb"] = DoNotDisturb.load().checkIn() }
                         // How long ago someone was at the bedside iPad, so family can tell whether to call now. Never before
                         // this launch's first poll says that's on. While a caregiver has it off, nothing is kept to report later.
                         if credential.role == .bedside, link.state?.shareAttendance == false { AttendanceTracker.shared.forget() }
@@ -408,8 +410,9 @@ struct FamilyCallSession {
         reportingKeypad = false
         for link in links {
             link.task?.cancel(); link.task = nil
-            // Numbered now, after any poll still in flight.
-            let values = PollOrder.next(["available": false]), credential = link.credential
+            // Numbered now, after any poll still in flight. It says Do Not Disturb too, in case it changed just before.
+            let credential = link.credential
+            let values = PollOrder.next(credential.role == .family ? ["available": false, "doNotDisturb": DoNotDisturb.load().checkIn()] : ["available": false])
             Task { _ = try? await FamilyService(credential).send("poll", values) }
         }
     }
