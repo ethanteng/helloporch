@@ -36,6 +36,11 @@ final class GroupKeysTests: XCTestCase {
         XCTAssertThrowsError(try CallGroup(name: "", memberIDs: [], memberNames: [], mode: .voice))
         XCTAssertThrowsError(try CallGroup(name: "", memberIDs: ["ethan"], memberNames: ["Ethan"], mode: .voice))
         XCTAssertThrowsError(try kids(name: String(repeating: "x", count: 81)))
+        // Two long names joined pass a contact's limit: the call screen's name is cut to fit, never a crash.
+        let long = try CallGroup(name: "", memberIDs: [ethan, david], memberNames: [String(repeating: "E", count: 40), String(repeating: "👋🏽", count: 40)], mode: .voice)
+        XCTAssertEqual(long.name.count, 83)
+        XCTAssertEqual(long.callContact.name.count, 80)
+        XCTAssertTrue(long.callContact.name.hasSuffix("👋🏽"), "Characters, not code units, are cut")
     }
 
     func testAGroupKeyReplacesWhatWasOnItAndAnythingElseReplacesTheGroup() throws {

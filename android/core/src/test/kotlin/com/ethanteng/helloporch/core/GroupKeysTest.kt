@@ -46,6 +46,13 @@ class GroupKeysTest {
         assertFailsWith<ValidationException> { CallGroup("", listOf(ethan), listOf("Ethan"), VOICE, buttonColorHex = "blue") }
     }
 
+    @Test fun twoLongNamesAreCutToFitTheCallScreenRatherThanFailing() {
+        val long = CallGroup("", listOf(ethan, david), listOf("E".repeat(40), "\uD83D\uDC4B\uD83C\uDFFD".repeat(40)), VOICE)
+        assertEquals(83, long.name.characterCount())
+        assertEquals(80, long.callContact.name.characterCount())
+        assertTrue(long.callContact.name.endsWith("\uD83D\uDC4B\uD83C\uDFFD"), "Characters, not code units, are cut")
+    }
+
     @Test fun aGroupKeyReplacesWhatWasOnItAndAnythingElseReplacesTheGroup() {
         val slots = CallSlots()
         slots.setContact(lisa(), 3)

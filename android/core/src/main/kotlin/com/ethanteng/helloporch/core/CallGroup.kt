@@ -41,8 +41,9 @@ class CallGroup private constructor(
     /** The key as the call screen and its announcement show it: its name, photo and color. A group has no phone to fall
      * back to. */
     val callContact: CallContact
-        // A name, a fixed room and a valid color always make a valid contact.
-        get() = CallContact(name = name.ifEmpty { "Family" }, nativeCall = NativeCall("group", mode), buttonColorHex = buttonColorHex).showing(photo)
+        // Two long names joined can pass a contact's 80 characters, so the name is cut to fit. With a fixed room and a
+        // valid color, that always makes a valid contact.
+        get() = CallContact(name = name.ifEmpty { "Family" }.takeCharacters(80), nativeCall = NativeCall("group", mode), buttonColorHex = buttonColorHex).showing(photo)
 
     /** Saves a new photo to `photoStore`, and gives what goes in settings. */
     internal fun saving(photoStore: ContactPhotoStore): SavedGroup {

@@ -190,3 +190,12 @@ internal fun String.characterCount(): Int {
     while (characters.next() != BreakIterator.DONE) count++
     return count
 }
+
+/** The first `count` characters, counted as [characterCount] counts them, so an emoji is never cut in half. */
+internal fun String.takeCharacters(count: Int): String {
+    val characters = BreakIterator.getCharacterInstance()
+    characters.setText(this)
+    var end = 0
+    repeat(count) { val next = characters.next(); if (next == BreakIterator.DONE) return this; end = next }
+    return substring(0, end)
+}

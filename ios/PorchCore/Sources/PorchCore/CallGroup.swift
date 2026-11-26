@@ -55,8 +55,9 @@ public struct CallGroup: Codable, Equatable {
     }
     /// The key as the call screen and its announcement show it: its name, photo and color. A group has no phone to fall back to.
     public var callContact: CallContact {
-        // A name, a fixed room and a known color always make a valid contact.
-        try! CallContact(name: name.isEmpty ? "Family" : name, nativeCall: NativeCall(room: "group", mode: mode), buttonColorHex: buttonColorHex).showing(photo: photo)
+        // Two long names joined can pass a contact's 80 characters, so the name is cut to fit. With a fixed room and a
+        // known color, that always makes a valid contact.
+        try! CallContact(name: name.isEmpty ? "Family" : String(name.prefix(80)), nativeCall: NativeCall(room: "group", mode: mode), buttonColorHex: buttonColorHex).showing(photo: photo)
     }
 
     private enum CodingKeys: String, CodingKey { case customName, memberIDs, memberNames, mode, buttonColorHex, photoID }
