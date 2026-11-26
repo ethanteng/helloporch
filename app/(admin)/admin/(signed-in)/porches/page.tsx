@@ -15,15 +15,37 @@ const offlineAfter = 86400;
 const phoneNumber = (number: string) => number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const hidden = (text: string) => <span className="visually-hidden">{text} </span>;
+/** Roughly how long, short: "25 min", "3 hours", "2 days". */
+function howLong(seconds: number) {
+  const minutes = Math.max(1, Math.floor(seconds / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 48 ? plural(hours, "hour", "hours") : plural(Math.floor(hours / 24), "day", "days");
+}
+const phoneKind = (kind: string) => kind === "adapter" ? "adapter" : "Cell2Jack";
+
+const svgProps = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+const phoneOff = <svg {...svgProps}><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" /><path d="M3 3l18 18" /></svg>;
+const powerOff = <svg {...svgProps}><path d="M12 3v9" /><path d="M6.3 6.8a8 8 0 1 0 11.4 0" /></svg>;
+
+/** What needs a look at a Porch: its bedside has been offline for a day (red), or it's on and its desk phone has been
+ * out long enough that caregivers were told (amber). Offline comes first: the phone can't be known then. */
+type Problem = { level: "bad" | "warn"; short: string; long: string };
+function problem(row: PorchRow, now: number): Problem | undefined {
+  if (row.lastSeenAt !== undefined && now - row.lastSeenAt > offlineAfter) {
+    const days = plural(Math.floor((now - row.lastSeenAt) / 86400), "day", "days");
+    return { level: "bad", short: `Offline ${days}`, long: `Offline for ${days}` };
+  }
+  if (row.phone?.noticed) return { level: "warn", short: "Phone not connected", long: `Phone not connected for ${howLong(now - row.phone.since)}` };
+  return undefined;
+}
+const pill = (p: Problem, long = false) => <span className={`pill ${p.level}`}>{p.level === "bad" ? powerOff : phoneOff}{long ? p.long : p.short}</span>;
 
 function status(row: PorchRow, now: number) {
-  let seen;
-  if (row.lastSeenAt === undefined) seen = <span className="muted">Never seen</span>;
-  else if (now - row.lastSeenAt > offlineAfter) {
-    const days = Math.floor((now - row.lastSeenAt) / 86400);
-    seen = <span className="tag warn">Offline {plural(days, "day", "days")}</span>;
-  } else seen = <span className="seen"><span className="dot" aria-hidden="true" />Seen {ago(row.lastSeenAt, now)}</span>;
-  return <span className="status">{seen}{!row.setupFinished && <span className="tag">Setup not finished</span>}</span>;
+  const p = problem(row, now);
+  const main = p ? pill(p) : row.lastSeenAt === undefined ? <span className="muted">Never seen</span>
+    : <span className="seen"><span className="dot" aria-hidden="true" />Seen {ago(row.lastSeenAt, now)}</span>;
+  return <span className="status lines">{main}{!row.setupFinished && <span className="muted subline">Setup not finished</span>}</span>;
 }
 
 const bedside = (row: PorchRow) => row.lastSeenAt === undefined ? <span className="muted">No bedside</span> : <span className="chip">{row.androidBedside ? "Android" : "iOS"}</span>;
@@ -31,6 +53,26 @@ function phones(row: PorchRow, none: string) {
   const android = row.androidPhones ?? 0, ios = row.familyPhones - android;
   if (!row.familyPhones) return <span className="muted">{none}</span>;
   return <span className="chips">{ios > 0 && <span className="chip">{ios} iOS</span>}{android > 0 && <span className="chip">{android} Android</span>}</span>;
+}
+
+/** One line of a Porch's health: a dot, what, and how it is. A problem's line is tinted. */
+type Check = { level: "ok" | "warn" | "bad" | "none"; label: string; value: React.ReactNode; flag?: boolean };
+function checks(row: PorchRow, now: number): Check[] {
+  const offline = row.lastSeenAt !== undefined && now - row.lastSeenAt > offlineAfter;
+  const app = `${row.androidBedside ? "Android" : "iOS"} ${row.bedsideVersion ?? "· app not reported"}`;
+  const bedsideCheck: Check = row.lastSeenAt === undefined ? { level: "none", label: "Bedside", value: "Never seen" }
+    : { level: offline ? "bad" : "ok", flag: offline, label: "Bedside",
+      value: <>{offline ? <b>Offline for {plural(Math.floor((now - row.lastSeenAt) / 86400), "day", "days")}</b> : `Seen ${ago(row.lastSeenAt, now)}`} · {app}</> };
+  const phone = row.phone;
+  const phoneCheck: Check = offline ? { level: "none", label: "Phone", value: <span className="muted">Unknown while offline</span> }
+    : !phone ? { level: "none", label: "Phone", value: <span className="muted">None reported</span> }
+    : phone.connected ? { level: "ok", label: "Phone", value: `Connected · ${phoneKind(phone.kind)}` }
+    : phone.noticed ? { level: "warn", flag: true, label: "Phone", value: <><b>Not connected</b> for {howLong(now - phone.since)} · {phoneKind(phone.kind)}</> }
+    // Out, but not yet long enough to tell anyone.
+    : { level: "none", label: "Phone", value: `Not connected for ${howLong(now - phone.since)} · ${phoneKind(phone.kind)}` };
+  return [bedsideCheck, phoneCheck,
+    { level: row.porchNumber ? "ok" : "none", label: "Porch number", value: row.porchNumber ? phoneNumber(row.porchNumber) : <span className="muted">{row.numberPending ? "Being set up" : "None"}</span> },
+    { level: row.familyPhones ? "ok" : "none", label: "Family phones", value: phones(row, "None") }];
 }
 
 const full = "Some of this range may be missing from Porch's records, so this is a minimum.";
@@ -42,23 +84,23 @@ const messages = (u: UsageRow): Tally => ({ count: u.audioMessages.count + u.vid
   ...(u.audioMessages.partial || u.videoMessages.partial ? { partial: true as const } : {}) });
 // Active contacts are counted from the same histories. When any of those is a minimum, so is this.
 const activePartial = (u: UsageRow) => !!(u.callsReceived.partial || u.audioMessages.partial || u.audioMessages.peoplePartial || u.videoMessages.partial || u.texts.partial);
-/** How many, then from (or to) how many different people, such as "18 from 5 callers, 14 answered". */
-function tallied(tally: Tally, [word, one, many]: [string, string, string], extra?: (plus: string) => string) {
-  // A zero can be a minimum too, when the history is full and kept nothing from this range.
-  if (!tally.count) return total(tally);
+/** From (or to) how many different people, for a total's tooltip, such as "from 5 callers, 14 answered". */
+function detail(tally: Tally, [word, one, many]: [string, string, string], extra?: (plus: string) => string) {
+  if (!tally.count) return undefined;
   const plus = tally.partial ? "+" : "", peoplePlus = tally.partial || tally.peoplePartial ? "+" : "";
-  return <><span className="num">{total(tally)}</span><span className="muted" title={peoplePlus ? full : undefined}>
-    {word} {tally.people}{peoplePlus} {tally.people === 1 ? one : many}{extra ? `, ${extra(plus)}` : ""}</span></>;
+  return `${word} ${tally.people}${peoplePlus} ${tally.people === 1 ? one : many}${extra ? `, ${extra(plus)}` : ""}${peoplePlus ? `. ${full}` : ""}`;
 }
 function sum(rows: UsageRow[], pick: (row: UsageRow) => Tally): Tally {
   return { count: rows.reduce((n, row) => n + pick(row).count, 0), people: 0, ...(rows.some(row => pick(row).partial) ? { partial: true as const } : {}) };
 }
 /** The list's activity columns, each a total and, with Trends on, its trend line. */
-const columns: { name: string; color: TrendSeries["color"]; tally: (u: UsageRow) => Tally; line: (u: UsageRow) => number[] }[] = [
-  { name: "Calls in", color: "s1", tally: u => u.callsReceived, line: u => u.trend.callsIn },
-  { name: "Calls out", color: "s2", tally: u => u.callsMade, line: u => u.trend.callsMade },
-  { name: "Messages", color: "s3", tally: messages, line: u => u.trend.messages },
-  { name: "Texts", color: "s4", tally: u => u.texts, line: u => u.trend.texts },
+const columns: { name: string; color: TrendSeries["color"]; tally: (u: UsageRow) => Tally; line: (u: UsageRow) => number[]; detail: (u: UsageRow) => string | undefined }[] = [
+  { name: "Calls in", color: "s1", tally: u => u.callsReceived, line: u => u.trend.callsIn,
+    detail: u => detail(u.callsReceived, ["from", "caller", "callers"], plus => `${u.callsReceived.answered}${plus} answered`) },
+  { name: "Calls out", color: "s2", tally: u => u.callsMade, line: u => u.trend.callsMade, detail: u => detail(u.callsMade, ["to", "contact", "contacts"]) },
+  { name: "Messages", color: "s3", tally: messages, line: u => u.trend.messages,
+    detail: u => messages(u).count ? `${u.audioMessages.count} audio, ${u.videoMessages.count} video${u.audioMessages.voicemails ? `, ${plural(u.audioMessages.voicemails, "phone voicemail", "phone voicemails")}` : ""}` : undefined },
+  { name: "Texts", color: "s4", tally: u => u.texts, line: u => u.trend.texts, detail: u => detail(u.texts, ["from", "sender", "senders"]) },
 ];
 
 const chevron = <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>;
@@ -72,13 +114,20 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
   const fields = "custom" in range ? range.custom : range.error ? { from: typed(params.from) ?? "", to: typed(params.to) ?? "" } : { from: pacificDay(range.from), to: pacificDay(now) };
   const [rows, usage] = await Promise.all([listPorches(session, store), porchUsage(session, store, range, now)]);
   const usageByID = new Map(usage.map(u => [u.id, u]));
-  const listed = rows.flatMap(row => { const u = usageByID.get(row.id); return u ? [{ row, u }] : []; }), shown = listed.map(({ u }) => u);
+  // Porches that need a look come first, offline ones before those whose phone is out; the rest stay newest first.
+  const rank = (row: PorchRow) => { const level = problem(row, now)?.level; return level === "bad" ? 0 : level === "warn" ? 1 : 2; };
+  const listed = rows.flatMap(row => { const u = usageByID.get(row.id); return u ? [{ row, u }] : []; })
+    .map((item, index) => ({ ...item, index })).sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index);
+  const shown = listed.map(({ u }) => u);
+  const needs = listed.flatMap(({ row }) => { const p = problem(row, now); return p ? [{ row, p }] : []; });
   const today = pacificDay(now), historyStarts = now - usageHistorySeconds;
   const preset = "preset" in range ? usagePresets.find(p => p.key === range.preset) : undefined;
   // Numbers, or each activity column as a trend line beside its total. Links keep the range and this choice.
   const trends = params.view === "trends", trendsQuery: Record<string, string> = trends ? { view: "trends" } : {};
   const rangeQuery: Record<string, string> = "custom" in range ? { from: range.custom.from, to: range.custom.to } : { range: range.preset };
   const porches = (query: Record<string, string>) => `/porches?${new URLSearchParams(query)}`;
+  // A Porch opened from Needs a look, by its Show link.
+  const opened = typeof params.open === "string" ? params.open : undefined;
   const dates = `${day(range.from)} – ${range.to >= now ? "now" : day(range.to - 1)}`;
   // Each trend line's points: a day each (named by the day most of it falls on) or a week each.
   const points = trendPoints(range);
@@ -99,6 +148,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
             <ul>
               <li>Every household, ours included. Names, phone numbers, messages and keypads stay private to each family: activity is counted without saying who it was with.</li>
               <li><b>Offline</b>: the bedside hasn&rsquo;t checked in for a day.</li>
+              <li><b>Phone not connected</b>: the bedside is on, but its desk phone hasn&rsquo;t answered for 10 minutes. Its caregivers were told.</li>
               <li><b>Setup not finished</b>: the Porch doesn&rsquo;t have its number or a family phone yet.</li>
               <li><b>App not reported</b>: the bedside&rsquo;s app is from before Porch reported its version, or it hasn&rsquo;t checked in since updating.</li>
             </ul>
@@ -132,6 +182,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
               <ul>
                 <li><b>Contacts</b>: family on the Porch app plus the phone numbers a household knows: saved on the keypad, approved to drop in, or allowed by a caregiver. <b>Active</b> ones called, left a recorded message or texted.</li>
                 <li><b>Messages</b>: audio and video messages, phone voicemail included.</li>
+                <li>Hover a total in a Porch&rsquo;s details for how many people it was with.</li>
                 <li>Calls come from each Porch&rsquo;s call history, which keeps its newest 100 calls for up to 90 days. Texts, and who left phone voicemail, are counted from November 2026.</li>
                 <li><b>+</b> means some of the range may be missing from Porch&rsquo;s records, so the count is a minimum. Callers who hide their number aren&rsquo;t counted as senders.</li>
                 <li>Days are in Pacific time.</li>
@@ -142,6 +193,21 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
       </div>
       {"error" in range && range.error && <p className="error" role="alert">{range.error} Showing {preset?.label.toLowerCase()} instead.</p>}
       {rows.length > 0 && range.from < historyStarts && <p className="muted">Calls, texts and phone voicemail senders only go back 90 days, to {day(historyStarts)}.</p>}
+
+      {needs.length > 0 && (
+        <section className="attn" aria-labelledby="attn-title">
+          <h2 id="attn-title">Needs a look <span className="count">{needs.length}</span></h2>
+          <ul>
+            {needs.map(({ row, p }) => (
+              <li key={row.id}>
+                <span className="name">{row.bedsideName}</span>
+                <span>{pill(p, true)}</span>
+                <Link href={`${porches({ ...rangeQuery, ...trendsQuery, open: row.id })}#porch-${row.id}`} aria-label={`Show ${row.bedsideName}`}>Show</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {listed.length ? (
         <div className={trends ? "porch-list trends" : "porch-list"}>
@@ -154,7 +220,7 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
               const contacts = u.contacts.porchApp + u.contacts.phoneNumbers;
               const any = columns.some(c => c.line(u).some(Boolean)), unsure = columns.some(c => c.tally(u).partial);
               return (
-                <details key={row.id} className="porch">
+                <details key={row.id} id={`porch-${row.id}`} className="porch" open={opened === row.id}>
                   <summary className="cols">
                     <span title={row.id}><span className="name">{row.bedsideName}</span>
                       {row.invitationLabel && row.invitationLabel !== row.bedsideName && <span className="sub">{row.invitationLabel}</span>}</span>
@@ -166,33 +232,28 @@ export default async function PorchesPage({ searchParams }: { searchParams: Prom
                     {chevron}
                   </summary>
                   <div className="panel">
-                    <div>
-                      <h3>This Porch</h3>
-                      <dl className="pairs">
-                        <dt>Porch number</dt><dd>{row.porchNumber ? phoneNumber(row.porchNumber) : <span className="muted">{row.numberPending ? "Being set up" : "None"}</span>}</dd>
-                        <dt>Set up</dt><dd>{row.setUpAt ? day(row.setUpAt) : <span className="muted">Before this list</span>}</dd>
-                        <dt>Bedside</dt><dd><span className="chips">{bedside(row)}{row.lastSeenAt !== undefined && (row.bedsideVersion ?? <span className="muted">App not reported</span>)}</span></dd>
-                        <dt>Last seen</dt><dd>{row.lastSeenAt === undefined ? <span className="muted">Never</span> : ago(row.lastSeenAt, now)}</dd>
-                        <dt>Family phones</dt><dd>{phones(row, "None")}</dd>
-                      </dl>
-                    </div>
-                    <div>
-                      <h3>{preset?.label ?? dates}</h3>
-                      <dl className="pairs">
-                        <dt>Contacts</dt><dd>{contacts ? <><span className="num">{contacts}</span><span className="muted">
-                          {u.contacts.porchApp} on Porch, {plural(u.contacts.phoneNumbers, "number", "numbers")} · {u.activeContacts}{activePartial(u) ? "+" : ""} active</span></> : <span className="muted">0</span>}</dd>
-                        <dt>Calls in</dt><dd>{tallied(u.callsReceived, ["from", "caller", "callers"], plus => `${u.callsReceived.answered}${plus} answered`)}</dd>
-                        <dt>Calls out</dt><dd>{tallied(u.callsMade, ["to", "contact", "contacts"])}</dd>
-                        <dt>Audio messages</dt><dd>{tallied(u.audioMessages, ["from", "sender", "senders"], u.audioMessages.voicemails ? plus => `${u.audioMessages.voicemails}${plus} phone ${u.audioMessages.voicemails === 1 ? "voicemail" : "voicemails"}` : undefined)}</dd>
-                        <dt>Video messages</dt><dd>{tallied(u.videoMessages, ["from", "sender", "senders"])}</dd>
-                        <dt>Texts</dt><dd>{tallied(u.texts, ["from", "sender", "senders"])}</dd>
-                      </dl>
-                    </div>
-                    {any ? (
-                      <TrendChart labels={labels} description={`${row.bedsideName}: calls in, calls out, messages and texts ${points.seconds === 86400 ? "a day" : "a week"}, ${dates}`}
-                        series={columns.map(c => ({ name: c.name, color: c.color, values: c.line(u) }))} />
-                    ) : <p className="quiet">{unsure ? "No calls, messages or texts found, but some of this range may be missing from Porch’s records."
-                      : "No calls, messages or texts in this range."}</p>}
+                    <section>
+                      <h3>Health</h3>
+                      <ul className="checks">
+                        {checks(row, now).map(check => (
+                          <li key={check.label} className={check.flag ? `flag ${check.level}` : undefined}>
+                            <span className={`dot ${check.level}`} aria-hidden="true" /><span className="k">{check.label}</span><span className="v">{check.value}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="setup muted">{row.setUpAt ? `Set up ${day(row.setUpAt)}` : "Set up before this list"}</p>
+                    </section>
+                    <section>
+                      <div className="acthead">
+                        <h3>{preset?.label ?? dates}</h3>
+                        <span className="muted subline">{contacts ? `${plural(contacts, "contact", "contacts")}, ${u.activeContacts}${activePartial(u) ? "+" : ""} active` : "No contacts"}</span>
+                      </div>
+                      {any ? (
+                        <TrendChart labels={labels} description={`${row.bedsideName}: calls in, calls out, messages and texts ${points.seconds === 86400 ? "a day" : "a week"}, ${dates}`}
+                          series={columns.map(c => ({ name: c.name, color: c.color, values: c.line(u), total: total(c.tally(u)), detail: c.detail(u) }))} />
+                      ) : <p className="quiet">{unsure ? "No calls, messages or texts found, but some of this range may be missing from Porch’s records."
+                        : "No calls, messages or texts in this range."}</p>}
+                    </section>
                   </div>
                 </details>
               );

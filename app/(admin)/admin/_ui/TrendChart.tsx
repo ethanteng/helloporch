@@ -1,6 +1,9 @@
+import type { ReactNode } from "react";
+
 /** One line a series over the same points, on one axis, with a legend. Hovering a point shows its counts, in the
- * browser's own tooltip, so it needs no script. Colors come from admin.css by each series' `color`: s1 to s4. */
-export type TrendSeries = { name: string; color: "s1" | "s2" | "s3" | "s4"; values: number[] };
+ * browser's own tooltip, so it needs no script. Colors come from admin.css by each series' `color`: s1 to s4.
+ * `total`: shown beside the series' name in the legend, with `detail` as its tooltip, such as "from 5 callers". */
+export type TrendSeries = { name: string; color: "s1" | "s2" | "s3" | "s4"; values: number[]; total?: ReactNode; detail?: string };
 
 const width = 1000, height = 170, left = 34, right = 10, top = 8, bottom = 24;
 const plotWidth = width - left - right, plotHeight = height - top - bottom;
@@ -22,7 +25,9 @@ export default function TrendChart({ series, labels, description }: { series: Tr
   const slot = count === 1 ? plotWidth : plotWidth / (count - 1);
   return (
     <figure className="trend">
-      <ul className="legend">{series.map(s => <li key={s.name}><i className={`key ${s.color}`} />{s.name}</li>)}</ul>
+      <ul className="legend">{series.map(s => (
+        <li key={s.name} title={s.detail}><i className={`key ${s.color}`} />{s.name}{s.total !== undefined && <b>{s.total}</b>}</li>
+      ))}</ul>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={description}>
         {ticks.map(t => (
           <g key={t}>

@@ -11,6 +11,9 @@
   --good-bg: #e2f2e8;
   --warn: #8a4b00;
   --warn-bg: #fdf0dc;
+  /* Offline: the bedside is off or unreachable. */
+  --bad: #a8322a;
+  --bad-bg: #fbe3df;
   --error: #b42318;
   --tag-bg: #eaeeec;
   --row: #f3f6f4;
@@ -35,6 +38,8 @@
     --good-bg: #1c3426;
     --warn: #f3c27a;
     --warn-bg: #3a2a12;
+    --bad: #ff9b8f;
+    --bad-bg: #3b1d1a;
     --error: #ff8a80;
     --tag-bg: #2a3230;
     --row: #202826;
@@ -199,6 +204,26 @@ table.narrow td:first-child { overflow-wrap: anywhere; }
 .status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .seen { display: inline-flex; align-items: center; gap: 8px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }
+.dot.none { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.status.lines { flex-direction: column; align-items: flex-start; gap: 3px; }
+.subline { font-size: 0.85rem; }
+/* A problem, in one short phrase: Offline (red) or Phone not connected (amber). */
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: 999px; font-size: 0.88rem; font-weight: 650; white-space: nowrap; }
+.pill svg { width: 15px; height: 15px; flex: none; }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+
+/* Needs a look: each Porch with a problem, above the list. */
+.attn { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 4px; margin-bottom: 20px; }
+.attn h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.05rem; }
+.attn .count { font-size: 0.8rem; font-weight: 700; background: var(--tag-bg); border-radius: 999px; padding: 0 8px; line-height: 1.6; }
+.attn ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.attn li { display: grid; grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.attn a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 0.92rem; min-height: 32px; display: inline-flex; align-items: center; }
+.attn a:hover { text-decoration: underline; }
+@media (max-width: 560px) { .attn li { grid-template-columns: minmax(0, 1fr) auto; } .attn li > :nth-child(2) { grid-row: 2; grid-column: 1 / -1; } }
 .chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .chip { display: inline-block; padding: 0 7px; border: 1px solid var(--line); border-radius: 6px; font-size: 0.8rem; font-weight: 600; line-height: 1.65; white-space: nowrap; }
 .name { font-weight: 600; }
@@ -230,8 +255,27 @@ table.narrow td:first-child { overflow-wrap: anywhere; }
 .spark .base { stroke: var(--line); stroke-width: 1; }
 .spark .line { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .spark .mark { fill: var(--c); stroke: var(--surface); stroke-width: 2; }
-.panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 16px 48px; padding: 4px 16px 20px; background: var(--row); border-bottom: 1px solid var(--line); }
-.panel h3 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 20px 40px; padding: 8px 16px 24px; background: var(--row); border-bottom: 1px solid var(--line); }
+.panel > section { min-width: 0; }
+.panel h3 { margin: 0; font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+@media (max-width: 760px) { .panel { grid-template-columns: minmax(0, 1fr); } }
+/* A Porch's health: a dot, what, and how it is; a problem's line is tinted. */
+.checks { list-style: none; margin: 10px 0 0; padding: 0; }
+.checks li { display: grid; grid-template-columns: 16px 118px minmax(0, 1fr); align-items: baseline; gap: 4px 8px; padding: 9px 0; border-top: 1px solid var(--line); }
+.checks li:first-child { border-top: 0; }
+.checks .dot { transform: translateY(-1px); }
+.checks .k { color: var(--muted); }
+.checks b { font-weight: 650; }
+.checks li.flag { border-radius: 10px; padding-inline: 10px; margin-inline: -10px; border-top-color: transparent; }
+.checks li.flag + li { border-top-color: transparent; }
+.checks li.flag.warn { background: var(--warn-bg); }
+.checks li.flag.bad { background: var(--bad-bg); }
+.checks li.flag.warn .k, .checks li.flag.warn .v { color: var(--warn); }
+.checks li.flag.bad .k, .checks li.flag.bad .v { color: var(--bad); }
+.setup { margin: 10px 0 0; font-size: 0.88rem; }
+.acthead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 10px; }
+.panel .trend { padding-top: 0; border-top: 0; }
+.panel .quiet { padding-top: 0; border-top: 0; }
 .pairs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; margin: 0; }
 .pairs dt { color: var(--muted); }
 .pairs dd { margin: 0; }
@@ -250,6 +294,7 @@ table.narrow td:first-child { overflow-wrap: anywhere; }
 .trend .point:hover .cross, .trend .point:hover .mark, .trend .only .mark { opacity: 1; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 6px; padding: 0; list-style: none; font-size: 0.85rem; color: var(--muted); }
 .legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c); }
 .s1 { --c: var(--s1); }
 .s2 { --c: var(--s2); }
