@@ -40,8 +40,10 @@ function fixture() {
   };
   let sequence = 0;
   const report = (bedside, phone) => json('poll', { available: true, launch: 'launch-1', sequence: ++sequence, ...(phone !== undefined ? { phone } : {}) }, bedside.credential);
+  // Porch on screen at the bedside: a report every 30 seconds for `seconds`, the last one at the end.
+  const keep = async (bedside, phone, seconds) => { for (let left = seconds; left > 0; left -= 30) { now += Math.min(30, left); await report(bedside, phone); } };
   const house = bedside => JSON.parse(store.values.get(`house:${bedside.state.householdID}`));
-  return { notices, send, json, join, setup, report, house, advance: s => now += s, now: () => now };
+  return { notices, send, json, join, setup, report, keep, house, advance: s => now += s, now: () => now };
 }
 const out = { kind: 'adapter', connected: false }, back = { kind: 'adapter', connected: true };
 
@@ -52,12 +54,10 @@ test('caregivers are told once the phone has been out for 10 minutes, and their 
   await f.report(bedside, back);
   const since = f.advance(60);
   await f.report(bedside, out);
-  f.advance(599);
-  await f.report(bedside, out);
+  await f.keep(bedside, out, 599);
   assert.deepEqual(f.notices, []);
   assert.equal((await f.json('poll', { available: true }, tom.credential)).state.bedsidePhone, undefined);
-  f.advance(1);
-  await f.report(bedside, out);
+  await f.keep(bedside, out, 1);
   assert.deepEqual(f.notices.map(n => [n.token[0], n.type, n.state, n.title, n.body]).sort(), [
     ['1', 'phone', 'out', 'Rose’s phone isn’t connected', 'Not connected for 10 minutes. The touchscreen still works.'],
     ['2', 'phone', 'out', 'Rose’s phone isn’t connected', 'Not connected for 10 minutes. The touchscreen still works.'],
@@ -78,8 +78,7 @@ test('when the phone is back, only the caregivers who were told hear it, with ho
   const f = fixture(), bedside = await f.setup();
   const tom = await f.join(bedside, 'Tom', { caregiver: true, alerts: 1 });
   await f.report(bedside, out);
-  f.advance(600);
-  await f.report(bedside, out);
+  await f.keep(bedside, out, 600);
   // Joined after the first notice: no "back" for them.
   await f.join(bedside, 'Ann', { caregiver: true, alerts: 2 });
   f.advance(900);
@@ -100,15 +99,32 @@ test('a quick replug, or the seconds the phone takes to connect, says nothing', 
   const f = fixture(), bedside = await f.setup();
   await f.join(bedside, 'Tom', { caregiver: true, alerts: 1 });
   await f.report(bedside, out);
-  f.advance(500);
-  await f.report(bedside, back);
-  f.advance(5);
+  await f.keep(bedside, out, 500);
+  await f.keep(bedside, back, 5);
   await f.report(bedside, out);
-  f.advance(500);
-  await f.report(bedside, out);
+  await f.keep(bedside, out, 500);
   assert.deepEqual(f.notices, []);
-  f.advance(100);
+  await f.keep(bedside, out, 100);
+  assert.equal(f.notices.length, 1);
+});
+
+test('a gap in the reports, as while Porch was off screen, starts the clock again', async () => {
+  const f = fixture(), bedside = await f.setup();
+  await f.join(bedside, 'Tom', { caregiver: true, alerts: 1 });
   await f.report(bedside, out);
+  // Porch off screen for 15 minutes, saying nothing, while someone plugs the phone back in. Opened again, it says
+  // "not connected" for the moment the Cell2Jack takes to answer: that's not 15 minutes out.
+  f.advance(900);
+  await f.report(bedside, out);
+  await f.keep(bedside, back, 3);
+  assert.deepEqual(f.notices, []);
+  // Out, then a gap, then seen out for 10 minutes: told then, not counting the time before the gap.
+  await f.report(bedside, out);
+  f.advance(300);
+  await f.report(bedside, out);
+  await f.keep(bedside, out, 590);
+  assert.deepEqual(f.notices, []);
+  await f.keep(bedside, out, 10);
   assert.equal(f.notices.length, 1);
 });
 
@@ -116,11 +132,11 @@ test('no phone set up forgets it; old apps and the background say nothing; only 
   const f = fixture(), bedside = await f.setup();
   const tom = await f.join(bedside, 'Tom', { caregiver: true, alerts: 1 });
   await f.report(bedside, out);
-  f.advance(600);
+  await f.keep(bedside, out, 590);
   await f.report(bedside);
   await f.report(bedside, { kind: 'telephone', connected: false });
   assert.equal(f.house(bedside).bedsidePhone.noticedAt, undefined);
-  await f.report(bedside, out);
+  await f.keep(bedside, out, 10);
   assert.equal(f.notices.length, 1);
   // A caregiver turned the phone keypad off at the bedside: no banner, and no "back" either.
   await f.report(bedside, null);
@@ -132,7 +148,7 @@ test('no phone set up forgets it; old apps and the background say nothing; only 
   await f.json('poll', { available: true, phone: out }, tom.credential);
   f.advance(600);
   await f.json('poll', { available: true, phone: out }, tom.credential);
-  assert.deepEqual(f.house(bedside).bedsidePhone, { kind: 'adapter', connected: true, since: f.now() - 600 });
+  assert.deepEqual(f.house(bedside).bedsidePhone, { kind: 'adapter', connected: true, since: f.now() - 600, reportedAt: f.now() - 600 });
 });
 
 test('how long, roughly', () => {

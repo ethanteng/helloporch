@@ -228,8 +228,8 @@ test('an invitation sets up one bedside with its link, then shows the household'
   const since = f.now();
   await poll({ kind: 'cell2jack', connected: false });
   assert.deepEqual((await listPorches(session, f.store))[0].phone, { kind: 'cell2jack', connected: false, since });
-  f.advance(600);
-  await poll({ kind: 'cell2jack', connected: false });
+  // Seen out for 10 minutes, a report every 30 seconds.
+  for (let seconds = 0; seconds < 600; seconds += 30) { f.advance(30); await poll({ kind: 'cell2jack', connected: false }); }
   assert.deepEqual((await listPorches(session, f.store))[0].phone, { kind: 'cell2jack', connected: false, since, noticed: true });
   await poll(null);
   assert.equal((await listPorches(session, f.store))[0].phone, undefined);

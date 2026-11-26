@@ -40,8 +40,10 @@ test('saved server responses still match what the server sends', async () => {
     // The bedside's phone has been out for 10 minutes, so caregivers' snapshots say since when.
     // Everyone joins after, so the bedside sees them join at its server time.
     await json(200, 'poll', { available: true, phone: { kind: 'adapter', connected: false } }, bedside.credential);
-    now += 600;
-    await json(200, 'poll', { available: true, phone: { kind: 'adapter', connected: false } }, bedside.credential);
+    for (let seconds = 0; seconds < 600; seconds += 30) {
+      now += 30;
+      await json(200, 'poll', { available: true, phone: { kind: 'adapter', connected: false } }, bedside.credential);
+    }
     const invite = (name, caregiver) => json(200, 'createInvite', { name, permissions: { audio: true, video: true }, caregiver }, bedside.credential, '123456');
     const ethan = await json(200, 'claimInvite', { code: (await invite('Ethan', true)).code, ...device(2) });
     const lee = await json(200, 'claimInvite', { code: (await invite('Lee', false)).code, platform: 'android', ...device(3) });
