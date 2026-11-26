@@ -2117,6 +2117,13 @@ final class CaregiverInputTests: XCTestCase {
         XCTAssertEqual(updated.accessibilityLabel, "Do Not Disturb, \(MessageSettingsViewController.hourText(23))–\(MessageSettingsViewController.hourText(7))")
     }
 
+    /// A message left during Do Not Disturb comes passive, and stays quiet while Porch is open, as it does while it's closed.
+    func testAMessageLeftDuringDoNotDisturbShowsOnlyInTheListWhilePorchIsOpen() {
+        let quiet = UNMutableNotificationContent(); quiet.interruptionLevel = .passive
+        XCTAssertEqual(FamilyMessageAlerts.presentation(for: quiet), [.list])
+        XCTAssertEqual(FamilyMessageAlerts.presentation(for: UNMutableNotificationContent()), [.banner, .list, .sound])
+    }
+
     @MainActor func testFamilyNameAndPhotoPageIsOnlyTheNameAndPhoto() {
         let profile = FamilyProfileViewController(); profile.loadViewIfNeeded()
         XCTAssertEqual(profile.title, "Your name and photo")

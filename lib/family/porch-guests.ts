@@ -67,6 +67,8 @@ export async function handlePorchGuestAction(_action: string, context: PorchGues
     requireValue(current.members.some(m => m.id === me.id && !m.revoked), "This call is no longer available.", 404);
     const invitee = current.members.find(m => m.id === target.id && !m.revoked && m.role === "family" && ![live.from, live.to].includes(m.id));
     requireValue(invitee, "This person isn't in your family on Porch.", 404);
+    // Do Not Disturb too: a check-in can turn it on while the room is checked.
+    if (inDoNotDisturb(invitee, now)) throw new FamilyError(`${displayName(invitee)} isn't taking calls right now.`, 409, doNotDisturbCode);
     requireValue(!activePorchGuest(live), "Someone is already being added to this call.", 409);
     requireValue((live.porchGuests?.length ?? 0) < porchGuestLimits.perCall, "This call can't add more people. Start a new call to add someone else.", 429);
     const added: PorchGuest = { id: randomUUID(), memberID: target.id, addedBy: me.id, invitedAt: now, ringUntil: now + porchGuestLimits.ringSeconds, state: "ringing" };

@@ -34,6 +34,8 @@ async function fixture() {
     headers:{...(credential?{Authorization:`Bearer ${credential}`}:{}),...(code?{'X-Porch-Setup-Code':code}:{})},
     body:JSON.stringify({action,...(['claimInvite','createHousehold'].includes(action)?{deviceID:randomUUID(),deviceSecret:randomBytes(32).toString('hex')}:{}),...values})}),
     {store,media,now:()=>now,endRoom:async()=>{},
+     // Everyone on a call is in its room, as far as a fake LiveKit says.
+     phoneGuestServices:()=>({ rooms:{ async getParticipant(_room,identity){ return { identity, attributes:{} }; }, async removeParticipant(){} }, sip:{} }),
      sendPush:async(device,call)=>{ pushes.push({device,call}); return {delivered:true}; },
      sendAlert:async(device,alert)=>{ alerts.push({device,alert}); return {delivered:true}; }});
   const json = async (...args) => { const response=await send(...args); assert.equal(response.status,200,await response.clone().text()); return response.json(); };
@@ -146,6 +148,21 @@ test('someone on Do Not Disturb can\'t be rung into a call, and caregivers see w
   const refused=await f.error(await f.send('addPorchGuest',{callID,memberID:f.ethan.state.me.id},f.david.credential));
   assert.deepEqual(refused,{status:409,error:"Ethan isn't taking calls right now.",errorCode:'doNotDisturb'});
   assert.equal(f.pushes.length,0);
+  // Turned on while the room is being checked: the update that would ring him looks again.
+  await f.json('poll',{available:true,doNotDisturb:{on:false}},f.ethan.credential);
+  const late=f.store.compareAndSet.bind(f.store);
+  let turnedOn=false;
+  f.store.compareAndSet=async(key,before,after)=>{
+    if (!turnedOn && JSON.parse(after).call?.porchGuests?.length) {
+      turnedOn=true;
+      const house=JSON.parse(before); house.members.find(m=>m.id===f.ethan.state.me.id).doNotDisturb={on:true};
+      await late(key,before,JSON.stringify(house));
+    }
+    return late(key,before,after);
+  };
+  const raced=await f.error(await f.send('addPorchGuest',{callID,memberID:f.ethan.state.me.id},f.david.credential));
+  f.store.compareAndSet=late;
+  assert.deepEqual([turnedOn,raced.status,raced.errorCode,f.pushes.length],[true,409,'doNotDisturb',0]);
   // The bedside and caregivers see it on Ethan; David, who isn't on it, has nothing to show.
   const people=(await f.json('poll',{available:true},f.bedside.credential)).state.people;
   assert.deepEqual(people.map(p=>[p.name,p.doNotDisturb]),[['Ethan',true],['David',undefined]]);

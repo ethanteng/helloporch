@@ -223,7 +223,7 @@ test('Android message alerts are notifications on the messages channel, one per 
  assert.equal((await sendAlertPush(android,{...alert,quiet:true},undefined,1800000000,google.request)).delivered,true);
  assert.deepEqual(JSON.parse(google.sends()[1].options.body),{message:{token:android.token,
   data:{type:'message',messageID:alert.messageID,recipientID:alert.recipientID,badge:'2',quiet:'1'},
-  android:{priority:'HIGH',ttl:'604800s',notification:{title:alert.title,body:alert.body,channel_id:'messages-quiet',tag:`porch-messages-${alert.recipientID}`,notification_count:2}}}});
+  android:{priority:'NORMAL',ttl:'604800s',notification:{title:alert.title,body:alert.body,channel_id:'messages-quiet',tag:`porch-messages-${alert.recipientID}`,notification_count:2}}}});
 }));
 
 test('Android every-call notices use their own channel, the newest replacing the last for that family',()=>withFCM(async()=>{
