@@ -232,6 +232,22 @@ test('someone on Do Not Disturb isn\'t rung: the other is, and with both on it t
   const both=await f.send('startCall',{targetIDs:[ids.ethan,ids.david],mode:'video',kind:'call'},setup.bedside.credential);
   assert.equal(both.status,409);
   assert.deepEqual(await both.json().then(body=>[body.errorCode,body.error]),['doNotDisturb',"Ethan and David aren't taking calls right now."]);
+  // Ethan on it and David's phone unreachable: it's still Do Not Disturb, naming Ethan.
+  const g=fixture(),other=await g.family();
+  await g.json('poll',{available:false,doNotDisturb:{on:true}},other.ethan.credential);
+  const stored=g.stored(other); delete stored.members.find(m=>m.id===other.ids.david).voip;
+  g.store.values.set(`house:${other.bedside.state.householdID}`,JSON.stringify(stored));
+  const one=await g.send('startCall',{targetIDs:[other.ids.ethan,other.ids.david],mode:'video',kind:'call'},other.bedside.credential);
+  assert.equal(one.status,409);
+  assert.deepEqual(await one.json().then(body=>[body.errorCode,body.error]),['doNotDisturb',"Ethan isn't taking calls right now."]);
+});
+
+test('a group call never falls back to a phone',async()=>{
+  const f=fixture(),setup=await f.family();
+  const started=(await f.call(setup)).state.call;
+  const fallback=await f.send('fallback',{callID:started.id},setup.bedside.credential);
+  assert.equal(fallback.status,409);
+  assert.equal((await f.view(setup.david.credential)).state,'pending','David still rings');
 });
 
 test('a push that fails after the other person has answered stops ringing that phone',async()=>{

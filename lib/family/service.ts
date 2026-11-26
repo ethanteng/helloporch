@@ -708,9 +708,13 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         const target = group ? group.find(ringable) ?? group.find(m => !quiet(m)) ?? group[0] : house.members.find(m => m.id === input.targetID && !m.revoked && m.role !== me.role);
         requireValue(target, "This person is not paired with your device.", 403);
         requireValue(!house.call || house.call.state === "ended", "Another call is already in progress.", 409);
-        // Before whether their app can ring: the bedside offers a message for this, and never tries their regular phone.
-        if (quiet(target)) throw new FamilyError(group && group.length > 1 ? `${group.map(displayName).join(" and ")} aren't taking calls right now.` : `${displayName(target)} isn't taking calls right now.`, 409, doNotDisturbCode);
-        if (!ringable(target)) throw new FamilyError(group && group.length > 1 ? "Their Porch apps are not ready." : "Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        if (!ringable(target)) {
+          // Do Not Disturb comes before whether an app can ring: the bedside offers a message for it, and never tries a
+          // regular phone. A group with someone on it and no one else who can ring says so too.
+          const resting = group ? group.filter(quiet) : quiet(target) ? [target] : [];
+          if (resting.length) throw new FamilyError(`${resting.map(displayName).join(" and ")} ${resting.length > 1 ? "aren't" : "isn't"} taking calls right now.`, 409, doNotDisturbCode);
+          throw new FamilyError(group && group.length > 1 ? "Their Porch apps are not ready." : "Their Porch app is not ready. Ask them to open it and keep it unlocked.", 409, "offline");
+        }
         if (input.kind === "dropIn") requireValue(target.role === "bedside" && mayDropIn(house, me, input.mode), "You are not approved for this type of drop-in.", 403);
         const kind = callKind(house, me, target, input.mode, input.kind, online(target, now));
         // Family phones call only the bedside, which rings for the caregiver's chosen time.
@@ -761,6 +765,8 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         requireValue(call && [call.from, call.to].includes(me.id) && callIDFor(call, me.id) === input.callID, "This call is no longer available.", 404);
         if (action === "fallback") {
           requireValue(me.role === "bedside" && call.from === me.id && call.kind === "call", "Phone fallback is only available to the bedside caller.", 403);
+          // A group key has no phone to try, and trying one would hang up the other person still ringing.
+          requireValue(!call.porchGuests?.some(g => g.group), "A group call has no phone to try.", 409);
           if (call.state === "accepted") throw new FamilyError("They answered on Porch. Phone fallback was cancelled.", 409, "answered");
           requireValue(call.state === "pending", "This call already ended.", 410);
           finishCall(call, "Trying their regular phone.", now); cleanupRoom = callRoom(call);
