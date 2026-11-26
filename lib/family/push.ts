@@ -154,10 +154,12 @@ export async function sendAlertPush(device: VoIPRegistration, alert: MessageAler
 }
 
 /** A visible notice on a caregiver's phone that isn't a message: every call to the bedside was turned on or off
- * (`everyCall`), or a phone call came in meanwhile (`callNotice`, with the call to end). It carries no badge, and has its
- * own thread. `recipientID` says which family it's about, as for messages. */
+ * (`everyCall`), or a phone call came in meanwhile (`callNotice`, with the call to end), or the bedside's desk phone isn't
+ * connected or is again (`phone`). It carries no badge, and has its own thread. `recipientID` says which family it's
+ * about, as for messages. */
 export type CaregiverNotice = { type: "everyCall"; recipientID: string; title: string; body: string }
-  | { type: "callNotice"; recipientID: string; callID: string; title: string; body: string };
+  | { type: "callNotice"; recipientID: string; callID: string; title: string; body: string }
+  | { type: "phone"; recipientID: string; state: "out" | "back"; title: string; body: string };
 export async function sendNoticePush(device: VoIPRegistration, notice: CaregiverNotice, createSession: typeof connect = connect, now = Math.floor(Date.now() / 1000), request: typeof fetch = fetch): Promise<PushResult> {
   if (!pushConfigured(device)) return { delivered: false };
   const thread = `porch-everycall-${notice.recipientID}`;
@@ -168,6 +170,17 @@ export async function sendNoticePush(device: VoIPRegistration, notice: Caregiver
     return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: randomUUID(), expiration: now + 3600,
       payload: { aps: { alert: { title: notice.title, body: notice.body }, sound: "default", "thread-id": thread, category: "PORCH_CALL_NOTICE" },
         type: notice.type, recipientID: notice.recipientID, callID: notice.callID } }, createSession);
+  }
+  if (notice.type === "phone") {
+    // The bedside's phone went out, or came back: kept for a day, as the Call tab says it after that. Its own thread on
+    // an iPhone. On Android each kind replaces its own last one for that family, so going in and out doesn't pile up.
+    const phoneThread = `porch-phone-${notice.recipientID}`;
+    if (device.platform === "android") {
+      return sendFCM(device, { data: { type: notice.type, recipientID: notice.recipientID, state: notice.state },
+        android: { priority: "HIGH", ttl: `${86400}s`, notification: { title: notice.title, body: notice.body, channel_id: "phone", sound: "default", tag: `${phoneThread}-${notice.state}` } } }, request, now);
+    }
+    return sendAPNs(device, { topic: process.env.APNS_BUNDLE_ID!, pushType: "alert", id: randomUUID(), expiration: now + 86400,
+      payload: { aps: { alert: { title: notice.title, body: notice.body }, sound: "default", "thread-id": phoneThread }, type: notice.type, recipientID: notice.recipientID, state: notice.state } }, createSession);
   }
   // Kept for a day: after that, the Call tab says whether it's still on.
   if (device.platform === "android") {

@@ -11,6 +11,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.ethanteng.helloporch.core.AttendanceTracker
 import com.ethanteng.helloporch.core.BedsideAttendance
+import com.ethanteng.helloporch.core.BedsidePhoneReport
 import com.ethanteng.helloporch.core.BedsidePreferences
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.CallSlots
@@ -51,7 +52,8 @@ class PorchApplication : Application() {
     val coordinator by lazy {
         FamilyCoordinator(device, scope, { service(it) }, PollOrder(), canReceive = { onScreen && screenReady }, attendance = AttendanceTracker.shared,
             afterChange = ::afterSnapshot, bedsideLanguage = { BedsidePreferences.load(settings).language },
-            appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", doNotDisturb = { DoNotDisturb.load(settings).checkIn() })
+            appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", doNotDisturb = { DoNotDisturb.load(settings).checkIn() },
+            bedsidePhone = ::bedsidePhone)
     }
     val keypadReport by lazy { KeypadNumberReport(scope, { service(it) }, pin = { caregiverPIN }, now = SystemClock::elapsedRealtime) }
     /** The call this device is ringing for or on. */
@@ -133,6 +135,16 @@ class PorchApplication : Application() {
     /** Stops the Cell2Jack, if this device made one: when Porch leaves the front, or the tablet stops being the
      * bedside, such as by joining a family. */
     fun stopCell2Jack() { if (cell2jackKeypad.isInitialized()) cell2jack.stop() }
+
+    /** The bedside's desk phone for its check-ins, as This tablet's Connect the physical phone shows it: set up once the
+     * phone keypad is on, and connected while the Cell2Jack answers. Only while the bedside is in front, where the
+     * Cell2Jack runs: behind another app, or on with a call while the screen is off, Porch can't tell. */
+    private fun bedsidePhone(): BedsidePhoneReport? {
+        // In front, the bedside has made its Cell2Jack (bedsideCameToFront). Asking a family phone would make one.
+        val inFront = device.experience == PorchExperience.BEDSIDE && activityResumed && cell2jackKeypad.isInitialized()
+        if (!inFront) return null
+        return BedsidePhoneReport.of(inFront = true, setUp = cell2jack.enabled.value, connected = cell2jack.isReady.value)
+    }
 
     override fun onCreate() {
         super.onCreate()

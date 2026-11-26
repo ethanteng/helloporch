@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import com.ethanteng.helloporch.core.BedsidePhone
 import com.ethanteng.helloporch.core.CallPreferences
 import com.ethanteng.helloporch.core.DoNotDisturb
 import com.ethanteng.helloporch.core.PorchNumber
@@ -46,6 +47,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -472,6 +475,8 @@ private fun familyTitle(app: PorchApplication, links: FamilyLinks, family: Famil
 private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<FamilyCredential>, onChanged: () -> Unit) {
     // A family that removed this phone, by device ID, while the phone asks before taking it off.
     var removing by rememberSaveable { mutableStateOf<String?>(null) }
+    // The family whose bedside's desk phone What to check opened the steps for.
+    var reconnecting by remember { mutableStateOf<Reconnecting?>(null) }
     // As on iOS, the microphone and, for video, the camera are asked for before the call starts. Asking after would
     // leave the bedside ringing while the question is up, or after it's refused.
     val context = LocalContext.current
@@ -530,16 +535,24 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
                 val (status, present) = familyStatus(link)
                 Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), tonalElevation = 2.dp) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        // Caregivers see when every call drops in, and can turn it off here. A phone call that started while it
-                        // was on shows under it, even once it's off, and can be ended here.
+                        // Caregivers see when every call drops in, and can turn it off here, and when the bedside's desk
+                        // phone has been out a while, and what to check there. A phone call that started while every call
+                        // was on shows under them, even once it's off, and can be ended here. They sit closer together than
+                        // the rest of the card, as one group.
                         val caregiver = state?.me?.caregiver == true && link.accessRemoved != true
                         val everyCall = state?.everyCall?.takeIf { caregiver }
-                        if (everyCall != null) EveryCallBanner(everyCall, bedsideDevice(state), busy = working == "${family.deviceID}:turnOffEveryCall") {
-                            act(family, "turnOffEveryCall", emptyMap(), "Every call is off")
-                        }
+                        val phone = state?.bedsidePhone?.takeIf { caregiver }
                         val call = state?.bedsideCall?.takeIf { caregiver }
-                        if (state != null && call != null) BedsideCallStrip(call, state.serverTime, busy = working == "${family.deviceID}:endBedsideCall") {
-                            act(family, "endBedsideCall", mapOf("callID" to JsonPrimitive(call.id)), "Call ended")
+                        if (state != null && (everyCall != null || phone != null || call != null)) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (everyCall != null) EveryCallBanner(everyCall, bedsideDevice(state), busy = working == "${family.deviceID}:turnOffEveryCall") {
+                                act(family, "turnOffEveryCall", emptyMap(), "Every call is off")
+                            }
+                            if (phone != null) PhoneNotConnectedBanner(phone, name) {
+                                reconnecting = Reconnecting(family.deviceID, phone, name, bedsideDevice(state))
+                            }
+                            if (call != null) BedsideCallStrip(call, state.serverTime, busy = working == "${family.deviceID}:endBedsideCall") {
+                                act(family, "endBedsideCall", mapOf("callID" to JsonPrimitive(call.id)), "Call ended")
+                            }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(name, size = 56.dp)
@@ -565,6 +578,16 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
+    // Its steps stay open once the phone is back, saying so, until they're closed.
+    reconnecting?.let { shown ->
+        families.firstOrNull { it.deviceID == shown.deviceID }?.let { family ->
+            val state = links.state(family)
+            val live = state?.bedsidePhone
+            LaunchedEffect(live) { if (live != null && live != shown.phone) reconnecting = shown.copy(phone = live) }
+            // A check-in that hasn't arrived, or failed, is not the phone coming back.
+            ReconnectPhoneSheet(live ?: shown.phone, connected = BedsidePhone.isConnected(state != null, live), shown.name, shown.bedsideDevice, onDismiss = { reconnecting = null })
+        }
+    }
     families.firstOrNull { it.deviceID == removing }?.let { family ->
         // As on iOS (confirmRemoval): only a new invitation brings the family back.
         val name = if (families.size > 1) app.device.familyName(family) ?: links.state(family)?.householdName else null
@@ -578,21 +601,42 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
     }
 }
 
+/** The steps to reconnect a bedside's desk phone that are open: its family by this phone's device ID in it, the phone as
+ * last heard while it was out, and the bedside's name and kind of device. */
+private data class Reconnecting(val deviceID: String, val phone: BedsidePhone, val name: String, val bedsideDevice: String)
+
+/**
+ * A caregiver's notice at the top of the bedside's card, such as Every call dropping in or the desk phone being out. Every
+ * one is laid out alike, so stacked together their words start, and what ends them stops, at the same place: the icon
+ * centered in its own column, the title over what it's about, then `trailing`, such as a button. `modifier` makes the
+ * whole of it one button, inside its rounded corners.
+ */
+@Composable
+internal fun CaregiverNotice(@DrawableRes icon: Int, iconTint: Color, title: String, titleColor: Color, detail: String, detailColor: Color,
+    background: Color, modifier: Modifier = Modifier, trailing: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(background).then(modifier).heightIn(min = 68.dp)
+        .padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(26.dp), contentAlignment = Alignment.Center) {
+            Icon(painterResource(icon), contentDescription = null, Modifier.size(20.dp), tint = iconTint)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = titleColor)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp, color = detailColor)
+        }
+        Spacer(Modifier.width(8.dp))
+        trailing()
+    }
+}
+
 /** Every call drops in: a faint red strip at the top of the bedside's card, with who turned it on and when, and Turn off. */
 @Composable
 private fun EveryCallBanner(everyCall: EveryCallDropIn, bedside: String, busy: Boolean, onTurnOff: () -> Unit) {
-    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = EveryCallColors.tint) {
-        Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(R.drawable.ic_warning), contentDescription = null, Modifier.size(24.dp), tint = PorchBrand.danger)
-            Column(Modifier.weight(1f)) {
-                Text("Every call drops in", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = EveryCallColors.ink)
-                Text(everyCallSince(everyCall, bedside), style = MaterialTheme.typography.bodyMedium, color = EveryCallColors.meta)
-            }
-            OutlinedButton(onClick = onTurnOff, enabled = !busy, border = BorderStroke(1.5.dp, PorchBrand.danger),
-                colors = ButtonDefaults.outlinedButtonColors(containerColor = PorchBrand.paper, contentColor = EveryCallColors.ink)) {
-                Text("Turn off", fontWeight = FontWeight.Bold)
-            }
+    CaregiverNotice(R.drawable.ic_warning, PorchBrand.danger, "Every call drops in", EveryCallColors.ink, everyCallSince(everyCall, bedside),
+        EveryCallColors.meta, EveryCallColors.tint) {
+        OutlinedButton(onClick = onTurnOff, enabled = !busy, border = BorderStroke(1.5.dp, PorchBrand.danger),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = PorchBrand.paper, contentColor = EveryCallColors.ink)) {
+            Text("Turn off", fontWeight = FontWeight.Bold)
         }
     }
 }

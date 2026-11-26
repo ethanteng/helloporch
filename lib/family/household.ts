@@ -1,3 +1,4 @@
+import type { BedsidePhone } from "./bedside-phone.ts";
 import type { FamilyVoice, PendingVoice } from "./voices.ts";
 import type { CallTranslation } from "./translation.ts";
 import type { CallServer } from "../calls/server.ts";
@@ -101,6 +102,8 @@ export type BedsideLanguage = (typeof bedsideLanguages)[number];
 export type Household = { id: string; name: string; createdAt?: number; dropInEnabled: boolean; members: Member[]; invites: Invite[]; call?: Call; messagesEnabled?: boolean; inbox?: InboxEntry[]; outbox?: OutboxEntry[]; texts?: TextEntry[]; purgeAt?: number; phoneDropIns?: PhoneDropIn[]; ringSeconds?: number; speechVoices?: Record<string, string | null>; speechUsage?: SpeechUsage; bedsideLanguage?: BedsideLanguage;
   blockUnknownCallers?: boolean; keypadNumbers?: string[]; allowedCallers?: AllowedCaller[]; blockedCallers?: BlockedCaller[]; porchNumber?: PorchNumber; phoneSetup?: PhoneSetup; numberFromSetup?: boolean; shareAttendance?: boolean; attendanceSince?: number;
   everyCall?: EveryCall;
+  /** The bedside's desk phone as it last reported it, and whether caregivers were told it's out (bedside-phone.ts). */
+  bedsidePhone?: BedsidePhone;
   /** Family voices taken out of use and still to delete from ElevenLabs, and voices made on one UTC day (see voices.ts). */
   retiredVoices?: string[]; voiceUsage?: { day: number; made: number } };
 export type Auth = { householdID: string; deviceID: string; hash: string };

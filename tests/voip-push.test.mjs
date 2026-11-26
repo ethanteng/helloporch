@@ -121,6 +121,11 @@ test('every-call notices are plain notifications without a badge, in their own t
   assert.equal((await sendNoticePush({token:'cd'.repeat(32),environment:'sandbox'},call,session,1800000000)).delivered,true);
   assert.equal(received[1].headers['apns-expiration'],String(1800000000+3600));
   assert.deepEqual(received[1].body,{aps:{alert:{title:call.title,body:call.body},sound:'default','thread-id':`porch-everycall-${call.recipientID}`,category:'PORCH_CALL_NOTICE'},type:'callNotice',recipientID:call.recipientID,callID:call.callID});
+  // The bedside's phone, out or back: its own thread, kept for a day.
+  const phone={type:'phone',recipientID:notice.recipientID,state:'out',title:'Mom’s phone isn’t connected',body:'Not connected for 10 minutes. The touchscreen still works.'};
+  assert.equal((await sendNoticePush({token:'cd'.repeat(32),environment:'sandbox'},phone,session,1800000000)).delivered,true);
+  assert.equal(received[2].headers['apns-expiration'],String(1800000000+86400));
+  assert.deepEqual(received[2].body,{aps:{alert:{title:phone.title,body:phone.body},sound:'default','thread-id':`porch-phone-${phone.recipientID}`},type:'phone',recipientID:phone.recipientID,state:'out'});
  } finally {
   server.closeAllConnections?.(); await new Promise(resolve=>server.close(resolve));
   keys.forEach((key,i)=>previous[i]===undefined?delete process.env[key]:process.env[key]=previous[i]);
@@ -238,6 +243,12 @@ test('Android every-call notices use their own channel, the newest replacing the
  assert.equal((await sendNoticePush(android,call,undefined,1800000000,google.request)).delivered,true);
  assert.deepEqual(JSON.parse(google.sends()[1].options.body),{message:{token:android.token,
   data:{type:'callNotice',recipientID:call.recipientID,callID:call.callID,title:call.title,body:call.body},android:{priority:'HIGH',ttl:'3600s'}}});
+ // The bedside's phone: its own channel, and out and back each replace their own last one for that family.
+ const phone={type:'phone',recipientID:notice.recipientID,state:'back',title:'Mom’s phone is connected again',body:'Back after 25 minutes.'};
+ assert.equal((await sendNoticePush(android,phone,undefined,1800000000,google.request)).delivered,true);
+ assert.deepEqual(JSON.parse(google.sends()[2].options.body),{message:{token:android.token,
+  data:{type:'phone',recipientID:phone.recipientID,state:'back'},
+  android:{priority:'HIGH',ttl:'86400s',notification:{title:phone.title,body:phone.body,channel_id:'phone',sound:'default',tag:`porch-phone-${phone.recipientID}-back`}}}});
 }));
 
 test('each platform pushes only when its own sender is set up',()=>withFCM(async()=>{

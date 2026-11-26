@@ -1,4 +1,5 @@
 import UIKit
+import GameController
 import PorchCore
 
 /// Phone digits share Porch's existing actions; keyboard input remains independent.
@@ -148,6 +149,12 @@ final class Cell2JackKeypad {
     func deskPhone(driver: Bool, keyboardConnected: Bool) -> DeskPhone {
         if (driver && isReady) || (keyboardConnected && adapterHeard) { return .connected }
         return (driver && enabled) || adapterHeard ? .notConnected : .notSetUp
+    }
+    /// The desk phone for the bedside's check-in, as `deskPhone` has it, so caregivers hear when it's been out a while.
+    /// Nothing while Porch isn't on screen: the driver only connects then, so there's no telling.
+    func checkIn(driver: Bool = Cell2JackKeypad.supportsDriverPlatform, keyboardConnected: Bool = GCKeyboard.coalesced != nil) -> BedsidePhoneReport? {
+        BedsidePhoneReport.make(onScreen: sceneActive && isBedside(), driver: driver, driverOn: enabled, driverAnswering: isReady,
+                                keyboard: keyboardConnected, adapterHeard: adapterHeard)
     }
     /// Connects even while the phone keypad is off, until `endTrial`. Turning it on is up to whoever started the trial.
     func beginTrial() { trying = true; refresh() }

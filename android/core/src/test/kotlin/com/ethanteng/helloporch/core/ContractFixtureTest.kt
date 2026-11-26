@@ -22,9 +22,12 @@ class ContractFixtureTest {
         assertEquals(listOf("Sam"), bedside.invitations?.map { it.name })
         // Keys follow invitations accepted in the last day, so the bedside learns when each person joined.
         assertEquals(listOf(bedside.serverTime, bedside.serverTime), bedside.people.map { it.joinedAt })
+        assertNull(bedside.bedsidePhone, "only caregivers hear the phone is out")
         val family = snapshot("family-poll")
         assertEquals(true, family.me.caregiver); assertNull(family.call)
         assertEquals(0, family.waitingMessages); assertNull(family.messagePlayedAt)
+        // Out for 10 minutes, through the phone adapter.
+        assertEquals(BedsidePhone(since = 1800000000, kind = "adapter"), family.bedsidePhone)
         val ringing = snapshot("family-incoming-call")
         assertEquals("pending", ringing.call?.state); assertEquals("Mom", ringing.call?.callerName)
         // An answered call has no time limit: Number.MAX_SAFE_INTEGER, more than 32 bits.
@@ -34,7 +37,8 @@ class ContractFixtureTest {
 
     @Test fun caregiverStateAndErrorsDecode() {
         val response = fixture("caregiver-admin")
-        PorchJson.decodeFromJsonElement(FamilySnapshot.serializer(), response.getValue("state"))
+        val state = PorchJson.decodeFromJsonElement(FamilySnapshot.serializer(), response.getValue("state"))
+        assertEquals(BedsidePhone(since = 1800000000, kind = "adapter"), state.bedsidePhone)
         val admin = PorchJson.decodeFromJsonElement(FamilyAdminState.serializer(), response.getValue("admin"))
         assertEquals(listOf("Ethan", "Lee"), admin.people.map { it.name })
         assertEquals("Another call is already in progress.", fixture("error-busy").getValue("error").jsonPrimitive.content)

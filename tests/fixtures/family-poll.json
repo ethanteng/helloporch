@@ -25,6 +25,10 @@
       "override": {}
     },
     "waitingMessages": 0,
+    "bedsidePhone": {
+      "since": 1800000000,
+      "kind": "adapter"
+    },
     "family": [
       {
         "id": "00000000-0000-4000-8000-000000000005",
@@ -49,6 +53,6 @@
     ],
     "call": null,
     "busy": false,
-    "serverTime": 1800000000
+    "serverTime": 1800000600
   }
 }

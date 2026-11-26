@@ -23,6 +23,9 @@ final class ContractFixtureTests: XCTestCase {
         let family = try decode(FamilySnapshot.self, try fixture("family-poll")["state"])
         XCTAssertEqual(family.me.caregiver, true); XCTAssertNil(family.call)
         XCTAssertEqual(family.waitingMessages, 0); XCTAssertNil(family.messagePlayedAt)
+        // The bedside's phone has been out for 10 minutes, through the adapter.
+        XCTAssertEqual(family.bedsidePhone, BedsidePhone(since: 1_800_000_000, kind: "adapter")); XCTAssertEqual(family.bedsidePhone?.phoneKind, .adapter)
+        XCTAssertNil(bedside.bedsidePhone)
         let ringing = try decode(FamilySnapshot.self, try fixture("family-incoming-call")["state"])
         XCTAssertEqual(ringing.call?.state, "pending"); XCTAssertEqual(ringing.call?.callerName, "Mom")
         // An answered call has no time limit: Number.MAX_SAFE_INTEGER.

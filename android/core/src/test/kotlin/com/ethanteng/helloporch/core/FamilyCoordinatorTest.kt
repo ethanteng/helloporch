@@ -134,6 +134,36 @@ class FamilyCoordinatorTest {
         assertEquals(JsonPrimitive("1.0 (12)"), poll["appVersion"], "so the admin Porches list shows which version it runs")
     }
 
+    /** The bedside says whether its desk phone is connected, or that none is set up, while it can tell. Otherwise it
+     * says nothing, and the server keeps what it last heard, as when Porch pauses. */
+    @Test fun theBedsideSaysWhetherItsPhoneIsConnectedWhileItCanTell() = runTest {
+        val tablet = FamilyHarness(this, canBeBedside = true)
+        tablet.device.save(TestFamilies.bedside(1))
+        tablet.bedsidePhone = BedsidePhoneReport.Cell2Jack(connected = true)
+        tablet.answerPolls { snapshot(it.deviceID!!, role = "bedside") }
+        tablet.coordinator.start()
+        runCurrent()
+        tablet.bedsidePhone = BedsidePhoneReport.Cell2Jack(connected = false)
+        advanceTimeBy(2_000); runCurrent()
+        tablet.bedsidePhone = BedsidePhoneReport.NotSetUp
+        advanceTimeBy(2_000); runCurrent()
+        tablet.bedsidePhone = null
+        advanceTimeBy(2_000); runCurrent()
+        tablet.bedsidePhone = BedsidePhoneReport.Cell2Jack(connected = true)
+        tablet.coordinator.pause()
+        runCurrent()
+        assertEquals(listOf("""{"kind":"cell2jack","connected":true}""", """{"kind":"cell2jack","connected":false}""", "null", null, null),
+            tablet.transport.requests("poll").map { it["phone"]?.toString() }, "nor as it pauses")
+
+        val phone = FamilyHarness(this)
+        phone.device.save(family(2))
+        phone.bedsidePhone = BedsidePhoneReport.Cell2Jack(connected = false)
+        phone.answerPolls()
+        phone.coordinator.start()
+        runCurrent()
+        assertNull(phone.transport.requests("poll").single()["phone"], "only the bedside has a desk phone")
+    }
+
     /** A family's household is noted as it checks in, so a call that rings before the next check-in can say which
      * family it's from. */
     @Test fun eachCheckInIsPublishedAndItsHouseholdNoted() = runTest {

@@ -302,6 +302,73 @@ final class CaregiverInputTests: XCTestCase {
         }
     }
 
+    /// Once the bedside's phone has been out a while, a caregiver's Call tab says so on its card. What to check lists the
+    /// plugs for how it's plugged in, and says Connected as soon as it's back. Neither banner narrows the cards.
+    @MainActor func testCaregiversSeeWhenTheBedsidePhoneIsOut() throws {
+        let coordinator = FamilyCoordinator.shared, wasActive = coordinator.isActive
+        defer { coordinator.start(); if !wasActive { coordinator.pause() } }
+        try preservingPairings {
+            let defaults = UserDefaults.standard, experience = defaults.object(forKey: "porch.experience")
+            defer { coordinator.pause(); defaults.set(experience, forKey: "porch.experience") }
+            defaults.set("family", forKey: "porch.experience")
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Bundle.main.bundleIdentifier!,
+                           kSecAttrAccount as String: "porch.family.families"] as CFDictionary)
+            try NativeCallSettings.writeSecret(Data(), account: "porch.family.family")
+            let family = FamilyCredential(origin: URL(string: "https://example.invalid")!, credential: "tom-device.tom-secret", role: .family)
+            try PorchDevice.save(family)
+            // Not `start`: it would ask for notification and microphone permission, which stops later tests.
+            coordinator.installForTesting([family])
+            @MainActor func show(caregiver: Bool, out: Bool, everyCall: Bool = false) throws {
+                var state: [String: Any] = ["householdID": "reyes", "householdName": "Rose", "dropInEnabled": true,
+                    "me": ["id": "tom-device", "name": "Tom Reyes", "role": "family", "permissions": ["audio": false, "video": false], "online": true, "caregiver": caregiver],
+                    "people": [["id": "rose", "name": "Rose", "role": "bedside", "permissions": ["audio": false, "video": false], "online": true]],
+                    "busy": false, "serverTime": 1]
+                if out { state["bedsidePhone"] = ["since": Date().timeIntervalSince1970 - 1500, "kind": "adapter"] }
+                if everyCall { state["everyCall"] = ["by": "Linda Reyes", "at": Date().timeIntervalSince1970] }
+                coordinator.update(try JSONDecoder().decode(FamilyResponse.self, from: JSONSerialization.data(withJSONObject: ["state": state])))
+            }
+            try show(caregiver: true, out: true, everyCall: true)
+            let home = FamilyHomeViewController()
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 874))
+            window.rootViewController = PorchStyle.navigation(home)
+            window.makeKeyAndVisible()
+            defer { window.isHidden = true }
+            window.layoutIfNeeded()
+            let banner = try XCTUnwrap(descendants(home.view).first { $0.accessibilityIdentifier == "family.phone" })
+            XCTAssertTrue(labels(in: banner).compactMap(\.text).contains("Phone not connected"))
+            XCTAssertTrue(labels(in: banner).compactMap(\.text).contains { $0.hasPrefix("Since ") })
+            XCTAssertNotNil(descendants(home.view).first { $0.accessibilityIdentifier == "family.everyCall" })
+            XCTAssertEqual(home.form.frame.width, 375 - 48, "the banners don't narrow the cards")
+            // Two notices read as one group: their text starts at the same place, and they're the same height.
+            let everyCall = try XCTUnwrap(descendants(home.view).first { $0.accessibilityIdentifier == "family.everyCall" })
+            @MainActor func textStart(_ banner: UIView) throws -> CGFloat {
+                let title = try XCTUnwrap(labels(in: banner).first { ["Every call drops in", "Phone not connected"].contains($0.text) })
+                return title.convert(title.bounds, to: home.view).minX
+            }
+            XCTAssertEqual(try textStart(everyCall), try textStart(banner), accuracy: 0.5)
+            XCTAssertEqual(everyCall.bounds.height, banner.bounds.height, accuracy: 0.5)
+            XCTAssertEqual(banner.accessibilityLabel?.hasPrefix("Rose’s phone isn’t connected. Since "), true)
+            XCTAssertTrue((banner as? UIControl)?.accessibilityTraits.contains(.button) == true, "the banner opens what to check")
+
+            home.showPhoneCheck(credential: family)
+            let sheet = try XCTUnwrap((home.presentedViewController as? UINavigationController)?.viewControllers.first as? PhoneCheckViewController)
+            sheet.loadViewIfNeeded()
+            let texts = labels(in: sheet.view).compactMap(\.text)
+            XCTAssertTrue(texts.contains("Reconnect Rose’s phone"))
+            XCTAssertTrue(texts.contains("At Rose’s iPad, check each plug:"))
+            XCTAssertTrue(texts.contains("Adapter into the hub by the iPad"))
+            let status = try XCTUnwrap(descendants(sheet.view).first { $0.accessibilityIdentifier == "phoneCheck.status" })
+            XCTAssertTrue(status.accessibilityLabel?.hasPrefix("Not connected · since ") == true)
+            try show(caregiver: true, out: false)
+            XCTAssertEqual(status.accessibilityLabel, "Connected", "the sheet follows the bedside live")
+            XCTAssertFalse(descendants(home.view).contains { $0.accessibilityIdentifier == "family.phone" })
+            home.dismiss(animated: false)
+
+            try show(caregiver: false, out: true)
+            XCTAssertFalse(descendants(home.view).contains { $0.accessibilityIdentifier == "family.phone" }, "Only caregivers hear about it")
+        }
+    }
+
     /// The Every call notice once narrowed the whole Call tab: UIKit capped its text at half the row, and the form gave way.
     /// The cards keep the screen's width, and the call buttons' titles fit on one line, icons above them where needed.
     @MainActor func testCallTabKeepsItsWidthWithEveryCallAndItsButtonTitlesFit() throws {
@@ -419,7 +486,7 @@ final class CaregiverInputTests: XCTestCase {
     /// background thread, so every notice tapped while Porch wasn't open crashed it.
     func testTappedNoticesOpenTheirTabAndFinishOnTheMainThread() {
         let notices: [(type: String?, opens: Notification.Name)] = [
-            ("everyCall", .porchOpenCallTab), ("callNotice", .porchOpenCallTab), (nil, .porchOpenReceivedMessages),
+            ("everyCall", .porchOpenCallTab), ("callNotice", .porchOpenCallTab), ("phone", .porchOpenCallTab), (nil, .porchOpenReceivedMessages),
         ]
         for notice in notices {
             let content = UNMutableNotificationContent()

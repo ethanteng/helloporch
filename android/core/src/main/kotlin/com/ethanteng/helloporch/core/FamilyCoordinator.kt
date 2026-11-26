@@ -74,6 +74,9 @@ class FamilyCoordinator(
     /** A family phone's Do Not Disturb as its check-ins say it ([DoNotDisturb.checkIn]), so each family can turn the
      * bedside's calls away while the phone is closed. Nothing leaves it as the server last heard it. */
     private val doNotDisturb: () -> JsonElement? = { null },
+    /** The bedside's desk phone as its check-ins report it, or null when Porch can't tell ([BedsidePhoneReport.of]),
+     * which leaves it as the server last heard it. */
+    private val bedsidePhone: () -> BedsidePhoneReport? = { null },
     private val afterChange: (FamilyLinks) -> Unit = {},
 ) {
     private class Link(val credential: FamilyCredential) {
@@ -139,6 +142,8 @@ class FamilyCoordinator(
                     values["features"] = JsonArray(listOf(JsonPrimitive("translation")))
                     bedsideLanguage()?.let { values["language"] = JsonPrimitive(it.code) }
                     appVersion?.let { values["appVersion"] = JsonPrimitive(it) }
+                    // Its desk phone, so caregivers hear when it's been out for a while. Only while Porch can tell.
+                    bedsidePhone()?.let { values["phone"] = it.json }
                 }
                 if (credential.role == PorchExperience.FAMILY) doNotDisturb()?.let { values["doNotDisturb"] = it }
                 val result = serviceFor(credential).send("poll", pollOrder.next(values))

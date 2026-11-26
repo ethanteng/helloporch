@@ -346,6 +346,9 @@ data class FamilySnapshot(
     val everyCall: EveryCallDropIn? = null,
     /** Family caregivers: the bedside's phone call that started while Every call was on. Older servers don't send it. */
     val bedsideCall: BedsideCall? = null,
+    /** Family caregivers: the bedside's desk phone, once it's been out long enough that they were told, until it's back.
+     * Older servers don't send it. */
+    val bedsidePhone: BedsidePhone? = null,
 ) {
     /** The language to report after a caregiver saves `language`, or null when the server already has it or can't keep it. */
     fun languageToReport(language: BedsideLanguage): BedsideLanguage? {

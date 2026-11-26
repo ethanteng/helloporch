@@ -1,10 +1,11 @@
 import { bedsideDevice, displayName, displayPhone, mutate, phoneDropIn, type Call, type Household, type Member } from "./household.ts";
 import { forgetRegistration, sendNoticePush, type CaregiverNotice, type PushResult, type VoIPRegistration } from "./push.ts";
 import type { FamilyStore } from "./store.ts";
+import { phoneNoticeAfter, roughly, type PhoneNotice } from "./bedside-phone.ts";
 
 /** Notices to caregivers' phones while every call drops in (see `everyCall` in household.ts). */
 export type NoticeDependencies = { sendNotice?: (device: VoIPRegistration, notice: CaregiverNotice) => Promise<PushResult> };
-type Notice = { title: string; body: string } & ({ type: "everyCall" } | { type: "callNotice"; callID: string });
+type Notice = { title: string; body: string } & ({ type: "everyCall" } | { type: "callNotice"; callID: string } | { type: "phone"; state: "out" | "back" });
 
 function bedsideName(house: Household) {
   const bedside = house.members.find(m => m.role === "bedside" && !m.revoked);
@@ -58,4 +59,19 @@ export async function noticeCall(store: FamilyStore, house: Household, call: Cal
       : house.keypadNumbers?.includes(number) ? `${displayPhone(number)} · On ${name}’s keypad` : `${displayPhone(number)} · Unknown number`;
   }
   await send(store, house, caregivers(house), { type: "callNotice", callID: call.id, title, body }, dependencies);
+}
+
+/** Tells caregivers the bedside's desk phone has been out for `phoneNoticeAfter`, or, only those who were told, that it's
+ * back. Everything else on Porch still works on the touchscreen, so it says so. */
+export async function noticePhone(store: FamilyStore, house: Household, notice: PhoneNotice, dependencies: NoticeDependencies) {
+  const name = bedsideName(house);
+  if (notice.state === "out") {
+    const told = new Set(house.bedsidePhone?.notified ?? []);
+    await send(store, house, caregivers(house).filter(m => told.has(m.id)), { type: "phone", state: "out",
+      title: `${name}’s phone isn’t connected`, body: `Not connected for ${roughly(phoneNoticeAfter)}. The touchscreen still works.` }, dependencies);
+    return;
+  }
+  const to = new Set(notice.to);
+  await send(store, house, caregivers(house).filter(m => to.has(m.id)), { type: "phone", state: "back",
+    title: `${name}’s phone is connected again`, body: `Back after ${roughly(notice.outFor)}.` }, dependencies);
 }
