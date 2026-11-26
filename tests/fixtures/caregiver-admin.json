@@ -25,6 +25,10 @@
       "override": {}
     },
     "waitingMessages": 0,
+    "bedsidePhone": {
+      "since": 1800000000,
+      "kind": "adapter"
+    },
     "family": [
       {
         "id": "00000000-0000-4000-8000-000000000005",
@@ -49,7 +53,7 @@
     ],
     "call": null,
     "busy": false,
-    "serverTime": 1800000000
+    "serverTime": 1800000600
   },
   "admin": {
     "householdName": "Mom",
@@ -103,7 +107,7 @@
       {
         "id": "00000000-0000-4000-8000-000000000002",
         "name": "Sam",
-        "expiresAt": 1800086400
+        "expiresAt": 1800087000
       }
     ]
   }

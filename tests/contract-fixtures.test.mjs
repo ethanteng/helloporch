@@ -26,7 +26,8 @@ test('saved server responses still match what the server sends', async () => {
   const saved = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
   Object.assign(process.env, env);
   try {
-    const store = new MemoryStore(), now = 1_800_000_000;
+    const store = new MemoryStore();
+    let now = 1_800_000_000;
     const device = n => ({ deviceID: `00000000-0000-4000-8000-${String(900 + n).padStart(12, '0')}`, deviceSecret: String(n).repeat(64).slice(0, 64) });
     const send = (action, values = {}, credential, pin) => handleFamily(new Request('https://porch.example/api/family', { method: 'POST',
       headers: { ...(credential ? { Authorization: `Bearer ${credential}` } : {}), ...(pin ? { 'X-Porch-Setup-Code': pin } : {}) },
@@ -36,6 +37,11 @@ test('saved server responses still match what the server sends', async () => {
     // Mom's iPad, a caregiver on an iPhone and a cousin on an Android phone.
     const bedside = await json(200, 'createHousehold', { name: 'Mom', ...device(1) }, undefined, env.PORCH_CONTACT_SETUP_CODE);
     await json(200, 'initializeCaregiverPIN', { pin: '123456' }, bedside.credential);
+    // The bedside's phone has been out for 10 minutes, so caregivers' snapshots say since when.
+    // Everyone joins after, so the bedside sees them join at its server time.
+    await json(200, 'poll', { available: true, phone: { kind: 'adapter', connected: false } }, bedside.credential);
+    now += 600;
+    await json(200, 'poll', { available: true, phone: { kind: 'adapter', connected: false } }, bedside.credential);
     const invite = (name, caregiver) => json(200, 'createInvite', { name, permissions: { audio: true, video: true }, caregiver }, bedside.credential, '123456');
     const ethan = await json(200, 'claimInvite', { code: (await invite('Ethan', true)).code, ...device(2) });
     const lee = await json(200, 'claimInvite', { code: (await invite('Lee', false)).code, platform: 'android', ...device(3) });

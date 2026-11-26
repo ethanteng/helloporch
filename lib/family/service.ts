@@ -16,7 +16,8 @@ import { guestCall, handlePorchGuestAction, porchGuestActions, publicPorchGuest 
 import { groupGuests, groupMembers, groupName, promoteGroupGuest, ringingGroupGuest } from "./group-calls.ts";
 import { handleProfileAction, maintainProfiles, profileActions, profileMedia, publicProfile } from "./profiles.ts";
 import { forgetRegistration, pushConfigured, sendAlertPush, sendVoIPPush, type MessageAlert, type PushResult, type VoIPRegistration } from "./push.ts";
-import { callTitle, noticeEveryCall } from "./notices.ts";
+import { callTitle, noticeEveryCall, noticePhone } from "./notices.ts";
+import { bedsidePhoneReport, notePhone, publicBedsidePhone, type PhoneNotice } from "./bedside-phone.ts";
 import { handleScreeningAction, pruneBlockedCallers, publicCallScreening, screeningActions } from "./screening.ts";
 import { handleSpeechAction, publicSpeech, speechActions, speechConfigured, type Synthesize } from "./speech.ts";
 import { doNotDisturbCode, inDoNotDisturb, noteDoNotDisturb } from "./do-not-disturb.ts";
@@ -139,6 +140,8 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
   // A phone call that came in meanwhile, which caregivers' phones show live and can end.
   const bedsideCall = me.role === "family" && me.caregiver && call?.everyCall && call.phone && call.state !== "ended"
     ? { id: call.id, title: callTitle(house, call), kind: call.kind, state: call.state, ...(call.acceptedAt !== undefined ? { acceptedAt: call.acceptedAt } : {}) } : undefined;
+  // The bedside's desk phone, once it's been out long enough that caregivers were told, until it's back.
+  const bedsidePhone = me.role === "family" && me.caregiver ? publicBedsidePhone(house) : undefined;
   return { householdID: house.id, householdName: house.name, dropInEnabled: house.dropInEnabled, ...(everyCall ? { everyCall } : {}), messagesEnabled: house.messagesEnabled !== false,
     // Family phones ring the bedside this long before offering voicemail.
     ringSeconds: ringSeconds(house),
@@ -162,6 +165,7 @@ function snapshot(house: Household, me: Member, now: number, pushable: Pushable 
     // When someone was last noticed at the bedside iPad, so family can tell whether a call now is likely to be answered.
     ...(me.role === "family" && attendanceShared(house) && bedside?.attendedAt !== undefined ? { bedsideAttendedAt: bedside.attendedAt } : {}),
     ...(bedsideCall ? { bedsideCall } : {}),
+    ...(bedsidePhone ? { bedsidePhone } : {}),
     // Caregivers on a family phone can add a regular phone number to their call with the bedside.
     ...(canAddPhoneGuests(me) ? { canAddPhoneGuests: true } : {}),
     // The rest of the family on Porch, so someone on a call with the bedside can ring them in. Names only. Someone on Do
@@ -495,10 +499,12 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
     let replaced: Call | undefined;
     // Whether every call drops in before this change, to tell the other caregivers when it's turned on or off.
     let everyCallBefore = false;
+    // The bedside's phone has been out long enough to tell caregivers, or is back after they were told.
+    let phoneNotice: PhoneNotice | undefined;
     const { house, result } = await mutate(store, auth.householdID, house => {
       // A failed save retries this update from scratch. Room teardown from the attempt that lost must not survive
       // into one that keeps the call going, or Mom and a guest are disconnected after all.
-      removedMedia = []; removeFromRoom = undefined; cleanupRoom = undefined; replaced = undefined;
+      removedMedia = []; removeFromRoom = undefined; cleanupRoom = undefined; replaced = undefined; phoneNotice = undefined;
       everyCallBefore = everyCallOn(house);
       const me = memberFor(house, auth);
       expire(house, now);
@@ -612,6 +618,10 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
         // Which version of Porch the bedside runs, for the admin Porches list. Apps from before it was sent say nothing.
         const version = appVersion(input.appVersion);
         if (newest && me.role === "bedside" && version) me.appVersion = version;
+        // Its desk phone, connected or not, or null with none set up. Apps from before it was sent say nothing, and an
+        // app in the background, which can't tell, leaves it out.
+        const phone = bedsidePhoneReport(input.phone);
+        if (newest && me.role === "bedside" && phone !== undefined) phoneNotice = notePhone(house, phone, now);
         if (newest) {
           me.available = input.available;
           noteAttendance(house, me, input.attendedSeconds, now);
@@ -819,6 +829,11 @@ export async function handleFamily(request: Request, dependencies: FamilyDepende
       return callJSON({ left: true });
     }
     const me = memberFor(house, auth);
+    if (phoneNotice) {
+      const notice = phoneNotice;
+      const notify = () => noticePhone(store, house, notice, dependencies).catch(() => undefined);
+      if (dependencies.afterResponse) dependencies.afterResponse(notify); else await notify();
+    }
     if (everyCallBefore !== everyCallOn(house) && ["setDropIn", "setDropInMode", "turnOffEveryCall"].includes(String(action))) {
       const notify = () => noticeEveryCall(store, house, me, everyCallOn(house), dependencies).catch(() => undefined);
       if (dependencies.afterResponse) dependencies.afterResponse(notify); else await notify();

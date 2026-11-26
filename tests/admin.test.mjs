@@ -220,6 +220,19 @@ test('an invitation sets up one bedside with its link, then shows the household'
 
   const [porch] = await listPorches(session, f.store);
   assert.deepEqual(porch, { id: householdID, bedsideName: 'Mom', invitationLabel: 'Lee family', numberPending: false, setUpAt: f.now(), lastSeenAt: f.now(), familyPhones: 0, setupFinished: false });
+
+  // Its desk phone, once the bedside reports it, and whether it's been out long enough that caregivers were told.
+  const { credential } = await setUp.json();
+  const poll = phone => handleFamily(new Request('https://porch.example/api/family', { method: 'POST', headers: { Authorization: `Bearer ${credential}` },
+    body: JSON.stringify({ action: 'poll', available: true, phone }) }), { store: f.store, now: f.now });
+  const since = f.now();
+  await poll({ kind: 'cell2jack', connected: false });
+  assert.deepEqual((await listPorches(session, f.store))[0].phone, { kind: 'cell2jack', connected: false, since });
+  f.advance(600);
+  await poll({ kind: 'cell2jack', connected: false });
+  assert.deepEqual((await listPorches(session, f.store))[0].phone, { kind: 'cell2jack', connected: false, since, noticed: true });
+  await poll(null);
+  assert.equal((await listPorches(session, f.store))[0].phone, undefined);
 });
 
 test('a cancelled or expired link no longer sets anything up, and can be sent again', async () => {
