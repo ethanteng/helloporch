@@ -324,7 +324,8 @@ final class FamilyAdminViewController: CaregiverFormViewController {
         let args = ProcessInfo.processInfo.arguments
         if let index = args.firstIndex(of: "--preview-caregiver-page"), args.indices.contains(index + 1), let page = CaregiverPage(rawValue: args[index + 1]) { open(page) }
         if let index = args.firstIndex(of: "--preview-caregiver-key"), args.indices.contains(index + 1), let digit = CallSlots.digit(forSymbol: args[index + 1]) {
-            show(PersonViewController(admin: self, slot: digit))
+            if let group = slots?.group(for: digit) { show(GroupKeyViewController(admin: self, draft: GroupKeyDraft(key: digit, existing: group))) }
+            else { show(PersonViewController(admin: self, slot: digit)) }
         }
         if args.contains("--preview-family-person"), let person = current?.people.first { show(PersonViewController(admin: self, memberID: person.id)) }
     }

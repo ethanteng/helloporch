@@ -120,6 +120,16 @@ While you're on a Porch call with Mom, you can ring another family member into i
 - The call goes on while two people are still on it. If you hang up, Mom and your brother keep talking. If Mom hangs up, you and your brother keep talking, and she can't rejoin. A phone counts only while the caregiver who added it is still on, so the bedside is never left alone with a phone, and a phone you added hangs up when you leave. A device that stops checking in for about 35 seconds drops off the same way. When fewer than two people would remain, hanging up ends the call for everyone.
 - Removing a rung-in family member's access cancels their invitation if it's still ringing, or takes them off the call, which goes on if two people remain. Removing access from the family member who started the call with Mom ends it.
 
+## Group call keys
+
+A key can ring two family members at once, such as you and your brother. In caregiver mode on the bedside, open **People**, tap a key, then **Group call** (for an empty key, tap **Use key 3 for something else** first). Choose the two people, then on **Check key 3** give the key a name such as **Kids** (or leave it as "Ethan & David"), a photo or color, and **Video** or **Voice**, and tap **Add to key 3**. Without a photo of its own, the key shows both people's photos side by side.
+
+- Pressing the key rings both phones at once, each as an ordinary Porch call from Mom. Whoever answers first talks with Mom, and the other can still answer and join until their ring runs out, as if they'd been added to the call. One declining doesn't stop the other ringing.
+- If neither answers, or neither phone can ring, Mom can leave one message, which goes to both.
+- Only people with the Porch app can be in a group, and only two, so a group call is the same three-person call as adding someone. There's no phone fallback.
+- Someone removed from Porch is skipped. Their key shows **Finish setup** until you choose again under **People** on the key's page.
+- The group is saved on the bedside beside the keypad. An older Porch build sees the key as empty.
+
 ## Adding a phone number to a call
 
 A caregiver can bring a regular phone into their call with the bedside, for example a bank that needs Mom on the line. Call Mom on Porch (or answer her call), then tap **Add someone** on the call screen and choose **A phone number…** (if nobody else in the family can be rung in, the button reads **Add a phone** and opens the form directly). Enter who you're calling, such as **Bank**, and their number, or **Choose from Contacts**, then **Call and add to this call**. Everyone hears it ring. The bedside shows "Calling Bank…", then "Bank joined the call". Mom's screen never shows the number.
@@ -134,7 +144,7 @@ A caregiver can bring a regular phone into their call with the bedside, for exam
 
 ## Keypad actions
 
-There are twelve stable slots: **1–9, 0**, then **\*** and **#**. A new keypad starts with **9** toggling video and **0** answering or hanging up; every other key has no action until you assign it. Existing six-person setups keep the people already saved, and their empty keys show as **No action**. Edit any slot to choose **No action**, **Person**, **Call control**, **Video toggle**, or **Messages**. Any key can call a person, be a control, or be set back to **No action**. A keyboard's * and # count wherever its layout types them, usually with Shift. Touch controls remain available even if no keypad controls are assigned.
+There are twelve stable slots: **1–9, 0**, then **\*** and **#**. A new keypad starts with **9** toggling video and **0** answering or hanging up; every other key has no action until you assign it. Existing six-person setups keep the people already saved, and their empty keys show as **No action**. Edit any slot to choose **No action**, **Person**, **Group call** (see [Group call keys](#group-call-keys)), **Call control**, **Video toggle**, or **Messages**. Any key can call a person, be a control, or be set back to **No action**. A keyboard's * and # count wherever its layout types them, usually with Shift. Touch controls remain available even if no keypad controls are assigned.
 
 For the call-control key: tap and release to answer an ordinary incoming call; hold one second to decline it. Tap to stop a drop-in during its announcement, or to hang up an active/dialing call, including phone fallback. The video key toggles your camera during a video call; voice-only and regular phone calls keep it off. Holding a digit does not repeatedly trigger it. Keys work while Porch is foregrounded; caregiver text fields continue to accept typing.
 
