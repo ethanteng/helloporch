@@ -12,6 +12,7 @@ import com.google.firebase.messaging.RemoteMessage
  * `type: "message"`, which Firebase shows itself unless Porch is running, when it comes here to show (MessageAlerts).
  * A caregiver's notice that Every call drop-in was turned on or off is one too, with `type: "everyCall"`. A notice of a
  * phone call to the bedside while Every call is on is data only, `type: "callNotice"`, which Porch shows (CallNotices).
+ * A caregiver's notice that the bedside's desk phone isn't connected, or is again, is a notification with `type: "phone"`.
  * Firebase calls this off the main thread.
  */
 class PorchMessagingService : FirebaseMessagingService() {
@@ -40,6 +41,12 @@ class PorchMessagingService : FirebaseMessagingService() {
             val title = message.notification?.title
             val body = message.notification?.body
             main.post { app.messageAlerts.receivedEveryCall(title, body, data) }
+            return
+        }
+        if (data["type"] == "phone") {
+            val title = message.notification?.title
+            val body = message.notification?.body
+            main.post { app.messageAlerts.receivedPhone(title, body, data) }
             return
         }
         if (data["type"] != "call") return

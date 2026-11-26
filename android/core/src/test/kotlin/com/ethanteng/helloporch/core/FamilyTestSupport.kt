@@ -79,6 +79,8 @@ internal class FamilyHarness(scope: TestScope, canBeBedside: Boolean = false, ap
     var bedsideLanguage: BedsideLanguage? = null
     /** This phone's Do Not Disturb, as the app's settings hold it. */
     var doNotDisturb = DoNotDisturb()
+    /** The bedside's desk phone, as the app reports it, or null when it can't tell. */
+    var bedsidePhone: BedsidePhoneReport? = null
     val coordinator = FamilyCoordinator(device, scope.backgroundScope, serviceFor, PollOrder(), { receiving }, attendance, caregiver, { bedsideLanguage }, appVersion,
-        { doNotDisturb.checkIn(java.time.ZoneId.of("America/Los_Angeles")) }) { changes += it; onChange(it) }
+        { doNotDisturb.checkIn(java.time.ZoneId.of("America/Los_Angeles")) }, { bedsidePhone }) { changes += it; onChange(it) }
 }
