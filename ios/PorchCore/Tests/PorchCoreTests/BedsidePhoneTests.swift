@@ -26,6 +26,14 @@ final class BedsidePhoneTests: XCTestCase {
         XCTAssertEqual(sent["kind"] as? String, "adapter"); XCTAssertEqual(sent["connected"] as? Bool, false)
     }
 
+    func testConnectedOnlyOnceACheckInArrivesWithoutThePhone() {
+        let out = BedsidePhone(since: 1_800_000_000, kind: "adapter")
+        XCTAssertFalse(BedsidePhone.isConnected(hasCheckIn: false, phone: nil), "no check-in yet, or one that failed, is not the phone coming back")
+        XCTAssertFalse(BedsidePhone.isConnected(hasCheckIn: false, phone: out))
+        XCTAssertFalse(BedsidePhone.isConnected(hasCheckIn: true, phone: out))
+        XCTAssertTrue(BedsidePhone.isConnected(hasCheckIn: true, phone: nil))
+    }
+
     func testAKindFromALaterServerStillDecodes() throws {
         let phone = try JSONDecoder().decode(BedsidePhone.self, from: Data(#"{"since":1800000000,"kind":"bluetooth"}"#.utf8))
         XCTAssertNil(phone.phoneKind)

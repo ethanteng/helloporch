@@ -14,6 +14,12 @@ public struct BedsidePhone: Codable, Equatable {
     public let kind: String
     public init(since: TimeInterval, kind: String) { self.since = since; self.kind = kind }
     public var phoneKind: BedsidePhoneKind? { BedsidePhoneKind(rawValue: kind) }
+
+    /// Whether What to check should say the phone is back. Only a check-in that arrived (`hasCheckIn`), and no longer
+    /// lists the phone, means that. No check-in yet, or one that failed after Porch resumed, is not the phone coming back.
+    public static func isConnected(hasCheckIn: Bool, phone: BedsidePhone?) -> Bool {
+        hasCheckIn && phone == nil
+    }
 }
 
 /// What the bedside's check-in says about its desk phone (`phone` in the poll).

@@ -581,9 +581,11 @@ private fun CallTab(app: PorchApplication, links: FamilyLinks, families: List<Fa
     // Its steps stay open once the phone is back, saying so, until they're closed.
     reconnecting?.let { shown ->
         families.firstOrNull { it.deviceID == shown.deviceID }?.let { family ->
-            val live = links.state(family)?.bedsidePhone
+            val state = links.state(family)
+            val live = state?.bedsidePhone
             LaunchedEffect(live) { if (live != null && live != shown.phone) reconnecting = shown.copy(phone = live) }
-            ReconnectPhoneSheet(live ?: shown.phone, connected = live == null, shown.name, shown.bedsideDevice, onDismiss = { reconnecting = null })
+            // A check-in that hasn't arrived, or failed, is not the phone coming back.
+            ReconnectPhoneSheet(live ?: shown.phone, connected = BedsidePhone.isConnected(state != null, live), shown.name, shown.bedsideDevice, onDismiss = { reconnecting = null })
         }
     }
     families.firstOrNull { it.deviceID == removing }?.let { family ->

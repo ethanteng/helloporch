@@ -84,6 +84,12 @@ data class BedsidePhone(val since: Long, val kind: String) {
         const val IOS_GUIDE = "https://helloporch.store/pilot/ios#phone"
         const val ANDROID_GUIDE = "https://helloporch.store/pilot/android#phone"
 
+        /**
+         * Whether What to check should say the phone is back. Only a check-in that arrived (`hasCheckIn`), and no longer
+         * lists the phone, means that. No check-in yet, or one that failed after Porch resumed, is not the phone coming back.
+         */
+        fun isConnected(hasCheckIn: Boolean, phone: BedsidePhone?) = hasCheckIn && phone == null
+
         /** Under the banner's title: "Since 2:14 PM". */
         fun since(time: String) = "Since $time"
 

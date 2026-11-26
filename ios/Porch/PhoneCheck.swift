@@ -124,9 +124,11 @@ final class PhoneCheckViewController: CaregiverFormViewController {
         return row
     }
 
-    /// Live: once the bedside reports the phone back, it says Connected.
+    /// Live: once a check-in arrives without the phone still out, it says Connected. A missing check-in, as just after
+    /// Porch resumes or when that check-in failed, keeps the last "not connected".
     @objc private func showStatus() {
-        let out = FamilyCoordinator.shared.state(for: credential)?.bedsidePhone != nil
+        let state = FamilyCoordinator.shared.state(for: credential)
+        let out = !BedsidePhone.isConnected(hasCheckIn: state != nil, phone: state?.bedsidePhone)
         let text = out ? "Not connected · since \(DropInSettingsViewController.time(since))" : "Connected"
         statusText.text = text
         statusText.textColor = out ? PhoneOutStyle.title : PhoneOutStyle.goText

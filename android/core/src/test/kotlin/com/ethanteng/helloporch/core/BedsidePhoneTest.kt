@@ -26,6 +26,14 @@ class BedsidePhoneTest {
         assertEquals(Json.parseToJsonElement("""{"kind":"cell2jack","connected":false}"""), BedsidePhoneReport.Cell2Jack(false).json)
     }
 
+    @Test fun connectedOnlyOnceACheckInArrivesWithoutThePhone() {
+        val phone = BedsidePhone(out, "adapter")
+        assertEquals(false, BedsidePhone.isConnected(hasCheckIn = false, phone = null), "no check-in yet, or one that failed, is not the phone coming back")
+        assertEquals(false, BedsidePhone.isConnected(hasCheckIn = false, phone = phone))
+        assertEquals(false, BedsidePhone.isConnected(hasCheckIn = true, phone = phone))
+        assertEquals(true, BedsidePhone.isConnected(hasCheckIn = true, phone = null))
+    }
+
     @Test fun theStepsFollowHowThePhoneIsPluggedIn() {
         assertEquals(listOf("Phone cord into the Cell2Jack", "Cell2Jack into the adapter", "Adapter into the hub by the iPad"),
             BedsidePhone(out, "adapter").steps("iPad"))
