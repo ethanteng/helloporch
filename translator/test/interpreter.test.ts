@@ -69,6 +69,21 @@ test("The translator's own voice coming back through the bedside's microphone is
   assert.equal(asked.length, 2);
 });
 
+test("One sentence of a translation said in two pieces is still the translator's echo", async () => {
+  const heard = "The doctor said your blood pressure is high, so take the medicine.";
+  const { interpreter, asked } = setup({ [heard]: "醫生說你的血壓有點高。所以要吃藥。好。" });
+  await interpreter.heard("ethan", "Ethan", heard);
+  await interpreter.settled();
+  // Each sentence scores about 0.78 and 0.44 against the whole line, under the echo threshold.
+  await interpreter.heard("mom", "Mom", "醫生說你的血壓有點高。");
+  await interpreter.heard("mom", "Mom", "所以要吃藥");
+  assert.equal(asked.length, 1);
+  // "好" is its own sentence of that line, and still Mom's. A different sentence is too.
+  await interpreter.heard("mom", "Mom", "好");
+  await interpreter.heard("mom", "Mom", "我不想吃藥。");
+  assert.deepEqual(asked.map(a => a.heard), [heard, "好", "我不想吃藥。"]);
+});
+
 test("A reply that sounds like what the translator just said is still the person's own", async () => {
   const { interpreter, asked } = setup({ "你禮拜六會來嗎？": "Are you coming on Saturday?" });
   await interpreter.heard("mom", "Mom", "你禮拜六會來嗎？");
@@ -189,6 +204,11 @@ test("The voice gets the first sentence alone only when it's long enough to say 
   assert.deepEqual(await all(voicePieces(written("我禮拜六去看你。"))), ["我禮拜六去看你。"]);
   assert.deepEqual(await all(voicePieces(written("Are you coming over on Saturday?"))), ["Are you coming over on Saturday?"]);
   assert.deepEqual(await all(voicePieces(written())), []);
+  // A period after a short word is "Dr." or "a.m.", not a place to start the voice.
+  assert.deepEqual(await all(voicePieces(written("I spoke with your doctor, Dr. Smith, this morning and she said you are fine. Please rest."))),
+    ["I spoke with your doctor, Dr. Smith, this morning and she said you are fine.", " Please rest."]);
+  assert.deepEqual(await all(voicePieces(written("Your appointment is at 10 a.m. tomorrow morning, and she said to come hungry."))),
+    ["Your appointment is at 10 a.m. tomorrow morning, and she said to come hungry."]);
 });
 
 test("The quiet marker means nothing is said; anything else is passed on as it's written", async () => {

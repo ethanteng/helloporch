@@ -158,7 +158,7 @@ export class Interpreter {
   /** Only while the translator is speaking to this side, or just after, and only an almost exact match. */
   private isEcho(side: Side, text: string) {
     const now = this.deps.now();
-    return this.spoken.some(s => s.side === side && (s.ended === undefined || now - s.ended <= echoTailMs) && similarity(s.text, text) >= echoSimilarity);
+    return this.spoken.some(s => s.side === side && (s.ended === undefined || now - s.ended <= echoTailMs) && echoes(s.text, text));
   }
 }
 
@@ -185,11 +185,48 @@ export async function* voicePieces(text: AsyncIterable<string>): AsyncGenerator<
 
 function firstSentenceEnd(text: string) {
   // A full stop only counts before a space, so "10.5" and a period still being written don't split.
-  for (const match of text.matchAll(/[。！？]|[.!?](?=\s)/g)) {
-    const end = match.index + 1;
+  // A period after one to three letters is "Dr." or "a.m.", not the end of the sentence.
+  for (const end of sentenceEnds(text)) {
     if (weight(text.slice(0, end)) >= firstPieceWeight && text.slice(end).trim()) return end;
   }
   return undefined;
+}
+
+/** Offsets just after sentence punctuation. Skips a period that ends a one-to-three-letter word. */
+function sentenceEnds(text: string) {
+  const ends: number[] = [];
+  for (const match of text.matchAll(/[。！？]|[.!?](?=\s)/g)) {
+    const at = match.index;
+    if (at === undefined || (match[0] === "." && abbreviates(text, at))) continue;
+    ends.push(at + 1);
+  }
+  return ends;
+}
+
+function abbreviates(text: string, dot: number) {
+  const word = text.slice(0, dot).match(/(\p{L}+)$/u)?.[1] ?? "";
+  return word.length >= 1 && word.length <= 3;
+}
+
+function sentences(text: string) {
+  const parts: string[] = [];
+  let start = 0;
+  for (const end of sentenceEnds(text)) {
+    if (text.slice(start, end).trim()) parts.push(text.slice(start, end));
+    start = end;
+  }
+  if (text.slice(start).trim()) parts.push(text.slice(start));
+  return parts;
+}
+
+/** How much a sentence of a longer line must hold before it can count as the translator's echo on its own.
+ * Below this, "OK" or "好" after a longer line is still the person talking. */
+const echoSentenceWeight = 10;
+
+/** A line spoken in two pieces can come back from the microphone one sentence at a time. */
+function echoes(spoken: string, heard: string) {
+  if (similarity(spoken, heard) >= echoSimilarity) return true;
+  return sentences(spoken).some(part => weight(part) >= echoSentenceWeight && similarity(part, heard) >= echoSimilarity);
 }
 
 function weight(text: string) {
