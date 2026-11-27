@@ -11,8 +11,11 @@ For each sentence someone finishes:
    person, with the family's and the bedside's languages as hints. It was the best of the models LiveKit offers at
    mixed English and Mandarin (`scripts/stt-bench.ts`); AssemblyAI is its fallback.
 2. **Translating.** Claude (`src/translate.ts`) decides whether the listener needs it said again: a sentence entirely in
-   their language passes through, and one with any other language in it is said again, all of it, in theirs.
-3. **Speaking.** ElevenLabs reads it in the household's natural voice for that language, on that side's own track:
+   their language passes through, and one with any other language in it is said again, all of it, in theirs. It
+   answers in plain text, streamed, which starts sooner than JSON did. A person's next sentence is translated while
+   the one before still is; their lines are still shown and said in the order they were spoken.
+3. **Speaking.** ElevenLabs reads it in the household's natural voice for that language, on that side's own track,
+   starting on the first sentence once it's written when there's more after it (`voicePieces` in `src/interpreter.ts`):
    `porch-translation-bedside` or `porch-translation-family`. Each app unsubscribes from the other side's track
    itself; LiveKit's server-side unsubscribe doesn't stop a participant that joined with auto-subscribe. A phone guest
    hears both. The apps lower the other voices while the translator speaks.
@@ -49,7 +52,12 @@ LIVEKIT_URL=ws://localhost:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret
 
 On 2026-11-14, with mixed English and Mandarin sentences, the listener saw the words 2.0 to 3.1 seconds after a
 sentence ended and heard them 2.6 to 3.8 seconds after: about 1.2 s to recognize, 0.8 to 1.7 s to translate (Claude
-Opus 5.5 in fast mode) and 0.5 s for the voice to start. `scripts/translate-check.ts` runs the translation step alone,
+Opus 5.5 in fast mode) and 0.5 s for the voice to start.
+
+On 2026-11-27, with Claude answering in plain text instead of JSON, three test calls alternating with the previous
+version (15 sentences each, Mac voices reading them) put the median from a sentence's end to hearing it at 3.6 s,
+from 5.0 s, and to seeing it at 2.8 s, from 4.2 s. Claude's part fell from a median of about 2.0 s to 1.3 s; Claude
+was slower that day than on 11-14. `scripts/translate-check.ts` runs the translation step alone,
 and `scripts/stt-bench.ts` compares speech recognition models.
 
 ## Deploying

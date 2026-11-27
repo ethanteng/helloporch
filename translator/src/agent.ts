@@ -4,6 +4,7 @@ import { AudioFrame, AudioSource, AudioStream, LocalAudioTrack, ParticipantKind,
   type RemoteParticipant, type RemoteTrack, type Room } from "@livekit/rtc-node";
 import { Interpreter, type Message, type Side } from "./interpreter.ts";
 import { isLanguage, languages, type Language } from "./languages.ts";
+import { readAhead } from "./read-ahead.ts";
 import { claudeTranslator } from "./translate.ts";
 import { elevenLabsVoice, voiceSampleRate } from "./voice.ts";
 
@@ -68,13 +69,24 @@ export default defineAgent({
       room.localParticipant!.publishData(new TextEncoder().encode(JSON.stringify(message)),
         { reliable: true, topic: topics.lines, destination_identities: destination }).catch(error => log("couldn't send", error));
     };
-    const speak = async (to: Side, text: string, language: Language) => {
+    // Each piece's voice is asked for as soon as the piece is written and the one before has arrived, so a side has
+    // one voice request at a time, and plays as it streams in.
+    const speak = async (to: Side, pieces: AsyncIterable<string>, language: Language) => {
       const source = sources[to];
       const frame = voiceSampleRate / 100; // 10 ms
       let pending = new Int16Array(0);
       const asked = Date.now();
       let first = true;
-      for await (const chunk of elevenLabsVoice(text, voices[to], language, elevenLabsKey)) {
+      const voiced = readAhead((async function* () {
+        let arrived = Promise.resolve();
+        for await (const piece of pieces) {
+          await arrived;
+          const voice = readAhead(elevenLabsVoice(piece.trim(), voices[to], language, elevenLabsKey));
+          arrived = voice.finished;
+          yield voice;
+        }
+      })());
+      for await (const voice of voiced) for await (const chunk of voice) {
         if (first) { log(`voice started in ${Date.now() - asked} ms`); first = false; }
         const samples = new Int16Array(pending.length + chunk.length);
         samples.set(pending); samples.set(chunk, pending.length);
