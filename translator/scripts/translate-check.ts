@@ -1,5 +1,5 @@
 // Runs the translation step alone on sentences like the ones recognition writes down, and shows what Claude says
-// and how long it took. node --env-file=<file with ANTHROPIC_API_KEY> scripts/translate-check.ts
+// and how long its first words and all of it took. node --env-file=<file with ANTHROPIC_API_KEY> scripts/translate-check.ts
 import type { Side } from "../src/interpreter.ts";
 import type { Language } from "../src/languages.ts";
 import { claudeTranslator } from "../src/translate.ts";
@@ -24,8 +24,10 @@ const translate = claudeTranslator();
 for (const c of cases) {
   const t0 = Date.now();
   try {
-    const r = await translate(c.heard, c.from, c.target, []);
-    const ok = (r.say ? "say" : "quiet") === c.expect ? "✓" : "✗";
-    console.log(`${ok} ${((Date.now() - t0) / 1000).toFixed(1)}s ${c.from}→${c.target} «${c.heard}»\n         ${r.say ? `→ «${r.text}»` : "(quiet)"}`);
+    let text = "", first = 0;
+    for await (const piece of translate(c.heard, c.from, c.target, [])) { first ||= Date.now() - t0; text += piece; }
+    const ok = (text ? "say" : "quiet") === c.expect ? "✓" : "✗";
+    const timing = `${first ? `first ${(first / 1000).toFixed(1)}s, ` : ""}done ${((Date.now() - t0) / 1000).toFixed(1)}s`;
+    console.log(`${ok} ${timing} ${c.from}→${c.target} «${c.heard}»\n         ${text ? `→ «${text}»` : "(quiet)"}`);
   } catch (e) { console.log(`✗ error ${(e as Error).message} «${c.heard}»`); }
 }
