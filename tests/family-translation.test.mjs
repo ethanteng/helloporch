@@ -100,7 +100,7 @@ test('translation is offered only once the server knows the translator', async (
   assert.equal((await f.send('setCallTranslation',{callID,on:true},ethan.credential)).status,409);
 });
 
-test('translation speaks a listed voice even when announcements use a caregiver’s own', async () => {
+test('translation speaks a caregiver’s words in their own voice, and everyone else in a listed one', async () => {
   const f = fixture(), { bedside, ethan, callID } = await f.connected();
   const key = `house:${bedside.state.householdID}`;
   const house = JSON.parse(f.store.values.get(key));
@@ -112,6 +112,8 @@ test('translation speaks a listed voice even when announcements use a caregiver�
   await f.json('setCallTranslation', { callID, on: true }, ethan.credential);
   assert.equal(f.calls[0].metadata.bedsideVoice, 'Z8Aisvg1z70p27kGvkZZ');
   assert.equal(f.calls[0].metadata.familyVoice, 'OYTbf65OHHFELVut7v2H');
+  // The translator speaks only Ethan's own words in his voice (translator/src/agent.ts).
+  assert.deepEqual(f.calls[0].metadata.ownVoices, { [ethan.state.me.id]: 'familyVoice00000001' });
   await f.json('setCallTranslation', { callID, on: true, language: 'ko' }, ethan.credential);
   assert.equal(f.calls[1].message.voice, 'uyVNoMrnUku1dZyVEXwD');
 });

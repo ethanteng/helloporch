@@ -3,6 +3,7 @@ import { bedsideLanguage, callIDFor, callRoom, FamilyError, isBedsideLanguage, m
   type Household, type Member } from "./household.ts";
 import { speechCatalog, speechVoice } from "./speech.ts";
 import type { FamilyStore } from "./store.ts";
+import { familyVoices } from "./voices.ts";
 
 // Live translation on a Porch call with the bedside. The family member on the call turns it on when they can't get
 // something across, and off again; every call starts with it off. Turning it on dispatches the translator
@@ -52,10 +53,15 @@ function bedsideOf(house: Household, call: Call) {
   return house.members.find(m => m.role === "bedside" && !m.revoked && [call.from, call.to].includes(m.id));
 }
 /** A listed voice for a language: the one chosen for announcements, or the language's default when that choice is the
- * tablet's built-in voice or a caregiver's own. A caregiver's voice speaks announcements only. Translation, like a
- * phone greeting, stays on a listed voice, so a phone guest never hears the clone say someone else's words. */
+ * tablet's built-in voice or a caregiver's own. The translator speaks everyone in it who has no voice of their own. */
 function voiceFor(house: Household, language: BedsideLanguage) {
   return speechVoice(house, language, false) ?? speechCatalog[language].voices[0].id;
+}
+/** Caregivers' own voices, by whose they are. The translator says a family member's words to the bedside in their own
+ * voice when they recorded one, and never anyone else's words in it: not the bedside's, a phone guest's, or another
+ * family member's. */
+function ownVoices(house: Household): Record<string, string> {
+  return Object.fromEntries(familyVoices(house).map(v => [v.memberID, v.id]));
 }
 
 /** Whether `me` can turn translation on for this call: one of its two ends, with the bedside on an app that supports it. */
@@ -81,8 +87,9 @@ export async function handleTranslationAction(_action: string, { store, now, hou
   try {
     if (input.on && !current?.on) {
       // `by`: the translator leaves when they do, since no one else on the call can turn it off.
+      const own = ownVoices(house);
       await services.start(room, JSON.stringify({ bedside: bedside.id, bedsideLanguage: language, bedsideVoice: voiceFor(house, language),
-        familyLanguage, familyVoice: voiceFor(house, familyLanguage), by: me.id }));
+        familyLanguage, familyVoice: voiceFor(house, familyLanguage), by: me.id, ...(Object.keys(own).length ? { ownVoices: own } : {}) }));
     } else if (input.on && current?.language !== language) {
       await services.configure(room, { type: "language", language, voice: voiceFor(house, language) });
     } else if (!input.on && current?.on) {

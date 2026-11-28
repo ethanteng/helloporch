@@ -14,7 +14,9 @@ For each sentence someone finishes:
    their language passes through, and one with any other language in it is said again, all of it, in theirs. It
    answers in plain text, streamed, which starts sooner than JSON did. A person's next sentence is translated while
    the one before still is; their lines are still shown and said in the order they were spoken.
-3. **Speaking.** ElevenLabs reads it in the household's natural voice for that language, on that side's own track,
+3. **Speaking.** ElevenLabs reads it in the household's natural voice for that language (a caregiver who recorded
+   their own voice says their own words to the bedside in it, `ownVoices` in the job; everyone else, and the bedside's
+   words to family, in the listed voice), on that side's own track,
    starting on the first sentence once it's written when there's more after it (`voicePieces` in `src/interpreter.ts`):
    `porch-translation-bedside` or `porch-translation-family`. Each app unsubscribes from the other side's track
    itself; LiveKit's server-side unsubscribe doesn't stop a participant that joined with auto-subscribe. A phone guest
