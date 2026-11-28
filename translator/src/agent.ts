@@ -6,7 +6,7 @@ import { Interpreter, type Message, type Side } from "./interpreter.ts";
 import { isLanguage, languages, type Language } from "./languages.ts";
 import { readAhead } from "./read-ahead.ts";
 import { claudeTranslator } from "./translate.ts";
-import { elevenLabsVoice, firstVoiceThatSpeaks, voiceSampleRate } from "./voice.ts";
+import { elevenLabsVoice, firstVoiceThatSpeaks, VoiceDidNotStart, voiceSampleRate } from "./voice.ts";
 
 // Porch's call translator. The calling server dispatches it into a family call's room when someone turns
 // translation on (lib/family/translation.ts) and removes it when they turn it off. It listens to everyone, says
@@ -90,8 +90,12 @@ export default defineAgent({
           await arrived;
           const own = to === "bedside" ? ownVoices.get(speaker) : undefined;
           const voice = readAhead(firstVoiceThatSpeaks(own ? [own, voices[to]] : [voices[to]],
-            voiceID => elevenLabsVoice(piece.trim(), voiceID, language, elevenLabsKey),
-            (_voiceID, error) => { ownVoices.delete(speaker); log("a caregiver's own voice couldn't speak, so the listed voice did", error); }));
+            (voiceID, signal) => elevenLabsVoice(piece.trim(), voiceID, language, elevenLabsKey, signal),
+            // A voice that failed, as one removed during the call does, isn't tried again on this call; a slow one is.
+            (_voiceID, error) => {
+              if (!(error instanceof VoiceDidNotStart)) ownVoices.delete(speaker);
+              log("a caregiver's own voice couldn't speak, so the listed voice did", error);
+            }));
           arrived = voice.finished;
           yield voice;
         }

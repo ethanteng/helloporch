@@ -4,7 +4,7 @@ import { echoTailMs, Interpreter, similarity, voicePieces, type InterpreterConfi
 import type { Language } from "../src/languages.ts";
 import { parseJobConfig } from "../src/agent.ts";
 import { readAhead } from "../src/read-ahead.ts";
-import { firstVoiceThatSpeaks } from "../src/voice.ts";
+import { firstVoiceThatSpeaks, VoiceDidNotStart } from "../src/voice.ts";
 import { translationRequest, withoutQuiet } from "../src/translate.ts";
 
 const config: InterpreterConfig = { bedside: "mom", bedsideLanguage: "zh-Hant", familyLanguage: "en" };
@@ -293,4 +293,24 @@ test("A caregiver's own voice that fails before speaking is followed by the list
   const asked: string[] = [];
   await all(firstVoiceThatSpeaks(["ling", "ling"], id => { asked.push(id); return audio(3); }));
   assert.deepEqual(asked, ["ling"]);
+});
+
+test("A caregiver's own voice that hasn't started in time gives way to the listed voice, without waiting out the request", { timeout: 2_000 }, async () => {
+  async function* audio(n: number) { yield new Int16Array([n]); }
+  // A request that never answers until it's told to stop, as a stuck one would.
+  async function* stuck(signal: AbortSignal): AsyncGenerator<Int16Array> {
+    await new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+  }
+  const failures: unknown[] = [];
+  const started = Date.now();
+  const said = await all(firstVoiceThatSpeaks(["ethanVoice", "ling"], (id, signal) => id === "ethanVoice" ? stuck(signal) : audio(2),
+    (_id, error) => failures.push(error), 50));
+  assert.deepEqual(said.map(chunk => chunk[0]), [2]);
+  assert.ok(Date.now() - started < 1_000);
+  assert.equal(failures.length, 1);
+  assert.ok(failures[0] instanceof VoiceDidNotStart, "a slow voice is told apart from a failed one");
+  // One that starts in time isn't cut off, however long the rest of it takes.
+  async function* slowAfterStart(): AsyncGenerator<Int16Array> { yield new Int16Array([1]); await new Promise(r => setTimeout(r, 120)); yield new Int16Array([2]); }
+  const whole = await all(firstVoiceThatSpeaks(["ethanVoice", "ling"], id => id === "ethanVoice" ? slowAfterStart() : audio(9), undefined, 50));
+  assert.deepEqual(whole.map(chunk => chunk[0]), [1, 2]);
 });

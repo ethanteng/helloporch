@@ -6,14 +6,19 @@ import { languages, type Language } from "./languages.ts";
 // ElevenLabs' announcement model, which the family chose voices with; it starts speaking within about half a second.
 export const voiceSampleRate = 24_000;
 export const voiceModel = "eleven_v4";
+/** How long a caregiver's own voice has to start before the listed voice says the sentence instead. Both start in well
+ * under a second (0.66 s for a recorded voice in Mandarin, 2026-11-27), so only a stuck request waits this long. */
+export const ownVoiceStartMs = 3_000;
 
-/** Yields the sentence's audio as 16-bit mono samples, a chunk at a time. */
+/** Yields the sentence's audio as 16-bit mono samples, a chunk at a time. It gives up after 20 seconds, or when
+ * `signal` aborts. */
 export async function* elevenLabsVoice(text: string, voiceID: string, language: Language, apiKey: string, signal?: AbortSignal): AsyncGenerator<Int16Array> {
+  const limit = AbortSignal.timeout(20_000);
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceID)}/stream?output_format=pcm_${voiceSampleRate}`, {
     method: "POST",
     headers: { "xi-api-key": apiKey, "content-type": "application/json" },
     body: JSON.stringify({ text, model_id: voiceModel, language_code: languages[language].speak }),
-    signal: signal ?? AbortSignal.timeout(20_000),
+    signal: signal ? AbortSignal.any([signal, limit]) : limit,
   });
   if (!response.ok || !response.body) throw new Error(`ElevenLabs answered ${response.status}.`);
   let carry: Uint8Array | undefined;
@@ -28,19 +33,32 @@ export async function* elevenLabsVoice(text: string, voiceID: string, language: 
   }
 }
 
-/** Says it in the first of `voiceIDs`, or, when that one fails before any of its audio arrives, the next: a caregiver's
- * own voice removed during the call is followed by the listed voice. Audio that started isn't said again. */
-export async function* firstVoiceThatSpeaks(voiceIDs: string[], speakIn: (voiceID: string) => AsyncIterable<Int16Array>,
-  failed?: (voiceID: string, error: unknown) => void): AsyncGenerator<Int16Array> {
+/** A voice that hadn't started within `ownVoiceStartMs`. It may only be slow, so it's tried again on the next sentence. */
+export class VoiceDidNotStart extends Error {}
+
+/** Says it in the first of `voiceIDs`, or, when that one fails or hasn't started within `startMs`, the next: a
+ * caregiver's own voice removed during the call, or stuck, is followed by the listed voice. Audio that started isn't
+ * said again. `speakIn` stops when its signal aborts. */
+export async function* firstVoiceThatSpeaks(voiceIDs: string[], speakIn: (voiceID: string, signal: AbortSignal) => AsyncIterable<Int16Array>,
+  failed?: (voiceID: string, error: unknown) => void, startMs = ownVoiceStartMs): AsyncGenerator<Int16Array> {
   const choices = [...new Set(voiceIDs)];
   for (const [i, voiceID] of choices.entries()) {
+    const last = i === choices.length - 1;
+    const stop = new AbortController();
+    // The last choice has nothing to give way to, so it keeps the request's own limit.
+    const timer = last ? undefined : setTimeout(() => stop.abort(new VoiceDidNotStart(`The voice didn't start in ${startMs} ms.`)), startMs);
     let started = false;
     try {
-      for await (const chunk of speakIn(voiceID)) { started = true; yield chunk; }
+      for await (const chunk of speakIn(voiceID, stop.signal)) {
+        if (!started) { started = true; clearTimeout(timer); }
+        yield chunk;
+      }
       return;
     } catch (error) {
-      if (started || i === choices.length - 1) throw error;
-      failed?.(voiceID, error);
+      if (started || last) throw error;
+      failed?.(voiceID, stop.signal.aborted ? stop.signal.reason : error);
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
