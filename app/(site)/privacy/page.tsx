@@ -12,7 +12,7 @@ export const metadata: Metadata = pageMetadata({
   image: { url: "/og/home.jpg", alt: "HelloPorch: video calling for people who struggle with phones." },
 });
 
-const updated = "November 24, 2026";
+const updated = "November 27, 2026";
 // Where privacy questions and deletion requests go.
 const contact = "privacy@helloporch.store";
 
@@ -155,9 +155,10 @@ export default function PrivacyPage() {
               <li>
                 <strong>A caregiver’s own voice.</strong> If a caregiver chooses to, they can read aloud for about a
                 minute on their own phone, after agreeing that it’s their voice, so announcements on your loved one’s
-                tablet can be spoken in it. We send the recording to ElevenLabs to make the voice, then delete it. We
-                keep which caregiver the voice belongs to. Only that caregiver can record it, and phone callers never
-                hear it.
+                tablet can be spoken in it, and so can that caregiver’s own words when a call is translated. We send the
+                recording to ElevenLabs to make the voice, then delete it. We keep which caregiver the voice belongs to.
+                Only that caregiver can record it. It never speaks anyone else’s words on a call, and phone voicemail
+                greetings never use it.
               </li>
               <li>
                 <strong>Device sign-in details.</strong> A random identifier for each paired device and a secret that

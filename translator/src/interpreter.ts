@@ -17,8 +17,8 @@ export type Message =
 export type InterpreterDeps = {
   translate: Translate;
   /** Says each piece on one side's translation track in turn, starting as soon as the first arrives; resolves once
-   * all of them have played. */
-  speak: (to: Side, pieces: AsyncIterable<string>, language: Language) => Promise<void>;
+   * all of them have played. `speaker`: whose words they are, as their identity on the call. */
+  speak: (to: Side, pieces: AsyncIterable<string>, language: Language, speaker: string) => Promise<void>;
   send: (message: Message, to: Side | "everyone") => void;
   now: () => number;
   log?: (message: string, detail?: unknown) => void;
@@ -146,7 +146,7 @@ export class Interpreter {
       if (listener === "bedside") this.deps.send({ type: "line", ...line, said, at: this.deps.now() }, "bedside");
     }).catch(error => this.deps.log?.("a caption couldn't be sent", error));
     this.deps.send({ type: "speaking", on: true }, listener);
-    try { await this.deps.speak(listener, prepend(first.value, pieces), line.language); }
+    try { await this.deps.speak(listener, prepend(first.value, pieces), line.language, line.speaker); }
     catch (error) { this.deps.log?.("speaking failed", error); }
     finally {
       await caption;

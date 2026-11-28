@@ -1,7 +1,8 @@
 import { languages, type Language } from "./languages.ts";
 
 // The translator speaks in the household's natural voice for each language (lib/family/speech.ts), streamed from
-// ElevenLabs as raw 24 kHz audio so it can start playing before the whole sentence is ready.
+// ElevenLabs as raw 24 kHz audio so it can start playing before the whole sentence is ready. A family member who
+// recorded their own voice (lib/family/voices.ts) is heard in it.
 // ElevenLabs' announcement model, which the family chose voices with; it starts speaking within about half a second.
 export const voiceSampleRate = 24_000;
 export const voiceModel = "eleven_v4";
@@ -24,6 +25,23 @@ export async function* elevenLabsVoice(text: string, voiceID: string, language: 
     const whole = bytes.length - (bytes.length % 2);
     carry = whole < bytes.length ? bytes.slice(whole) : undefined;
     if (whole) yield new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + whole));
+  }
+}
+
+/** Says it in the first of `voiceIDs`, or, when that one fails before any of its audio arrives, the next: a caregiver's
+ * own voice removed during the call is followed by the listed voice. Audio that started isn't said again. */
+export async function* firstVoiceThatSpeaks(voiceIDs: string[], speakIn: (voiceID: string) => AsyncIterable<Int16Array>,
+  failed?: (voiceID: string, error: unknown) => void): AsyncGenerator<Int16Array> {
+  const choices = [...new Set(voiceIDs)];
+  for (const [i, voiceID] of choices.entries()) {
+    let started = false;
+    try {
+      for await (const chunk of speakIn(voiceID)) { started = true; yield chunk; }
+      return;
+    } catch (error) {
+      if (started || i === choices.length - 1) throw error;
+      failed?.(voiceID, error);
+    }
   }
 }
 

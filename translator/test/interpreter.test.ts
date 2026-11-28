@@ -4,6 +4,7 @@ import { echoTailMs, Interpreter, similarity, voicePieces, type InterpreterConfi
 import type { Language } from "../src/languages.ts";
 import { parseJobConfig } from "../src/agent.ts";
 import { readAhead } from "../src/read-ahead.ts";
+import { firstVoiceThatSpeaks } from "../src/voice.ts";
 import { translationRequest, withoutQuiet } from "../src/translate.ts";
 
 const config: InterpreterConfig = { bedside: "mom", bedsideLanguage: "zh-Hant", familyLanguage: "en" };
@@ -250,4 +251,46 @@ test("job details from the calling server are checked", () => {
   assert.deepEqual(parseJobConfig(JSON.stringify(good)), good);
   assert.throws(() => parseJobConfig(JSON.stringify({ ...good, bedsideLanguage: "fr" })));
   assert.throws(() => parseJobConfig(JSON.stringify({ ...good, bedside: "" })));
+});
+
+test("Each line is spoken with whose words it is, so a caregiver's own voice says only theirs", async () => {
+  const heard: { to: Side; speaker: string }[] = [];
+  const interpreter = new Interpreter(config, {
+    translate: heardText => written(heardText === "I'll come Saturday" ? "我禮拜六來" : "I'm fine"),
+    speak: async (to, pieces, _language, speaker) => { await all(pieces); heard.push({ to, speaker }); },
+    send: () => {},
+    now: () => 0,
+  });
+  await interpreter.heard("ethan", "Ethan", "I'll come Saturday");
+  await interpreter.heard("david", "David", "I'll come Saturday");
+  await interpreter.heard("mom", "Mom", "我很好");
+  await interpreter.settled();
+  assert.deepEqual(heard, [{ to: "bedside", speaker: "ethan" }, { to: "bedside", speaker: "david" }, { to: "family", speaker: "mom" }]);
+});
+
+test("Caregivers' own voices come with the job, without the bedside's or malformed ones", () => {
+  const base = { bedside: "mom", bedsideLanguage: "zh-Hant", bedsideVoice: "ling", familyLanguage: "en", familyVoice: "hope" };
+  assert.deepEqual(parseJobConfig(JSON.stringify({ ...base, ownVoices: { ethan: "ethanVoice" } })).ownVoices, { ethan: "ethanVoice" });
+  assert.deepEqual(parseJobConfig(JSON.stringify({ ...base, ownVoices: { ethan: "ethanVoice", mom: "someVoice", david: 7, "": "x" } })).ownVoices,
+    { ethan: "ethanVoice" });
+  assert.equal(parseJobConfig(JSON.stringify({ ...base, ownVoices: ["ethanVoice"] })).ownVoices, undefined);
+  assert.equal(parseJobConfig(JSON.stringify(base)).ownVoices, undefined);
+});
+
+test("A caregiver's own voice that fails before speaking is followed by the listed voice, and only then", async () => {
+  async function* audio(n: number) { yield new Int16Array([n]); }
+  const removed = async function* (): AsyncGenerator<Int16Array> { throw new Error("ElevenLabs answered 400."); };
+  const failures: string[] = [];
+  const said = await all(firstVoiceThatSpeaks(["ethanVoice", "ling"], id => id === "ethanVoice" ? removed() : audio(2), id => failures.push(id)));
+  assert.deepEqual(said.map(chunk => chunk[0]), [2]);
+  assert.deepEqual(failures, ["ethanVoice"]);
+  // Audio that started isn't said again in another voice: the failure goes on to the caller.
+  const partway = async function* () { yield new Int16Array([1]); throw new Error("dropped"); };
+  const heard: number[] = [];
+  await assert.rejects(async () => { for await (const chunk of firstVoiceThatSpeaks(["ethanVoice", "ling"], id => id === "ethanVoice" ? partway() : audio(2))) heard.push(chunk[0]); });
+  assert.deepEqual(heard, [1]);
+  // The listed voice alone, as for everyone without their own, is asked once.
+  const asked: string[] = [];
+  await all(firstVoiceThatSpeaks(["ling", "ling"], id => { asked.push(id); return audio(3); }));
+  assert.deepEqual(asked, ["ling"]);
 });

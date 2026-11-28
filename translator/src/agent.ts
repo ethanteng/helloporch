@@ -6,7 +6,7 @@ import { Interpreter, type Message, type Side } from "./interpreter.ts";
 import { isLanguage, languages, type Language } from "./languages.ts";
 import { readAhead } from "./read-ahead.ts";
 import { claudeTranslator } from "./translate.ts";
-import { elevenLabsVoice, voiceSampleRate } from "./voice.ts";
+import { elevenLabsVoice, firstVoiceThatSpeaks, voiceSampleRate } from "./voice.ts";
 
 // Porch's call translator. The calling server dispatches it into a family call's room when someone turns
 // translation on (lib/family/translation.ts) and removes it when they turn it off. It listens to everyone, says
@@ -19,8 +19,10 @@ export const topics = { lines: "porch-translation", control: "porch-translation-
 export const trackNames: Record<Side, string> = { bedside: "porch-translation-bedside", family: "porch-translation-family" };
 
 /** The dispatch's metadata: who the bedside is, its language and voice, the family's, and who turned translation on
- * (`by`; older servers don't send it). */
-export type JobConfig = { bedside: string; bedsideLanguage: Language; bedsideVoice: string; familyLanguage: Language; familyVoice: string; by?: string };
+ * (`by`; older servers don't send it). `ownVoices`: caregivers' own recorded voices, by their identity on the call, which
+ * say their own words to the bedside (older servers and households without one don't send it). */
+export type JobConfig = { bedside: string; bedsideLanguage: Language; bedsideVoice: string; familyLanguage: Language; familyVoice: string; by?: string;
+  ownVoices?: Record<string, string> };
 
 export function parseJobConfig(metadata: string): JobConfig {
   const value: unknown = JSON.parse(metadata);
@@ -28,8 +30,11 @@ export function parseJobConfig(metadata: string): JobConfig {
   const v = value as Record<string, unknown>;
   if (typeof v.bedside !== "string" || !v.bedside || !isLanguage(v.bedsideLanguage) || !isLanguage(v.familyLanguage) ||
       typeof v.bedsideVoice !== "string" || typeof v.familyVoice !== "string") throw new Error("The translator's call details are incomplete.");
+  // A malformed entry is left out: that person is heard in the listed voice.
+  const ownVoices = v.ownVoices && typeof v.ownVoices === "object" && !Array.isArray(v.ownVoices)
+    ? Object.fromEntries(Object.entries(v.ownVoices).filter(([who, voice]) => who && who !== v.bedside && typeof voice === "string" && voice)) : {};
   return { bedside: v.bedside, bedsideLanguage: v.bedsideLanguage, bedsideVoice: v.bedsideVoice, familyLanguage: v.familyLanguage, familyVoice: v.familyVoice,
-    ...(typeof v.by === "string" && v.by ? { by: v.by } : {}) };
+    ...(typeof v.by === "string" && v.by ? { by: v.by } : {}), ...(Object.keys(ownVoices).length ? { ownVoices } : {}) };
 }
 
 /** Google's live transcription handled mixed English and Mandarin best (scripts/stt-bench.ts); AssemblyAI is the fallback. */
@@ -52,6 +57,7 @@ export default defineAgent({
     await ctx.connect(undefined, AutoSubscribe.AUDIO_ONLY);
     const room = ctx.room;
     const voices: Record<Side, string> = { bedside: config.bedsideVoice, family: config.familyVoice };
+    const ownVoices = new Map(Object.entries(config.ownVoices ?? {}));
 
     // One track per side, so each side hears only the translation meant for it.
     const sources = {} as Record<Side, AudioSource>;
@@ -70,8 +76,9 @@ export default defineAgent({
         { reliable: true, topic: topics.lines, destination_identities: destination }).catch(error => log("couldn't send", error));
     };
     // Each piece's voice is asked for as soon as the piece is written and the one before has arrived, so a side has
-    // one voice request at a time, and plays as it streams in.
-    const speak = async (to: Side, pieces: AsyncIterable<string>, language: Language) => {
+    // one voice request at a time, and plays as it streams in. A family member's words reach the bedside in their own
+    // voice when they recorded one; everyone else's, and the bedside's words to family, in the listed voice.
+    const speak = async (to: Side, pieces: AsyncIterable<string>, language: Language, speaker: string) => {
       const source = sources[to];
       const frame = voiceSampleRate / 100; // 10 ms
       let pending = new Int16Array(0);
@@ -81,7 +88,10 @@ export default defineAgent({
         let arrived = Promise.resolve();
         for await (const piece of pieces) {
           await arrived;
-          const voice = readAhead(elevenLabsVoice(piece.trim(), voices[to], language, elevenLabsKey));
+          const own = to === "bedside" ? ownVoices.get(speaker) : undefined;
+          const voice = readAhead(firstVoiceThatSpeaks(own ? [own, voices[to]] : [voices[to]],
+            voiceID => elevenLabsVoice(piece.trim(), voiceID, language, elevenLabsKey),
+            (_voiceID, error) => { ownVoices.delete(speaker); log("a caregiver's own voice couldn't speak, so the listed voice did", error); }));
           arrived = voice.finished;
           yield voice;
         }
